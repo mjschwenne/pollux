@@ -1,0 +1,36 @@
+// v4.proto -- Start organizing locations into a
+// hierarchical structure.
+syntax = "proto3";
+
+message location {
+  string loc = 2;
+  // This says that a location belongs to another,
+  // typically larger, location. Since there is no
+  // master registry locations, any value in this field
+  // will implicitly define a location.
+  //
+  // An ordering on locations can be defined by
+  // using this to build a DAG and then topologically
+  // sorting it, although there are no mechanisms in the
+  // proto file to force an acyclic graph, but that's probably
+  // not something for the data format to be enforcing anyways
+  string parent = 3;
+}
+
+message item {
+  reserved 8;
+  string name = 2;
+  string public_description = 3;
+  string private_description = 7;
+  // Also, store an image of the item just for fun.
+  optional bytes image = 9;
+  int value = 4;
+  int level = 6;
+  repeated location loc_log = 5;
+}
+
+message ledger {
+  int version = 1;
+  string world_name = 2;
+  repeated item log = 3;
+}

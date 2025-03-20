@@ -1,0 +1,33 @@
+// v1.proto -- build off v0.proto by adding some
+// extra fields to the item message, such as item
+// level, and split descriptions and locations
+syntax = "proto3";
+
+message location {
+  string loc = 2;
+}
+
+message item {
+  string name = 2;
+  // Changing field names is a safe upgrade as long as the
+  // field number is preserved. Here we split the description
+  // into something the players can immediately observe and
+  // some extra information for the GM to use.
+  string public_description = 3;
+  string private_description = 7;
+  int value = 4;
+  // Track the item level now
+  int level = 6;
+  // Now track both where the item originated and
+  // where it currently is. Using index numbers, the
+  // old loc field becomes the origin_loc, although this
+  // choice is relative
+  location origin_loc = 5;
+  location current_loc = 8; 
+}
+
+message ledger {
+  int version = 1;
+  string world_name = 2;
+  repeated item log = 3;
+}

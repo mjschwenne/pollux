@@ -1,0 +1,23 @@
+// v3.proto -- Finish the v2 update by removing the
+// current_loc field and reserving the field number.
+syntax = "proto3";
+
+message location {
+  string loc = 2;
+}
+
+message item {
+  reserved 8;
+  string name = 2;
+  string public_description = 3;
+  string private_description = 7;
+  int value = 4;
+  int level = 6;
+  repeated location loc_log = 5;
+}
+
+message ledger {
+  int version = 1;
+  string world_name = 2;
+  repeated item log = 3;
+}
