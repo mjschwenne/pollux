@@ -54,6 +54,37 @@
         "type": "github"
       }
     },
+    "karamel": {
+      "inputs": {
+        "flake-utils": [
+          "karamel",
+          "fstar",
+          "flake-utils"
+        ],
+        "fstar": [
+          "fstar"
+        ],
+        "nixpkgs": [
+          "karamel",
+          "fstar",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1743521541,
+        "narHash": "sha256-cCqctSchoQ87utCY4xitBfeYrkoMmTQ45aYVu1YSlcg=",
+        "owner": "FStarLang",
+        "repo": "karamel",
+        "rev": "86f99f08afa04ca792f9c4f64f24db4c0fdbc46c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "FStarLang",
+        "repo": "karamel",
+        "rev": "86f99f08afa04ca792f9c4f64f24db4c0fdbc46c",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1693158576,
@@ -86,6 +117,7 @@
       "inputs": {
         "flake-utils": "flake-utils",
         "fstar": "fstar",
+        "karamel": "karamel",
         "nixpkgs": "nixpkgs_2"
       }
     },

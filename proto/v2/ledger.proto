@@ -1,8 +1,8 @@
-// v1.proto -- build off v0.proto by adding some
+// v2.proto -- build off v0.proto by adding some
 // extra fields to the item message, such as item
 // level, and split descriptions and locations
 syntax = "proto3";
-package proto.v2;
+package ledger;
 
 message Location {
   string loc = 2;

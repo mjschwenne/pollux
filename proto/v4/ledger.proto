@@ -1,7 +1,7 @@
-// v3.proto -- Finish the v2 update by removing the
+// v4.proto -- Finish the v2 update by removing the
 // current_loc field and reserving the field number.
 syntax = "proto3";
-package proto.v4;
+package ledger;
 
 message Location {
   string loc = 2;

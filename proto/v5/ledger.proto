@@ -1,7 +1,7 @@
-// v4.proto -- Start organizing locations into a
+// v5.proto -- Start organizing locations into a
 // hierarchical structure.
 syntax = "proto3";
-package proto.v5;
+package ledger;
 
 message Location {
   string loc = 2;

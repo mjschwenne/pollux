@@ -2,3 +2,7 @@ version: v2
 breaking:
   use:
     - WIRE
+lint:
+  except:
+    - PACKAGE_VERSION_SUFFIX
+    - PACKAGE_DIRECTORY_MATCH

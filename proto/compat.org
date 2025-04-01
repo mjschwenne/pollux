@@ -1,0 +1,32 @@
+#+TITLE: Protobuf Compatibility
+#+AUTHOR: Matt Schwennesen
+#+DATE: [2025-04-01 Tue]
+
+In this directory, you will find several versions of a proto file which could be
+used for data storage for an application which tracks items in a tabletop
+role-playing game (TTRPG). Each version marks some update to the schema from the
+previous version.
+
+As an interesting exercise, I setup the [[https://buf.build/docs/cli/][buf]] protobuf tool in this repository,
+which includes a breaking change detector and ran it against each successive
+update. You can do the same with =just buf-breaking {{new}} {{old}}= and providing
+the version numbers for =new= and =old=.
+
+For the most part, the results were expected. The proto files were setup to be a
+sequence of compatible updates and when the =buf= tool is set to use wire
+compatibility as a metric, every update is compatible. Of course, when the
+compatibility is set to more restrictive values, like =FILE=, changes to field
+names are also reported which makes sense since any source code linked against
+the =protoc= generated stubs would now fail to build.
+
+The interesting case is the update from version 3 to 5 which can cause loss of
+data if version 4 of the application isn't booted between updates. However the
+messages are still compatible from a binary prospective; this update depends on
+the semantics of the application which =buf= can't reason about. Setting the
+compatibility level to =FILE= does produce a message about the deleted =current_loc=
+field between versions 3 and 5. 
+
+
+# Local Variables:
+# jinx-local-words: "Protobuf proto protobuf"
+# End:

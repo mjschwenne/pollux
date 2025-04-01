@@ -1,8 +1,8 @@
-// v0.proto -- A base proto for the example software.
+// v1.proto -- A base proto for the example software.
 // Tracks some basic information about an item, with the
 // ledger itself basically being a list of items.
 syntax = "proto3";
-package proto.v1;
+package ledger;
 
 message Location {
   string loc = 2;

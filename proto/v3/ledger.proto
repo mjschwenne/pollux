@@ -1,9 +1,9 @@
-// v2.proto -- build off v1.proto by enhancing
+// v3.proto -- build off v1.proto by enhancing
 // location history tracking. It's now a repeated
 // field with the first entry meaning the origin location
 // and last being the current location. 
 syntax = "proto3";
-package proto.v3;
+package ledger;
 
 message Location {
   string loc = 2;
