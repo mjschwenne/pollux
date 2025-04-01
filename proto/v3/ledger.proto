@@ -3,12 +3,13 @@
 // field with the first entry meaning the origin location
 // and last being the current location. 
 syntax = "proto3";
+package proto.v3;
 
-message location {
+message Location {
   string loc = 2;
 }
 
-message item {
+message Item {
   string name = 2;
   // Changing field names is a safe upgrade as long as the
   // field number is preserved. Here we split the description
@@ -16,9 +17,9 @@ message item {
   // some extra information for the GM to use.
   string public_description = 3;
   string private_description = 7;
-  int value = 4;
+  int32 value = 4;
   // Track the item level now
-  int level = 6;
+  int32 level = 6;
   // Changing from location to repeated location is safe
   // according to the protobuf wire format, but the issue
   // now is that we'd like to get rid of field 8.
@@ -28,12 +29,12 @@ message item {
   // 8 and then move that into the loc_log list. This can be
   // done safely over 2 updates, so long as the middle
   // version at least launches and saves the data.
-  repeated location loc_log = 5;
-  location current_loc = 8; 
+  repeated Location loc_log = 5;
+  Location current_loc = 8; 
 }
 
-message ledger {
-  int version = 1;
+message Ledger {
+  int32 version = 1;
   string world_name = 2;
-  repeated item log = 3;
+  repeated Item log = 3;
 }

@@ -2,25 +2,26 @@
 // Tracks some basic information about an item, with the
 // ledger itself basically being a list of items.
 syntax = "proto3";
+package proto.v1;
 
-message location {
+message Location {
   string loc = 2;
 }
 
-message item {
+message Item {
   string name = 2;
   string description = 3;
-  int value = 4;
+  int32 value = 4;
   // The obvious first thing to do here would be
   // string location = 5;
   // but if we think there may be some updates to
   // how locations are stored and processed, this
   // already has so much more forward compatibility
-  location loc = 5;
+  Location loc = 5;
 }
 
-message ledger {
-  int version = 1;
+message Ledger {
+  int32 version = 1;
   string world_name = 2;
-  repeated item log = 3;
+  repeated Item log = 3;
 }

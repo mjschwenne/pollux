@@ -1,8 +1,9 @@
 // v4.proto -- Start organizing locations into a
 // hierarchical structure.
 syntax = "proto3";
+package proto.v5;
 
-message location {
+message Location {
   string loc = 2;
   // This says that a location belongs to another,
   // typically larger, location. Since there is no
@@ -17,20 +18,20 @@ message location {
   string parent = 3;
 }
 
-message item {
+message Item {
   reserved 8;
   string name = 2;
   string public_description = 3;
   string private_description = 7;
   // Also, store an image of the item just for fun.
   optional bytes image = 9;
-  int value = 4;
-  int level = 6;
-  repeated location loc_log = 5;
+  int32 value = 4;
+  int32 level = 6;
+  repeated Location loc_log = 5;
 }
 
-message ledger {
-  int version = 1;
+message Ledger {
+  int32 version = 1;
   string world_name = 2;
-  repeated item log = 3;
+  repeated Item log = 3;
 }
