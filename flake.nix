@@ -24,6 +24,9 @@
             buildInputs = [
               fstar.packages.${system}.fstar
               just
+              protobuf
+              protoscope
+              buf
             ];
 
             shellHook = ''
