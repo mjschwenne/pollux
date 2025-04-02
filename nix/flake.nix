@@ -2,7 +2,7 @@
   description = "A Flake for F* development";
 
   inputs = {
-    nixpkgs.url = "nixpkgs";
+    nixpkgs.url = "github:NixOS/nixpkgs/a999c1cc0c9eb2095729d5aa03e0d8f7ed256780";
     fstar.url = "github:FStarLang/FStar/8080c2c10e2a15fdacea6df31f0921850294cd37";
     karamel.url = "github:FStarLang/karamel/86f99f08afa04ca792f9c4f64f24db4c0fdbc46c";
     karamel.inputs.fstar.follows = "fstar";
