@@ -22,17 +22,20 @@
           inherit system;
         };
         fstarp = fstar.packages.${system}.fstar;
-        karamelp = karamel.packages.${system}.karamel;
+        karamelp = karamel.packages.${system}.karamel.overrideAttrs {
+          patches = [./karamel-install.patch];
+        };
       in {
         devShells.default = with pkgs;
           mkShell {
             buildInputs = [
               fstarp
-              karamel.packages.${system}.karamel
+              karamelp
+              ocaml
+              dune_3
               (callPackage ./everparse.nix {
                 fstar = fstarp;
                 karamel = karamelp;
-                version = "v2025.04.01";
               })
             ];
 
