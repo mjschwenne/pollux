@@ -16,7 +16,7 @@ message Item {
   // some extra information for the GM to use.
   string public_description = 3;
   string private_description = 7;
-  int32 value = 4;
+  int64 value = 4;
   // Track the item level now
   int32 level = 6;
   // Now track both where the item originated and

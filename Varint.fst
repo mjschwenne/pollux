@@ -1,17 +1,24 @@
 module Varint
+open FStar.Ghost
 open FStar.UInt
 open FStar.UInt64
 open FStar.UInt8
 open FStar.List.Tot
 
-let uint8_to_64 (u:UInt8.t) : UInt64.t = UInt64.uint_to_t (UInt8.v u)
-
-let rec encodes (v:list UInt8.t) (n:UInt64.t) : bool = 
+let rec valid (v:list UInt8.t) : bool = 
   match v with 
   | [] -> false
-  | msb :: [] -> UInt8.v msb = UInt64.v n
-  | msb :: rest -> let continuation = ((msb &^ 0b10000000uy) = 128uy) in 
-                 let n_rest : UInt64.t = UInt64.sub (UInt64.sub n 127uL) (uint8_to_64 (msb |^ 0b01111111uy)) in
-                 continuation && encodes rest n_rest
+    (* A one-byte varint is valid if the continuation bit is zero *)
+  | msb :: [] -> (msb &^ 0b10000000uy) = 0uy
+    (* Otherwise the continuation bit should be one *)
+  | msb :: rest -> ((msb &^ 0x80uy) = 128uy) && valid rest
 
-let varint = v:list UInt8.t{length v >= 1 /\ length v <= 10 /\ exists (n:UInt64.t). encodes v n}
+let varint = v:list UInt8.t{length v >= 1 /\ length v <= 10 /\ valid v}
+
+let encode (x: UInt64.t) : varint = 
+  let nextByte = UInt8.uint_to_t (UInt64.v (UInt64.logand x 0x7FuL)) in 
+  let rest = FStar.UInt64.(x >>^ 7ul) in
+  [nextByte] 
+
+let rec decode (bs:varint) (x:erased UInt64.t) : y:UInt64.t{(requires bs == encode(x)) (ensures y == x)}
+  = 0

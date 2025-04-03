@@ -53,6 +53,7 @@
               protoscope
               buf
               jq
+              go
             ];
 
             shellHook = ''

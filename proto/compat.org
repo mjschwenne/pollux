@@ -14,18 +14,46 @@ the version numbers for =new= and =old=.
 
 For the most part, the results were expected. The proto files were setup to be a
 sequence of compatible updates and when the =buf= tool is set to use wire
-compatibility as a metric, every update is compatible. Of course, when the
-compatibility is set to more restrictive values, like =FILE=, changes to field
-names are also reported which makes sense since any source code linked against
-the =protoc= generated stubs would now fail to build.
+compatibility as a metric. Only one wire compatibility breaking change was
+reported, and I don't believe that it would actually cause any issues. Of
+course, when the compatibility is set to more restrictive values, like =FILE=,
+changes to field names are also reported which makes sense since any source code
+linked against the =protoc= generated stubs would now fail to build.
 
-The interesting case is the update from version 3 to 5 which can cause loss of
+The reported error in wire format compatibility reported by =buf= is between
+versions 3 and 2. Specifically, field 5 which changes from
+
+#+begin_src protobuf
+  Location origin_loc = 5;
+#+end_src
+
+to
+
+#+begin_src protobuf
+  repeated Location loc_log = 5;
+#+end_src
+
+in version 3. Looking at the textual description on the [[https://protobuf.dev/programming-guides/encoding/#optional][protobuf documentation]]
+shows that a repeated element is encoded as one record in the encoding for each
+element of the list. Thus a message encoded with the version 2 schema would emit
+exactly what it needs for the version 3 decoder to correctly create a list of
+one element. 
+
+Another interesting case is the update from version 3 to 5 which can cause loss of
 data if version 4 of the application isn't booted between updates. However the
 messages are still compatible from a binary prospective; this update depends on
 the semantics of the application which =buf= can't reason about. Setting the
 compatibility level to =FILE= does produce a message about the deleted =current_loc=
 field between versions 3 and 5. 
 
+Something else that I just realized is that =buf= reports changing from =int32= to
+=int64= as a wire compatible change. While this is true in the strictest sense of
+the word, since the =int64= would be encoded as a variable length integer and the
+=int32= would be encoded from a variable length integer, I suspect that the struct
+which will eventually be exposed to the receiving program will truncate the
+integer and lose data. This may be an example of a change which shouldn't be
+listed as compatible since it would break developer expectations rather than
+generating unparsable messages. 
 
 # Local Variables:
 # jinx-local-words: "Protobuf proto protobuf"
