@@ -41,6 +41,10 @@
           fstar = fstar-pkg;
           karamel = karamel-pkg;
         };
+        dir-locals = pkgs.callPackage ./nix/dir-locals.nix {
+          karamel = karamel-pkg;
+          everparse = everparse-pkg;
+        };
       in {
         devShells.default = with pkgs;
           mkShell {
@@ -54,11 +58,14 @@
               buf
               jq
               go
+              dir-locals
             ];
 
             shellHook = ''
               export KRML_HOME=${karamel-pkg}
               export EVERPARSE_HOME=${everparse-pkg}
+              export DIR_LOCALS=${dir-locals}
+              ln -f -s ${dir-locals}/dir-locals.el .dir-locals.el
             '';
           };
       }
