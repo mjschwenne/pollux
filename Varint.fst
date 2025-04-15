@@ -22,3 +22,5 @@ let encode (x: UInt64.t) : varint =
 
 let rec decode (bs:varint) (x:erased UInt64.t) : y:UInt64.t{(requires bs == encode(x)) (ensures y == x)}
   = 0
+
+(* Relevant F* code in ASN1*: ANS1.Spec.IdentifierU32.fst *)

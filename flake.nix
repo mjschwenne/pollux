@@ -26,9 +26,6 @@
         pkgs = import nixpkgs {
           inherit system;
         };
-        fstar-nixpkgs = import fstar.inputs.nixpkgs {
-          inherit system;
-        };
         fstar-pkg = fstar.packages.${system}.fstar;
         karamel-pkg = karamel.packages.${system}.karamel.overrideAttrs {
           # So karamel correctly exports everything it needs to,
@@ -39,11 +36,6 @@
           # $out/krml rather than $out/bin/krml where nix wants it
           patches = [./nix/karamel-install.patch];
         };
-        # Use the fstar nixpkgs to ensure that the ocaml versions align
-        # everparse-pkg = fstar-nixpkgs.callPackage ./nix/everparse.nix {
-        #   fstar = fstar-pkg;
-        #   karamel = karamel-pkg;
-        # };
         everparse-pkg = everparse.packages."${system}".default;
         dir-locals = pkgs.callPackage ./nix/dir-locals.nix {
           karamel = karamel-pkg;
