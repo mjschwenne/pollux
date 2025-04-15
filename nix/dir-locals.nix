@@ -1,6 +1,5 @@
 {
   pkgs,
-  fstar,
   karamel,
   everparse,
   stdenv,
@@ -21,7 +20,11 @@ stdenv.mkDerivation {
       ((fstar-mode .
                    ((fstar-subp-prover-args .
                        ("--include"
-                         "${karamel}/krmllib")
+                         "${karamel}/krmllib"
+                         "--include"
+                         "${everparse}/lib/lowparse"
+                         "--include"
+                         "${everparse}/lib/asn1")
                        )))))
     '';
 

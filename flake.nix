@@ -1,5 +1,5 @@
 {
-  description = "A Flake for F* development";
+  description = "A Flake for F* and Pollux development";
 
   inputs = {
     nixpkgs.url = "nixpkgs";
@@ -8,6 +8,8 @@
     karamel.url = "github:FStarLang/karamel/86f99f08afa04ca792f9c4f64f24db4c0fdbc46c";
     # Use the existing fstar install
     karamel.inputs.fstar.follows = "fstar";
+    # Use my nix flake for everparse
+    everparse.url = "github:mjschwenne/everparse/nix";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -15,6 +17,7 @@
     nixpkgs,
     fstar,
     karamel,
+    everparse,
     flake-utils,
     ...
   }:
@@ -37,10 +40,11 @@
           patches = [./nix/karamel-install.patch];
         };
         # Use the fstar nixpkgs to ensure that the ocaml versions align
-        everparse-pkg = fstar-nixpkgs.callPackage ./nix/everparse.nix {
-          fstar = fstar-pkg;
-          karamel = karamel-pkg;
-        };
+        # everparse-pkg = fstar-nixpkgs.callPackage ./nix/everparse.nix {
+        #   fstar = fstar-pkg;
+        #   karamel = karamel-pkg;
+        # };
+        everparse-pkg = everparse.packages."${system}".default;
         dir-locals = pkgs.callPackage ./nix/dir-locals.nix {
           karamel = karamel-pkg;
           everparse = everparse-pkg;
