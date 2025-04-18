@@ -29,8 +29,8 @@ type proto_enc_lv : Type =
 | LEN : B.bytes -> proto_enc_lv
 | I32 : U32.t -> proto_enc_lv
 
-type proto_enc_field : Type = vint * proto_enc_lv
+type proto_enc_field : Type = vint & proto_enc_lv
 
 type proto_enc_msg : Type = list proto_enc_field
 
-
+let msg1 : proto_enc_msg = [(2, VARINT 3)]
