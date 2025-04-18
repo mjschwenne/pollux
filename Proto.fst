@@ -18,12 +18,19 @@ module List = FStar.List.Tot
 let vint = nat
 
 (* 
-   Simple inductive type for the tags in an encoded proto Tag-Length-Value field. 
+   Simple inductive type for the tags/value combinations in an encoded proto 
+   Tag-Length-Value field. 
 
-   Not modeling SGROUP or EGROUP this this types are deprecated.
+   Not modeling SGROUP or EGROUP this these types are deprecated.
 *)
-type proto_enc_tag : Type = 
-| VARINT
-| I64
-| LEN
-| I32
+type proto_enc_lv : Type = 
+| VARINT : vint -> proto_enc_lv
+| I64 : U64.t -> proto_enc_lv 
+| LEN : B.bytes -> proto_enc_lv
+| I32 : U32.t -> proto_enc_lv
+
+type proto_enc_field : Type = vint * proto_enc_lv
+
+type proto_enc_msg : Type = list proto_enc_field
+
+
