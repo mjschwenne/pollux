@@ -2,12 +2,15 @@ module Proto
 open FStar.UInt
 open FStar.UInt64
 open FStar.UInt32
+open FStar.UInt16
 open FStar.UInt8
 open FStar.Seq
 open FStar.Bytes
 open FStar.List.Tot
+open FStar.Int.Cast.Full
 
 module U8 = FStar.UInt8
+module U16 = FStar.UInt16
 module U32 = FStar.UInt32
 module U64 = FStar.UInt64
 module B = FStar.Bytes
@@ -34,3 +37,75 @@ type proto_enc_field : Type = vint & proto_enc_lv
 type proto_enc_msg : Type = list proto_enc_field
 
 let msg1 : proto_enc_msg = [(2, VARINT 3)]
+
+type proto_enum_descriptor = {
+  name : string;
+  fields : list proto_enum_field;
+}
+and proto_enum_field = string * nat
+
+type proto_msg_descriptor : Type = {
+  name: string;
+  fields: list proto_field_descriptor
+}
+and proto_field_descriptor : Type = 
+| FIELD : proto_decorator -> proto_terminal -> string -> nat -> proto_field_descriptor
+| MAP : proto_decorator -> proto_terminal -> proto_terminal -> string -> nat -> proto_field_descriptor
+| ONEOF : proto_decorator -> list proto_terminal -> string -> nat -> proto_field_descriptor
+
+and proto_decorator : Type = 
+| PLAIN 
+| OPTION
+| REPEATED
+
+and proto_terminal : Type = 
+| DOUBLE
+| FLOAT
+| INT32
+| INT64
+| UINT32
+| UINT64
+| SINT32
+| SINT64
+| FIXED32
+| FIXED64
+| SFIXED32
+| SFIXED64
+| BOOL
+| STRING
+| BYTES
+(* The natural number marks the index in the descriptor set *)
+| MSG : nat -> proto_terminal
+| ENUM : nat -> proto_terminal
+
+type descriptor_set = {
+  enums : list proto_enum_descriptor;
+  msgs : list proto_msg_descriptor;
+}
+
+(* 
+   While this design should allow for mutual recursion between messages, 
+   It doesn't track the scoping rules for enums, i.e. an enum defined in
+   a message.
+
+   I'm also suspicious about the use of records for top level objects like
+   messages. I should probably be tracking the name, and while it does mirror
+   the structure of the descriptor.proto, it doesn't feel very proof assistant.
+*)
+
+let descriptor_set1 : descriptor_set = {
+  enums = [];
+  msgs = [
+    { 
+      name = "test"; 
+      fields = [
+        FIELD PLAIN STRING "test_field" 2;
+        FIELD REPEATED INT32 "test_int" 3;
+      ];
+    }
+  ];
+}
+
+let f : proto_field_descriptor = match (List.nth descriptor_set1.msgs 0) with 
+| Some m -> match (List.nth m.fields 1) with 
+  | Some f -> f
