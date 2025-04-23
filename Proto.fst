@@ -18,8 +18,8 @@ module Seq = FStar.Seq
 module List = FStar.List.Tot
 
 (* Placeholder, until I have something actually finished for variable width integer encoding *)
-let vint = nat
-
+let vint64 = n:nat{n < pow2 64}
+let vint32 = n:nat{n < pow2 32}
 (* 
    Simple inductive type for the tags/value combinations in an encoded proto 
    Tag-Length-Value field. 
@@ -27,14 +27,22 @@ let vint = nat
    Not modeling SGROUP or EGROUP this these types are deprecated.
 *)
 type proto_enc_lv : Type = 
-| VARINT : vint -> proto_enc_lv
+| VARINT : vint64 -> proto_enc_lv
 | I64 : U64.t -> proto_enc_lv 
 | LEN : B.bytes -> proto_enc_lv
 | I32 : U32.t -> proto_enc_lv
 
-type proto_enc_field : Type = vint & proto_enc_lv
+type proto_enc_field : Type = vint32 & proto_enc_lv
 
 type proto_enc_msg : Type = list proto_enc_field
+
+let proto_compat_field (f1 f2 : proto_enc_field) : bool = 
+  f1._1 = f2._1 && (match f1._2, f2._2 with 
+  | VARINT v1, VARINT v2 -> v1 = v2
+  | I64 v1, I64 v2 -> v1 = v2
+  | LEN v1, LEN v2 -> B.length v1 = B.length v2 
+  | I32 v1, I32 v2 -> v1 = v2 
+  | _, _ -> false)
 
 let msg1 : proto_enc_msg = [(2, VARINT 3)]
 
@@ -109,3 +117,47 @@ let descriptor_set1 : descriptor_set = {
 let f : proto_field_descriptor = match (List.nth descriptor_set1.msgs 0) with 
 | Some m -> match (List.nth m.fields 1) with 
   | Some f -> f
+
+
+type proto_enc_tv : eqtype = 
+| VARINT' : t:proto_terminal{
+          match t with
+          | INT32 -> true
+          | INT64 -> true
+          | UINT32 -> true
+          | UINT64 -> true
+          | SINT32 -> true
+          | SINT64 -> true
+          | ENUM _ -> true
+          | BOOL -> true
+          | _ -> false
+          } -> proto_enc_tv
+| I64' : t:proto_terminal{
+          match t with
+          | FIXED64 -> true 
+          | SFIXED64 -> true
+          | _ -> false
+          } -> proto_enc_tv
+| LEN' : t:proto_terminal{
+          match t with 
+          | STRING -> true 
+          | BYTES -> true 
+          | MSG _ -> true 
+          | _ -> false
+          } -> proto_enc_tv
+| I32' : t:proto_terminal{
+          match t with
+          | FIXED32 -> true 
+          | SFIXED32 -> true
+          | _ -> false
+          } -> proto_enc_tv
+
+type proto_enc_field' : Type = vint32 & proto_enc_tv
+
+let proto_compat_field' (f1 f2 : proto_enc_field') : bool = 
+  f1._1 = f2._1 && (match f1._2, f2._2 with 
+  | VARINT' v1, VARINT' v2 -> v1 = v2
+  | I64' v1, I64' v2 -> v1 = v2
+  | LEN' v1, LEN' v2 -> v1 = v2 
+  | I32' v1, I32' v2 -> v1 = v2 
+  | _, _ -> false)

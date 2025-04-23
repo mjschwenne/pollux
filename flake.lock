@@ -8,11 +8,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1744747713,
-        "narHash": "sha256-tvQuKzemyrcAkkUWJflTk7qDmGQU3e1iEkQ0pMlfYcs=",
+        "lastModified": 1745437411,
+        "narHash": "sha256-Q4DREqCVZBacMp/cLPjP59TXPg18okolrQPrVDuLOwU=",
         "owner": "mjschwenne",
         "repo": "everparse",
-        "rev": "653e844e8d78870c5a5e2dfeb5701a3fa760567e",
+        "rev": "971a913f68a50ac7e09a731955d15a4849ff6bbb",
         "type": "github"
       },
       "original": {
