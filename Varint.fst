@@ -61,19 +61,19 @@ let logand_trunc_lemma #n a m =
   assert True
   
   
+#push-options "--split_queries always"
+
 let rec encode (x: U64.t) : Tot varint (decreases (U64.v x)) = 
   let nextByte = Cast.uint64_to_uint8 (U64.logand x 0x7FuL) in 
   let rest = U64.(x >>^ 7ul) in
   UInt.logand_le (U64.v x) 0x7F;
   if U64.(lte rest 0uL) then 
     (
-        assert UInt.fits U8.(v nextByte) 7;
-        UInt.shift_right_value_lemma (U64.v x) 7;
         assert op_Division (U64.v x) 128 = 0;
         assert (U64.v x) < 128;
-        assert (U8.v nextByte) < 128;
-        assert (UInt.to_uint_t 7 (U64.v x)) = U64.v x;
-        // UInt.logand_lemma_2 (UInt.to_uint_t)
+        UInt.logand_mask (U64.v x) 7;
+        FStar.Math.Lemmas.modulo_lemma (U64.v x) 128;
+        FStar.Math.Lemmas.modulo_lemma (U64.v x) 256;
         assert U8.v nextByte = U64.v x;
         [nextByte]
     )
@@ -84,17 +84,20 @@ let rec encode (x: U64.t) : Tot varint (decreases (U64.v x)) =
     let restEnc = encode rest in
     assert (U8.v nextByte) >= 128;
     UInt.lemma_msb_pow2 (U8.v nextByte);
-    List.append [nextByte] restEnc
+    let enc = List.append [nextByte] restEnc in 
+    assert length enc > 1;
+    enc
 
+#pop-options
 
 let rec decode (bs:varint) (x:erased U64.t{bs = encode(reveal x)}) : y:U64.t{y = reveal x} =
   let nextByte = hd bs in
   match U.msb (U8.v nextByte) with 
   | false -> assert length bs = 1; 
-            // UInt.logand_le (U64.v x) 0x7F;
-            // assert nextByte = Cast.uint64_to_uint8 (U64.logand (reveal x) 0x7FuL);
-            // UInt.logand_mask (U64.v x) 8;
-            // assert U64.v (reveal x) < 128;
+            UInt.logand_le (U64.v x) 0x7F;
+            assert U64.(v (x >>^ 7ul)) <= 0;
+            assert U64.v (reveal x) < 128;
+            assert nextByte = Cast.uint64_to_uint8 (U64.logand (reveal x) 0x7FuL);
             assert U8.v nextByte = U64.v (reveal x);
             Cast.uint8_to_uint64 nextByte
   | true -> 0uL
