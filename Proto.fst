@@ -1,12 +1,5 @@
 module Proto
 open FStar.UInt
-open FStar.UInt64
-open FStar.UInt32
-open FStar.UInt16
-open FStar.UInt8
-open FStar.Seq
-open FStar.Bytes
-open FStar.List.Tot
 open FStar.Int.Cast.Full
 
 module U8 = FStar.UInt8
@@ -15,6 +8,7 @@ module U32 = FStar.UInt32
 module U64 = FStar.UInt64
 module B = FStar.Bytes
 module Seq = FStar.Seq 
+module Set = FStar.Set
 module List = FStar.List.Tot
 
 (* Placeholder, until I have something actually finished for variable width integer encoding *)
@@ -52,8 +46,10 @@ type proto_enum_descriptor = {
 }
 and proto_enum_field = string * nat
 
+unopteq
 type proto_msg_descriptor : Type = {
   name: string;
+  reserved: Set.set nat;
   fields: list proto_field_descriptor
 }
 and proto_field_descriptor : Type = 
@@ -87,6 +83,7 @@ and proto_terminal : Type =
 
 let msg_descriptor1 : proto_msg_descriptor = {
       name = "test"; 
+      reserved = Set.empty;
       fields = [
         FIELD IMPLICIT STRING "test_field" 2;
         FIELD REPEATED INT32 "test_int" 3;
