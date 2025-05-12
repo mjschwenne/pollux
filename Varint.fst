@@ -54,8 +54,7 @@ let rec encode (x: U64.t) : Tot varint (decreases (U64.v x)) =
     let restEnc = encode rest in
     assert (U8.v nextByte) >= 128;
     UInt.lemma_msb_pow2 (U8.v nextByte);
-    let enc = List.append [nextByte] restEnc in 
-    enc
+    List.append [nextByte] restEnc
 
 
 val lemma_varint_max (bs:varint) (x: U64.t) : 
@@ -67,6 +66,7 @@ let rec lemma_varint_max bs x =
                UInt.logand_le (U64.v x) 0x7F;
                assert UInt.fits (U64.v nextByte) 7;
                assert [msb] = [nextByte'];
+               assert U64.(lte (x >>^ 7ul) 0uL); 
                assert op_Division (U64.v x) 128 = 0; 
                ()
   | msb :: rest -> assume False; ()
@@ -75,6 +75,19 @@ val lemma_varint_max' (bs:varint) :
   Lemma (exists x. bs = encode x /\ UInt.fits (U64.v x) (7 * length bs))
 let lemma_varint_max' bs = assume False
 
+val lemma_varint_trunc (bs:varint) (x:U64.t) :
+  Lemma (requires bs = encode x /\ length bs >= 2) (ensures tl bs = encode U64.(x >>^ 7ul))
+let lemma_varint_trunc bs x = 
+  match bs with 
+  | msb :: rest -> let nextX = U64.(x >>^ 7ul) in 
+                 let nextByteEnc = Cast.uint64_to_uint8 (U64.logand x 0x7FuL) in 
+                 let restEnc = encode nextX in
+                 UInt.logand_le (U64.v x) 0x7F;
+                 assert not U64.(lte nextX 0uL);
+                 assert bs = List.append [U8.(nextByteEnc +^ 128uy)] restEnc;
+                 assert rest = encode nextX;
+                 ()
+  
 let rec decode (bs:varint) (x:erased U64.t{bs = encode(reveal x)}) : y:U64.t{y = reveal x} =
   match bs with 
   | msb :: [] -> 
@@ -87,10 +100,10 @@ let rec decode (bs:varint) (x:erased U64.t{bs = encode(reveal x)}) : y:U64.t{y =
             FStar.Math.Lemmas.modulo_lemma (U64.v x) 256;
             Cast.uint8_to_uint64 msb
   | msb :: rest -> let msx = U64.(Cast.uint8_to_uint64 msb |^ 128uL) in
-                 assume rest = encode U64.(x |^ msx);
-                 let rx = decode rest U64.(x |^ msx) in 
-                 assume False;
-                 U64.(msx +^ rx <<^ 7ul)
+                 assert U.fits (U8.v msb) 7;
+                 lemma_varint_trunc bs x;
+                 let rx = decode rest U64.(x >>^ 7ul) in 
+                 U64.((msx +^ rx) <<^ 7ul)
 
 let rec decode' (bs:varint) (x:erased U64.t{bs = encode(reveal x)}) : y:U64.t{y = reveal x} =
   let nextByte = hd bs in
