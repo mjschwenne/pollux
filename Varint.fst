@@ -120,7 +120,7 @@ let rec decode (bs:varint) (x:erased U64.t{bs = encode(reveal x)}) : y:U64.t{y =
                  assume U64.v rx = U64.v U64.(x &^ n_upper_ones 7);
                  lemma_and_comp x rx msx 7;
                  let y = U64.(msx &^ (rx <<^ 7ul)) in
-                 assert reveal x = y;
+                 assert y = reveal x;
                  y
 
 let rec decode' (bs:varint) (x:erased U64.t{bs = encode(reveal x)}) : y:U64.t{y = reveal x} =
