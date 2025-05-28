@@ -36,6 +36,8 @@ let byte = U8.t
 (* 
   Returns the minimum value which requires exactly n bytes to encode.
 
+  Need if statement since otherwise 2^0 is 1 and we encode pos, not nat
+
   TODO we'll see if this is the correct approach for a malleable encoding.
 *)
 let varint_lowerbound (n : pos) = 
@@ -58,10 +60,10 @@ let u64_max = U.max_int 64              (* 18446844073709551616 *)
 let vlb_eleven = varint_lowerbound 11 (* 1180591620717411303424 *)
 
 (* varint_lowerbound is monotonic *)
-let lemma_varint_lowerbound_mono (n m : pos) : Lemma 
+let lemma_varint_lowerbound_mono (m n : pos) : Lemma 
   (requires m <= n)
   (ensures varint_lowerbound m <= varint_lowerbound n) = 
-    Math.Lemmas.pow2_le_compat (n * 7) (m * 7); ()
+    Math.Lemmas.pow2_le_compat ((n - 1) * 7) ((m - 1) * 7); ()
 
 (* Returns one more than the maximum value which can be encoded into n bytes. *)
 let varint_upperbound (n : pos) = 
@@ -97,7 +99,8 @@ let varint_bound_separation (n : pos) (v : U64.t) (v' : U64.t) : Lemma
 let varint_in_bound (n : pos) (v : nat) = 
   varint_lowerbound n <= v /\ v <= varint_upperbound n
 
-let varint_bound_u64 (u : U64.t) : Pure pos
+(* Here, let's use the 'f' as 'function', not 'float' *)
+let varint_bound_f64 (u : U64.t) : Pure pos
   (requires True)
   (ensures (fun n -> n <= 10 /\ varint_in_bound n (U64.v u))) = 
   let v = U64.v u in 
@@ -139,7 +142,7 @@ let varint_bound_u64 (u : U64.t) : Pure pos
 *)
 let lemma_varint_bound_intro (u : U64.t) (n : pos) : 
   Lemma (requires (varint_in_bound n (U64.v u)))
-        (ensures (varint_bound_u64 u = n)) =
+        (ensures (varint_bound_f64 u = n)) =
   let v = U64.v u in 
   let _ = 
     Math.Lemmas.pow2_lt_compat 7 0;
@@ -167,6 +170,26 @@ let lemma_varint_bound_intro (u : U64.t) (n : pos) :
   | _ -> Math.Lemmas.pow2_le_compat ((n - 1) * 7) 70;
         assert (pow2 70 <= v)
 
+let varint_prefixf (vint : U64.t) (m : pos) : Pure U64.t 
+  (requires (m < varint_bound_f64 vint))
+  (ensures (fun vint' -> varint_bound_f64 vint' = m))
+= (* Minimal number of bytes needed to encode vint *)
+  let n = varint_bound_f64 vint in 
+  let delta = U64.mul (U64.uint_to_t m) 7uL in
+  let pow2_delta = (pow2 (U64.v delta)) in 
+  let ret = vint %^ U64.uint_to_t (UInt.to_uint_t 64 pow2_delta) in
+  assert (U64.v vint <= varint_upperbound n);
+  assert (U64.v ret <= (varint_upperbound m) + 1);
+  assert (varint_lowerbound n <= U64.v vint);
+  assume (varint_lowerbound m <= U64.v ret);
+  lemma_varint_bound_intro ret m;
+  ret
+
+let lemma_varint_prefixf_val (vint : U64.t) (m : pos) : 
+  Lemma (requires (m <= varint_bound_f64 vint))
+        (ensures (U64.v (varint_prefixf vint m) = U64.v vint / (pow2 (((varint_bound_f64 vint) - m) * 7))))
+= let delta = U32.mul (U32.uint_to_t ((varint_bound_f64 vint) - m)) 7ul in 
+  UInt.shift_right_value_lemma (U64.v vint) (U32.v delta); ()
 
 // Local Variables:
 // jinx-local-words: "lowerbound varint"
