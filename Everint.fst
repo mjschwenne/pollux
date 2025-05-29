@@ -170,9 +170,23 @@ let lemma_varint_bound_intro (u : U64.t) (n : pos) :
   | _ -> Math.Lemmas.pow2_le_compat ((n - 1) * 7) 70;
         assert (pow2 70 <= v)
 
+(* 
+  So, this is where things are going to start to differ from the ASN1* source...
+
+  Basically, since ASN1 is a big-endian encoding, the prefix of the an identifier 
+  is the most significant sequence of bits. Since these are always encoded into a 
+  minimal number of bytes, we can drop the lowest byte and get an encoding of 
+  another number that requires exactly n - m bytes. 
+
+  On the other hand, protobuf is a little-endian encoding, so large powers of 2 
+  (or around powers of two, with a lot of consecutive zero bits) have "prefixes"
+  (now suffixes) which contain an all zero bytes, which reduce the number of bytes 
+  required to encode the resulting number. We don't end with a number needing n - m
+  bytes, but at most m bytes.
+*)
 let varint_prefixf (vint : U64.t) (m : pos) : Pure U64.t 
   (requires (m < varint_bound_f64 vint))
-  (ensures (fun vint' -> varint_bound_f64 vint' = m))
+  (ensures (fun vint' -> varint_bound_f64 vint' <= m))
 = (* Minimal number of bytes needed to encode vint *)
   let n = varint_bound_f64 vint in 
   let delta = U64.mul (U64.uint_to_t m) 7uL in
@@ -181,13 +195,11 @@ let varint_prefixf (vint : U64.t) (m : pos) : Pure U64.t
   assert (U64.v vint <= varint_upperbound n);
   assert (U64.v ret <= (varint_upperbound m) + 1);
   assert (varint_lowerbound n <= U64.v vint);
-  assume (varint_lowerbound m <= U64.v ret);
-  lemma_varint_bound_intro ret m;
   ret
 
 let lemma_varint_prefixf_val (vint : U64.t) (m : pos) : 
   Lemma (requires (m <= varint_bound_f64 vint))
-        (ensures (U64.v (varint_prefixf vint m) = U64.v vint / (pow2 (((varint_bound_f64 vint) - m) * 7))))
+        (ensures (U64.v (varint_prefixf vint m) = U64.v vint % (pow2 (m * 7))))
 = let delta = U32.mul (U32.uint_to_t ((varint_bound_f64 vint) - m)) 7ul in 
   UInt.shift_right_value_lemma (U64.v vint) (U32.v delta); ()
 
