@@ -21,3 +21,26 @@ let rec get #a #n (i:nat{i < n}) (v:vec a n)
   = let Cons hd tl = v in
         if i = 0 then hd
         else get (i - 1) tl
+
+let int_vec = vec int
+
+let test = int_vec 5
+
+let test_vec : test = Cons 0 (Cons 1 (Cons 2 (Cons 3 (Cons 4 Nil))))
+
+type dec : Type = 
+| IMPLICIT
+| REPEATED
+
+type field (d:dec) (s:string) (id:nat) = 
+| FIELD : int -> field d s id
+
+let f1 : field IMPLICIT "test" 1 = FIELD 3
+let f2 : field REPEATED "test" 3 = FIELD 5
+
+type f1t = field IMPLICIT "test" 1 
+
+let discrimiate #d1 #s1 #id1 #d2 #s2 #id2 (f1:field d1 s1 id1) (f2:field d2 s2 id2) = 
+  if not (id1 = id2) then false else true
+
+let t = discrimiate f1 f2

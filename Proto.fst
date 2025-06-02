@@ -21,7 +21,7 @@ let vint32 = n:nat{n < pow2 32}
 
      Not modeling SGROUP or EGROUP this these types are deprecated.
    *)
-  type proto_enc_lv : Type = 
+type proto_enc_lv : Type = 
 | VARINT : vint64 -> proto_enc_lv
 | I64 : U64.t -> proto_enc_lv 
 | LEN : B.bytes -> proto_enc_lv
@@ -176,39 +176,96 @@ let sint_uint (v:int) (b:base) : int = 2 * (abs v) - idn (v < 0)
 let int_sint (v:int) (b:base) : int = if v >= 0 then 
     (exp (-1) (abs v)) * (v / 2) - (v % 2)
   else 
-    (exp (-1) (abs v)) * (v + (pow2 (b - 1)) - (v / 2)) + (v % 2) 
+    (exp (-1) (abs v)) * (v + (pow2 (b - 1)) - (v / 2)) // - (v % 2) 
 let sint_int (v:int) (b:base) : int = if -(pow2 (b-2)) <= v && v < pow2 (b-2) then 
     2 * (abs v) - idn (v < 0) 
   else 
     abs (2 * v - pow2 (b-1)) - pow2 (b-1) - idn (v < pow2 (b-2))
 
-let val_rel (v1 : int) (t1 : proto_terminal) (v2 : int) (t2 : proto_terminal) = 
+type proto_spec_type : Type = 
+  | SP_INT : int -> proto_spec_type
+  | SP_BOOL : bool -> proto_spec_type
+  | SP_STR : string -> proto_spec_type
+  | SP_ENUM : nat -> proto_spec_type
+
+let val_rel (v1 : proto_spec_type) (t1 : proto_terminal) (v2 : proto_spec_type) (t2 : proto_terminal) = 
   if t1 = t2 then 
      v1 = v2 
   else 
-  match t1, t2 with 
-  | STRING, BYTES 
-  | BYTES, STRING -> v1 = v2
-  | UINT32, UINT64 -> v2 = uint_promote v1
-  | UINT64, UINT64 -> v2 = uint_demote v1
-  | INT32, INT64 -> v2 = int_promote v1 
-  | INT64, INT32 -> v2 = int_demote v2 
-  | SINT32, SINT64 -> v2 = sint_promote v1
-  | SINT64, SINT32 -> v2 = sint_demote v1
-  | UINT32, INT32 -> v2 = uint_int v1 32
-  | UINT64, INT64 -> v2 = uint_int v2 64
-  | INT32, UINT32 -> v2 = int_uint v1 32
-  | INT64, UINT64 -> v2 = int_uint v2 64 
-  | UINT32, SINT32 -> v2 = uint_sint v1 32 
-  | UINT64, SINT64 -> v2 = uint_sint v1 64
-  | SINT32, UINT32 -> v2 = sint_uint v1 32 
-  | SINT64, UINT64 -> v2 = sint_uint v1 64
-  | INT32, SINT32 -> v2 = int_sint v1 32 
-  | INT64, SINT64 -> v2 = int_sint v1 64
-  | SINT32, INT32 -> v2 = sint_int v1 32 
-  | SINT64, INT64 -> v2 = sint_int v1 64
+  match v1, v2 with 
+  | SP_INT i1, SP_INT i2 -> begin match t1, t2 with 
+                            | UINT32, UINT64 -> i2 = uint_promote i1
+                            | UINT64, UINT64 -> i2 = uint_demote i1
+                            | INT32, INT64 -> i2 = int_promote i1 
+                            | INT64, INT32 -> i2 = int_demote i1
+                            | SINT32, SINT64 -> i2 = sint_promote i1
+                            | SINT64, SINT32 -> i2 = sint_demote i1
+                            | UINT32, INT32 -> i2 = uint_int i1 32
+                            | UINT64, INT64 -> i2 = uint_int i1 64
+                            | INT32, UINT32 -> i2 = int_uint i1 32
+                            | INT64, UINT64 -> i2 = int_uint i1 64 
+                            | UINT32, SINT32 -> i2 = uint_sint i1 32 
+                            | UINT64, SINT64 -> i2 = uint_sint i1 64
+                            | SINT32, UINT32 -> i2 = sint_uint i1 32 
+                            | SINT64, UINT64 -> i2 = sint_uint i1 64
+                            | INT32, SINT32 -> i2 = int_sint i1 32 
+                            | INT64, SINT64 -> i2 = int_sint i1 64
+                            | SINT32, INT32 -> i2 = sint_int i1 32 
+                            | SINT64, INT64 -> i2 = sint_int i1 64
+                            | _ -> false
+                           end 
+  | SP_STR s1, SP_STR s2 -> begin match t1, t2 with 
+                            | STRING, BYTES 
+                            | BYTES, STRING -> s1 = s2
+                            | _ -> false
+                           end
+  | SP_BOOL b1, SP_INT i2 -> begin match t1, t2 with 
+                            | BOOL, UINT32 
+                            | BOOL, UINT64
+                            | BOOL, INT32 
+                            | BOOL, INT64 -> i2 = idn b1
+                            | BOOL, SINT32
+                            | BOOL, SINT64 -> i2 = - (idn b1)
+                            | _ -> false
+                           end 
+  | SP_INT i1, SP_BOOL b1 -> begin match t1, t2 with 
+                            | UINT32, BOOL 
+                            | UINT64, BOOL 
+                            | INT32, BOOL 
+                            | INT64, BOOL 
+                            | SINT32, BOOL 
+                            | SINT64, BOOL -> b1 = (i1 = 0)
+                            | _ -> false 
+                           end
   | _ -> false
   
-let test = val_rel (-9) INT32 (-12) SINT32
-(* FIXME Off by one error from actual protobuf implementation *)
-let testv = int_sint (-9) 32
+(* 
+  From protobuf tests:
+
+  i32 encoded value: -9 (dec)
+  i32 encoded value: 0000000000000000000000000000000011111111111111111111111111110111 (bin)
+  s32 decoded value: 0000000000000000000000000000000011111111111111111111111111110111 (bin)
+  s32 decoded value: -2147483644 (dec)
+*)
+let test_val_rel = val_rel (SP_INT (-9)) INT32 (SP_INT (-2147483644)) SINT32
+
+let comp_rel_field (f1 f2:proto_field_descriptor) : bool = 
+  match f1, f2 with 
+  | FIELD pd1 pt1 n1 id1, FIELD pd2 pt2 n2 id2 -> if (pd1, pt1, n1, id1) = (pd2, pt2, n2, id2) then 
+                                                    true // Refl rule
+                                                 else if (pt1, id1) = (pt2, id2) && pd1 = IMPLICIT 
+                                                          && pd2 = OPTION then 
+                                                    true // Add-Opt rule
+                                                 else if (pt1, id1) = (pt2, id2) && pd1 = OPTION 
+                                                          && pd2 = IMPLICIT then 
+                                                    true // Rm-Opt rule
+                                                 else if (pt1, id1) = (pt2, id2) && pd1 = IMPLICIT
+                                                          && pd2 = REPEATED then 
+                                                    true // Add-Rep rule
+                                                 (* 
+                                                   TODO How to represent Type-Chg rule? 
+                                                   I don't have a value here... 
+                                                 *)
+                                                 else 
+                                                    false // No other field rule applies
+  | _ -> false
