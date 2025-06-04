@@ -197,3 +197,15 @@ let soundness #e #e' #t
     else let (| e', s |) = progress ht in
          let ht' = preservation_step ht s in
          Inr (| e', Single s, ht' |)
+
+// Typing proof of () : ()
+val t_unit : typing empty EUnit TUnit 
+let t_unit = TyUnit
+
+// Typing proof of (fun x : () -> x) as () -> () 
+val t_uid : typing empty (ELam TUnit (EVar 0)) (TArr TUnit TUnit)
+let t_uid = TyLam TUnit (TyVar 0)
+
+// Typing proof of (fun x : () -> x) () as ()
+val t_uapp : typing empty (EApp (ELam TUnit (EVar 0)) EUnit) TUnit
+let t_uapp = TyApp t_uid t_unit
