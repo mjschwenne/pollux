@@ -14,6 +14,10 @@ module List = FStar.List.Tot
 
 type byte = String.char
 type bytes = list byte
+
+type width = z:int{z = 32 \/ z = 64}
+type zw (w:width) = z:int{- pow2 (w-1) <= z /\ z < pow2 (w-1) } 
+type uw (w:width) = n:nat{n < pow2 w}
  
 type proto_dec (a:Type) = 
 | IMPLICIT : a -> proto_dec a
@@ -23,23 +27,18 @@ type proto_dec (a:Type) =
 type proto_ty = 
 | DOUBLE // I would add a double here, but F* literally doesn't support any kind of floating point number...
 | FLOAT // See above.
-| INT32 : proto_dec int -> proto_ty
-| INT64 : proto_dec int -> proto_ty
-| UINT32 : proto_dec int -> proto_ty // Should this be nat?
-| UINT64 : proto_dec int -> proto_ty // Should this be nat?
-| SINT32 : proto_dec int -> proto_ty
-| SINT64 : proto_dec int -> proto_ty
-| FIXED32 : proto_dec int -> proto_ty
-| FIXED64 : proto_dec int -> proto_ty
-| SFIXED32 : proto_dec int -> proto_ty
-| SFIXED64 : proto_dec int -> proto_ty
-| BOOL : proto_dec bool -> proto_ty
-| STRING : proto_dec string -> proto_ty
-| BYTES : proto_dec bytes -> proto_ty
+| INT :    w:width -> proto_dec (zw w) -> proto_ty
+| UINT :   w:width -> proto_dec (uw w) -> proto_ty
+| SINT :   w:width -> proto_dec (zw w) -> proto_ty
+| FIXED :  w:width -> proto_dec (uw w) -> proto_ty
+| SFIXED : w:width -> proto_dec (zw w) -> proto_ty
+| BOOL :               proto_dec bool -> proto_ty
+| STRING :           proto_dec string -> proto_ty
+| BYTES :             proto_dec bytes -> proto_ty
 | MSG
 | ENUM
 
-let test : proto_ty = INT32 (REPEATED [3; 4])
+let test_pty : proto_ty = INT 32 (REPEATED [3; 4])
 
 (*
    TAKEN FROM PROTO.FST
@@ -64,160 +63,129 @@ let rec exp (x:int) (n:nat) : Tot int (decreases n) =
 
 let idn c = if c then 1 else 0
 
-let base = b:nat{b = 32 \/ b = 64}
-let uint_promote (v:int) : int = v
-let uint_demote (v:int) : int = v % pow2 32
-let int_promote (v:int) : int = v
-let int_demote' (v:int) : int = (v % pow2 32 - pow2 32 * (idn (v >= pow2 31))) % pow2 32
-let int_demote (v:int) : int = (v % pow2 32 - pow2 32 * (idn (v >= pow2 31))) % pow2 32
-let sint_promote (v:int) : int = v 
-let sint_demote (v:int) : int = v % pow2 31
-let uint_int (v:int) (b:base) : int = v - (pow2 b) * (idn (v >= pow2 (b - 1)))
-let int_uint (v:int) (b:base) : int = v + (pow2 b) * (idn (v < 0))
-let uint_sint (v:int) (b:base) : int = (exp (-1) (abs v)) * (v / 2) - (v % 2)
-let sint_uint (v:int) (b:base) : int = 2 * (abs v) - idn (v < 0)
-let int_sint (v:int) (b:base) : int = if v >= 0 then 
+let uint_change_w (w:width) (v:int) : uw w = v % pow2 w
+let int_change_w (w:width) (v:int) : zw w = (v % pow2 (w-1) - (pow2 (w-1)) * idn ((v / pow2 (w-1)) % 2 = 1))
+let sint_change_w (w:width) (v:int) : zw w = (v % pow2 (w-1) - (pow2 (w-1)) * idn (v < 0))
+let uint_int (w:width) (v:int) : int = v - (pow2 w) * (idn (v >= pow2 (w - 1)))
+let int_uint (w:width) (v:int) : int = v + (pow2 w) * (idn (v < 0))
+let uint_sint (w:width) (v:int) : int = (exp (-1) (abs v)) * (v / 2) - (v % 2)
+let sint_uint (w:width) (v:int) : int = 2 * (abs v) - idn (v < 0)
+let int_sint (w:width) (v:int) : int = if v >= 0 then 
     (exp (-1) (abs v)) * (v / 2) - (v % 2)
   else 
-    (exp (-1) (abs v)) * (v + (pow2 (b - 1)) - (v / 2)) // - (v % 2) 
-let sint_int (v:int) (b:base) : int = if -(pow2 (b-2)) <= v && v < pow2 (b-2) then 
+    (exp (-1) (abs v)) * (v + (pow2 (w - 1)) - (v / 2))
+let sint_int (v:int) (w:width) : int = if -(pow2 (w-2)) <= v && v < pow2 (w-2) then 
     2 * (abs v) - idn (v < 0) 
   else 
-    abs (2 * v - pow2 (b-1)) - pow2 (b-1) - idn (v < pow2 (b-2))
+    abs (2 * v - pow2 (w-1)) - pow2 (w-1) - idn (v < pow2 (w-2))
+
+let pty_wrap (#t1:Type) (#t2:Type) (f:t1 -> t2) (a:proto_dec t1) = 
+  match a with 
+  | IMPLICIT a' -> IMPLICIT (f a')
+  | OPTIONAL None -> OPTIONAL None 
+  | OPTIONAL (Some a') -> OPTIONAL (Some (f a'))
+  | REPEATED l -> REPEATED (List.map f l)
+
+let proto_ty_int_sint32 = pty_wrap (int_sint 32)
+let proto_ty_int_sint_test_i = proto_ty_int_sint32 (IMPLICIT (-9))
+let proto_ty_int_sint_test_o = proto_ty_int_sint32 (OPTIONAL None)
+let proto_ty_int_sint_test_o' = proto_ty_int_sint32 (OPTIONAL (Some 9))
+let proto_ty_int_sint_test_r = proto_ty_int_sint32 (REPEATED [(-9); 9])
 
 unopteq
 type val_rel : proto_ty -> proto_ty -> Type = 
   | ValTrans :
-    #f1:proto_ty ->
-    #f2:proto_ty ->
-    #f3:proto_ty ->
-    vr1:val_rel f1 f2 ->
-    vr2:val_rel f2 f3 ->
-    val_rel f1 f3
+    #v1:proto_ty ->
+    #v2:proto_ty ->
+    #v3:proto_ty ->
+    vr1:val_rel v1 v2 ->
+    vr2:val_rel v2 v3 ->
+    val_rel v1 v3
   | ValRefl :
-    f:proto_ty ->
-    val_rel f f
+    v:proto_ty ->
+    val_rel v v
   // Rules from the original value relation
   | ValStrByt : 
-    f1:string -> 
-    f2:bytes{f2 = String.list_of_string f1} -> 
-    val_rel (STRING (IMPLICIT f1)) (BYTES (IMPLICIT f2))
+    v1:(proto_dec string) -> 
+    v2:(proto_dec bytes){v2 = pty_wrap String.list_of_string v1} -> 
+    val_rel (STRING v1) (BYTES v2)
   | ValBytStr : 
-    f1:bytes ->
-    f2:string{f2 = String.string_of_list f1} ->
-    val_rel (BYTES (IMPLICIT f1)) (STRING (IMPLICIT f2))
-  | ValUintPro : 
-    f1:int ->
-    f2:int{f2 = uint_promote f1} ->
-    val_rel (UINT32 (IMPLICIT f1)) (UINT64 (IMPLICIT f2))
-  | ValUintDem :
-    f1:int ->
-    f2:int{f2 = uint_demote f1} ->
-    val_rel (UINT64 (IMPLICIT f1)) (UINT32 (IMPLICIT f2))
-  | ValIntPro : 
-    f1:int ->
-    f2:int{f2 = int_promote f1} ->
-    val_rel (INT32 (IMPLICIT f1)) (INT64 (IMPLICIT f2))
-  | ValIntDem : 
-    f1:int ->
-    f2:int{f2 = int_demote f1} ->
-    val_rel (INT64 (IMPLICIT f1)) (INT32 (IMPLICIT f2))
-  | ValSintPro :
-    f1:int ->
-    f2:int{f2 = sint_promote f1} ->
-    val_rel (SINT32 (IMPLICIT f1)) (SINT64 (IMPLICIT f2))
-  | ValSintDem : 
-    f1:int ->
-    f2:int{f2 = sint_demote f1} ->
-    val_rel (SINT64 (IMPLICIT f1)) (SINT32 (IMPLICIT f2))
-  | ValUintInt32 : 
-    f1:int ->
-    f2:int{f2 = uint_int f1 32} -> 
-    val_rel (UINT32 (IMPLICIT f1)) (INT32 (IMPLICIT f2))
-  | ValUintInt64 : 
-    f1:int ->
-    f2:int{f2 = uint_int f1 64} -> 
-    val_rel (UINT64 (IMPLICIT f1)) (INT64 (IMPLICIT f2))
-  | ValIntUint32 : 
-    f1:int ->
-    f2:int{f2 = int_uint f1 32} -> 
-    val_rel (INT32 (IMPLICIT f1)) (UINT32 (IMPLICIT f2))
-  | ValIntUint64 : 
-    f1:int ->
-    f2:int{f2 = int_uint f1 64} -> 
-    val_rel (INT64 (IMPLICIT f1)) (UINT64 (IMPLICIT f2))
-  | ValUintSint32 : 
-    f1:int ->
-    f2:int{f2 = uint_sint f1 32} -> 
-    val_rel (UINT32 (IMPLICIT f1)) (SINT32 (IMPLICIT f2))
-  | ValUintSint64 : 
-    f1:int ->
-    f2:int{f2 = uint_sint f1 64} -> 
-    val_rel (UINT64 (IMPLICIT f1)) (SINT64 (IMPLICIT f2))
-  | ValIntSint32 : 
-    f1:int ->
-    f2:int{f2 = int_sint f1 32} ->
-    val_rel (INT32 (IMPLICIT f1)) (SINT32 (IMPLICIT f2))
-  | ValIntSint64 : 
-    f1:int ->
-    f2:int{f2 = int_sint f1 64} ->
-    val_rel (INT64 (IMPLICIT f1)) (SINT64 (IMPLICIT f2))
+    v1:(proto_dec bytes) ->
+    v2:(proto_dec string){v2 = pty_wrap String.string_of_list v1} ->
+    val_rel (BYTES v1) (STRING v2)
+  | ValUintChgW : 
+    #w1:width ->
+    #w2:width ->
+    v1:(proto_dec (uw w1)) ->
+    v2:(proto_dec (uw w2)){v2 = pty_wrap (uint_change_w w2) v1} ->
+    val_rel (UINT w1 v1) (UINT w2 v2)
+  | ValIntChgW : 
+    #w1:width ->
+    #w2:width ->
+    v1:(proto_dec (zw w1)) ->
+    v2:(proto_dec (zw w2)){v2 = pty_wrap (int_change_w w2) v1} ->
+    val_rel (INT w1 v1) (INT w2 v2)
+  | ValSintChgW :
+    #w1:width ->
+    #w2:width ->
+    v1:(proto_dec (zw w1)) ->
+    v2:(proto_dec (zw w2)){v2 = pty_wrap (int_change_w w2) v1} ->
+    val_rel (SINT w1 v1) (SINT w2 v2)
+  | ValUintInt : 
+    #w:width ->
+    v1:(proto_dec (uw w)) ->
+    v2:(proto_dec (zw w)){v2 = pty_wrap (uint_int w) v1} -> 
+    val_rel (UINT w v1) (INT w v2)
+  | ValIntUint : 
+    #w:width ->
+    v1:(proto_dec (zw w)) ->
+    v2:(proto_dec (uw w)){v2 = pty_wrap (uint_int w) v1} -> 
+    val_rel (INT w v1) (UINT w v2)
+  | ValUintSint : 
+    #w:width ->
+    v1:(proto_dec (uw w)) ->
+    v2:(proto_dec (zw w)){v2 = pty_wrap (uint_sint w) v1} -> 
+    val_rel (UINT w v1) (INT w v2)
+  | ValIntSint : 
+    #w:width ->
+    v1:(proto_dec (zw w)) ->
+    v2:(proto_dec (zw w)){v2 = pty_wrap (int_sint w) v1} -> 
+    val_rel (INT w v1) (SINT w v2)
   | ValSintInt32 : 
-    f1:int ->
-    f2:int{f2 = sint_int f1 32} ->
-    val_rel (SINT32 (IMPLICIT f1)) (INT32 (IMPLICIT f2))
-  | ValSintInt64 : 
-    f1:int ->
-    f2:int{f2 = sint_int f1 64} ->
-    val_rel (SINT64 (IMPLICIT f1)) (INT64 (IMPLICIT f2))
-  | ValUint32Bool :
-    f1:int ->
-    f2:bool{f2 = (f1 <> 0)} ->
-    val_rel (UINT32 (IMPLICIT f1)) (BOOL (IMPLICIT f2))
-  | ValUint64Bool :
-    f1:int ->
-    f2:bool{f2 = (f1 <> 0)} ->
-    val_rel (UINT64 (IMPLICIT f1)) (BOOL (IMPLICIT f2))
-  | ValBoolUint32 :
-    f1:bool ->
-    f2:int{f2 = idn f1} ->
-    val_rel (BOOL (IMPLICIT f1)) (UINT32 (IMPLICIT f2))
-  | ValBoolUint64 :
-    f1:bool ->
-    f2:int{f2 = idn f1} ->
-    val_rel (BOOL (IMPLICIT f1)) (UINT64 (IMPLICIT f2))
-  | ValInt32Bool : 
-    f1:int ->
-    f2:bool{f2 = (f1 <> 0)} ->
-    val_rel (INT32 (IMPLICIT f1)) (BOOL (IMPLICIT f2))
-  | ValInt64Bool :
-    f1:int ->
-    f2:bool{f2 = (f1 <> 0)} ->
-    val_rel (INT64 (IMPLICIT f1)) (BOOL (IMPLICIT f2))
-  | ValBoolInt32 :
-    f1:bool ->
-    f2:int{f2 = idn f1} ->
-    val_rel (BOOL (IMPLICIT f1)) (INT32 (IMPLICIT f2))
-  | ValBoolInt64 :
-    f1:bool ->
-    f2:int{f2 = idn f1} ->
-    val_rel (BOOL (IMPLICIT f1)) (INT64 (IMPLICIT f2))
-  | ValSint32Bool : 
-    f1:int ->
-    f2:bool{f2 = (f1 <> 0)} ->
-    val_rel (SINT32 (IMPLICIT f1)) (BOOL (IMPLICIT f2))
-  | ValSint64Bool :
-    f1:int ->
-    f2:bool{f2 = (f1 <> 0)} ->
-    val_rel (SINT64 (IMPLICIT f1)) (BOOL (IMPLICIT f2))
-  | ValBoolSint32 :
-    f1:bool ->
-    f2:int{f2 = - (idn f1)} ->
-    val_rel (BOOL (IMPLICIT f1)) (SINT32 (IMPLICIT f2))
-  | ValBoolSint64 :
-    f1:bool ->
-    f2:int{f2 = - (idn f1)} ->
-    val_rel (BOOL (IMPLICIT f1)) (SINT64 (IMPLICIT f2))
+    #w:width ->
+    v1:(proto_dec (zw w)) ->
+    v2:(proto_dec (zw w)){v2 = pty_wrap (int_sint w) v1} -> 
+    val_rel (SINT w v1) (INT w v2)
+  | ValUintBool :
+    #w:width ->
+    v1:(proto_dec (uw w)) ->
+    v2:(proto_dec bool){v2 = pty_wrap (fun u -> u <> 0) v1} ->
+    val_rel (UINT w v1) (BOOL v2)
+  | ValBoolUint :
+    #w:width ->
+    v1:(proto_dec bool) ->
+    v2:(proto_dec (uw w)){v2 = pty_wrap (fun b -> idn b) v1} ->
+    val_rel (BOOL v1) (UINT w v2)
+  | ValIntBool : 
+    #w:width ->
+    v1:(proto_dec (zw w)) ->
+    v2:(proto_dec bool){v2 = pty_wrap (fun u -> u <> 0) v1} ->
+    val_rel (INT w v1) (BOOL v2)
+  | ValBoolInt :
+    #w:width ->
+    v1:(proto_dec bool) ->
+    v2:(proto_dec (zw w)){v2 = pty_wrap (fun b -> idn b) v1} ->
+    val_rel (BOOL v1) (INT w v2)
+  | ValSintBool : 
+    #w:width ->
+    v1:(proto_dec (zw w)) ->
+    v2:(proto_dec bool){v2 = pty_wrap (fun u -> u <> 0) v1} ->
+    val_rel (SINT w v1) (BOOL v2)
+  | ValBoolSint :
+    #w:width ->
+    v1:(proto_dec bool) ->
+    v2:(proto_dec (zw w)){v2 = pty_wrap (fun b -> idn b) v1} ->
+    val_rel (BOOL v1) (SINT w v2)
   // Rules for dealing with modifiers 
   | ValAddOpt :
     #t:Type ->
