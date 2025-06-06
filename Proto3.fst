@@ -24,6 +24,21 @@ type proto_dec (a:Type) =
 | OPTIONAL : option a -> proto_dec a
 | REPEATED : list a -> proto_dec a
 
+let is_IMPLICIT_v (#t:eqtype) (d:proto_dec t) (v:t) : bool = 
+  match d with 
+  | IMPLICIT e -> e = v
+  | _ -> false
+
+let is_OPTIONAL_v (#t:eqtype) (d:proto_dec t) (v:t) : bool = 
+  match d with 
+  | OPTIONAL (Some e) -> e = v 
+  | _ -> false
+
+let is_REPEATED_v (#t:eqtype) (d:proto_dec t) (v:list t) : bool = 
+  match d with 
+  | REPEATED e -> e = v
+  | _ -> false
+
 type proto_ty = 
 | DOUBLE // I would add a double here, but F* literally doesn't support any kind of floating point number...
 | FLOAT // See above.
@@ -61,29 +76,37 @@ let rec exp (x:int) (n:nat) : Tot int (decreases n) =
   else 
     x * (exp (x * x) ((n - 1) / 2))
 
+let parity (v:int) : int = 
+  if v % 2 = 0 then 
+    1
+  else 
+    (-1)
+
 let idn c = if c then 1 else 0
+let idnuw (w:width) c : (uw w) = if c then 1 else 0
+let idnzw (w:width) c : (zw w) = if c then 1 else 0
 
 let uint_change_w (w:width) (v:int) : uw w = v % pow2 w
 let int_change_w (w:width) (v:int) : zw w = (v % pow2 (w-1) - (pow2 (w-1)) * idn ((v / pow2 (w-1)) % 2 = 1))
 let sint_change_w (w:width) (v:int) : zw w = (v % pow2 (w-1) - (pow2 (w-1)) * idn (v < 0))
-let uint_int (w:width) (v:int) : int = v - (pow2 w) * (idn (v >= pow2 (w - 1)))
-let int_uint (w:width) (v:int) : int = v + (pow2 w) * (idn (v < 0))
-let uint_sint (w:width) (v:int) : int = (exp (-1) (abs v)) * (v / 2) - (v % 2)
-let sint_uint (w:width) (v:int) : int = 2 * (abs v) - idn (v < 0)
-let int_sint (w:width) (v:int) : int = if v >= 0 then 
-    (exp (-1) (abs v)) * (v / 2) - (v % 2)
+let uint_int (w:width) (v:uw w) : zw w = v - (pow2 w) * (idn (v >= pow2 (w - 1)))
+let int_uint (w:width) (v:zw w) : uw w = v + (pow2 w) * (idn (v < 0))
+let uint_sint (w:width) (v:uw w) : zw w = parity v * (v / 2) - (v % 2)
+let sint_uint (w:width) (v:zw w) : uw w = 2 * (abs v) - idn (v < 0)
+let int_sint (w:width) (v:zw w) : zw w = if v >= 0 then 
+    parity v * (v / 2) - (v % 2)
   else 
-    (exp (-1) (abs v)) * (v + (pow2 (w - 1)) - (v / 2))
-let sint_int (v:int) (w:width) : int = if -(pow2 (w-2)) <= v && v < pow2 (w-2) then 
-    2 * (abs v) - idn (v < 0) 
+    parity v * (v + (pow2 (w - 1)) - (v / 2))
+let sint_int (w:width) (v:zw w) : zw w = if -(pow2 (w-2)) <= v && v < pow2 (w-2) then 
+      2 * (abs v) - idn (v < 0) 
   else 
-    abs (2 * v - pow2 (w-1)) - pow2 (w-1) - idn (v < pow2 (w-2))
+      2 * (abs v) - pow2 w - idn (v < 0)
 
 let pty_wrap (#t1:Type) (#t2:Type) (f:t1 -> t2) (a:proto_dec t1) = 
   match a with 
   | IMPLICIT a' -> IMPLICIT (f a')
-  | OPTIONAL None -> OPTIONAL None 
   | OPTIONAL (Some a') -> OPTIONAL (Some (f a'))
+  | OPTIONAL None -> OPTIONAL None 
   | REPEATED l -> REPEATED (List.map f l)
 
 let proto_ty_int_sint32 = pty_wrap (int_sint 32)
@@ -139,7 +162,7 @@ type val_rel : proto_ty -> proto_ty -> Type =
   | ValIntUint : 
     #w:width ->
     v1:(proto_dec (zw w)) ->
-    v2:(proto_dec (uw w)){v2 = pty_wrap (uint_int w) v1} -> 
+    v2:(proto_dec (uw w)){v2 = pty_wrap (int_uint w) v1} -> 
     val_rel (INT w v1) (UINT w v2)
   | ValUintSint : 
     #w:width ->
@@ -151,7 +174,7 @@ type val_rel : proto_ty -> proto_ty -> Type =
     v1:(proto_dec (zw w)) ->
     v2:(proto_dec (zw w)){v2 = pty_wrap (int_sint w) v1} -> 
     val_rel (INT w v1) (SINT w v2)
-  | ValSintInt32 : 
+  | ValSintInt : 
     #w:width ->
     v1:(proto_dec (zw w)) ->
     v2:(proto_dec (zw w)){v2 = pty_wrap (int_sint w) v1} -> 
@@ -159,59 +182,80 @@ type val_rel : proto_ty -> proto_ty -> Type =
   | ValUintBool :
     #w:width ->
     v1:(proto_dec (uw w)) ->
-    v2:(proto_dec bool){v2 = pty_wrap (fun u -> u <> 0) v1} ->
+    v2:(proto_dec bool){v2 = pty_wrap (fun (u:uw w) -> u <> 0) v1} ->
     val_rel (UINT w v1) (BOOL v2)
   | ValBoolUint :
     #w:width ->
     v1:(proto_dec bool) ->
-    v2:(proto_dec (uw w)){v2 = pty_wrap (fun b -> idn b) v1} ->
+    v2:(proto_dec (uw w)){v2 = pty_wrap (idnuw w) v1} ->
     val_rel (BOOL v1) (UINT w v2)
   | ValIntBool : 
     #w:width ->
     v1:(proto_dec (zw w)) ->
-    v2:(proto_dec bool){v2 = pty_wrap (fun u -> u <> 0) v1} ->
+    v2:(proto_dec bool){v2 = pty_wrap (fun (u:zw w) -> u <> 0) v1} ->
     val_rel (INT w v1) (BOOL v2)
   | ValBoolInt :
     #w:width ->
     v1:(proto_dec bool) ->
-    v2:(proto_dec (zw w)){v2 = pty_wrap (fun b -> idn b) v1} ->
+    v2:(proto_dec (zw w)){v2 = pty_wrap (idnzw w) v1} ->
     val_rel (BOOL v1) (INT w v2)
   | ValSintBool : 
     #w:width ->
     v1:(proto_dec (zw w)) ->
-    v2:(proto_dec bool){v2 = pty_wrap (fun u -> u <> 0) v1} ->
+    v2:(proto_dec bool){v2 = pty_wrap (fun (u:zw w) -> u <> 0) v1} ->
     val_rel (SINT w v1) (BOOL v2)
   | ValBoolSint :
     #w:width ->
     v1:(proto_dec bool) ->
-    v2:(proto_dec (zw w)){v2 = pty_wrap (fun b -> idn b) v1} ->
+    v2:(proto_dec (zw w)){v2 = pty_wrap (idnzw w) v1} ->
     val_rel (BOOL v1) (SINT w v2)
   // Rules for dealing with modifiers 
   | ValAddOpt :
-    #t:Type ->
-    pty:(proto_dec t -> proto_ty) ->
-    v:t ->
+    #t:eqtype ->
+    #pty:(proto_dec t -> proto_ty) ->
+    #v:t ->
+    pty1:(proto_dec t){is_IMPLICIT_v pty1 v} ->
     val_rel (pty (IMPLICIT v)) (pty (OPTIONAL (Some v)))
+  | ValRmOpt :
+    #t:eqtype ->
+    #pty:(proto_dec t -> proto_ty) ->
+    #v:t ->
+    pty1:(proto_dec t){is_OPTIONAL_v pty1 v} ->
+    val_rel (pty (OPTIONAL (Some v))) (pty (IMPLICIT v))
+  | ValAddRep :
+    #t:eqtype ->
+    #pty:(proto_dec t -> proto_ty) ->
+    #v:t ->
+    pty1:(proto_dec t){is_IMPLICIT_v pty1 v \/ is_OPTIONAL_v pty1 v} ->
+    val_rel (pty pty1) (pty (REPEATED [v]))
+    
 
 let test_str = "test"
 let test_bytes = String.list_of_string test_str
 
 val test_str_byt : val_rel (STRING (IMPLICIT test_str)) (BYTES (IMPLICIT test_bytes))
-let test_str_byt = ValStrByt test_str test_bytes
+let test_str_byt = ValStrByt (IMPLICIT test_str) (IMPLICIT test_bytes)
 
-val test_uint_demotion : val_rel (UINT64 (IMPLICIT 34359738370)) (UINT32 (IMPLICIT 2))
-let test_uint_demotion = ValUintDem 34359738370 2
+val test_uint_demotion : val_rel (UINT 64 (OPTIONAL (Some 34359738370))) (UINT 32 (OPTIONAL (Some 2)))
+let test_uint_demotion = ValUintChgW (OPTIONAL (Some 34359738370)) (OPTIONAL (Some 2))
 
-val test_uint_int : val_rel (UINT32 (IMPLICIT 2147483656)) (INT32 (IMPLICIT (-2147483640)))
-let test_uint_int = ValUintInt32 2147483656 (-2147483640)
+val test_uint_int : val_rel (UINT 32 (IMPLICIT 2147483656)) (INT 32 (IMPLICIT (-2147483640)))
+let test_uint_int = ValUintInt (IMPLICIT 2147483656) (IMPLICIT (-2147483640))
 
-val test_uint_big_int : val_rel (UINT32 (IMPLICIT 2147483656)) (INT64 (IMPLICIT (-2147483640)))
-let test_uint_big_int = ValTrans test_uint_int (ValIntPro (-2147483640) (-2147483640))
+val test_uint_big_int : val_rel (UINT 32 (IMPLICIT 2147483656)) (INT 64 (IMPLICIT (-2147483640)))
+let test_uint_big_int = ValTrans test_uint_int (ValIntChgW (IMPLICIT (-2147483640)) (IMPLICIT (-2147483640)))
 
-val test_refl : val_rel (UINT32 (IMPLICIT 0)) (UINT32 (IMPLICIT 0))
-let test_refl = ValRefl (UINT32 (IMPLICIT 0))
+val test_refl : val_rel (UINT 32 (IMPLICIT 0)) (UINT 32 (IMPLICIT 0))
+let test_refl = ValRefl (UINT 32 (IMPLICIT 0))
 
-// FIXME: For some reason, declaring the type ahead of time causes an error, 
-// despite the fact that the reported type is the same as the one below...
-// val test_add_opt : val_rel (INT32 (IMPLICIT (-9))) (INT32 (OPTIONAL (Some (-9))))
-let test_add_opt = ValAddOpt INT32 (-9)
+val test_add_opt : val_rel (UINT 32 (IMPLICIT 0)) (UINT 32 (OPTIONAL (Some 0)))
+let test_add_opt = ValAddOpt (IMPLICIT 0)
+
+val test_rm_opt : val_rel (SINT 64 (OPTIONAL (Some 123456))) (SINT 64 (IMPLICIT 123456))
+let test_rm_opt = ValRmOpt (OPTIONAL (Some 123456))
+
+val test_add_rep : val_rel (UINT 32 (IMPLICIT 12)) (UINT 32 (REPEATED [12]))
+let test_add_rep = ValAddRep (IMPLICIT 12)
+
+val test_add_rep' : val_rel (INT 32 (OPTIONAL (Some (-23)))) (INT 32 (REPEATED [-23]))
+let test_add_rep' = ValAddRep (OPTIONAL (Some (-23)))
