@@ -118,11 +118,11 @@
         "nixpkgs": "nixpkgs_3"
       },
       "locked": {
-        "lastModified": 1744132355,
-        "narHash": "sha256-jy0nmBVfk3FZwTAthE3KN5MZ60sWSUU1eiO44XNT/LE=",
+        "lastModified": 1750037142,
+        "narHash": "sha256-H4FC/dAT9xrqr5zAOtlwXpcXd94PfFwB3PkYSgLb0Kg=",
         "owner": "FStarLang",
         "repo": "FStar",
-        "rev": "20e123b8ee252f855c04e108b63b4db4c50e6bcc",
+        "rev": "99b214b266da1ad00fc9c83c2155aad9346e5c2b",
         "type": "github"
       },
       "original": {
@@ -182,17 +182,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1743521541,
-        "narHash": "sha256-cCqctSchoQ87utCY4xitBfeYrkoMmTQ45aYVu1YSlcg=",
+        "lastModified": 1749779941,
+        "narHash": "sha256-+oaUL5KVSPrhCwBad0VNcr365VENrTOZSfBMBqTU9vs=",
         "owner": "FStarLang",
         "repo": "karamel",
-        "rev": "86f99f08afa04ca792f9c4f64f24db4c0fdbc46c",
+        "rev": "d159d55af3f5260a18a0582dac4310c3b64c44b9",
         "type": "github"
       },
       "original": {
         "owner": "FStarLang",
         "repo": "karamel",
-        "rev": "86f99f08afa04ca792f9c4f64f24db4c0fdbc46c",
         "type": "github"
       }
     },
@@ -229,11 +228,11 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1693158576,
-        "narHash": "sha256-aRTTXkYvhXosGx535iAFUaoFboUrZSYb1Ooih/auGp0=",
+        "lastModified": 1743588408,
+        "narHash": "sha256-WRZyK13yucGjwNBMOGjU8ljRJ8FYFv8MBru/bXqZUn0=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "a999c1cc0c9eb2095729d5aa03e0d8f7ed256780",
+        "rev": "88efe689298b1863db0310c0a22b3ebb4d04fbc3",
         "type": "github"
       },
       "original": {
@@ -244,11 +243,12 @@
     },
     "nixpkgs_4": {
       "locked": {
-        "lastModified": 1743964447,
-        "narHash": "sha256-nEo1t3Q0F+0jQ36HJfbJtiRU4OI+/0jX/iITURKe3EE=",
-        "path": "/nix/store/1xq1i0sygpz909157jdgg8jijvbjpvrg-source",
-        "rev": "063dece00c5a77e4a0ea24e5e5a5bd75232806f8",
-        "type": "path"
+        "lastModified": 1749903597,
+        "narHash": "sha256-jp0D4vzBcRKwNZwfY4BcWHemLGUs4JrS3X9w5k/JYDA=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "41da1e3ea8e23e094e5e3eeb1e6b830468a7399e",
+        "type": "github"
       },
       "original": {
         "id": "nixpkgs",

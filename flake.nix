@@ -4,8 +4,7 @@
   inputs = {
     nixpkgs.url = "nixpkgs";
     fstar.url = "github:FStarLang/FStar";
-    # pin karamel until nixpkgs can support dune 3.13
-    karamel.url = "github:FStarLang/karamel/86f99f08afa04ca792f9c4f64f24db4c0fdbc46c";
+    karamel.url = "github:FStarLang/karamel";
     # Use the existing fstar install
     karamel.inputs.fstar.follows = "fstar";
     # Use my nix flake for everparse
