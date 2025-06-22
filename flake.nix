@@ -43,22 +43,35 @@
       in {
         devShells.default = with pkgs;
           mkShell {
-            buildInputs = [
-              fstar-pkg
-              karamel-pkg
-              everparse-pkg
-              just
-              protobuf
-              protoscope
-              buf
-              jq
-              go
-              dir-locals
-            ];
+            buildInputs =
+              [
+                fstar-pkg
+                karamel-pkg
+                everparse-pkg
+                just
+                protobuf
+                protoscope
+                buf
+                jq
+                go
+                dir-locals
+              ]
+              ++ (with pkgs.ocaml-ng.ocamlPackages_4_14; [
+                ocaml
+                ocamlbuild
+                findlib
+                batteries
+                pprint
+                ppx_deriving_yojson
+                stdint
+                zarith
+              ]);
 
             shellHook = ''
+              export FSTAR_HOME=${fstar-pkg}
               export KRML_HOME=${karamel-pkg}
               export EVERPARSE_HOME=${everparse-pkg}
+              export OCAMLPATH=$OCAMLPATH:${fstar-pkg}/lib
               export DIR_LOCALS=${dir-locals}
               ln -f -s ${dir-locals}/dir-locals.el .dir-locals.el
             '';

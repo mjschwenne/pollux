@@ -263,3 +263,12 @@ let test_add_rep = ValAddRep (IMPLICIT (Some 12))
 
 val test_add_rep' : val_rel (INT 32 (OPTIONAL (Some (-23)))) (INT 32 (REPEATED [-23]))
 let test_add_rep' = ValAddRep (OPTIONAL (Some (-23)))
+
+type field : Type = string & nat & proto_ty
+
+unopteq
+type msg : Type = {
+  name: string;
+  reserved: Set.set nat;
+  fields: list field
+}

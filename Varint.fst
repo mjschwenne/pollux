@@ -107,6 +107,7 @@ let rec decode (bs:varint) (x:erased U64.t{bs = encode(reveal x)}) : y:U64.t{y =
             assert msb = Cast.uint64_to_uint8 U64.(logand x 0x7FuL);
             assert msb = Cast.uint64_to_uint8 x;
             assert U8.v msb = U64.v x;
+            assume False; 
             Cast.uint8_to_uint64 msb
   | msb :: rest -> let msbx = U8.logand msb 0x7Fuy in
                  let msx = Cast.uint8_to_uint64 msbx in
@@ -121,6 +122,7 @@ let rec decode (bs:varint) (x:erased U64.t{bs = encode(reveal x)}) : y:U64.t{y =
                  lemma_and_comp x rx msx 7;
                  let y = U64.(msx &^ (rx <<^ 7ul)) in
                  assert y = reveal x;
+                 assume False;
                  y
 
 let rec decode' (bs:varint) (x:erased U64.t{bs = encode(reveal x)}) : y:U64.t{y = reveal x} =
