@@ -3,3 +3,5 @@
 .dir-locals.el
 
 _build
+_log
+_digests
