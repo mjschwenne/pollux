@@ -65,18 +65,6 @@ let rec decode (bs:varint) : y:U64.t =
 
 #pop-options
 
-(* Test proto message *)
-let test_msg : Proto3.msg = {
-  name = "Test";
-  reserved = Set.empty;
-  fields = [
-    ("field1", 1, (P.INT 32 (P.IMPLICIT (Some 10))));
-    ("field2", 2, (P.STRING (P.OPTIONAL (Some "Test String"))));
-    ("field3", 3, (P.UINT 64 (P.OPTIONAL (None))))
-  ]
-}
-
-
 type tag : Type =
 | VARINT
 | I64
@@ -120,15 +108,15 @@ let encode_field (f:Proto3.field) : list U8.t =
   let tagn = tag_num (tag_func f._3) in 
   // TODO: check maximum field number
   let id_u64 = nat_to_u64 f._2 in
-  let header_u64 = U64.( logor (shift_left id_u64 (nat_to_u32 3)) tagn) in
+  let header_u64 = U64.(logor (shift_left id_u64 (nat_to_u32 3)) tagn) in
   let header_enc = encode header_u64 in
   let body_enc = match f._3 with 
                  | P.UINT _ (P.IMPLICIT (Some v)) -> encode (nat_to_u64 v)
                  | P.UINT _ (P.OPTIONAL (Some v)) -> encode (nat_to_u64 v)
-                 | P.INT _ (P.IMPLICIT (Some v)) -> encode (FStar.Int.Cast.int64_to_uint64 (int_to_i64 v))
-                 | P.INT _ (P.OPTIONAL (Some v)) -> encode (FStar.Int.Cast.int64_to_uint64 (int_to_i64 v))
-                 | P.SINT _ (P.IMPLICIT (Some v)) -> encode (FStar.Int.Cast.int64_to_uint64 (int_to_i64 v))
-                 | P.SINT _ (P.OPTIONAL (Some v)) -> encode (FStar.Int.Cast.int64_to_uint64 (int_to_i64 v))
+                 | P.INT _ (P.IMPLICIT (Some v)) -> encode  (Cast.int64_to_uint64 (int_to_i64 v))
+                 | P.INT _ (P.OPTIONAL (Some v)) -> encode  (Cast.int64_to_uint64 (int_to_i64 v))
+                 | P.SINT _ (P.IMPLICIT (Some v)) -> encode (Cast.int64_to_uint64 (int_to_i64 v))
+                 | P.SINT _ (P.OPTIONAL (Some v)) -> encode (Cast.int64_to_uint64 (int_to_i64 v))
                  | P.STRING (P.IMPLICIT (Some v)) -> List.Tot.Base.append 
                                                      (encode (nat_to_u64 (String.length v))) 
                                                      (byte_list_of_string v)
@@ -144,20 +132,4 @@ let encode_field (f:Proto3.field) : list U8.t =
 
 let encode_msg (m:Proto3.msg) : list U8.t = // 
   List.fold_left List.Tot.Base.append [] (List.map encode_field m.fields) 
-
-let bin_to_str (e:list U8.t) : string = 
-  String.string_of_list (
-    List.map 
-      (fun b -> (Char.char_of_int
-              (U8.v b)))
-      e)
-
-let main () =
-    let enc = encode_msg test_msg in
-    let enc_str = String.string_of_list (List.map (fun b -> (Char.char_of_int (U8.v b))) enc) in
-    IO.print_string enc_str
-
-//Run ``main ()`` when the module loads
-#push-options "--warn_error -272"
-let _ = main ()
-#pop-options 
+  

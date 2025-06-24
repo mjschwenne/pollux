@@ -32,24 +32,6 @@ let rec (decode : varint -> FStar_UInt64.t) =
           FStar_UInt64.logand msx
             (FStar_UInt64.shift_left rx (Stdint.Uint32.of_int (7))) in
         y
-let (test_msg : Proto3.msg) =
-  {
-    Proto3.name = "Test";
-    Proto3.reserved = (FStar_Set.empty ());
-    Proto3.fields =
-      [("field1", Prims.int_one,
-         (Proto3.INT
-            ((Prims.of_int (32)),
-              (Proto3.IMPLICIT
-                 (FStar_Pervasives_Native.Some (Prims.of_int (10)))))));
-      ("field2", (Prims.of_int (2)),
-        (Proto3.STRING
-           (Proto3.OPTIONAL (FStar_Pervasives_Native.Some "Test String"))));
-      ("field3", (Prims.of_int (3)),
-        (Proto3.UINT
-           ((Prims.of_int (64)),
-             (Proto3.OPTIONAL FStar_Pervasives_Native.None))))]
-  }
 type tag =
   | VARINT 
   | I64 
@@ -141,17 +123,3 @@ let (encode_msg : Proto3.msg -> FStar_UInt8.t Prims.list) =
   fun m ->
     FStar_List_Tot_Base.fold_left FStar_List_Tot_Base.append []
       (FStar_List_Tot_Base.map encode_field m.Proto3.fields)
-let (bin_to_str : FStar_UInt8.t Prims.list -> Prims.string) =
-  fun e ->
-    FStar_String.string_of_list
-      (FStar_List_Tot_Base.map
-         (fun b -> FStar_Char.char_of_int (FStar_UInt8.v b)) e)
-let (main : unit -> unit) =
-  fun uu___ ->
-    let enc = encode_msg test_msg in
-    let enc_str =
-      FStar_String.string_of_list
-        (FStar_List_Tot_Base.map
-           (fun b -> FStar_Char.char_of_int (FStar_UInt8.v b)) enc) in
-    FStar_IO.print_string enc_str
-let (uu___0 : unit) = main ()

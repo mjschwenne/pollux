@@ -52,13 +52,17 @@
                 protobuf
                 protoscope
                 buf
-                jq
+                xxd
                 go
                 dir-locals
               ]
               ++ (with pkgs.ocaml-ng.ocamlPackages_4_14; [
                 ocaml
                 ocamlbuild
+                dune_3
+                utop
+                merlin
+                stdio
                 findlib
                 batteries
                 pprint
