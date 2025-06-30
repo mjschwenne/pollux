@@ -22,4 +22,6 @@ let () =
   let output_file = open_out_bin "msg.bin" in
   Printf.fprintf output_file "%s" (Bytes.to_string enc_byt);
   close_out output_file;
+  Printf.printf "%d\n"
+    (Z.to_int (FStar_UInt64.v (Pollux.Encode.decode [ 128; 1 ])));
   print_endline "================ end ================="

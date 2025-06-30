@@ -1,4 +1,14 @@
 open Prims
+let (nat_to_u8 : Prims.nat -> FStar_UInt8.t) =
+  fun n -> FStar_UInt8.uint_to_t (FStar_UInt.to_uint_t (Prims.of_int (8)) n)
+let (nat_to_u32 : Prims.nat -> FStar_UInt32.t) =
+  fun n ->
+    FStar_UInt32.uint_to_t (FStar_UInt.to_uint_t (Prims.of_int (32)) n)
+let (nat_to_u64 : Prims.nat -> FStar_UInt64.t) =
+  fun n ->
+    FStar_UInt64.uint_to_t (FStar_UInt.to_uint_t (Prims.of_int (64)) n)
+let (int_to_i64 : Prims.int -> FStar_Int64.t) =
+  fun z -> FStar_Int64.int_to_t (FStar_Int.to_int_t (Prims.of_int (64)) z)
 let rec (valid : FStar_UInt8.t Prims.list -> Prims.bool) =
   fun v ->
     match v with
@@ -29,8 +39,8 @@ let rec (decode : varint -> FStar_UInt64.t) =
         let msx = FStar_Int_Cast.uint8_to_uint64 msbx in
         let rx = decode rest in
         let y =
-          FStar_UInt64.logand msx
-            (FStar_UInt64.shift_left rx (Stdint.Uint32.of_int (7))) in
+          FStar_UInt64.logor
+            (FStar_UInt64.shift_left rx (Stdint.Uint32.of_int (7))) msx in
         y
 type tag =
   | VARINT 
@@ -60,14 +70,6 @@ let (tag_func : Proto3.proto_ty -> tag) =
     | Proto3.SFIXED (uu___, uu___1) when uu___ = (Prims.of_int (64)) -> I64
     | Proto3.DOUBLE -> I64
     | uu___ -> LEN
-let (nat_to_u64 : Prims.nat -> FStar_UInt64.t) =
-  fun n ->
-    FStar_UInt64.uint_to_t (FStar_UInt.to_uint_t (Prims.of_int (64)) n)
-let (int_to_i64 : Prims.int -> FStar_Int64.t) =
-  fun z -> FStar_Int64.int_to_t (FStar_Int.to_int_t (Prims.of_int (64)) z)
-let (nat_to_u32 : Prims.nat -> FStar_UInt32.t) =
-  fun n ->
-    FStar_UInt32.uint_to_t (FStar_UInt.to_uint_t (Prims.of_int (32)) n)
 let (tag_num : tag -> FStar_UInt64.t) =
   fun t ->
     match t with

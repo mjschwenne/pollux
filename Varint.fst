@@ -34,20 +34,73 @@ let varint = v:list UInt8.t{length v >= 1 /\ valid v}
 
 #push-options "--split_queries always"
 
-let rec encode (x: U64.t) : Tot varint (decreases (U64.v x)) = 
-  let nextByte = Cast.uint64_to_uint8 (U64.logand x 0x7FuL) in 
-  let rest = U64.(x >>^ 7ul) in
+let rec decode (bs:varint) : U64.t =
+  match bs with 
+  | msb :: [] -> Cast.uint8_to_uint64 msb
+  | msb :: rest -> let msbx = U8.logand msb 0x7Fuy in
+                 let msx = Cast.uint8_to_uint64 msbx in
+                 let rx = decode rest in 
+                 let y = U64.((rx <<^ 7ul) |^ msx) in
+                 y
+
+let test = UInt.ones 0
+
+let split (#b:pos) (x: UInt.uint_t b) (n:nat{n <= b}) : (UInt.uint_t b & UInt.uint_t b) = 
+  let lo = U.(logand x (UInt.to_uint_t b (ones n))) in 
+  let hi = U.(shift_right x n) in 
+  hi, lo
+
+val pollux_split_lo_bound (#b:pos) (x: UInt.uint_t b) (n: nat{n <= b}) :
+  Lemma (let hi, lo = split x n in 
+         hi = 0 ==> x <= (UInt.ones n))
+let pollux_split_lo_bound x n = admit ()
+
+val pollux_split_lo_val (#b:pos) (x: UInt.uint_t b) (n: pos{n <= b}) :
+  Lemma (let _, lo = split x n in 
+         lo = x % pow2 n)
+let pollux_split_lo_val x n = admit ()
+
+val pollux_split_hi_val (#b:pos) (x: UInt.uint_t b) (n: nat{n <= b}) :
+  Lemma (let hi, _ = split x n in 
+         hi = x / pow2 n)
+let pollux_split_hi_val x n = admit ()
+
+val pollux_split_hi_bound (#b:pos) (x: UInt.uint_t b) (n: nat{n <= b}) :
+  Lemma (let hi, _ = split x n in
+         hi > 0 ==> x >= pow2 n)
+let pollux_split_hi_bound x n = admit ()
+
+let rec encode (x: U64.t) : Tot (v:varint{U64.v (decode v) = U64.v x}) (decreases (U64.v x)) = 
+  let xn : UInt.uint_t U64.n = U64.v x in
+  let hi, lo = split xn 7 in
+  let hi64 = (U64.uint_to_t hi) in 
+  let lo64 = (U64.uint_to_t lo) in
   UInt.logand_le (U64.v x) 0x7F;
-  if U64.(lte rest 0uL) then 
-        [nextByte]
+  if U64.(lte hi64 0uL) then 
+        (
+          let lo8 : U8.t = Cast.uint64_to_uint8 lo64 in
+          pollux_split_lo_bound xn 7; 
+          pollux_split_lo_val xn 7;
+          assert (UInt.ones 7) < pow2 7;
+          assert xn < 128;
+          FStar.Math.Lemmas.modulo_lemma lo 128;
+          assert lo = xn;
+          [lo8]
+        )
   else 
-    let nextByte = U8.(nextByte +^ 128uy) in
-    UInt.shift_right_value_lemma (U64.v x) 7;
-    assert op_Division (U64.v x) 128 = (U64.v rest);
-    let restEnc = encode rest in
-    assert (U8.v nextByte) >= 128;
-    UInt.lemma_msb_pow2 (U8.v nextByte);
-    List.append [nextByte] restEnc
+    let lo8 : U8.t = Cast.uint64_to_uint8 lo64 in
+    // assert hi > 0;
+    pollux_split_hi_bound xn 7;
+    pollux_split_hi_val xn 7;
+    let rx = encode hi64 in 
+    lo8 :: rx 
+    // let nextByte = U64.(lo64 +^ 128uL) in
+    // UInt.shift_right_value_lemma (U64.v x) 7;
+    // assert op_Division (U64.v x) 128 = (U64.v hi64);
+    // let restEnc = encode hi64 in
+    // assert (U64.v nextByte) >= 128;
+    // UInt.lemma_msb_pow2 (U64.v nextByte);
+    // List.append [(Cast.uint64_to_uint8 nextByte)] restEnc
 
 
 val lemma_varint_max (bs:varint) (x: U64.t) : 

@@ -22,6 +22,11 @@ module String = FStar.String
 
 module P = Proto3
 
+let nat_to_u8 (n:nat) : U8.t = U8.uint_to_t (UInt.to_uint_t U8.n n)
+let nat_to_u32 (n:nat) : U32.t = U32.uint_to_t (UInt.to_uint_t U32.n n)
+let nat_to_u64 (n:nat) : U64.t = U64.uint_to_t (UInt.to_uint_t U64.n n)
+let int_to_i64 (z:int) : I64.t = I64.int_to_t (Int.to_int_t I64.n z)
+
 let rec valid (v:list UInt8.t) : bool = 
   match v with 
   | [] -> false
@@ -54,13 +59,13 @@ let rec encode (x: U64.t) : Tot varint (decreases (U64.v x)) =
     List.append [nextByte] restEnc
 
 (* Strip out the verification stuff *)
-let rec decode (bs:varint) : y:U64.t =
+let rec decode (bs:varint) : U64.t =
   match bs with 
   | msb :: [] -> Cast.uint8_to_uint64 msb
   | msb :: rest -> let msbx = U8.logand msb 0x7Fuy in
                  let msx = Cast.uint8_to_uint64 msbx in
                  let rx = decode rest in 
-                 let y = U64.(msx &^ (rx <<^ 7ul)) in
+                 let y = U64.((rx <<^ 7ul) |^ msx) in
                  y
 
 #pop-options
@@ -86,10 +91,6 @@ let tag_func (p:P.proto_ty) : tag =
   | P.DOUBLE -> I64
   | _ -> LEN
 
-
-let nat_to_u64 (n:nat) : U64.t = U64.uint_to_t (UInt.to_uint_t U64.n n)
-let int_to_i64 (z:int) : I64.t = I64.int_to_t (Int.to_int_t I64.n z)
-let nat_to_u32 (n:nat) : U32.t = U32.uint_to_t (UInt.to_uint_t U32.n n)
 
 let tag_num (t:tag) : U64.t = 
   match t with 
