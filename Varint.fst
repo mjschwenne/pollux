@@ -75,7 +75,6 @@ let rec encode (x: U64.t) : Tot (v:varint{U64.v (decode v) = U64.v x}) (decrease
   let hi, lo = split xn 7 in
   let hi64 = (U64.uint_to_t hi) in 
   let lo64 = (U64.uint_to_t lo) in
-  UInt.logand_le (U64.v x) 0x7F;
   if U64.(lte hi64 0uL) then 
         (
           let lo8 : U8.t = Cast.uint64_to_uint8 lo64 in

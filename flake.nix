@@ -71,6 +71,8 @@
                 zarith
               ]);
 
+            dontDetectOcamlConflicts = true;
+
             shellHook = ''
               export FSTAR_HOME=${fstar-pkg}
               export KRML_HOME=${karamel-pkg}
