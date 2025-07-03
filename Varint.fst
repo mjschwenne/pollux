@@ -1,13 +1,5 @@
 module Varint
 open FStar.Ghost
-open FStar.UInt
-open FStar.UInt8
-open FStar.UInt16
-open FStar.UInt32
-open FStar.UInt64
-open FStar.Int.Cast.Full
-open FStar.Seq
-open FStar.List.Tot
 open FStar.Mul
 open FStar.Tactics.V2
 
@@ -30,24 +22,42 @@ let rec valid (v:list UInt8.t) : bool =
     (* Note that U.msb is "most significant bit" while the msb in the pattern is "most significant byte" *)
   | msb :: rest -> U.msb (U8.v msb) && valid rest
 
-let varint = v:list UInt8.t{length v >= 1 /\ valid v}
+let varint = v:list UInt8.t{List.length v >= 1 /\ valid v}
 
-#push-options "--split_queries always"
+let set_msb_u8 (b:U8.t{U8.v b < 128}) : r:U8.t{UInt.msb (U8.v r) /\ (U8.v r) = (U8.v b + 128)} = 
+  let r = U8.(b +^ 128uy) in 
+  assert U8.v r >= pow2 7;
+  UInt.lemma_msb_pow2 (U8.v r);
+  r
+
+let unset_msb_u8 (b:U8.t{UInt.msb (U8.v b)}) : r:U8.t{~ (UInt.msb (U8.v r)) /\ (U8.v r) = (U8.v b - 128)} = 
+  UInt.lemma_msb_pow2 (U8.v b);
+  let r = U8.(b -^ 128uy) in 
+  UInt.lemma_msb_pow2 (U8.v r);
+  r
 
 let rec decode (bs:varint) : U64.t =
   match bs with 
   | msb :: [] -> Cast.uint8_to_uint64 msb
-  | msb :: rest -> let msbx = U8.logand msb 0x7Fuy in
+  | msb :: rest -> let msbx = unset_msb_u8 msb in
                  let msx = Cast.uint8_to_uint64 msbx in
                  let rx = decode rest in 
                  let y = U64.((rx <<^ 7ul) |^ msx) in
                  y
 
-let split (#b:pos) (x: UInt.uint_t b) (n:pos{n < b}) : (UInt.uint_t b & UInt.uint_t b) = 
-  FStar.Math.Lemmas.pow2_lt_compat b n; 
-  let lo = U.(logand x ((pow2 n) - 1)) in 
-  let hi = U.(shift_right x n) in 
-  hi, lo
+let split (#b:pos) (x: UInt.uint_t b) (n:pos{n < b}) : 
+  s:(UInt.uint_t b & UInt.uint_t b){x = s._1 * (pow2 n) + s._2} = 
+    FStar.Math.Lemmas.pow2_lt_compat b n; 
+    let lo = U.(logand x ((pow2 n) - 1)) in 
+    let hi = U.(shift_right x n) in 
+    UInt.shift_right_value_lemma x n;
+    UInt.logand_mask x n;
+    FStar.Math.Lemmas.euclidean_division_definition x (pow2 n);
+    hi, lo
+
+let split64 (x: U64.t) (n:pos{n < 64}) : 
+  s:(UInt.uint_t U64.n & UInt.uint_t U64.n){U64.v x = s._1 * (pow2 n) + s._2} = 
+  split (U64.v x) n
 
 val pollux_split_lo_val (#b:pos) (x: UInt.uint_t b) (n: pos{n < b}) :
   Lemma (let _, lo = split x n in 
@@ -59,136 +69,71 @@ let pollux_split_lo_val #b x n = let _, lo = split x n in
 val pollux_split_lo_bound (#b:pos) (x: UInt.uint_t b) (n: pos{n < b}) :
   Lemma (let hi, lo = split x n in 
          hi = 0 ==> x <= (pow2 n) - 1 /\ lo = x)
-let pollux_split_lo_bound x n = pollux_split_lo_val x n
+let pollux_split_lo_bound x n = let hi, lo = split x n in 
+  pollux_split_lo_val x n;
+  // Turns out the post conditions have some type of dependency between them 
+  // So we need to know lo = x before we get that x <= (pow2 n) - 1
+  assert hi = 0 ==> lo = x;
+  assert hi = 0 ==> x <= (pow2 n) - 1
 
 val pollux_split_hi_val (#b:pos) (x: UInt.uint_t b) (n: pos{n < b}) :
   Lemma (let hi, _ = split x n in 
          hi = x / pow2 n)
 let pollux_split_hi_val x n = UInt.shift_right_value_lemma x n
 
+// Also getting a warning about assertions only succeeding after splitting 
+// them, but I don't see any assertions which can be split...
+#push-options "--split_queries always"
 val pollux_split_hi_bound (#b:pos) (x: UInt.uint_t b) (n: pos{n < b}) :
   Lemma (let hi, _ = split x n in
-         hi > 0 ==> x >= pow2 n /\ x > hi)
+         hi > 0 ==> x >= pow2 n)
 let pollux_split_hi_bound x n = let hi, _ = split x n in 
   pollux_split_hi_val x n;
-  admit ()
-  
+  assert (forall (n d:pos). n / d > 0 ==> n >= d);
+  assert hi > 0 ==> x >= pow2 n
+#pop-options 
+
+let split_lo_to_u8 (x: erased (UInt.uint_t U64.n)) 
+                   (lo: UInt.uint_t U64.n{let _, slo = split x 7 in lo = slo}) : b:U8.t{U8.v b = lo} = 
+    pollux_split_lo_val x 7;
+    FStar.Math.Lemmas.modulo_lemma lo (pow2 8);
+    Cast.uint64_to_uint8 (U64.uint_to_t lo)
+
+val decode_prepend (x:UInt.uint_t U64.n) (v:varint{let shi, _ = split x 7 in U64.v (decode v) = shi}) : 
+  Lemma (let hi, lo = split x 7 in 
+           pollux_split_lo_val x 7;
+             U64.v (decode ((set_msb_u8 (split_lo_to_u8 x lo)) :: v)) = hi * (pow2 7) + lo)
+let decode_prepend x v = let hi, lo = split #U64.n x 7 in 
+  pollux_split_hi_val x 7;
+  pollux_split_lo_val x 7;
+  let lo8 = split_lo_to_u8 x lo in
+  let slo8 = set_msb_u8 lo8 in
+  let hi64 = U64.uint_to_t hi in 
+  let lo64 = U64.uint_to_t lo in
+  assert U64.v (decode (slo8 :: v)) = U64.v U64.(logor (shift_left hi64 7ul) lo64);
+  assert U64.v (decode (slo8 :: v)) = U.(logor (shift_left hi 7) lo);
+  FStar.Math.Lemmas.lemma_mul_nat_pos_is_nat hi (pow2 7);
+  FStar.Math.Lemmas.modulo_lemma (hi * pow2 7) (pow2 U64.n);
+  UInt.shift_left_value_lemma hi 7;
+  FStar.Math.Lemmas.multiple_modulo_lemma hi (pow2 7);
+  assert (U.shift_left hi 7) = hi * (pow2 7);
+  UInt.logor_disjoint U.(shift_left hi 7) lo 7
+
+#push-options "--z3rlimit 8 --split_queries always"
+
 let rec encode (x: U64.t) : Tot (v:varint{U64.v (decode v) = U64.v x}) (decreases (U64.v x)) = 
-  let xn : UInt.uint_t U64.n = U64.v x in
-  let hi, lo = split xn 7 in
+  let xn : erased (UInt.uint_t U64.n) = U64.v x in
+  let hi, lo = split64 x 7 in
   let hi64 = (U64.uint_to_t hi) in 
-  let lo64 = (U64.uint_to_t lo) in
+  pollux_split_lo_bound xn 7; 
   if U64.(lte hi64 0uL) then 
-        (
-          let lo8 : U8.t = Cast.uint64_to_uint8 lo64 in
-          pollux_split_lo_bound xn 7; 
-          [lo8]
-        )
+    [split_lo_to_u8 xn lo]
   else 
-    let lo8 : U8.t = Cast.uint64_to_uint8 lo64 in
+    let lo8 = split_lo_to_u8 xn lo in
     pollux_split_hi_bound xn 7;
     pollux_split_lo_val xn 7;
-    FStar.Math.Lemmas.modulo_lemma lo (pow2 8);
-    assert U8.v lo8 = lo;
     let rx = encode hi64 in 
-    let vlo8 = U8.(lo8 +^ 128uy) in 
-    assert U8.v vlo8 >= pow2 7;
-    UInt.lemma_msb_pow2 (U8.v vlo8);
-    let ret : varint = vlo8 :: rx in 
-    assert U64.v (decode ret) = U64.v x;
-    ret
+    decode_prepend xn rx;
+    (set_msb_u8 lo8) :: rx
 
-val lemma_varint_max (bs:varint) (x: U64.t) : 
-  Lemma (requires bs = encode x) (ensures UInt.fits (U64.v x) (7 * length bs))
-let rec lemma_varint_max bs x = 
-  match bs with 
-  | msb :: [] -> let nextByte = U64.logand x 0x7FuL in
-               let nextByte' = Cast.uint64_to_uint8 nextByte in
-               UInt.logand_le (U64.v x) 0x7F;
-               assert UInt.fits (U64.v nextByte) 7;
-               assert [msb] = [nextByte'];
-               assert U64.(lte (x >>^ 7ul) 0uL); 
-               assert op_Division (U64.v x) 128 = 0; 
-               ()
-  | msb :: rest -> assume False; ()
-
-val lemma_varint_trunc (bs:varint) (x:U64.t) :
-  Lemma (requires bs = encode x /\ length bs >= 2) (ensures tl bs = encode U64.(x >>^ 7ul))
-let lemma_varint_trunc bs x = 
-  match bs with 
-  | msb :: rest -> let nextX = U64.(x >>^ 7ul) in 
-                 let nextByteEnc = Cast.uint64_to_uint8 (U64.logand x 0x7FuL) in 
-                 let restEnc = encode nextX in
-                 UInt.logand_le (U64.v x) 0x7F;
-                 assert not U64.(lte nextX 0uL);
-                 assert bs = List.append [U8.(nextByteEnc +^ 128uy)] restEnc;
-                 assert rest = encode nextX;
-                 ()
-
-let n_lower_ones (n:pos{n < 64}) : U64.t = 
-  let shift = pow2 n in
-  FStar.Math.Lemmas.pow2_lt_compat 64 n;
-  U64.(uint_to_t shift -^ 1uL)
-
-let n_upper_ones (n:pos{n < 64}) : U64.t = 
-  let shift = pow2 n in 
-  FStar.Math.Lemmas.pow2_lt_compat 64 n;
-  let ones = U64.(uint_to_t shift -^ 1uL) in 
-  U64.lognot ones
-
-val lemma_and_comp (x y z:U64.t) (p:pos{n < 64}) : 
-  Lemma (requires U64.v y = U64.v U64.(x &^ (n_upper_ones p)) /\ U64.v z = U64.v U64.(x &^ (n_lower_ones p)))
-        (ensures U64.v U64.(z &^ y) = U64.v x)
-let lemma_and_comp x y z p = 
-  assume False;
-  ()
-  
-let rec decode (bs:varint) (x:erased U64.t{bs = encode(reveal x)}) : y:U64.t{y = reveal x} =
-  match bs with 
-  | msb :: [] -> assert length bs = 1;
-            assert UInt.fits (U8.v msb) 7;
-            UInt.logand_le (U64.v x) 0x7F;
-            lemma_varint_max bs x;
-            assert U64.v x < 128;
-            UInt.logand_mask (U64.v x) 7;
-            FStar.Math.Lemmas.modulo_lemma (U64.v x) 128;
-            assert msb = Cast.uint64_to_uint8 U64.(logand x 0x7FuL);
-            assert msb = Cast.uint64_to_uint8 x;
-            assert U8.v msb = U64.v x;
-            assume False; 
-            Cast.uint8_to_uint64 msb
-  | msb :: rest -> let msbx = U8.logand msb 0x7Fuy in
-                 let msx = Cast.uint8_to_uint64 msbx in
-                 lemma_varint_trunc bs x;
-                 let restx : erased U64.t = U64.(x >>^ 7ul) in
-                 let rx = decode rest restx in 
-                 UInt.shift_left_value_lemma (U64.v rx) 7;
-                 assert U64.(v (restx <<^ 7ul)) <= pow2 U64.n;
-                 FStar.Math.Lemmas.modulo_lemma (U64.v restx) (pow2 U64.n);
-                 assume U64.v msx = U64.v U64.(x &^ n_lower_ones 7);
-                 assume U64.v rx = U64.v U64.(x &^ n_upper_ones 7);
-                 lemma_and_comp x rx msx 7;
-                 let y = U64.(msx &^ (rx <<^ 7ul)) in
-                 assert y = reveal x;
-                 assume False;
-                 y
-
-let rec decode' (bs:varint) (x:erased U64.t{bs = encode(reveal x)}) : y:U64.t{y = reveal x} =
-  let nextByte = hd bs in
-  match U.msb (U8.v nextByte) with 
-  | false -> assert length bs = 1; 
-            assert UInt.fits (U8.v nextByte) 7;
-            UInt.logand_le (U64.v x) 0x7F;
-            lemma_varint_max bs x;
-            assert U64.v (reveal x) < 128;
-            UInt.logand_mask (U64.v x) 7;
-            FStar.Math.Lemmas.modulo_lemma (U64.v x) 128;
-            FStar.Math.Lemmas.modulo_lemma (U64.v x) 256;
-            Cast.uint8_to_uint64 nextByte
-  | true ->  assert length bs > 1; 
-            let rest : varint = tl bs in
-            let nextByte' = U8.(nextByte -^ 128uy) in
-            assume False; 0uL 
-  
 #pop-options
-(* Relevant F* code in ASN1*: ANS1.Spec.IdentifierU32.fst *)
