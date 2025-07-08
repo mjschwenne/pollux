@@ -1,4 +1,5 @@
-module Varint
+module Pollux.Proto.Varint
+
 open FStar.Ghost
 open FStar.Mul
 open FStar.Tactics.V2
@@ -8,11 +9,12 @@ module U8 = FStar.UInt8
 module U16 = FStar.UInt16
 module U32 = FStar.UInt32
 module U64 = FStar.UInt64
+module B = FStar.Bytes
 module Cast = FStar.Int.Cast.Full
 module Seq = FStar.Seq
 module List = FStar.List.Tot
 
-let rec valid (v:list UInt8.t) : bool = 
+let rec valid (v:list U8.t) : bool = 
   match v with 
   | [] -> false
     (* A one-byte varint is valid if the continuation bit is zero,
@@ -22,7 +24,7 @@ let rec valid (v:list UInt8.t) : bool =
     (* Note that U.msb is "most significant bit" while the msb in the pattern is "most significant byte" *)
   | msb :: rest -> U.msb (U8.v msb) && valid rest
 
-let varint = v:list UInt8.t{List.length v >= 1 /\ valid v}
+let varint = v:list U8.t{List.length v >= 1 /\ valid v}
 
 let set_msb_u8 (b:U8.t{U8.v b < 128}) : r:U8.t{UInt.msb (U8.v r) /\ (U8.v r) = (U8.v b + 128)} = 
   let r = U8.(b +^ 128uy) in 

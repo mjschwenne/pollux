@@ -1,8 +1,7 @@
 module Encode
+
 open FStar.Ghost
 open FStar.Mul
-open FStar.IO
-open FStar.Printf
 
 module U = FStar.UInt
 module I = FStar.Int
@@ -20,7 +19,7 @@ module List = FStar.List.Tot
 module Char = FStar.Char 
 module String = FStar.String 
 
-module P = Proto3
+module P = Pollux.Proto.Descriptors
 
 let nat_to_u8 (n:nat) : U8.t = U8.uint_to_t (UInt.to_uint_t U8.n n)
 let nat_to_u32 (n:nat) : U32.t = U32.uint_to_t (UInt.to_uint_t U32.n n)
@@ -76,19 +75,19 @@ type tag : Type =
 | LEN
 | I32
 
-let tag_func (p:P.proto_ty) : tag =
+let tag_func (p:P.pty) : tag =
   match p with 
-  | P.INT _ _ 
-  | P.UINT _ _ 
-  | P.SINT _ _ 
-  | P.BOOL _ 
-  | P.ENUM -> VARINT 
-  | P.FIXED 32 _
-  | P.SFIXED 32 _
-  | P.FLOAT -> I32
-  | P.FIXED 64 _ 
-  | P.SFIXED 64 _
-  | P.DOUBLE -> I64
+  | P.P_INT _ _ 
+  | P.P_UINT _ _ 
+  | P.P_SINT _ _ 
+  | P.P_BOOL _ 
+  | P.P_ENUM _ -> VARINT 
+  | P.P_FIXED 32 _
+  | P.P_SFIXED 32 _
+  | P.P_FLOAT _ -> I32
+  | P.P_FIXED 64 _ 
+  | P.P_SFIXED 64 _
+  | P.P_DOUBLE _ -> I64
   | _ -> LEN
 
 
@@ -105,23 +104,23 @@ List.map (fun c -> (U8.uint_to_t
                     (Char.int_of_char c)))) 
   (String.list_of_string s)
 
-let encode_field (f:Proto3.field) : list U8.t = 
+let encode_field (f:P.fd) : list U8.t = 
   let tagn = tag_num (tag_func f._3) in 
   // TODO: check maximum field number
   let id_u64 = nat_to_u64 f._2 in
   let header_u64 = U64.(logor (shift_left id_u64 (nat_to_u32 3)) tagn) in
   let header_enc = encode header_u64 in
   let body_enc = match f._3 with 
-                 | P.UINT _ (P.IMPLICIT (Some v)) -> encode (nat_to_u64 v)
-                 | P.UINT _ (P.OPTIONAL (Some v)) -> encode (nat_to_u64 v)
-                 | P.INT _ (P.IMPLICIT (Some v)) -> encode  (Cast.int64_to_uint64 (int_to_i64 v))
-                 | P.INT _ (P.OPTIONAL (Some v)) -> encode  (Cast.int64_to_uint64 (int_to_i64 v))
-                 | P.SINT _ (P.IMPLICIT (Some v)) -> encode (Cast.int64_to_uint64 (int_to_i64 v))
-                 | P.SINT _ (P.OPTIONAL (Some v)) -> encode (Cast.int64_to_uint64 (int_to_i64 v))
-                 | P.STRING (P.IMPLICIT (Some v)) -> List.Tot.Base.append 
+                 | P.P_UINT _ (P.P_IMPLICIT (Some v)) -> encode (nat_to_u64 v)
+                 | P.P_UINT _ (P.P_OPTIONAL (Some v)) -> encode (nat_to_u64 v)
+                 | P.P_INT _  (P.P_IMPLICIT (Some v)) -> encode  (Cast.int64_to_uint64 (int_to_i64 v))
+                 | P.P_INT _  (P.P_OPTIONAL (Some v)) -> encode  (Cast.int64_to_uint64 (int_to_i64 v))
+                 | P.P_SINT _ (P.P_IMPLICIT (Some v)) -> encode (Cast.int64_to_uint64 (int_to_i64 v))
+                 | P.P_SINT _ (P.P_OPTIONAL (Some v)) -> encode (Cast.int64_to_uint64 (int_to_i64 v))
+                 | P.P_STRING (P.P_IMPLICIT (Some v)) -> List.Tot.Base.append 
                                                      (encode (nat_to_u64 (String.length v))) 
                                                      (byte_list_of_string v)
-                 | P.STRING (P.OPTIONAL (Some v)) -> List.Tot.Base.append 
+                 | P.P_STRING (P.P_OPTIONAL (Some v)) -> List.Tot.Base.append 
                                                      (encode (nat_to_u64 (String.length v))) 
                                                      (byte_list_of_string v)
                  | _ -> [] 
@@ -131,6 +130,6 @@ let encode_field (f:Proto3.field) : list U8.t =
   else
     List.Tot.Base.append header_enc body_enc
 
-let encode_msg (m:Proto3.msg) : list U8.t = // 
+let encode_msg (m:P.msg) : list U8.t = // 
   List.fold_left List.Tot.Base.append [] (List.map encode_field m.fields) 
   
