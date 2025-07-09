@@ -1,0 +1,17 @@
+syntax = "proto3"; 
+
+message everything {
+  int32 i32i = 1;
+  optional int32 i64o = 2;
+  repeated uint32 u32r = 4;
+  uint64 u64i = 5;
+  optional sint32 s32o = 6;
+  repeated sint64 s64r = 7;
+  fixed32 f32i = 8;
+  optional fixed64 f64o = 9;
+  repeated sfixed32 sf32r = 10;
+  sfixed64 sf64i = 11;
+  optional bool bo = 12; 
+  repeated string sr = 13;
+  bytes bi = 14;
+}

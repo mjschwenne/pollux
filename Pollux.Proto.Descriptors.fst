@@ -1,6 +1,7 @@
 module Pollux.Proto.Descriptors
+
 open FStar.Mul
-open FStar.List.Tot
+open FStar.List.Tot.Base
 
 module U = FStar.UInt
 module U8 = FStar.UInt8
@@ -9,18 +10,12 @@ module I32 = FStar.Int32
 module U64 = FStar.UInt64
 module I64 = FStar.Int64
 module Cast = FStar.Int.Cast.Full
-module B = FStar.Bytes 
-module Seq = FStar.Seq
 module Set = FStar.Set 
-module PartMap = FStar.PartialMap
 
-let test_empty : PartMap.t string int = PartMap.empty string int
-let test_map : PartMap.t string int = PartMap.upd test_empty "test" 1
-let get : option int = PartMap.sel test_map "test"
-let x = assert (Some?.v get) = 1
-
-type double = d:list U8.t{List.length d = 8}
 type float = f:list U8.t{List.length f = 4}
+let float_z : float = [0uy; 0uy; 0uy; 0uy]
+type double = d:list U8.t{List.length d = 8}
+let double_z : double = float_z @ float_z
 
 type width = z:int{z = 32 \/ z = 64}
 type zw (w:width) = z:int{- pow2 (w-1) <= z /\ z < pow2 (w-1) } 
@@ -47,7 +42,6 @@ type pty =
 | P_MSG :              pdec -> pty
 | P_ENUM :             pdec -> pty
 
-let test_dpty : pty = P_INT 32 P_REPEATED
 
 type fd : Type = string & nat & pty
 
@@ -59,7 +53,7 @@ type md : Type = {
 }
 
 type dvty (v:Type) =
-| VIMPLICIT : option v -> dvty v
+| VIMPLICIT : v -> dvty v
 | VOPTIONAL : option v -> dvty v 
 | VREPEATED : list v -> dvty v
 
@@ -79,8 +73,13 @@ type vty =
 | VBOOL     : dvty bool -> vty 
 | VSTRING   : dvty string -> vty 
 | VBYTES    : dvty (list U8.t) -> vty 
-| VMSG      : vty
-| VENUM     : vty
+| VMSG      : dvty unit -> vty
+| VENUM     : dvty unit -> vty
 
-type msg : PartMap.t string vty
+type vf = string & vty
+let sort_vf (v1:vf) (v2:vf) : bool = String.compare v1._1 v2._1 <= 0
 
+type msg = m:list vf{List.sorted sort_vf m} 
+let empty_msg : msg = []
+
+let msg_field_names (m:msg) : list string = map (fun (f:vf) -> f._1) m

@@ -1,4 +1,5 @@
 (executable
  (public_name pollux)
  (name main)
- (libraries pollux stdio))
+ (libraries pollux proto stdio)
+ (preprocess (pps ppx_deriving.show)))

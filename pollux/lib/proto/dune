@@ -1,0 +1,4 @@
+(library
+ (name proto)
+ (libraries ocaml-protoc-plugin)
+ (preprocess (pps ppx_deriving.show)))

@@ -1,0 +1,3 @@
+(library
+ (name pollux)
+ (libraries fstar.lib ocaml-protoc-plugin))

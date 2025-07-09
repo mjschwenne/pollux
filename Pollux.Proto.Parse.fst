@@ -13,7 +13,7 @@ module Cast = FStar.Int.Cast.Full
 module Seq = FStar.Seq
 module Set = FStar.Set 
 module Str = FStar.String
-module PartMap = FStar.PartialMap
+module Map = FStar.Map
 
 module Desc = Pollux.Proto.Descriptors
 module Vint = Pollux.Proto.Varint
@@ -121,112 +121,143 @@ let encode_header (msg_d:Desc.md) (name:string) : option U64.t =
 
 type bytes = list U8.t
 
-let rec bytes_of_u64 (x:U64.t) : Tot bytes (decreases (U64.v x)) = 
-  let hi = U64.(x >>^ 8ul) in
-  let lo = Cast.uint64_to_uint8 U64.(logand x 255uL) in 
-  if U64.lte hi 0uL then 
-    [lo]
-  else 
-    let rx = bytes_of_u64 hi in 
-    lo :: rx
-   
-let rec bytes_of_u32 (x:U32.t) : Tot bytes (decreases (U32.v x)) = 
-  let hi = U32.(x >>^ 8ul) in
-  let lo = Cast.uint32_to_uint8 U32.(logand x 255ul) in 
-  if U32.lte hi 0ul then 
-    [lo]
-  else 
-    let rx = bytes_of_u32 hi in 
-    lo :: rx
-
-let bytes_of_i64 (i:I64.t) : bytes = bytes_of_u64 (Cast.int64_to_uint64 i)
-let bytes_of_i32 (i:I32.t) : bytes = bytes_of_u32 (Cast.int32_to_uint32 i)
-
 let u64_of_s32 (s:I32.t) : U64.t = nat_to_u64 (sint_uint 32 (I32.v s))
 let u64_of_s64 (s:I64.t) : U64.t = nat_to_u64 (sint_uint 64 (I64.v s))
 
-let bytes_of_bool (b:bool) : bytes = if b then [1uy] else [0uy]
+let encode_int32 (i:I32.t) : bytes = Vint.encode (Cast.int32_to_uint64 i)
+let encode_int64 (i:I64.t) : bytes = Vint.encode (Cast.int64_to_uint64 i)
+let encode_uint32 (u:U32.t) : bytes = Vint.encode (Cast.uint32_to_uint64 u)
+let encode_sint32 (s:I32.t) : bytes = Vint.encode (u64_of_s32 s)
+let encode_sint64 (s:I64.t) : bytes = Vint.encode (u64_of_s64 s)
+let rec __encode_fixed32 (x:U32.t) (b:pos{b <= 4}) : Tot bytes (decreases b) = 
+  let hi = U32.(x >>^ 8ul) in
+  let lo = Cast.uint32_to_uint8 U32.(logand x 255ul) in 
+  if b = 1 then 
+    [lo]
+  else 
+    let rx = __encode_fixed32 hi (b-1) in 
+    lo :: rx
+let encode_fixed32 (f:U32.t) : bytes = __encode_fixed32 f 4
+let rec __encode_fixed64 (x:U64.t) (b:pos{b <= 8}) : Tot bytes (decreases b) = 
+  let hi = U64.(x >>^ 8ul) in
+  let lo = Cast.uint64_to_uint8 U64.(logand x 255uL) in 
+  if b = 1 then 
+    [lo]
+  else 
+    let rx = __encode_fixed64 hi (b-1) in 
+    lo :: rx
+let encode_fixed64 (f:U64.t) : bytes = __encode_fixed64 f 8
+let encode_sfixed32 (i:I32.t) : bytes = encode_fixed32 (Cast.int32_to_uint32 i)
+let encode_sfixed64 (i:I64.t) : bytes = encode_fixed64 (Cast.int64_to_uint64 i)
+let encode_bool (b:bool) : bytes = if b then [1uy] else [0uy]
 
-let bytes_of_string (s:string) : bytes = fold_left append [] 
-  (map (fun x -> bytes_of_u32 (FStar.Char.u32_of_char x)) (String.list_of_string s))
+let encode_implicit (#a:eqtype) (v:a) (d:a) (enc: a -> bytes) : option bytes = 
+  if v = d then None else Some (enc v)
+let encode_packed (#a:Type) (l:list a) (enc_one: a -> bytes) : bytes = 
+  let bytes = fold_left append [] (map enc_one l) in 
+  let length = Vint.encode (nat_to_u64 (length bytes)) in 
+  length @ bytes
 
-let encode_value (v:Desc.vty) : option bytes = 
+let rec encode_utf8_char (x:U32.t) : Tot bytes (decreases (U32.v x)) = 
+  let hi = U32.(x >>^ 8ul) in
+  let lo = Cast.uint32_to_uint8 U32.(logand x 255ul) in 
+  UInt.logand_mask (U32.v x) 8;
+  if U32.lte hi 0ul then 
+    [lo]
+  else 
+    let rx = encode_utf8_char hi in 
+    lo :: rx
+let encode_string (s:string) : bytes = encode_packed (map Char.u32_of_char (String.list_of_string s))
+                                        encode_utf8_char
+
+let v_measure (v:Desc.vty) : nat = 
   match v with 
-  | Desc.VDOUBLE (Desc.VIMPLICIT (Some v')) 
+  | Desc.VDOUBLE v'
+  | Desc.VFLOAT v'
+  | Desc.VINT32 v' 
+  | Desc.VINT64 v'
+  | Desc.VUINT32 v' 
+  | Desc.VUINT64 v' 
+  | Desc.VSINT32 v' 
+  | Desc.VSINT64 v' 
+  | Desc.VFIXED32 v' 
+  | Desc.VFIXED64 v' 
+  | Desc.VSFIXED32 v' 
+  | Desc.VSFIXED64 v' 
+  | Desc.VBOOL v' 
+  | Desc.VSTRING v' 
+  | Desc.VBYTES v' 
+  | Desc.VMSG v' 
+  | Desc.VENUM v' -> match v' with 
+                    | Desc.VIMPLICIT _ -> 0
+                    | Desc.VOPTIONAL _ -> 0
+                    | Desc.VREPEATED l -> List.length l
+
+let rec encode_field (msg_d:Desc.md) (field:Desc.vf) : Tot (option bytes) (decreases %[v_measure field._2;1]) = 
+    let? header : U64.t = encode_header msg_d field._1 in 
+    let header_bytes : bytes = Vint.encode header in 
+    let? value : bytes = encode_value msg_d field in
+    Some (header_bytes @ value)
+
+and encode_value (msg_d:Desc.md) (field:Desc.vf) : Tot (option bytes) (decreases %[v_measure field._2;0]) = 
+  match field._2 with 
+  | Desc.VDOUBLE (Desc.VIMPLICIT v') -> encode_implicit v' Desc.double_z id
   | Desc.VDOUBLE (Desc.VOPTIONAL (Some v')) -> Some v'
-  // Hopefully this (vh :: vt) pattern will only match non-empty lists
-  | Desc.VDOUBLE (Desc.VREPEATED (vh :: vt)) -> Some (fold_left append vh vt)
-  | Desc.VFLOAT (Desc.VIMPLICIT (Some v'))
+  | Desc.VDOUBLE (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) id)
+  | Desc.VFLOAT (Desc.VIMPLICIT v') -> encode_implicit v' Desc.float_z id
   | Desc.VFLOAT (Desc.VOPTIONAL (Some v')) -> Some v' 
-  | Desc.VFLOAT (Desc.VREPEATED (vh :: vt)) -> Some (fold_left append vh vt)
-  | Desc.VINT32 (Desc.VIMPLICIT (Some v')) 
-  | Desc.VINT32 (Desc.VOPTIONAL (Some v')) -> Some (Vint.encode (Cast.int32_to_uint64 v'))
-  // FIXME: Add length prefix
-  | Desc.VINT32 (Desc.VREPEATED (vh :: vt)) -> Some (fold_left append (bytes_of_i32 vh) 
-                                                   (map (fun x -> Vint.encode (Cast.int32_to_uint64 x)) vt))
-  | Desc.VINT64 (Desc.VIMPLICIT (Some v')) 
-  | Desc.VINT64 (Desc.VOPTIONAL (Some v')) -> Some (Vint.encode (Cast.int64_to_uint64 v'))
-  | Desc.VINT64 (Desc.VREPEATED (vh :: vt)) -> Some (fold_left append (Vint.encode (Cast.int64_to_uint64 vh)) 
-                                                   (map (fun x -> Vint.encode (Cast.int64_to_uint64 x)) vt))
-  | Desc.VUINT32 (Desc.VIMPLICIT (Some v')) 
-  | Desc.VUINT32 (Desc.VOPTIONAL (Some v')) -> Some (Vint.encode (Cast.uint32_to_uint64 v'))
-  | Desc.VUINT32 (Desc.VREPEATED (vh :: vt)) -> Some (fold_left append (Vint.encode (Cast.uint32_to_uint64 vh)) 
-                                                   (map (fun x -> Vint.encode (Cast.uint32_to_uint64 x)) vt))
-  | Desc.VUINT64 (Desc.VIMPLICIT (Some v')) 
+  | Desc.VFLOAT (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) id)
+  | Desc.VINT32 (Desc.VIMPLICIT v') -> encode_implicit v' 0l encode_int32
+  | Desc.VINT32 (Desc.VOPTIONAL (Some v')) -> Some (encode_int32 v')
+  | Desc.VINT32 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_int32)
+  | Desc.VINT64 (Desc.VIMPLICIT v') -> encode_implicit v' 0L encode_int64 
+  | Desc.VINT64 (Desc.VOPTIONAL (Some v')) -> Some (encode_int64 v')
+  | Desc.VINT64 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_int64)
+  | Desc.VUINT32 (Desc.VIMPLICIT v') -> encode_implicit v' 0ul encode_uint32
+  | Desc.VUINT32 (Desc.VOPTIONAL (Some v')) -> Some (encode_uint32 v')
+  | Desc.VUINT32 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_uint32)
+  | Desc.VUINT64 (Desc.VIMPLICIT v') -> encode_implicit v' 0uL Vint.encode
   | Desc.VUINT64 (Desc.VOPTIONAL (Some v')) -> Some (Vint.encode v')
-  | Desc.VUINT64 (Desc.VREPEATED (vh :: vt)) -> Some (fold_left append (Vint.encode vh) 
-                                                   (map Vint.encode vt))
-  | Desc.VSINT32 (Desc.VIMPLICIT (Some v')) 
-  | Desc.VSINT32 (Desc.VOPTIONAL (Some v')) -> Some (Vint.encode (u64_of_s32 v'))
-  | Desc.VSINT32 (Desc.VREPEATED (vh :: vt)) -> Some (fold_left append (Vint.encode (u64_of_s32 vh)) 
-                                                   (map (fun x -> Vint.encode (u64_of_s32 x)) vt))
-  | Desc.VSINT64 (Desc.VIMPLICIT (Some v')) 
-  | Desc.VSINT64 (Desc.VOPTIONAL (Some v')) -> Some (Vint.encode (u64_of_s64 v'))
-  | Desc.VSINT64 (Desc.VREPEATED (vh :: vt)) -> Some (fold_left append (Vint.encode (u64_of_s64 vh)) 
-                                                   (map (fun x -> Vint.encode (u64_of_s64 x)) vt))
-  | Desc.VFIXED32 (Desc.VIMPLICIT (Some v')) 
-  | Desc.VFIXED32 (Desc.VOPTIONAL (Some v')) -> Some (bytes_of_u32 v')
-  | Desc.VFIXED32 (Desc.VREPEATED (vh :: vt)) -> Some (fold_left append (bytes_of_u32 vh)
-                                                    (map bytes_of_u32 vt))
-  | Desc.VFIXED64 (Desc.VIMPLICIT (Some v')) 
-  | Desc.VFIXED64 (Desc.VOPTIONAL (Some v')) -> Some (bytes_of_u64 v')
-  | Desc.VFIXED64 (Desc.VREPEATED (vh :: vt)) -> Some (fold_left append (bytes_of_u64 vh)
-                                                    (map bytes_of_u64 vt))
-  | Desc.VSFIXED32 (Desc.VIMPLICIT (Some v')) 
-  | Desc.VSFIXED32 (Desc.VOPTIONAL (Some v')) -> Some (bytes_of_i32 v')
-  | Desc.VSFIXED32 (Desc.VREPEATED (vh :: vt)) -> Some (fold_left append (bytes_of_i32 vh)
-                                                    (map bytes_of_i32 vt))
-  | Desc.VSFIXED64 (Desc.VIMPLICIT (Some v')) 
-  | Desc.VSFIXED64 (Desc.VOPTIONAL (Some v')) -> Some (bytes_of_i64 v')
-  | Desc.VSFIXED64 (Desc.VREPEATED (vh :: vt)) -> Some (fold_left append (bytes_of_i64 vh)
-                                                    (map bytes_of_i64 vt))
-  | Desc.VBOOL (Desc.VIMPLICIT (Some v'))
-  | Desc.VBOOL (Desc.VOPTIONAL (Some v')) -> Some (bytes_of_bool v')
-  | Desc.VBOOL (Desc.VREPEATED (vh :: vt)) -> Some (fold_left append (bytes_of_bool vh)
-                                                  (map bytes_of_bool vt))
-  | Desc.VSTRING (Desc.VIMPLICIT (Some v'))
-  | Desc.VSTRING (Desc.VOPTIONAL (Some v')) -> Some (bytes_of_string v')
-  // FIXME: Strings, bytes and messages can be repeated by aren't packed
-  | Desc.VSTRING (Desc.VREPEATED (vh :: vt)) -> Some (bytes_of_string vh)
-  | Desc.VBYTES (Desc.VIMPLICIT (Some v'))
+  | Desc.VUINT64 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) Vint.encode)
+  | Desc.VSINT32 (Desc.VIMPLICIT v') -> encode_implicit v' 0l encode_sint32
+  | Desc.VSINT32 (Desc.VOPTIONAL (Some v')) -> Some (encode_sint32 v')
+  | Desc.VSINT32 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_sint32)
+  | Desc.VSINT64 (Desc.VIMPLICIT v') -> encode_implicit v' 0L encode_sint64
+  | Desc.VSINT64 (Desc.VOPTIONAL (Some v')) -> Some (encode_sint64 v')
+  | Desc.VSINT64 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_sint64)
+  | Desc.VFIXED32 (Desc.VIMPLICIT v') -> encode_implicit v' 0ul encode_fixed32 
+  | Desc.VFIXED32 (Desc.VOPTIONAL (Some v')) -> Some (encode_fixed32 v')
+  | Desc.VFIXED32 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_fixed32)
+  | Desc.VFIXED64 (Desc.VIMPLICIT v') -> encode_implicit v' 0uL encode_fixed64 
+  | Desc.VFIXED64 (Desc.VOPTIONAL (Some v')) -> Some (encode_fixed64 v')
+  | Desc.VFIXED64 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_fixed64)
+  | Desc.VSFIXED32 (Desc.VIMPLICIT v') -> encode_implicit v' 0l encode_sfixed32
+  | Desc.VSFIXED32 (Desc.VOPTIONAL (Some v')) -> Some (encode_sfixed32 v')
+  | Desc.VSFIXED32 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_sfixed32)
+  | Desc.VSFIXED64 (Desc.VIMPLICIT v') -> encode_implicit v' 0L encode_sfixed64 
+  | Desc.VSFIXED64 (Desc.VOPTIONAL (Some v')) -> Some (encode_sfixed64 v')
+  | Desc.VSFIXED64 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_sfixed64)
+  | Desc.VBOOL (Desc.VIMPLICIT v') -> encode_implicit v' false encode_bool
+  | Desc.VBOOL (Desc.VOPTIONAL (Some v')) -> Some (encode_bool v')
+  | Desc.VBOOL (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_bool)
+  | Desc.VSTRING (Desc.VIMPLICIT v') -> encode_implicit v' "" encode_string
+  | Desc.VSTRING (Desc.VOPTIONAL (Some v')) -> Some (encode_string v')
+  | Desc.VSTRING (Desc.VREPEATED (vh :: vt)) -> let rest = (Desc.VSTRING (Desc.VREPEATED vt)) in 
+                                              let? renc = (encode_field msg_d (field._1, rest)) in 
+                                              Some (encode_string vh @ renc)
+  | Desc.VBYTES (Desc.VIMPLICIT v') -> encode_implicit v' [] id 
   | Desc.VBYTES (Desc.VOPTIONAL (Some v')) -> Some v'
-  // FIXME: Strings, bytes and messages can be repeated by aren't packed
-  | Desc.VBYTES (Desc.VREPEATED (vh :: vt)) -> Some vh
+  | Desc.VBYTES (Desc.VREPEATED (vh :: vt)) -> let rest = (Desc.VBYTES (Desc.VREPEATED vt)) in 
+                                             let? renc = (encode_field msg_d (field._1, rest)) in 
+                                             Some (vh @ renc)
   // TODO: Add message and enum support
   | _ -> None
 
-let encode_field (msg_d:Desc.md) (name:string) (v:Desc.vty) : option bytes = 
-  let? header : U64.t = encode_header msg_d name in 
-  let header_bytes : bytes = Vint.encode header in 
-  let? value : bytes = encode_value v in
-  Some (header_bytes @ value)
+let opt_append (#a:Type) (l1:list a) (l2:option (list a)) : list a =
+  match l2 with 
+  | None -> l1
+  | Some l2' -> l1 @ l2'
 
-let test_msg : Desc.md = {
-  name = "test";
-  reserved = Set.empty;
-  fields = [
-    ("field1", 1, Desc.P_INT 32 Desc.P_REPEATED)
-  ];
-}
-
-let test_gh = encode_header test_msg "field2"
+let encode_message (md:Desc.md) (msg:Desc.msg) : bytes = 
+  let encoder : Desc.vf -> option bytes = encode_field md in 
+  fold_left opt_append [] (map encoder msg)

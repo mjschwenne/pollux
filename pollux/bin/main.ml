@@ -1,27 +1,15 @@
 open Stdio
-open Pollux
+open Proto.Everything
 
-let test_val : Z.t Proto3.proto_dec = Proto3.IMPLICIT (Some (Z.of_int 128))
-let test_field : Proto3.proto_ty = Proto3.INT (Z.of_int 32, test_val)
-
-let test_msg : Proto3.msg =
-  {
-    Proto3.name = "test";
-    Proto3.reserved = FStar_Set.empty ();
-    Proto3.fields = [ ("field1", Z.of_int 1, test_field) ];
-  }
-
-let fstar_u8_to_char u8 = Char.chr (Z.to_int (FStar_UInt8.v u8))
+let test : Everything.t =
+  Everything.make ~i32i:3 ~i64o:(-1) ~u32r:[ 1; 2; 3 ] ~u64i:0 ?s32o:None
+    ~s64r:[ -1 ] ~f32i:1024l ~f64o:3668L ~sf32r:[ -19l ] ~sf64i:26L ~bo:true
+    ~sr:[ "Hello"; "World" ]
+    ~bi:(String.to_bytes "DEADBEEF")
+    ()
 
 let () =
   print_endline "==== Pollux Encoding Test Program ====";
-  let enc = Encode.encode_msg test_msg in
-  let enc_byt : bytes =
-    Bytes.init (List.length enc) (fun i -> fstar_u8_to_char (List.nth enc i))
-  in
-  let output_file = open_out_bin "msg.bin" in
-  Printf.fprintf output_file "%s" (Bytes.to_string enc_byt);
-  close_out output_file;
-  Printf.printf "%d\n"
-    (Z.to_int (FStar_UInt64.v (Pollux.Encode.decode [ 128; 1 ])));
+  printf "Proto Struct: %s\n" (Everything.show test);
+  let proto_enc = Everything.to_proto test in
   print_endline "================ end ================="

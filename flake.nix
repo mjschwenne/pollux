@@ -36,6 +36,11 @@
           patches = [./nix/karamel-install.patch];
         };
         everparse-pkg = everparse.packages."${system}".default;
+        ocaml-protoc-plugin = pkgs.callPackage ./nix/ocaml-protoc-plugin.nix {
+          buildDunePackage = pkgs.ocaml-ng.ocamlPackages_4_14.buildDunePackage;
+          ocaml = pkgs.ocaml-ng.ocamlPackages_4_14.ocaml;
+          ocamlPackages = pkgs.ocaml-ng.ocamlPackages_4_14;
+        };
         dir-locals = pkgs.callPackage ./nix/dir-locals.nix {
           karamel = karamel-pkg;
           everparse = everparse-pkg;
@@ -55,6 +60,7 @@
                 xxd
                 go
                 dir-locals
+                ocaml-protoc-plugin
               ]
               ++ (with pkgs.ocaml-ng.ocamlPackages_4_14; [
                 ocaml
@@ -67,6 +73,9 @@
                 batteries
                 pprint
                 ppx_deriving_yojson
+                ppx_expect
+                ptime
+                base64
                 stdint
                 zarith
               ]);
