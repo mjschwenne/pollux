@@ -1,7 +1,7 @@
 pollux/_build/default/bin/main.exe: pollux/lib/Proto3.ml pollux/lib/Encode.ml pollux/bin/main.ml
 	cd pollux; dune build
 
-pollux/lib/%.ml: %.fst
+pollux/lib/pollux/%.ml: %.fst
 	fstar.exe --codegen OCaml --extract $(basename $?) --odir pollux/lib $? 
 
 run: pollux/_build/default/bin/main.exe

@@ -2,6 +2,9 @@
 .envrc
 .dir-locals.el
 
+*.fst.checked
+*.bin
+
 _build
 _log
 _digests

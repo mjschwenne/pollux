@@ -86,7 +86,7 @@ end = struct
   let make ?(i32i = 0) ?i64o ?(u32r = []) ?(u64i = 0) ?s32o ?(s64r = []) ?(f32i = 0l) ?f64o ?(sf32r = []) ?(sf64i = 0L) ?bo ?(sr = []) ?(bi = (Bytes.of_string {||})) () = { i32i; i64o; u32r; u64i; s32o; s64r; f32i; f64o; sf32r; sf64i; bo; sr; bi }
   let merge =
   let merge_i32i = Runtime'.Merge.merge Runtime'.Spec.( basic ((1, "i32i", "i32i"), int32_int, (0)) ) in
-  let merge_i64o = Runtime'.Merge.merge Runtime'.Spec.( basic_opt ((2, "i64o", "i64o"), int32_int) ) in
+  let merge_i64o = Runtime'.Merge.merge Runtime'.Spec.( basic_opt ((2, "i64o", "i64o"), int64_int) ) in
   let merge_u32r = Runtime'.Merge.merge Runtime'.Spec.( repeated ((4, "u32r", "u32r"), uint32_int, packed) ) in
   let merge_u64i = Runtime'.Merge.merge Runtime'.Spec.( basic ((5, "u64i", "u64i"), uint64_int, (0)) ) in
   let merge_s32o = Runtime'.Merge.merge Runtime'.Spec.( basic_opt ((6, "s32o", "s32o"), sint32_int) ) in
@@ -113,7 +113,7 @@ end = struct
   	sr = (merge_sr t1.sr t2.sr);
   	bi = (merge_bi t1.bi t2.bi);
    }
-  let spec () = Runtime'.Spec.( basic ((1, "i32i", "i32i"), int32_int, (0)) ^:: basic_opt ((2, "i64o", "i64o"), int32_int) ^:: repeated ((4, "u32r", "u32r"), uint32_int, packed) ^:: basic ((5, "u64i", "u64i"), uint64_int, (0)) ^:: basic_opt ((6, "s32o", "s32o"), sint32_int) ^:: repeated ((7, "s64r", "s64r"), sint64_int, packed) ^:: basic ((8, "f32i", "f32i"), fixed32, (0l)) ^:: basic_opt ((9, "f64o", "f64o"), fixed64) ^:: repeated ((10, "sf32r", "sf32r"), sfixed32, packed) ^:: basic ((11, "sf64i", "sf64i"), sfixed64, (0L)) ^:: basic_opt ((12, "bo", "bo"), bool) ^:: repeated ((13, "sr", "sr"), string, not_packed) ^:: basic ((14, "bi", "bi"), bytes, ((Bytes.of_string {||}))) ^:: nil )
+  let spec () = Runtime'.Spec.( basic ((1, "i32i", "i32i"), int32_int, (0)) ^:: basic_opt ((2, "i64o", "i64o"), int64_int) ^:: repeated ((4, "u32r", "u32r"), uint32_int, packed) ^:: basic ((5, "u64i", "u64i"), uint64_int, (0)) ^:: basic_opt ((6, "s32o", "s32o"), sint32_int) ^:: repeated ((7, "s64r", "s64r"), sint64_int, packed) ^:: basic ((8, "f32i", "f32i"), fixed32, (0l)) ^:: basic_opt ((9, "f64o", "f64o"), fixed64) ^:: repeated ((10, "sf32r", "sf32r"), sfixed32, packed) ^:: basic ((11, "sf64i", "sf64i"), sfixed64, (0L)) ^:: basic_opt ((12, "bo", "bo"), bool) ^:: repeated ((13, "sr", "sr"), string, not_packed) ^:: basic ((14, "bi", "bi"), bytes, ((Bytes.of_string {||}))) ^:: nil )
   let to_proto' =
     let serialize = Runtime'.apply_lazy (fun () -> Runtime'.Serialize.serialize (spec ())) in
     fun writer { i32i; i64o; u32r; u64i; s32o; s64r; f32i; f64o; sf32r; sf64i; bo; sr; bi } -> serialize writer i32i i64o u32r u64i s32o s64r f32i f64o sf32r sf64i bo sr bi

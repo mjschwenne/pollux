@@ -99,14 +99,26 @@ let find_field_string (msg:Desc.md) (id: string) : option (f:Desc.fd{f._1 = id})
 
 let find_tag (p:Desc.pty) : tag = 
   match p with 
+  | Desc.P_INT _ Desc.P_REPEATED
+  | Desc.P_UINT _ Desc.P_REPEATED
+  | Desc.P_SINT _ Desc.P_REPEATED
+  | Desc.P_BOOL Desc.P_REPEATED
+  | Desc.P_ENUM Desc.P_REPEATED -> LEN
   | Desc.P_INT _ _ 
   | Desc.P_UINT _ _ 
   | Desc.P_SINT _ _ 
   | Desc.P_BOOL _
   | Desc.P_ENUM _ -> VARINT
+  | Desc.P_FIXED 32 Desc.P_REPEATED
+  | Desc.P_SFIXED 32 Desc.P_REPEATED
+  | Desc.P_FLOAT Desc.P_REPEATED -> LEN
+  | Desc.P_FIXED 32 _ 
   | Desc.P_FIXED 32 _
   | Desc.P_SFIXED 32 _
   | Desc.P_FLOAT _ -> I32 
+  | Desc.P_FIXED 64 Desc.P_REPEATED
+  | Desc.P_SFIXED 64 Desc.P_REPEATED
+  | Desc.P_DOUBLE Desc.P_REPEATED -> I64 
   | Desc.P_FIXED 64 _ 
   | Desc.P_SFIXED 64 _ 
   | Desc.P_DOUBLE _ -> I64 
@@ -169,6 +181,8 @@ let rec encode_utf8_char (x:U32.t) : Tot bytes (decreases (U32.v x)) =
     lo :: rx
 let encode_string (s:string) : bytes = encode_packed (map Char.u32_of_char (String.list_of_string s))
                                         encode_utf8_char
+// Add the length prefix, separate function for consistency
+let encode_bytes (b:bytes) : bytes = encode_packed b (fun x -> [x])
 
 let v_measure (v:Desc.vty) : nat = 
   match v with 
@@ -243,13 +257,17 @@ and encode_value (msg_d:Desc.md) (field:Desc.vf) : Tot (option bytes) (decreases
   | Desc.VSTRING (Desc.VIMPLICIT v') -> encode_implicit v' "" encode_string
   | Desc.VSTRING (Desc.VOPTIONAL (Some v')) -> Some (encode_string v')
   | Desc.VSTRING (Desc.VREPEATED (vh :: vt)) -> let rest = (Desc.VSTRING (Desc.VREPEATED vt)) in 
-                                              let? renc = (encode_field msg_d (field._1, rest)) in 
-                                              Some (encode_string vh @ renc)
-  | Desc.VBYTES (Desc.VIMPLICIT v') -> encode_implicit v' [] id 
-  | Desc.VBYTES (Desc.VOPTIONAL (Some v')) -> Some v'
+                                              let renc = (encode_field msg_d (field._1, rest)) in 
+                                              (match renc with 
+                                                | None -> Some (encode_string vh)
+                                                | Some r -> Some ((encode_string vh) @ r))
+  | Desc.VBYTES (Desc.VIMPLICIT v') -> encode_implicit v' [] encode_bytes
+  | Desc.VBYTES (Desc.VOPTIONAL (Some v')) -> Some (encode_bytes v')
   | Desc.VBYTES (Desc.VREPEATED (vh :: vt)) -> let rest = (Desc.VBYTES (Desc.VREPEATED vt)) in 
-                                             let? renc = (encode_field msg_d (field._1, rest)) in 
-                                             Some (vh @ renc)
+                                             let renc = (encode_field msg_d (field._1, rest)) in 
+                                             (match renc with 
+                                               | None -> Some (encode_bytes vh)
+                                               | Some r -> Some ((encode_bytes vh) @ r))
   // TODO: Add message and enum support
   | _ -> None
 
