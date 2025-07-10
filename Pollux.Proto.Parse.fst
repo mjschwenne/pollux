@@ -118,7 +118,7 @@ let find_tag (p:Desc.pty) : tag =
   | Desc.P_FLOAT _ -> I32 
   | Desc.P_FIXED 64 Desc.P_REPEATED
   | Desc.P_SFIXED 64 Desc.P_REPEATED
-  | Desc.P_DOUBLE Desc.P_REPEATED -> I64 
+  | Desc.P_DOUBLE Desc.P_REPEATED -> LEN
   | Desc.P_FIXED 64 _ 
   | Desc.P_SFIXED 64 _ 
   | Desc.P_DOUBLE _ -> I64 
@@ -279,3 +279,46 @@ let opt_append (#a:Type) (l1:list a) (l2:option (list a)) : list a =
 let encode_message (md:Desc.md) (msg:Desc.msg) : bytes = 
   let encoder : Desc.vf -> option bytes = encode_field md in 
   fold_left opt_append [] (map encoder msg)
+
+let tag_from_num (n:U64.t) : option tag = 
+  match n with 
+  | 0uL -> Some VARINT
+  | 1uL -> Some I64 
+  | 2uL -> Some LEN 
+  | 5uL -> Some I32 
+  | _ -> None 
+
+let decode_header (enc:bytes) : option (U64.t & tag & b:bytes{length b < length enc}) =
+  // FIXME: What if we have an invalid varint encoded here?
+  let? header_bytes, bs = Vint.extract_varint enc in
+  let header = Vint.decode header_bytes in 
+  let fid = U64.( header >>^ 3ul) in 
+  let tag_n = U64.( header &^ 7uL) in
+  let? tag = tag_from_num tag_n in
+  Some (fid, tag, bs)
+
+let find_field (md:Desc.md) (id:nat) : option (f:Desc.fd{f._2 = id}) = 
+  find (fun (f: Desc.fd) -> f._2 = id) md.fields
+
+let rec decode_field (md:Desc.md) (enc:bytes) : Tot (option (Desc.vf & b:bytes{length b < length enc})) (decreases (length enc)) =
+  // FIXME: Find a way to skip unknown fields
+  match decode_header enc with 
+  | None -> None 
+  | Some (fid, tag, bs) -> (match find_field md (U64.v fid) with 
+                          | None -> None 
+                          | Some field -> (match decode_value md field._3 bs with 
+                                          | None -> None 
+                                          | Some (v, bs') -> Some ((field._1, v), bs')))
+  // So apparently the monadic let? doesn't like the bytes length decreasing 
+  // clause.                                          
+  // let? fid, tag, bs = decode_header enc in 
+  // let? field = find_field md (U64.v fid) in 
+  // let? value, bs' = decode_value md field._3 bs in 
+  // let vfv : Desc.vf = (field._1, value) in
+  // Some ((field._1, value), bs')
+
+and decode_value (md:Desc.md) (pf:Desc.pty) (enc:bytes) : Tot (option (Desc.vty & b:bytes{length b < length enc})) (decreases (length enc)) = 
+  match pf with 
+  | Desc.P_INT 32 Desc.P_IMPLICIT -> None 
+  | _ -> None
+  

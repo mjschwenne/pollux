@@ -2,7 +2,7 @@ module Pollux.Proto.Varint
 
 open FStar.Ghost
 open FStar.Mul
-open FStar.Tactics.V2
+open FStar.List.Tot
 
 module U = FStar.UInt
 module U8 = FStar.UInt8
@@ -46,6 +46,18 @@ let rec decode (bs:varint) : U64.t =
                  let rx = decode rest in 
                  let y = U64.((rx <<^ 7ul) |^ msx) in
                  y
+
+let rec extract_varint (bs:list U8.t) : o:option (varint & b:list U8.t{length b < length bs}) = 
+  match bs with 
+  | [] -> None
+  | h :: tl -> if U8.(lte h 127uy) then 
+              Some ([h], tl)
+            else 
+              let rest : option (varint & list U8.t) = extract_varint tl in 
+               (match rest with 
+                | None -> None 
+                | Some (v, rest) -> UInt.lemma_msb_pow2 (U8.v h); 
+                                   Some ((h :: v), rest))
 
 let split (#b:pos) (x: UInt.uint_t b) (n:pos{n < b}) : 
   s:(UInt.uint_t b & UInt.uint_t b){x = s._1 * (pow2 n) + s._2} = 
@@ -133,7 +145,6 @@ let rec encode (x: U64.t) : Tot (v:varint{U64.v (decode v) = U64.v x}) (decrease
   else 
     let lo8 = split_lo_to_u8 xn lo in
     pollux_split_hi_bound xn 7;
-    pollux_split_hi_vacl xn 7;
     pollux_split_lo_val xn 7;
     let rx = encode hi64 in 
     decode_prepend xn rx;

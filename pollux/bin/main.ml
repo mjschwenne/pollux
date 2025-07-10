@@ -126,15 +126,20 @@ let () =
     string_of_pollux_bytes
       (Pollux_Proto_Parse.encode_message pollux_md test_pollux)
   in
-  let problem_value =
-    Pollux_Proto_Parse.encode_value pollux_md (List.nth test_pollux 11)
-  in
-  (match problem_value with
-  | None -> printf "Failed to encode sr value: None\n"
-  | Some h ->
-      printf "Encoded sr value:";
-      List.iter print_fstar_u8 h;
-      printf "\n");
+  printf "Testing varint extraction!\n";
+  let test_varint = [ 212; 129; 243 ] in
+  let v, rest = Pollux_Proto_Varint.extract_varint test_varint in
+  (match v with
+  | None ->
+      printf "No Varint: ";
+      List.iter print_fstar_u8 rest;
+      print_newline ()
+  | Some v' ->
+      printf "Found Varint %d: " (Uint64.to_int (Pollux_Proto_Varint.decode v'));
+      List.iter print_fstar_u8 v';
+      printf "-- ";
+      List.iter print_fstar_u8 rest;
+      print_newline ());
   let output_file = open_out_bin "msg.bin" in
   Printf.fprintf output_file "%s" pollux_enc;
   close_out output_file;

@@ -42,7 +42,6 @@ type pty =
 | P_MSG :              pdec -> pty
 | P_ENUM :             pdec -> pty
 
-
 type fd : Type = string & nat & pty
 
 unopteq

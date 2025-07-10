@@ -24,6 +24,25 @@ let rec (decode : varint -> FStar_UInt64.t) =
           FStar_UInt64.logor
             (FStar_UInt64.shift_left rx (Stdint.Uint32.of_int (7))) msx in
         y
+let rec (extract_varint :
+  FStar_UInt8.t Prims.list ->
+    (varint FStar_Pervasives_Native.option * FStar_UInt8.t Prims.list))
+  =
+  fun bs ->
+    match bs with
+    | [] -> (FStar_Pervasives_Native.None, [])
+    | h::tl ->
+        if FStar_UInt8.lte h 127
+        then ((FStar_Pervasives_Native.Some [h]), tl)
+        else
+          (let uu___1 = extract_varint tl in
+           match uu___1 with
+           | (v, rest) ->
+               (match v with
+                | FStar_Pervasives_Native.None ->
+                    (FStar_Pervasives_Native.None, bs)
+                | FStar_Pervasives_Native.Some v1 ->
+                    ((FStar_Pervasives_Native.Some (h :: v1)), rest)))
 let (split :
   Prims.pos ->
     Obj.t FStar_UInt.uint_t ->
