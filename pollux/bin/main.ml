@@ -25,7 +25,7 @@ let pollux_md : D.md =
       [
         (* TODO: make F* md type enforce unique field numbers *)
         ("i32i", z 1, P_INT (z 32, P_IMPLICIT));
-        ("i640", z 2, P_INT (z 64, P_OPTIONAL));
+        ("i64o", z 2, P_INT (z 64, P_OPTIONAL));
         ("u32r", z 4, P_UINT (z 32, P_REPEATED));
         ("u64i", z 5, P_UINT (z 64, P_IMPLICIT));
         ("s32o", z 6, P_SINT (z 32, P_OPTIONAL));
@@ -126,20 +126,22 @@ let () =
     string_of_pollux_bytes
       (Pollux_Proto_Parse.encode_message pollux_md test_pollux)
   in
-  printf "Testing varint extraction!\n";
-  let test_varint = [ 212; 129; 243 ] in
-  let v, rest = Pollux_Proto_Varint.extract_varint test_varint in
-  (match v with
-  | None ->
-      printf "No Varint: ";
-      List.iter print_fstar_u8 rest;
-      print_newline ()
+  printf "Testing optional encoding!\n";
+  let test_optional_enc =
+    Pollux_Proto_Parse.encode_field pollux_md (List.nth test_pollux 1)
+  in
+  let test_optional_header =
+    Pollux_Proto_Parse.encode_header pollux_md "i64o"
+  in
+  (match test_optional_enc with
+  | None -> printf "No Encoding\n"
   | Some v' ->
-      printf "Found Varint %d: " (Uint64.to_int (Pollux_Proto_Varint.decode v'));
+      printf "Found Encoding: ";
       List.iter print_fstar_u8 v';
-      printf "-- ";
-      List.iter print_fstar_u8 rest;
       print_newline ());
+  (match test_optional_header with
+  | None -> printf "No Header\n"
+  | Some v' -> printf "Found Header: %d\n" (Uint64.to_int v'));
   let output_file = open_out_bin "msg.bin" in
   Printf.fprintf output_file "%s" pollux_enc;
   close_out output_file;

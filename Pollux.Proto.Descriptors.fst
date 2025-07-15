@@ -2,6 +2,7 @@ module Pollux.Proto.Descriptors
 
 open FStar.Mul
 open FStar.List.Tot.Base
+open Pollux.Proto.Prelude
 
 module U = FStar.UInt
 module U8 = FStar.UInt8
@@ -44,11 +45,16 @@ type pty =
 
 type fd : Type = string & nat & pty
 
+let get_fids (l:list fd) : list nat = map (fun (e : fd) -> e._2) l
+let get_names (l:list fd) : list string = map (fun (e : fd) -> e._1) l
+
+let sort_fd (f1:fd) (f2:fd) : bool = (bool_of_compare String.compare) (f1._1) (f2._1) 
+
+type fields = l:list fd{List.noRepeats (get_fids l) /\ List.noRepeats (get_names l) /\ List.sorted sort_fd l}
 unopteq
 type md : Type = {
-  name: string;
   reserved: Set.set nat;
-  fields: list fd
+  fields: fields
 }
 
 type dvty (v:Type) =
@@ -59,26 +65,53 @@ type dvty (v:Type) =
 type vty = 
 | VDOUBLE   : dvty double -> vty
 | VFLOAT    : dvty float -> vty
-| VINT32    : dvty I32.t -> vty 
-| VINT64    : dvty I64.t -> vty 
-| VUINT32   : dvty U32.t -> vty 
-| VUINT64   : dvty U64.t -> vty 
-| VSINT32   : dvty I32.t -> vty 
-| VSINT64   : dvty I64.t -> vty 
-| VFIXED32  : dvty U32.t -> vty 
-| VFIXED64  : dvty U64.t -> vty 
-| VSFIXED32 : dvty I32.t -> vty 
-| VSFIXED64 : dvty I64.t -> vty 
+| VINT      : dvty int -> vty 
 | VBOOL     : dvty bool -> vty 
 | VSTRING   : dvty string -> vty 
-| VBYTES    : dvty (list U8.t) -> vty 
+| VBYTES    : dvty bytes -> vty 
 | VMSG      : dvty unit -> vty
 | VENUM     : dvty unit -> vty
 
 type vf = string & vty
-let sort_vf (v1:vf) (v2:vf) : bool = String.compare v1._1 v2._1 <= 0
 
-type msg = m:list vf{List.sorted sort_vf m} 
+let sort_vf (v1:vf) (v2:vf) : bool = (bool_of_compare String.compare) v1._1 v2._1
+
+let msg_names (m:list vf) : list string = map (fun (f:vf) -> f._1) m
+type msg = m:list vf{List.sorted sort_vf m /\ List.noRepeats (msg_names m)} 
+
 let empty_msg : msg = []
 
-let msg_field_names (m:msg) : list string = map (fun (f:vf) -> f._1) m
+let init_dec (#a:Type) (dec:pdec) (def:a) = 
+  match dec with 
+  | P_IMPLICIT -> VIMPLICIT def 
+  | P_OPTIONAL -> VOPTIONAL None 
+  | P_REPEATED -> VREPEATED []
+  
+let init_field (f:fd) : vf = f._1, 
+(match f._3 with 
+ | P_DOUBLE pd -> VDOUBLE (init_dec pd double_z)
+ | P_FLOAT pd -> VFLOAT (init_dec pd float_z)
+ | P_INT _ pd 
+ | P_UINT _ pd 
+ | P_SINT _ pd 
+ | P_FIXED _ pd 
+ | P_SFIXED _ pd -> VINT (init_dec pd 0)
+ | P_BOOL pd -> VBOOL (init_dec pd false)
+ | P_STRING pd -> VSTRING (init_dec pd "")
+ | P_BYTES pd -> VBYTES (init_dec pd [])
+ | P_MSG pd -> VMSG (init_dec pd ())
+ | P_ENUM pd -> VENUM (init_dec pd ())
+)
+
+// Refinement needed for prove purposes
+let rec init_fields (fs:fields) : m:msg{get_names fs = msg_names m} = 
+  match fs with 
+  | [] -> []
+  | hd :: tl -> let new_field = init_field hd in  
+              let rest_fields = init_fields tl in
+              let fields = new_field :: rest_fields in 
+              List.noRepeats_cons new_field._1 (msg_names rest_fields);
+              assert List.noRepeats (msg_names fields);
+              fields
+
+let init_msg (m:md) : msg = init_fields m.fields 

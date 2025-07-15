@@ -23,6 +23,7 @@ module Vint = Pollux.Proto.Varint
 let nat_to_u8 (n:nat) : U8.t = U8.uint_to_t (UInt.to_uint_t U8.n n)
 let nat_to_u32 (n:nat) : U32.t = U32.uint_to_t (UInt.to_uint_t U32.n n)
 let nat_to_u64 (n:nat) : U64.t = U64.uint_to_t (UInt.to_uint_t U64.n n)
+let int_to_i32 (z:int) : I32.t = I32.int_to_t (Int.to_int_t I32.n z)
 let int_to_i64 (z:int) : I64.t = I64.int_to_t (Int.to_int_t I64.n z)
 
 (*
@@ -87,31 +88,30 @@ let find_field_string (msg:Desc.md) (id: string) : option (f:Desc.fd{f._1 = id})
   find (fun (f : Desc.fd) -> f._1 = id) msg.fields
 
 let find_tag (p:Desc.pty) : tag = 
-  match p with 
-  | Desc.P_INT _ Desc.P_REPEATED
-  | Desc.P_UINT _ Desc.P_REPEATED
-  | Desc.P_SINT _ Desc.P_REPEATED
-  | Desc.P_BOOL Desc.P_REPEATED
-  | Desc.P_ENUM Desc.P_REPEATED -> LEN
-  | Desc.P_INT _ _ 
-  | Desc.P_UINT _ _ 
-  | Desc.P_SINT _ _ 
-  | Desc.P_BOOL _
-  | Desc.P_ENUM _ -> VARINT
-  | Desc.P_FIXED 32 Desc.P_REPEATED
-  | Desc.P_SFIXED 32 Desc.P_REPEATED
-  | Desc.P_FLOAT Desc.P_REPEATED -> LEN
-  | Desc.P_FIXED 32 _ 
-  | Desc.P_FIXED 32 _
-  | Desc.P_SFIXED 32 _
-  | Desc.P_FLOAT _ -> I32 
-  | Desc.P_FIXED 64 Desc.P_REPEATED
-  | Desc.P_SFIXED 64 Desc.P_REPEATED
-  | Desc.P_DOUBLE Desc.P_REPEATED -> LEN
-  | Desc.P_FIXED 64 _ 
-  | Desc.P_SFIXED 64 _ 
-  | Desc.P_DOUBLE _ -> I64 
-  | _ -> LEN
+  Desc.(match p with 
+  // Check for packed fields first
+  | P_INT _ P_REPEATED
+  | P_UINT _ P_REPEATED
+  | P_SINT _ P_REPEATED
+  | P_BOOL P_REPEATED
+  | P_ENUM P_REPEATED
+  | P_FIXED _ P_REPEATED
+  | P_SFIXED _ P_REPEATED
+  | P_FLOAT P_REPEATED
+  | P_DOUBLE P_REPEATED -> LEN
+  | P_INT _ _ 
+  | P_UINT _ _ 
+  | P_SINT _ _ 
+  | P_BOOL _
+  | P_ENUM _ -> VARINT
+  | P_FIXED 32 _ 
+  | P_FIXED 32 _
+  | P_SFIXED 32 _
+  | P_FLOAT _ -> I32 
+  | P_FIXED 64 _ 
+  | P_SFIXED 64 _ 
+  | P_DOUBLE _ -> I64 
+  | _ -> LEN)
 
 let encode_header (msg_d:Desc.md) (name:string) : option U64.t = 
   let? f : Desc.fd = find_field_string msg_d name in
@@ -120,14 +120,15 @@ let encode_header (msg_d:Desc.md) (name:string) : option U64.t =
   let tag_n : U64.t = tag_num (find_tag f._3) in 
   Some U64.((id_n <<^ (nat_to_u32 3) |^ tag_n))
 
-let u64_of_s32 (s:I32.t) : U64.t = nat_to_u64 (sint_uint 32 (I32.v s))
-let u64_of_s64 (s:I64.t) : U64.t = nat_to_u64 (sint_uint 64 (I64.v s))
+let u64_of_s32 (s:int) : U64.t = nat_to_u64 (sint_uint 32 (I32.v (int_to_i32 s)))
+let u64_of_s64 (s:int) : U64.t = nat_to_u64 (sint_uint 64 (I64.v (int_to_i64 s)))
 
-let encode_int32 (i:I32.t) : bytes = Vint.encode (Cast.int32_to_uint64 i)
-let encode_int64 (i:I64.t) : bytes = Vint.encode (Cast.int64_to_uint64 i)
-let encode_uint32 (u:U32.t) : bytes = Vint.encode (Cast.uint32_to_uint64 u)
-let encode_sint32 (s:I32.t) : bytes = Vint.encode (u64_of_s32 s)
-let encode_sint64 (s:I64.t) : bytes = Vint.encode (u64_of_s64 s)
+let encode_int32 (i:int) : bytes = Vint.encode (Cast.int64_to_uint64 (int_to_i64 i))
+let encode_int64 (i:int) : bytes = Vint.encode (Cast.int64_to_uint64 (int_to_i64 i))
+let encode_uint32 (u:int) : bytes = Vint.encode (Cast.int64_to_uint64 (int_to_i64 u))
+let encode_uint64 (u:int) : bytes = Vint.encode (Cast.int64_to_uint64 (int_to_i64 u))
+let encode_sint32 (s:int) : bytes = Vint.encode (u64_of_s32 s)
+let encode_sint64 (s:int) : bytes = Vint.encode (u64_of_s64 s)
 let rec __encode_fixed32 (x:U32.t) (b:pos{b <= 4}) : Tot bytes (decreases b) = 
   let hi = U32.(x >>^ 8ul) in
   let lo = Cast.uint32_to_uint8 U32.(logand x 255ul) in 
@@ -136,7 +137,7 @@ let rec __encode_fixed32 (x:U32.t) (b:pos{b <= 4}) : Tot bytes (decreases b) =
   else 
     let rx = __encode_fixed32 hi (b-1) in 
     lo :: rx
-let encode_fixed32 (f:U32.t) : bytes = __encode_fixed32 f 4
+let encode_fixed32 (f:int) : bytes = __encode_fixed32 (Cast.int32_to_uint32 (int_to_i32 f)) 4
 let rec __encode_fixed64 (x:U64.t) (b:pos{b <= 8}) : Tot bytes (decreases b) = 
   let hi = U64.(x >>^ 8ul) in
   let lo = Cast.uint64_to_uint8 U64.(logand x 255uL) in 
@@ -145,9 +146,9 @@ let rec __encode_fixed64 (x:U64.t) (b:pos{b <= 8}) : Tot bytes (decreases b) =
   else 
     let rx = __encode_fixed64 hi (b-1) in 
     lo :: rx
-let encode_fixed64 (f:U64.t) : bytes = __encode_fixed64 f 8
-let encode_sfixed32 (i:I32.t) : bytes = encode_fixed32 (Cast.int32_to_uint32 i)
-let encode_sfixed64 (i:I64.t) : bytes = encode_fixed64 (Cast.int64_to_uint64 i)
+let encode_fixed64 (f:int) : bytes = __encode_fixed64 (Cast.int64_to_uint64 (int_to_i64 f)) 8
+let encode_sfixed32 (i:int) : bytes = encode_fixed32 i
+let encode_sfixed64 (i:int) : bytes = encode_fixed64 i
 let encode_bool (b:bool) : bytes = if b then [1uy] else [0uy]
 
 let encode_implicit (#a:eqtype) (v:a) (d:a) (enc: a -> bytes) : option bytes = 
@@ -172,91 +173,66 @@ let encode_string (s:string) : bytes = encode_packed (map Char.u32_of_char (Stri
 let encode_bytes (b:bytes) : bytes = encode_packed b (fun x -> [x])
 
 let v_measure (v:Desc.vty) : nat = 
-  match v with 
-  | Desc.VDOUBLE v'
-  | Desc.VFLOAT v'
-  | Desc.VINT32 v' 
-  | Desc.VINT64 v'
-  | Desc.VUINT32 v' 
-  | Desc.VUINT64 v' 
-  | Desc.VSINT32 v' 
-  | Desc.VSINT64 v' 
-  | Desc.VFIXED32 v' 
-  | Desc.VFIXED64 v' 
-  | Desc.VSFIXED32 v' 
-  | Desc.VSFIXED64 v' 
-  | Desc.VBOOL v' 
-  | Desc.VSTRING v' 
-  | Desc.VBYTES v' 
-  | Desc.VMSG v' 
-  | Desc.VENUM v' -> match v' with 
-                    | Desc.VIMPLICIT _ -> 0
-                    | Desc.VOPTIONAL _ -> 0
-                    | Desc.VREPEATED l -> List.length l
+  Desc.(match v with 
+  | VDOUBLE v'
+  | VFLOAT v'
+  | VINT v' 
+  | VBOOL v' 
+  | VSTRING v' 
+  | VBYTES v' 
+  | VMSG v' 
+  | VENUM v' -> match v' with 
+               | VIMPLICIT _ -> 0
+               | VOPTIONAL _ -> 0
+               | VREPEATED l -> List.length l)
+
+let encode_dec_packed (#a:eqtype) (field:Desc.dvty a) (def:a) (encode_one:a -> bytes) : option bytes = 
+  Desc.(match field with 
+  | VIMPLICIT v' -> encode_implicit v' def encode_one 
+  | VOPTIONAL (Some v') -> Some (encode_one v')
+  | VREPEATED (vh :: vt) -> Some (encode_packed (vh :: vt) encode_one)
+  | _ -> None)
+
+let find_encode_one (msg_d:Desc.md) (name:string) : option (int -> bytes) = 
+  let? f : Desc.fd = find_field_string msg_d name in
+  Desc.(match f._3 with 
+  | P_INT 32 _ -> Some encode_int32
+  | P_INT 64 _ -> Some encode_int64
+  | P_UINT 32 _ -> Some encode_uint32
+  | P_UINT 64 _ -> Some encode_uint64
+  | P_SINT 32 _ -> Some encode_sint32
+  | P_SINT 64 _ -> Some encode_sint64 
+  | P_FIXED 32 _ -> Some encode_fixed32
+  | _ -> None)
 
 let rec encode_field (msg_d:Desc.md) (field:Desc.vf) : Tot (option bytes) (decreases %[v_measure field._2;1]) = 
-    let? header : U64.t = encode_header msg_d field._1 in 
-    let header_bytes : bytes = Vint.encode header in 
-    let? value : bytes = encode_value msg_d field in
-    Some (header_bytes @ value)
+  let? header : U64.t = encode_header msg_d field._1 in 
+  let header_bytes : bytes = Vint.encode header in 
+  let? value : bytes = encode_value msg_d field in
+  Some (header_bytes @ value)
 
 and encode_value (msg_d:Desc.md) (field:Desc.vf) : Tot (option bytes) (decreases %[v_measure field._2;0]) = 
-  match field._2 with 
-  | Desc.VDOUBLE (Desc.VIMPLICIT v') -> encode_implicit v' Desc.double_z id
-  | Desc.VDOUBLE (Desc.VOPTIONAL (Some v')) -> Some v'
-  | Desc.VDOUBLE (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) id)
-  | Desc.VFLOAT (Desc.VIMPLICIT v') -> encode_implicit v' Desc.float_z id
-  | Desc.VFLOAT (Desc.VOPTIONAL (Some v')) -> Some v' 
-  | Desc.VFLOAT (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) id)
-  | Desc.VINT32 (Desc.VIMPLICIT v') -> encode_implicit v' 0l encode_int32
-  | Desc.VINT32 (Desc.VOPTIONAL (Some v')) -> Some (encode_int32 v')
-  | Desc.VINT32 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_int32)
-  | Desc.VINT64 (Desc.VIMPLICIT v') -> encode_implicit v' 0L encode_int64 
-  | Desc.VINT64 (Desc.VOPTIONAL (Some v')) -> Some (encode_int64 v')
-  | Desc.VINT64 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_int64)
-  | Desc.VUINT32 (Desc.VIMPLICIT v') -> encode_implicit v' 0ul encode_uint32
-  | Desc.VUINT32 (Desc.VOPTIONAL (Some v')) -> Some (encode_uint32 v')
-  | Desc.VUINT32 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_uint32)
-  | Desc.VUINT64 (Desc.VIMPLICIT v') -> encode_implicit v' 0uL Vint.encode
-  | Desc.VUINT64 (Desc.VOPTIONAL (Some v')) -> Some (Vint.encode v')
-  | Desc.VUINT64 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) Vint.encode)
-  | Desc.VSINT32 (Desc.VIMPLICIT v') -> encode_implicit v' 0l encode_sint32
-  | Desc.VSINT32 (Desc.VOPTIONAL (Some v')) -> Some (encode_sint32 v')
-  | Desc.VSINT32 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_sint32)
-  | Desc.VSINT64 (Desc.VIMPLICIT v') -> encode_implicit v' 0L encode_sint64
-  | Desc.VSINT64 (Desc.VOPTIONAL (Some v')) -> Some (encode_sint64 v')
-  | Desc.VSINT64 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_sint64)
-  | Desc.VFIXED32 (Desc.VIMPLICIT v') -> encode_implicit v' 0ul encode_fixed32 
-  | Desc.VFIXED32 (Desc.VOPTIONAL (Some v')) -> Some (encode_fixed32 v')
-  | Desc.VFIXED32 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_fixed32)
-  | Desc.VFIXED64 (Desc.VIMPLICIT v') -> encode_implicit v' 0uL encode_fixed64 
-  | Desc.VFIXED64 (Desc.VOPTIONAL (Some v')) -> Some (encode_fixed64 v')
-  | Desc.VFIXED64 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_fixed64)
-  | Desc.VSFIXED32 (Desc.VIMPLICIT v') -> encode_implicit v' 0l encode_sfixed32
-  | Desc.VSFIXED32 (Desc.VOPTIONAL (Some v')) -> Some (encode_sfixed32 v')
-  | Desc.VSFIXED32 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_sfixed32)
-  | Desc.VSFIXED64 (Desc.VIMPLICIT v') -> encode_implicit v' 0L encode_sfixed64 
-  | Desc.VSFIXED64 (Desc.VOPTIONAL (Some v')) -> Some (encode_sfixed64 v')
-  | Desc.VSFIXED64 (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_sfixed64)
-  | Desc.VBOOL (Desc.VIMPLICIT v') -> encode_implicit v' false encode_bool
-  | Desc.VBOOL (Desc.VOPTIONAL (Some v')) -> Some (encode_bool v')
-  | Desc.VBOOL (Desc.VREPEATED (vh :: vt)) -> Some (encode_packed (vh :: vt) encode_bool)
-  | Desc.VSTRING (Desc.VIMPLICIT v') -> encode_implicit v' "" encode_string
-  | Desc.VSTRING (Desc.VOPTIONAL (Some v')) -> Some (encode_string v')
-  | Desc.VSTRING (Desc.VREPEATED (vh :: vt)) -> let rest = (Desc.VSTRING (Desc.VREPEATED vt)) in 
+  Desc.(match field._2 with 
+  | VDOUBLE v' -> encode_dec_packed v' double_z id
+  | VFLOAT v' -> encode_dec_packed v' float_z id
+  | VINT v' -> let? encode_one = find_encode_one msg_d field._1 in encode_dec_packed v' 0 encode_one 
+  | VBOOL v' -> encode_dec_packed v' false encode_bool 
+  | VSTRING (VIMPLICIT v') -> encode_implicit v' "" encode_string
+  | VSTRING (VOPTIONAL (Some v')) -> Some (encode_string v')
+  | VSTRING (VREPEATED (vh :: vt)) -> let rest = (VSTRING (VREPEATED vt)) in 
                                               let renc = (encode_field msg_d (field._1, rest)) in 
                                               (match renc with 
                                                 | None -> Some (encode_string vh)
                                                 | Some r -> Some ((encode_string vh) @ r))
-  | Desc.VBYTES (Desc.VIMPLICIT v') -> encode_implicit v' [] encode_bytes
-  | Desc.VBYTES (Desc.VOPTIONAL (Some v')) -> Some (encode_bytes v')
-  | Desc.VBYTES (Desc.VREPEATED (vh :: vt)) -> let rest = (Desc.VBYTES (Desc.VREPEATED vt)) in 
+  | VBYTES (VIMPLICIT v') -> encode_implicit v' [] encode_bytes
+  | VBYTES (VOPTIONAL (Some v')) -> Some (encode_bytes v')
+  | VBYTES (VREPEATED (vh :: vt)) -> let rest = (VBYTES (VREPEATED vt)) in 
                                              let renc = (encode_field msg_d (field._1, rest)) in 
                                              (match renc with 
                                                | None -> Some (encode_bytes vh)
                                                | Some r -> Some ((encode_bytes vh) @ r))
   // TODO: Add message and enum support
-  | _ -> None
+  | _ -> None)
 
 let opt_append (#a:Type) (l1:list a) (l2:option (list a)) : list a =
   match l2 with 
@@ -275,10 +251,10 @@ let tag_from_num (n:U64.t) : option tag =
   | 5uL -> Some I32 
   | _ -> None 
 
-let decode_header (enc:bytes) : option (U64.t & tag & b:bytes{length b < length enc}) =
+let decode_header (enc:bytes) : option (nat & tag & b:bytes{length b < length enc}) =
   let? header_bytes, bs = Vint.extract_varint enc in
   let header = Vint.decode header_bytes in 
-  let fid = U64.( header >>^ 3ul) in 
+  let fid : nat = U64.(v (header >>^ 3ul)) in 
   let tag_n = U64.( header &^ 7uL) in
   let? tag = tag_from_num tag_n in
   Some (fid, tag, bs)
@@ -302,14 +278,7 @@ let rec lemma_take_snd_length (#a:Type) (n:nat) (l:list a) :
   | _, [] -> ()
   | _, _ :: l' -> lemma_take_snd_length (n-1) l'
 
-let rec decode_field (md:Desc.md) (enc:bytes) : Tot (option (U64.t & bytes & b:bytes{length b < length enc})) (decreases (length enc)) =
-  match decode_header enc with 
-  | None -> None 
-  | Some (fid, t, bs) -> match decode_value md t bs with 
-                        | None -> None 
-                        | Some (v, b) -> Some (fid, v, b)
-
-and decode_value (md:Desc.md) (t:tag) (enc:bytes) : Tot (option (bytes & b:bytes{length b < length enc})) (decreases (length enc)) = 
+let decode_value (t:tag) (enc:bytes) : Tot (option (bytes & b:bytes{length b < length enc})) (decreases (length enc)) = 
   match t with 
   | VARINT -> let? v = Vint.extract_varint enc in 
              // I /should/ be able to write 'VARINT -> Vint.extract_varint enc', but the 
@@ -322,7 +291,7 @@ and decode_value (md:Desc.md) (t:tag) (enc:bytes) : Tot (option (bytes & b:bytes
           | Some (i64, b) -> lemma_take_snd_length 8 enc; Some (i64, b))
   | LEN -> let? len_byt, b = Vint.extract_varint enc in 
           let len = Vint.decode len_byt in 
-          if U64.(eq len 0uL) then None else 
+          if U64.(eq len 0uL) then Some ([], b) else 
           (match take (U64.v len) enc with 
           | None -> None 
           | Some (len_bs, rest_bs) -> lemma_take_snd_length (U64.v len) enc; 
@@ -333,4 +302,26 @@ and decode_value (md:Desc.md) (t:tag) (enc:bytes) : Tot (option (bytes & b:bytes
           | None -> None 
           | Some (i32, b) -> lemma_take_snd_length 4 enc; Some (i32, b))
   | _ -> None
-  
+
+let decode_field (enc:bytes) : Tot (option (nat & bytes & b:bytes{length b < length enc})) (decreases (length enc)) =
+  match decode_header enc with 
+  | None -> None 
+  | Some (fid, t, bs) -> match decode_value t bs with 
+                        | None -> None 
+                        | Some (v, b) -> Some (fid, v, b)
+
+// While decode_field performs one decode, this one decodes until either 
+// - the remaining bytes are empty 
+// - something fails to chunk
+let rec decode_fields (enc:bytes) : Tot (list (nat & bytes) & bytes) (decreases (length enc)) = 
+  match enc with 
+  | [] -> [], []
+  | enc -> (match decode_field enc with 
+          | None -> [], enc
+          | Some (fid, fbs, bs) -> let rest_fields, rest_byt = decode_fields bs in
+                                  (fid, fbs) :: rest_fields, rest_byt)
+
+let parse (m:Desc.md) (enc:bytes) : option Desc.msg =
+  let raw_fields, leftover_byt = decode_fields enc in 
+  if leftover_byt <> [] then None else 
+  admit ()
