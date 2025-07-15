@@ -3,6 +3,8 @@ module Pollux.Proto.Parse
 open FStar.Mul
 open FStar.List.Tot.Base
 
+open Pollux.Proto.Prelude
+
 module U = FStar.UInt
 module U8 = FStar.UInt8
 module U32 = FStar.UInt32
@@ -81,19 +83,6 @@ let tag_num (t:tag) : U64.t =
   | LEN -> nat_to_u64 2
   | I32 -> nat_to_u64 5
 
-(* The [option] monad *)
-// Bind operator
-let (let?) (x: option 'a) (f: 'a -> option 'b): option 'b
-  = match x with
-  | Some x -> f x
-  | None   -> None
-
-// Sort of applicative
-let (and?) (x: option 'a) (y: option 'b): option ('a & 'b)
-  = match x, y with
-  | Some x, Some y -> Some (x, y)
-  | _ -> None
-
 let find_field_string (msg:Desc.md) (id: string) : option (f:Desc.fd{f._1 = id}) = 
   find (fun (f : Desc.fd) -> f._1 = id) msg.fields
 
@@ -130,8 +119,6 @@ let encode_header (msg_d:Desc.md) (name:string) : option U64.t =
   let id_n : U64.t = nat_to_u64 f._2 in
   let tag_n : U64.t = tag_num (find_tag f._3) in 
   Some U64.((id_n <<^ (nat_to_u32 3) |^ tag_n))
-
-type bytes = list U8.t
 
 let u64_of_s32 (s:I32.t) : U64.t = nat_to_u64 (sint_uint 32 (I32.v s))
 let u64_of_s64 (s:I64.t) : U64.t = nat_to_u64 (sint_uint 64 (I64.v s))
@@ -289,7 +276,6 @@ let tag_from_num (n:U64.t) : option tag =
   | _ -> None 
 
 let decode_header (enc:bytes) : option (U64.t & tag & b:bytes{length b < length enc}) =
-  // FIXME: What if we have an invalid varint encoded here?
   let? header_bytes, bs = Vint.extract_varint enc in
   let header = Vint.decode header_bytes in 
   let fid = U64.( header >>^ 3ul) in 
@@ -300,25 +286,51 @@ let decode_header (enc:bytes) : option (U64.t & tag & b:bytes{length b < length 
 let find_field (md:Desc.md) (id:nat) : option (f:Desc.fd{f._2 = id}) = 
   find (fun (f: Desc.fd) -> f._2 = id) md.fields
 
-let rec decode_field (md:Desc.md) (enc:bytes) : Tot (option (Desc.vf & b:bytes{length b < length enc})) (decreases (length enc)) =
-  // FIXME: Find a way to skip unknown fields
+let rec take (#a:Type) (n:nat) (l:list a) : option (list a & list a) = 
+  if n = 0 then Some ([], l) 
+  else 
+    match l with 
+    | [] -> None 
+    | hd :: tl -> let? l1, l2 = take (n-1) tl in 
+                Some (hd :: l1, l2)
+
+let rec lemma_take_snd_length (#a:Type) (n:nat) (l:list a) : 
+  Lemma 
+    (ensures (let t = take n l in Some? t ==> n <= length l /\ length (snd (Some?.v t)) = length l - n)) = 
+  match n, l with 
+  | 0, _ -> ()
+  | _, [] -> ()
+  | _, _ :: l' -> lemma_take_snd_length (n-1) l'
+
+let rec decode_field (md:Desc.md) (enc:bytes) : Tot (option (U64.t & bytes & b:bytes{length b < length enc})) (decreases (length enc)) =
   match decode_header enc with 
   | None -> None 
-  | Some (fid, tag, bs) -> (match find_field md (U64.v fid) with 
-                          | None -> None 
-                          | Some field -> (match decode_value md field._3 bs with 
-                                          | None -> None 
-                                          | Some (v, bs') -> Some ((field._1, v), bs')))
-  // So apparently the monadic let? doesn't like the bytes length decreasing 
-  // clause.                                          
-  // let? fid, tag, bs = decode_header enc in 
-  // let? field = find_field md (U64.v fid) in 
-  // let? value, bs' = decode_value md field._3 bs in 
-  // let vfv : Desc.vf = (field._1, value) in
-  // Some ((field._1, value), bs')
+  | Some (fid, t, bs) -> match decode_value md t bs with 
+                        | None -> None 
+                        | Some (v, b) -> Some (fid, v, b)
 
-and decode_value (md:Desc.md) (pf:Desc.pty) (enc:bytes) : Tot (option (Desc.vty & b:bytes{length b < length enc})) (decreases (length enc)) = 
-  match pf with 
-  | Desc.P_INT 32 Desc.P_IMPLICIT -> None 
+and decode_value (md:Desc.md) (t:tag) (enc:bytes) : Tot (option (bytes & b:bytes{length b < length enc})) (decreases (length enc)) = 
+  match t with 
+  | VARINT -> let? v = Vint.extract_varint enc in 
+             // I /should/ be able to write 'VARINT -> Vint.extract_varint enc', but the 
+             // SMT solver throws a fit...
+             let vint : bytes = v._1 in 
+             let byt : b:bytes{length b < length enc} = v._2 in 
+             Some (vint, byt)
+  | I64 -> (match take 8 enc with 
+          | None -> None 
+          | Some (i64, b) -> lemma_take_snd_length 8 enc; Some (i64, b))
+  | LEN -> let? len_byt, b = Vint.extract_varint enc in 
+          let len = Vint.decode len_byt in 
+          if U64.(eq len 0uL) then None else 
+          (match take (U64.v len) enc with 
+          | None -> None 
+          | Some (len_bs, rest_bs) -> lemma_take_snd_length (U64.v len) enc; 
+                                     let len_byt : bytes = len_bs in 
+                                     let rest_byt : b:bytes{length b < length enc} = rest_bs in 
+                                     Some (len_byt, rest_byt))
+  | I32 -> (match take 4 enc with 
+          | None -> None 
+          | Some (i32, b) -> lemma_take_snd_length 4 enc; Some (i32, b))
   | _ -> None
   

@@ -4,6 +4,8 @@ open FStar.Ghost
 open FStar.Mul
 open FStar.List.Tot
 
+open Pollux.Proto.Prelude
+
 module U = FStar.UInt
 module U8 = FStar.UInt8
 module U16 = FStar.UInt16
@@ -24,7 +26,7 @@ let rec valid (v:list U8.t) : bool =
     (* Note that U.msb is "most significant bit" while the msb in the pattern is "most significant byte" *)
   | msb :: rest -> U.msb (U8.v msb) && valid rest
 
-let varint = v:list U8.t{List.length v >= 1 /\ valid v}
+let varint = v:bytes{List.length v >= 1 /\ valid v}
 
 let set_msb_u8 (b:U8.t{U8.v b < 128}) : r:U8.t{UInt.msb (U8.v r) /\ (U8.v r) = (U8.v b + 128)} = 
   let r = U8.(b +^ 128uy) in 
@@ -47,7 +49,7 @@ let rec decode (bs:varint) : U64.t =
                  let y = U64.((rx <<^ 7ul) |^ msx) in
                  y
 
-let rec extract_varint (bs:list U8.t) : o:option (varint & b:list U8.t{length b < length bs}) = 
+let rec extract_varint (bs:list U8.t) : o:option (varint & b:bytes{length b < length bs}) = 
   match bs with 
   | [] -> None
   | h :: tl -> if U8.(lte h 127uy) then 
