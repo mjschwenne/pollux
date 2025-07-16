@@ -49,13 +49,13 @@ let rec decode (bs:varint) : U64.t =
                  let y = U64.((rx <<^ 7ul) |^ msx) in
                  y
 
-let rec extract_varint (bs:list U8.t) : o:option (varint & b:bytes{length b < length bs}) = 
+let rec extract_varint (bs:list U8.t) : option (varint & b:bytes{length b < length bs}) = 
   match bs with 
   | [] -> None
   | h :: tl -> if U8.(lte h 127uy) then 
               Some ([h], tl)
             else 
-              let rest : option (varint & list U8.t) = extract_varint tl in 
+              let rest = extract_varint tl in 
                (match rest with 
                 | None -> None 
                 | Some (v, rest) -> UInt.lemma_msb_pow2 (U8.v h); 

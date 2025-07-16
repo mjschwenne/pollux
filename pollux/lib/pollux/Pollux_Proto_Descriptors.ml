@@ -97,19 +97,30 @@ let (uu___is_P_ENUM : pty -> Prims.bool) =
 let (__proj__P_ENUM__item___0 : pty -> pdec) =
   fun projectee -> match projectee with | P_ENUM _0 -> _0
 type fd = (Prims.string * Prims.nat * pty)
-type md =
-  {
-  name: Prims.string ;
+let (get_fids : fd Prims.list -> Prims.nat Prims.list) =
+  fun l ->
+    FStar_List_Tot_Base.map
+      (fun e -> FStar_Pervasives_Native.__proj__Mktuple3__item___2 e) l
+let (get_names : fd Prims.list -> Prims.string Prims.list) =
+  fun l ->
+    FStar_List_Tot_Base.map
+      (fun e -> FStar_Pervasives_Native.__proj__Mktuple3__item___1 e) l
+let (sort_fd : fd -> fd -> Prims.bool) =
+  fun f1 ->
+    fun f2 ->
+      FStar_List_Tot_Base.bool_of_compare FStar_String.compare
+        (FStar_Pervasives_Native.__proj__Mktuple3__item___1 f1)
+        (FStar_Pervasives_Native.__proj__Mktuple3__item___1 f2)
+type fields = fd Prims.list
+type md = {
   reserved: Prims.nat FStar_Set.set ;
-  fields: fd Prims.list }
-let (__proj__Mkmd__item__name : md -> Prims.string) =
-  fun projectee -> match projectee with | { name; reserved; fields;_} -> name
+  fields: fields }
 let (__proj__Mkmd__item__reserved : md -> Prims.nat FStar_Set.set) =
   fun projectee ->
-    match projectee with | { name; reserved; fields;_} -> reserved
-let (__proj__Mkmd__item__fields : md -> fd Prims.list) =
+    match projectee with | { reserved; fields = fields1;_} -> reserved
+let (__proj__Mkmd__item__fields : md -> fields) =
   fun projectee ->
-    match projectee with | { name; reserved; fields;_} -> fields
+    match projectee with | { reserved; fields = fields1;_} -> fields1
 type 'v dvty =
   | VIMPLICIT of 'v 
   | VOPTIONAL of 'v FStar_Pervasives_Native.option 
@@ -133,19 +144,10 @@ let __proj__VREPEATED__item___0 : 'v . 'v dvty -> 'v Prims.list =
 type vty =
   | VDOUBLE of double dvty 
   | VFLOAT of float dvty 
-  | VINT32 of FStar_Int32.t dvty 
-  | VINT64 of FStar_Int64.t dvty 
-  | VUINT32 of FStar_UInt32.t dvty 
-  | VUINT64 of FStar_UInt64.t dvty 
-  | VSINT32 of FStar_Int32.t dvty 
-  | VSINT64 of FStar_Int64.t dvty 
-  | VFIXED32 of FStar_UInt32.t dvty 
-  | VFIXED64 of FStar_UInt64.t dvty 
-  | VSFIXED32 of FStar_Int32.t dvty 
-  | VSFIXED64 of FStar_Int64.t dvty 
+  | VINT of Prims.int dvty 
   | VBOOL of Prims.bool dvty 
   | VSTRING of Prims.string dvty 
-  | VBYTES of FStar_UInt8.t Prims.list dvty 
+  | VBYTES of Pollux_Proto_Prelude.bytes dvty 
   | VMSG of unit dvty 
   | VENUM of unit dvty 
 let (uu___is_VDOUBLE : vty -> Prims.bool) =
@@ -156,50 +158,10 @@ let (uu___is_VFLOAT : vty -> Prims.bool) =
   fun projectee -> match projectee with | VFLOAT _0 -> true | uu___ -> false
 let (__proj__VFLOAT__item___0 : vty -> float dvty) =
   fun projectee -> match projectee with | VFLOAT _0 -> _0
-let (uu___is_VINT32 : vty -> Prims.bool) =
-  fun projectee -> match projectee with | VINT32 _0 -> true | uu___ -> false
-let (__proj__VINT32__item___0 : vty -> FStar_Int32.t dvty) =
-  fun projectee -> match projectee with | VINT32 _0 -> _0
-let (uu___is_VINT64 : vty -> Prims.bool) =
-  fun projectee -> match projectee with | VINT64 _0 -> true | uu___ -> false
-let (__proj__VINT64__item___0 : vty -> FStar_Int64.t dvty) =
-  fun projectee -> match projectee with | VINT64 _0 -> _0
-let (uu___is_VUINT32 : vty -> Prims.bool) =
-  fun projectee -> match projectee with | VUINT32 _0 -> true | uu___ -> false
-let (__proj__VUINT32__item___0 : vty -> FStar_UInt32.t dvty) =
-  fun projectee -> match projectee with | VUINT32 _0 -> _0
-let (uu___is_VUINT64 : vty -> Prims.bool) =
-  fun projectee -> match projectee with | VUINT64 _0 -> true | uu___ -> false
-let (__proj__VUINT64__item___0 : vty -> FStar_UInt64.t dvty) =
-  fun projectee -> match projectee with | VUINT64 _0 -> _0
-let (uu___is_VSINT32 : vty -> Prims.bool) =
-  fun projectee -> match projectee with | VSINT32 _0 -> true | uu___ -> false
-let (__proj__VSINT32__item___0 : vty -> FStar_Int32.t dvty) =
-  fun projectee -> match projectee with | VSINT32 _0 -> _0
-let (uu___is_VSINT64 : vty -> Prims.bool) =
-  fun projectee -> match projectee with | VSINT64 _0 -> true | uu___ -> false
-let (__proj__VSINT64__item___0 : vty -> FStar_Int64.t dvty) =
-  fun projectee -> match projectee with | VSINT64 _0 -> _0
-let (uu___is_VFIXED32 : vty -> Prims.bool) =
-  fun projectee ->
-    match projectee with | VFIXED32 _0 -> true | uu___ -> false
-let (__proj__VFIXED32__item___0 : vty -> FStar_UInt32.t dvty) =
-  fun projectee -> match projectee with | VFIXED32 _0 -> _0
-let (uu___is_VFIXED64 : vty -> Prims.bool) =
-  fun projectee ->
-    match projectee with | VFIXED64 _0 -> true | uu___ -> false
-let (__proj__VFIXED64__item___0 : vty -> FStar_UInt64.t dvty) =
-  fun projectee -> match projectee with | VFIXED64 _0 -> _0
-let (uu___is_VSFIXED32 : vty -> Prims.bool) =
-  fun projectee ->
-    match projectee with | VSFIXED32 _0 -> true | uu___ -> false
-let (__proj__VSFIXED32__item___0 : vty -> FStar_Int32.t dvty) =
-  fun projectee -> match projectee with | VSFIXED32 _0 -> _0
-let (uu___is_VSFIXED64 : vty -> Prims.bool) =
-  fun projectee ->
-    match projectee with | VSFIXED64 _0 -> true | uu___ -> false
-let (__proj__VSFIXED64__item___0 : vty -> FStar_Int64.t dvty) =
-  fun projectee -> match projectee with | VSFIXED64 _0 -> _0
+let (uu___is_VINT : vty -> Prims.bool) =
+  fun projectee -> match projectee with | VINT _0 -> true | uu___ -> false
+let (__proj__VINT__item___0 : vty -> Prims.int dvty) =
+  fun projectee -> match projectee with | VINT _0 -> _0
 let (uu___is_VBOOL : vty -> Prims.bool) =
   fun projectee -> match projectee with | VBOOL _0 -> true | uu___ -> false
 let (__proj__VBOOL__item___0 : vty -> Prims.bool dvty) =
@@ -210,7 +172,7 @@ let (__proj__VSTRING__item___0 : vty -> Prims.string dvty) =
   fun projectee -> match projectee with | VSTRING _0 -> _0
 let (uu___is_VBYTES : vty -> Prims.bool) =
   fun projectee -> match projectee with | VBYTES _0 -> true | uu___ -> false
-let (__proj__VBYTES__item___0 : vty -> FStar_UInt8.t Prims.list dvty) =
+let (__proj__VBYTES__item___0 : vty -> Pollux_Proto_Prelude.bytes dvty) =
   fun projectee -> match projectee with | VBYTES _0 -> _0
 let (uu___is_VMSG : vty -> Prims.bool) =
   fun projectee -> match projectee with | VMSG _0 -> true | uu___ -> false
@@ -224,13 +186,44 @@ type vf = (Prims.string * vty)
 let (sort_vf : vf -> vf -> Prims.bool) =
   fun v1 ->
     fun v2 ->
-      (FStar_String.compare
-         (FStar_Pervasives_Native.__proj__Mktuple2__item___1 v1)
-         (FStar_Pervasives_Native.__proj__Mktuple2__item___1 v2))
-        <= Prims.int_zero
-type msg = vf Prims.list
-let (empty_msg : msg) = []
-let (msg_field_names : msg -> Prims.string Prims.list) =
+      FStar_List_Tot_Base.bool_of_compare FStar_String.compare
+        (FStar_Pervasives_Native.__proj__Mktuple2__item___1 v1)
+        (FStar_Pervasives_Native.__proj__Mktuple2__item___1 v2)
+let (msg_names : vf Prims.list -> Prims.string Prims.list) =
   fun m ->
     FStar_List_Tot_Base.map
       (fun f -> FStar_Pervasives_Native.__proj__Mktuple2__item___1 f) m
+type msg = vf Prims.list
+let (empty_msg : msg) = []
+let init_dec : 'a . pdec -> 'a -> 'a dvty =
+  fun dec ->
+    fun def ->
+      match dec with
+      | P_IMPLICIT -> VIMPLICIT def
+      | P_OPTIONAL -> VOPTIONAL FStar_Pervasives_Native.None
+      | P_REPEATED -> VREPEATED []
+let (init_field : fd -> vf) =
+  fun f ->
+    ((FStar_Pervasives_Native.__proj__Mktuple3__item___1 f),
+      (match FStar_Pervasives_Native.__proj__Mktuple3__item___3 f with
+       | P_DOUBLE pd -> VDOUBLE (init_dec pd double_z)
+       | P_FLOAT pd -> VFLOAT (init_dec pd float_z)
+       | P_INT (uu___, pd) -> VINT (init_dec pd Prims.int_zero)
+       | P_UINT (uu___, pd) -> VINT (init_dec pd Prims.int_zero)
+       | P_SINT (uu___, pd) -> VINT (init_dec pd Prims.int_zero)
+       | P_FIXED (uu___, pd) -> VINT (init_dec pd Prims.int_zero)
+       | P_SFIXED (uu___, pd) -> VINT (init_dec pd Prims.int_zero)
+       | P_BOOL pd -> VBOOL (init_dec pd false)
+       | P_STRING pd -> VSTRING (init_dec pd "")
+       | P_BYTES pd -> VBYTES (init_dec pd [])
+       | P_MSG pd -> VMSG (init_dec pd ())
+       | P_ENUM pd -> VENUM (init_dec pd ())))
+let rec (init_fields : fields -> msg) =
+  fun fs ->
+    match fs with
+    | [] -> []
+    | hd::tl ->
+        let new_field = init_field hd in
+        let rest_fields = init_fields tl in
+        let fields1 = new_field :: rest_fields in fields1
+let (init_msg : md -> msg) = fun m -> init_fields m.fields

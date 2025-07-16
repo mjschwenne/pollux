@@ -3,15 +3,14 @@ open Proto.Everything
 open Ocaml_protoc_plugin
 open Pollux
 module D = Pollux_Proto_Descriptors
+module Prelude = Pollux_Proto_Prelude
 open Stdint
 
 let z = Z.of_int
-let u32 = Uint32.of_int
-let u64 = Uint64.of_int
 
 let test_proto : Everything.t =
   Everything.make ~i32i:3 ~i64o:(-1) ~u32r:[ 1; 2; 3 ] ~u64i:0 ?s32o:None
-    ~s64r:[ -1 ] ~f32i:1024l ~f64o:3668L ~sf32r:[ -19l ] ~sf64i:26L ~bo:true
+    ~s64r:[ -1 ] ~f32i:1024l ~f64o:3668L ~sf32r:[ -19l ] ~sf64i:26L ?bo:None
     ~sr:[ "Hello"; "World" ]
     ~bi:(String.to_bytes "DEADBEEF")
     ()
@@ -19,11 +18,9 @@ let test_proto : Everything.t =
 let pollux_md : D.md =
   let open D in
   {
-    name = "Test";
     reserved = FStar_Set.empty ();
     fields =
       [
-        (* TODO: make F* md type enforce unique field numbers *)
         ("i32i", z 1, P_INT (z 32, P_IMPLICIT));
         ("i64o", z 2, P_INT (z 64, P_OPTIONAL));
         ("u32r", z 4, P_UINT (z 32, P_REPEATED));
@@ -43,16 +40,16 @@ let pollux_md : D.md =
 let test_pollux : Pollux_Proto_Descriptors.msg =
   let open D in
   [
-    ("i32i", VINT32 (VIMPLICIT 3l));
-    ("i64o", VINT64 (VOPTIONAL (Some (-1L))));
-    ("u32r", VUINT32 (VREPEATED [ u32 1; u32 2; u32 3 ]));
-    ("u64i", VUINT64 (VIMPLICIT (u64 0)));
-    ("s32o", VSINT32 (VOPTIONAL None));
-    ("s64r", VSINT64 (VREPEATED [ -1L ]));
-    ("f32i", VFIXED32 (VIMPLICIT (u32 1024)));
-    ("f64o", VFIXED64 (VOPTIONAL (Some (u64 3668))));
-    ("sf32r", VSFIXED32 (VREPEATED [ -19l ]));
-    ("sf64i", VSFIXED64 (VIMPLICIT 26L));
+    ("i32i", VINT (VIMPLICIT (z 3)));
+    ("i64o", VINT (VOPTIONAL (Some (z (-1)))));
+    ("u32r", VINT (VREPEATED [ z 1; z 2; z 3 ]));
+    ("u64i", VINT (VIMPLICIT (z 0)));
+    ("s32o", VINT (VOPTIONAL None));
+    ("s64r", VINT (VREPEATED [ z (-1) ]));
+    ("f32i", VINT (VIMPLICIT (z 1024)));
+    ("f64o", VINT (VOPTIONAL (Some (z 3668))));
+    ("sf32r", VINT (VREPEATED [ z (-19) ]));
+    ("sf64i", VINT (VIMPLICIT (z 26)));
     ("bo", VBOOL (VOPTIONAL None));
     ("sr", VSTRING (VREPEATED [ "Hello"; "World" ]));
     ("bi", VBYTES (VIMPLICIT [ 68; 69; 65; 68; 66; 69; 69; 70 ]));
@@ -60,10 +57,7 @@ let test_pollux : Pollux_Proto_Descriptors.msg =
 
 (* Crazy that this isn't built in... *)
 let id x = x
-let str_i32 x = string_of_int (Int32.to_int x)
-let str_i64 x = string_of_int (Int64.to_int x)
-let str_u32 x = string_of_int (Uint32.to_int x)
-let str_u64 x = string_of_int (Uint64.to_int x)
+let str_int x = string_of_int (Z.to_int x)
 
 let str_bytes (x : int list) : string =
   String.of_seq (List.to_seq (List.map Char.chr x))
@@ -76,29 +70,47 @@ let str_pollux_list l str : string =
   | [] -> "[]"
   | h :: t -> "[" ^ List.fold_left (fun a b -> a ^ "; " ^ str b) (str h) t ^ "]"
 
+let str_pollux_pdec (d : D.pdec) : string =
+  match d with
+  | D.P_IMPLICIT -> "IMPLICIT"
+  | D.P_OPTIONAL -> "OPTIONAL"
+  | D.P_REPEATED -> "REPEATED"
+
+let str_pollux_pty (p : D.pty) : string =
+  match p with
+  | D.P_DOUBLE p' -> str_pollux_pdec p' ^ " DOUBLE"
+  | D.P_FLOAT p' -> str_pollux_pdec p' ^ " FLOAT"
+  | D.P_INT (w, p') -> str_pollux_pdec p' ^ " INT " ^ str_int w
+  | D.P_UINT (w, p') -> str_pollux_pdec p' ^ " UINT " ^ str_int w
+  | D.P_SINT (w, p') -> str_pollux_pdec p' ^ " SINT " ^ str_int w
+  | D.P_FIXED (w, p') -> str_pollux_pdec p' ^ " FIXED " ^ str_int w
+  | D.P_SFIXED (w, p') -> str_pollux_pdec p' ^ " SFIXED " ^ str_int w
+  | D.P_BOOL p' -> str_pollux_pdec p' ^ " BOOL"
+  | D.P_STRING p' -> str_pollux_pdec p' ^ " STRING"
+  | D.P_BYTES p' -> str_pollux_pdec p' ^ " BYTES"
+  | D.P_MSG p' -> str_pollux_pdec p' ^ " MSG"
+  | D.P_ENUM p' -> str_pollux_pdec p' ^ " ENUM"
+
 let str_pollux_dvty (v : 'a D.dvty) (str : 'a -> string) : string =
   match v with
   | D.VIMPLICIT v' -> str v'
   | D.VOPTIONAL v' -> str_pollux_option v' str
   | D.VREPEATED v' -> str_pollux_list v' str
 
+let str_pollux_vty (v : D.vty) : string =
+  match v with
+  | D.VDOUBLE _ -> "DOUBLE"
+  | D.VFLOAT _ -> "FLOAT"
+  | D.VINT v' -> str_pollux_dvty v' str_int
+  | D.VBOOL v' -> str_pollux_dvty v' string_of_bool
+  | D.VSTRING v' -> str_pollux_dvty v' id
+  | D.VBYTES v' -> str_pollux_dvty v' str_bytes
+  | D.VMSG v' -> "MSG"
+  | D.VENUM v' -> "ENUM"
+
 let str_pollux_field (f : D.vf) : string =
   let n, v = f in
-  let str_v =
-    match v with
-    | D.VDOUBLE _ -> "DOUBLE"
-    | D.VFLOAT _ -> "FLOAT"
-    | D.VINT32 v' | D.VSINT32 v' | D.VSFIXED32 v' -> str_pollux_dvty v' str_i32
-    | D.VINT64 v' | D.VSINT64 v' | D.VSFIXED64 v' -> str_pollux_dvty v' str_i64
-    | D.VUINT32 v' | D.VFIXED32 v' -> str_pollux_dvty v' str_u32
-    | D.VUINT64 v' | D.VFIXED64 v' -> str_pollux_dvty v' str_u64
-    | D.VBOOL v' -> str_pollux_dvty v' string_of_bool
-    | D.VSTRING v' -> str_pollux_dvty v' id
-    | D.VBYTES v' -> str_pollux_dvty v' str_bytes
-    | D.VMSG v' -> "MSG"
-    | D.VENUM v' -> "ENUM"
-  in
-  n ^ ": " ^ str_v
+  n ^ ": " ^ str_pollux_vty v
 
 let str_pollux_msg (m : D.msg) : string =
   List.fold_left (fun a f -> a ^ "\n  " ^ str_pollux_field f) "  " m
@@ -106,11 +118,14 @@ let str_pollux_msg (m : D.msg) : string =
 let fstar_u8_to_char u8 = Char.chr (Z.to_int (FStar_UInt8.v u8))
 let print_fstar_u8 u8 = printf "%X " (Z.to_int (FStar_UInt8.v u8))
 
-let bytes_of_pollux_bytes (enc : Pollux_Proto_Parse.bytes) : bytes =
+let bytes_of_pollux_bytes (enc : Prelude.bytes) : bytes =
   Bytes.init (List.length enc) (fun i -> fstar_u8_to_char (List.nth enc i))
 
-let string_of_pollux_bytes (enc : Pollux_Proto_Parse.bytes) : string =
+let string_of_pollux_bytes (enc : Prelude.bytes) : string =
   Bytes.to_string (bytes_of_pollux_bytes enc)
+
+let pollux_bytes_of_string (enc : string) : Prelude.bytes =
+  String.fold_left (fun b x -> FStar_List.append b [ Char.code x ]) [] enc
 
 let () =
   print_endline "==== Pollux Encoding Test Program ====";
@@ -122,33 +137,49 @@ let () =
   | Error e ->
       printf "Error parsing proto struct: %s\n" (Runtime'.Result.show_error e));
   printf "Original Pollux Struct:%s\n" (str_pollux_msg test_pollux);
-  let pollux_enc =
-    string_of_pollux_bytes
-      (Pollux_Proto_Parse.encode_message pollux_md test_pollux)
-  in
-  printf "Testing optional encoding!\n";
-  let test_optional_enc =
-    Pollux_Proto_Parse.encode_field pollux_md (List.nth test_pollux 1)
-  in
-  let test_optional_header =
-    Pollux_Proto_Parse.encode_header pollux_md "i64o"
-  in
-  (match test_optional_enc with
-  | None -> printf "No Encoding\n"
-  | Some v' ->
-      printf "Found Encoding: ";
-      List.iter print_fstar_u8 v';
-      print_newline ());
-  (match test_optional_header with
-  | None -> printf "No Header\n"
-  | Some v' -> printf "Found Header: %d\n" (Uint64.to_int v'));
+  let pollux_enc = Pollux_Proto_Parse.encode_message pollux_md test_pollux in
+  let pollux_str = string_of_pollux_bytes pollux_enc in
   let output_file = open_out_bin "msg.bin" in
-  Printf.fprintf output_file "%s" pollux_enc;
+  Printf.fprintf output_file "%s" pollux_str;
   close_out output_file;
-  let proto_from_pollux = Everything.from_proto (Reader.create pollux_enc) in
+  let pollux_from_pollux = Pollux_Proto_Parse.parse pollux_md pollux_enc in
+  (match pollux_from_pollux with
+  | None -> printf "Failed to decode Pollux struct\n"
+  | Some p -> printf "Reconstructed Pollux struct:%s\n" (str_pollux_msg p));
+  let chunks, rest = Pollux_Proto_Parse.decode_fields pollux_enc in
+  printf "Decoded %d fields, %d leftover bytes\n" (List.length chunks)
+    (List.length rest);
+  List.iter
+    (fun e ->
+      printf "(%d, " (Z.to_int (fst e));
+      List.iter print_fstar_u8 (snd e);
+      printf ")\n")
+    chunks;
+  List.iter print_fstar_u8 rest;
+  print_newline ();
+  printf "Default Struct:%s\n" (str_pollux_msg (D.init_msg pollux_md));
+  List.iter
+    (fun e ->
+      let ty = Pollux_Proto_Parse.find_field pollux_md (fst e) in
+      match ty with
+      | None -> printf "Failed to find ty for %d\n" (Z.to_int (fst e))
+      | Some (n, f, pty) -> (
+          printf "Found field \"%s\" : %s for %d" n (str_pollux_pty pty)
+            (Z.to_int f);
+          match Pollux_Proto_Parse.parse_field pty (snd e) with
+          | None -> printf " -> Failed to parse\n"
+          | Some v -> printf " -> parsed to %s\n" (str_pollux_vty v)))
+    chunks;
+  let proto_from_pollux = Everything.from_proto (Reader.create pollux_str) in
   (match proto_from_pollux with
   | Ok p -> printf "Proto from Pollux Struct: %s\n" (Everything.show p)
   | Error e ->
       printf "Error parsing pollux struct with proto: %s\n"
         (Runtime'.Result.show_error e));
+  let pollux_from_proto =
+    Pollux_Proto_Parse.parse pollux_md (pollux_bytes_of_string proto_enc)
+  in
+  (match pollux_from_proto with
+  | None -> printf "Failed to decode Pollux from Proto struct\n"
+  | Some p -> printf "Pollux from Proto struct:%s\n" (str_pollux_msg p));
   print_endline "================ end ================="

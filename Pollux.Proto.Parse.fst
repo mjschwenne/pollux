@@ -203,6 +203,9 @@ let find_encode_one (msg_d:Desc.md) (name:string) : option (int -> bytes) =
   | P_SINT 32 _ -> Some encode_sint32
   | P_SINT 64 _ -> Some encode_sint64 
   | P_FIXED 32 _ -> Some encode_fixed32
+  | P_FIXED 64 _ -> Some encode_fixed64
+  | P_SFIXED 32 _ -> Some encode_sfixed32
+  | P_SFIXED 64 _ -> Some encode_sfixed64
   | _ -> None)
 
 let rec encode_field (msg_d:Desc.md) (field:Desc.vf) : Tot (option bytes) (decreases %[v_measure field._2;1]) = 
@@ -278,6 +281,14 @@ let rec lemma_take_snd_length (#a:Type) (n:nat) (l:list a) :
   | _, [] -> ()
   | _, _ :: l' -> lemma_take_snd_length (n-1) l'
 
+let rec lemma_take_fst_length (#a:Type) (n:nat) (l:list a) : 
+  Lemma 
+    (ensures (let t = take n l in Some? t ==> length (fst (Some?.v t)) = n)) = 
+  match n, l with 
+  | 0, _ -> ()
+  | _, [] -> () 
+  | _, _ :: l' -> lemma_take_fst_length (n-1) l'
+
 let decode_value (t:tag) (enc:bytes) : Tot (option (bytes & b:bytes{length b < length enc})) (decreases (length enc)) = 
   match t with 
   | VARINT -> let? v = Vint.extract_varint enc in 
@@ -289,15 +300,15 @@ let decode_value (t:tag) (enc:bytes) : Tot (option (bytes & b:bytes{length b < l
   | I64 -> (match take 8 enc with 
           | None -> None 
           | Some (i64, b) -> lemma_take_snd_length 8 enc; Some (i64, b))
-  | LEN -> let? len_byt, b = Vint.extract_varint enc in 
+  | LEN -> let? len_byt, enc_byt = Vint.extract_varint enc in 
           let len = Vint.decode len_byt in 
-          if U64.(eq len 0uL) then Some ([], b) else 
-          (match take (U64.v len) enc with 
+          if U64.(eq len 0uL) then Some ([], enc_byt) else 
+          (match take (U64.v len) enc_byt with 
           | None -> None 
-          | Some (len_bs, rest_bs) -> lemma_take_snd_length (U64.v len) enc; 
-                                     let len_byt : bytes = len_bs in 
-                                     let rest_byt : b:bytes{length b < length enc} = rest_bs in 
-                                     Some (len_byt, rest_byt))
+          | Some tak -> lemma_take_snd_length (U64.v len) enc_byt; 
+                        let len_byt : bytes = fst tak in 
+                        let rest_byt : b:bytes{length b < length enc} = snd tak in 
+                        Some (len_byt, rest_byt))
   | I32 -> (match take 4 enc with 
           | None -> None 
           | Some (i32, b) -> lemma_take_snd_length 4 enc; Some (i32, b))
@@ -321,7 +332,157 @@ let rec decode_fields (enc:bytes) : Tot (list (nat & bytes) & bytes) (decreases 
           | Some (fid, fbs, bs) -> let rest_fields, rest_byt = decode_fields bs in
                                   (fid, fbs) :: rest_fields, rest_byt)
 
+type field_parser (a:Type) = b:bytes -> option (a & b':bytes{length b' < length b})
+
+// Little-endian
+let rec assemble_nat (b:bytes) : n:nat{n < pow2 (8 * length b)} = 
+  match b with 
+  | [] -> 0 
+  | hd :: tl -> let rest = (pow2 8) * assemble_nat tl in 
+              FStar.Math.Lemmas.pow2_plus 8 (8 * length tl); 
+              U8.v hd + rest
+
+// Splitting and recombining db below is required for type checking
+val parse_double : field_parser Desc.double
+let parse_double b = 
+  match take 8 b with 
+  | None -> None 
+  | Some db -> lemma_take_fst_length 8 b; lemma_take_snd_length 8 b; Some ((fst db), (snd db))
+val parse_float : field_parser Desc.float
+let parse_float b = 
+  match take 4 b with 
+  | None -> None 
+  | Some db -> lemma_take_fst_length 4 b; lemma_take_snd_length 4 b; Some ((fst db), (snd db))
+val parse_int : w:Desc.width -> field_parser int 
+let parse_int w b = 
+  match Vint.extract_varint b with 
+  | None -> None 
+  | Some vint -> let raw_v : int = (U64.v (Vint.decode (fst vint))) in 
+                let v = uint_int w (uint_change_w w raw_v) in
+                Some (v, (snd vint))
+val parse_uint : w:Desc.width -> field_parser int 
+let parse_uint w b = 
+  match Vint.extract_varint b with 
+  | None -> None 
+  | Some vint -> let raw_v : int = (U64.v (Vint.decode (fst vint))) in 
+                let v = (uint_change_w w raw_v) in 
+                Some (v, (snd vint))
+val parse_sint : w:Desc.width -> field_parser int 
+let parse_sint w b = 
+  match Vint.extract_varint b with 
+  | None -> None 
+  | Some vint -> let raw_v : int = (U64.v (Vint.decode (fst vint))) in 
+                let v = uint_sint w (uint_change_w w raw_v) in 
+                Some (v, (snd vint))
+val parse_fixed : w:Desc.width -> field_parser int 
+let parse_fixed w b = 
+  let n = w / 8 in
+  assert n > 1;
+  match take n b with 
+  | None -> None 
+  | Some db -> lemma_take_fst_length n b; lemma_take_snd_length n b; 
+              Some (assemble_nat (fst db), (snd db))
+val parse_sfixed : w:Desc.width -> field_parser int 
+let parse_sfixed w b = 
+  let n = w / 8 in
+  assert n > 1;
+  match take n b with 
+  | None -> None 
+  | Some db -> lemma_take_fst_length n b; lemma_take_snd_length n b; 
+              Some (uint_int w (assemble_nat (fst db)), (snd db))
+val parse_bool : field_parser bool 
+let parse_bool b = 
+  match b with 
+  | 0uy :: tl -> Some (false, tl)
+  | 1uy :: tl -> Some (true, tl)
+  | _ -> None
+val parse_string : field_parser string 
+let parse_string b = 
+  if List.isEmpty b then None else
+  let s = String.string_of_list (map (fun b -> Char.char_of_int (U8.v b)) b) in 
+  Some (s, [])
+val parse_bytes : field_parser bytes 
+let parse_bytes b = 
+  if List.isEmpty b then None else Some (b, [])
+
+let rec parse_list (#a:Type) (payload:bytes) (parse_one:field_parser a) : 
+  Tot (option (list a)) (decreases (length payload)) = 
+    match parse_one payload with 
+    | None -> None
+    | Some (a, bs) -> if List.isEmpty bs then Some ([a]) else  
+                       let rest = parse_list bs parse_one in 
+                       (match rest with 
+                        | None -> None
+                        | Some r -> Some (a :: r))
+
+let parse_dec (#a:Type) (dec:Desc.pdec) (payload:bytes) (parse_one:field_parser a) : option (Desc.dvty a) = 
+  Desc.(match dec with 
+  | P_IMPLICIT -> let? one, _ = parse_one payload in Some (VIMPLICIT one)
+  | P_OPTIONAL -> let? one, _ = parse_one payload in Some (VOPTIONAL (Some one))
+  | P_REPEATED -> let? many = parse_list payload parse_one in Some (VREPEATED many))
+
+let parse_field (ty:Desc.pty) (payload:bytes) : option Desc.vty = 
+  Desc.(match ty with 
+  | P_DOUBLE p' -> let? vdec = parse_dec p' payload parse_double in Some (VDOUBLE vdec)
+  | P_FLOAT p' -> let? vdec = parse_dec p' payload parse_float in Some (VFLOAT vdec)
+  | P_INT w p' -> let? vdec = parse_dec p' payload (parse_int w) in Some (VINT vdec)
+  | P_UINT w p' -> let? vdec = parse_dec p' payload (parse_uint w) in Some (VINT vdec) 
+  | P_SINT w p' -> let? vdec = parse_dec p' payload (parse_sint w) in Some (VINT vdec)
+  | P_FIXED w p' -> let? vdec = parse_dec p' payload (parse_fixed w) in Some (VINT vdec)
+  | P_SFIXED w p' -> let? vdec = parse_dec p' payload (parse_sfixed w) in Some (VINT vdec)
+  | P_BOOL p' -> let? vdec = parse_dec p' payload parse_bool in Some (VBOOL vdec)
+  | P_STRING p' -> let? vdec = parse_dec p' payload parse_string in Some (VSTRING vdec)
+  | P_BYTES p' -> let? vdec = parse_dec p' payload parse_bytes in Some (VBYTES vdec)
+  | _ -> None)
+
+let update_field (#a:Type) (name:string) (ori_v:Desc.dvty a) (new_v:Desc.dvty a) : Desc.dvty a =
+    Desc.(match ori_v, new_v with 
+    | VIMPLICIT _, VIMPLICIT v' -> VIMPLICIT v'
+    | VOPTIONAL _, VOPTIONAL v' -> VOPTIONAL v'
+    | VREPEATED v', VREPEATED value' -> VREPEATED (v' @ value')
+    | _ -> ori_v) 
+
+// Refinement and explicit splitting of hd purely for verification purposes.
+let rec update_msg (msg:Desc.msg) (name:string) (value:Desc.vty) : m:Desc.msg{Desc.msg_names msg = Desc.msg_names m} = 
+  match msg with 
+  | [] -> []
+  | hd :: tl -> let n = (fst hd) in 
+              let v = (snd hd) in 
+              if n = name then (n, 
+                Desc.(match v, value with 
+                      | VDOUBLE orig, VDOUBLE newv -> VDOUBLE (update_field n orig newv)
+                      | VFLOAT orig, VFLOAT newv -> VFLOAT (update_field n orig newv)
+                      | VINT orig, VINT newv -> VINT (update_field n orig newv)
+                      | VBOOL orig, VBOOL newv -> VBOOL (update_field n orig newv)
+                      | VSTRING orig, VSTRING newv -> VSTRING (update_field n orig newv)
+                      | VBYTES orig, VBYTES newv -> VBYTES (update_field n orig newv)
+                      | VMSG orig, VMSG newv -> VMSG (update_field n orig newv)
+                      | VENUM orig, VENUM newv -> VENUM (update_field n orig newv)
+                      | _ -> v
+                      )) :: tl
+              else 
+              let r = update_msg tl name value in 
+              List.noRepeats_cons n (Desc.msg_names r);
+              hd :: r
+
+let merge_field (m:Desc.md) (msg:option Desc.msg) (f:nat & bytes) : option Desc.msg = 
+  let? msg = msg in
+  let fid, payload = f in
+  let field_desc = find_field m fid in 
+  match field_desc with 
+  // msg is no longer an option, thanks to the let? on the first line of this function
+  | None -> Some msg 
+  | Some (n, f, ty) -> let? typed_payload = parse_field ty payload in 
+                      let new_msg : Desc.msg = update_msg msg n typed_payload in
+                      Some (new_msg)
+
 let parse (m:Desc.md) (enc:bytes) : option Desc.msg =
   let raw_fields, leftover_byt = decode_fields enc in 
+  // Not sure if this is the right behavior, but leftover bytes 
+  // indicates that something wasn't formatted correctly, and 
+  // we should probably report a parse failure via returning 
+  // None
   if leftover_byt <> [] then None else 
-  admit ()
+  let msg : Desc.msg = Desc.init_msg m in 
+  let field_merge = merge_field m in 
+  fold_left field_merge (Some msg) raw_fields

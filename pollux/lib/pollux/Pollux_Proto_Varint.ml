@@ -7,7 +7,7 @@ let rec (valid : FStar_UInt8.t Prims.list -> Prims.bool) =
     | msb::rest ->
         (FStar_UInt.msb (Prims.of_int (8)) (FStar_UInt8.v msb)) &&
           (valid rest)
-type varint = FStar_UInt8.t Prims.list
+type varint = Pollux_Proto_Prelude.bytes
 let (set_msb_u8 : FStar_UInt8.t -> FStar_UInt8.t) =
   fun b -> let r = FStar_UInt8.add b 128 in r
 let (unset_msb_u8 : FStar_UInt8.t -> FStar_UInt8.t) =
@@ -26,23 +26,20 @@ let rec (decode : varint -> FStar_UInt64.t) =
         y
 let rec (extract_varint :
   FStar_UInt8.t Prims.list ->
-    (varint FStar_Pervasives_Native.option * FStar_UInt8.t Prims.list))
+    (varint * Pollux_Proto_Prelude.bytes) FStar_Pervasives_Native.option)
   =
   fun bs ->
     match bs with
-    | [] -> (FStar_Pervasives_Native.None, [])
+    | [] -> FStar_Pervasives_Native.None
     | h::tl ->
         if FStar_UInt8.lte h 127
-        then ((FStar_Pervasives_Native.Some [h]), tl)
+        then FStar_Pervasives_Native.Some ([h], tl)
         else
-          (let uu___1 = extract_varint tl in
-           match uu___1 with
-           | (v, rest) ->
-               (match v with
-                | FStar_Pervasives_Native.None ->
-                    (FStar_Pervasives_Native.None, bs)
-                | FStar_Pervasives_Native.Some v1 ->
-                    ((FStar_Pervasives_Native.Some (h :: v1)), rest)))
+          (let rest = extract_varint tl in
+           match rest with
+           | FStar_Pervasives_Native.None -> FStar_Pervasives_Native.None
+           | FStar_Pervasives_Native.Some (v, rest1) ->
+               FStar_Pervasives_Native.Some ((h :: v), rest1))
 let (split :
   Prims.pos ->
     Obj.t FStar_UInt.uint_t ->
