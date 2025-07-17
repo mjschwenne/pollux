@@ -63,20 +63,21 @@
                 ocaml-protoc-plugin
               ]
               ++ (with pkgs.ocaml-ng.ocamlPackages_4_14; [
+                base64
+                batteries
+                dune_3
+                merlin
+                findlib
                 ocaml
                 ocamlbuild
-                dune_3
-                utop
-                merlin
-                stdio
-                findlib
-                batteries
                 pprint
                 ppx_deriving_yojson
                 ppx_expect
                 ptime
-                base64
+                qcheck-core
                 stdint
+                stdio
+                utop
                 zarith
               ]);
 

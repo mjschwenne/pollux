@@ -1,2 +1,4 @@
 (test
- (name test_pollux))
+ (name test_pollux)
+ (modules test_pollux)
+ (libraries proto pollux qcheck-core qcheck-core.runner stdint))
