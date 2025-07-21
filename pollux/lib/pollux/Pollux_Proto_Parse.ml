@@ -301,57 +301,6 @@ let (encode_string : Prims.string -> Pollux_Proto_Prelude.bytes) =
          (FStar_String.list_of_string s)) encode_utf8_char
 let (encode_bytes : Pollux_Proto_Prelude.bytes -> Pollux_Proto_Prelude.bytes)
   = fun b -> encode_packed b (fun x -> [x])
-let (v_measure : Pollux_Proto_Descriptors.vty -> Prims.nat) =
-  fun v ->
-    match v with
-    | Pollux_Proto_Descriptors.VDOUBLE v' ->
-        (match v' with
-         | Pollux_Proto_Descriptors.VIMPLICIT uu___ -> Prims.int_zero
-         | Pollux_Proto_Descriptors.VOPTIONAL uu___ -> Prims.int_zero
-         | Pollux_Proto_Descriptors.VREPEATED l ->
-             FStar_List_Tot_Base.length l)
-    | Pollux_Proto_Descriptors.VFLOAT v' ->
-        (match v' with
-         | Pollux_Proto_Descriptors.VIMPLICIT uu___ -> Prims.int_zero
-         | Pollux_Proto_Descriptors.VOPTIONAL uu___ -> Prims.int_zero
-         | Pollux_Proto_Descriptors.VREPEATED l ->
-             FStar_List_Tot_Base.length l)
-    | Pollux_Proto_Descriptors.VINT v' ->
-        (match v' with
-         | Pollux_Proto_Descriptors.VIMPLICIT uu___ -> Prims.int_zero
-         | Pollux_Proto_Descriptors.VOPTIONAL uu___ -> Prims.int_zero
-         | Pollux_Proto_Descriptors.VREPEATED l ->
-             FStar_List_Tot_Base.length l)
-    | Pollux_Proto_Descriptors.VBOOL v' ->
-        (match v' with
-         | Pollux_Proto_Descriptors.VIMPLICIT uu___ -> Prims.int_zero
-         | Pollux_Proto_Descriptors.VOPTIONAL uu___ -> Prims.int_zero
-         | Pollux_Proto_Descriptors.VREPEATED l ->
-             FStar_List_Tot_Base.length l)
-    | Pollux_Proto_Descriptors.VSTRING v' ->
-        (match v' with
-         | Pollux_Proto_Descriptors.VIMPLICIT uu___ -> Prims.int_zero
-         | Pollux_Proto_Descriptors.VOPTIONAL uu___ -> Prims.int_zero
-         | Pollux_Proto_Descriptors.VREPEATED l ->
-             FStar_List_Tot_Base.length l)
-    | Pollux_Proto_Descriptors.VBYTES v' ->
-        (match v' with
-         | Pollux_Proto_Descriptors.VIMPLICIT uu___ -> Prims.int_zero
-         | Pollux_Proto_Descriptors.VOPTIONAL uu___ -> Prims.int_zero
-         | Pollux_Proto_Descriptors.VREPEATED l ->
-             FStar_List_Tot_Base.length l)
-    | Pollux_Proto_Descriptors.VMSG v' ->
-        (match v' with
-         | Pollux_Proto_Descriptors.VIMPLICIT uu___ -> Prims.int_zero
-         | Pollux_Proto_Descriptors.VOPTIONAL uu___ -> Prims.int_zero
-         | Pollux_Proto_Descriptors.VREPEATED l ->
-             FStar_List_Tot_Base.length l)
-    | Pollux_Proto_Descriptors.VENUM v' ->
-        (match v' with
-         | Pollux_Proto_Descriptors.VIMPLICIT uu___ -> Prims.int_zero
-         | Pollux_Proto_Descriptors.VOPTIONAL uu___ -> Prims.int_zero
-         | Pollux_Proto_Descriptors.VREPEATED l ->
-             FStar_List_Tot_Base.length l)
 let encode_dec_packed :
   'a .
     'a Pollux_Proto_Descriptors.dvty ->
@@ -413,6 +362,131 @@ let (find_encode_one :
                uu___ = (Prims.of_int (64)) ->
                FStar_Pervasives_Native.Some encode_sfixed64
            | uu___ -> FStar_Pervasives_Native.None)
+let opt_append :
+  'a .
+    'a Prims.list ->
+      'a Prims.list FStar_Pervasives_Native.option -> 'a Prims.list
+  =
+  fun l1 ->
+    fun l2 ->
+      match l2 with
+      | FStar_Pervasives_Native.None -> l1
+      | FStar_Pervasives_Native.Some l2' -> FStar_List_Tot_Base.op_At l1 l2'
+let rec (fields_measure : Pollux_Proto_Descriptors.fields -> Prims.nat) =
+  fun fs ->
+    match fs with
+    | [] -> Prims.int_zero
+    | f::ftl ->
+        (match FStar_Pervasives_Native.__proj__Mktuple3__item___3 f with
+         | Pollux_Proto_Descriptors.P_DOUBLE uu___ -> fields_measure ftl
+         | Pollux_Proto_Descriptors.P_FLOAT uu___ -> fields_measure ftl
+         | Pollux_Proto_Descriptors.P_INT (uu___, uu___1) ->
+             fields_measure ftl
+         | Pollux_Proto_Descriptors.P_UINT (uu___, uu___1) ->
+             fields_measure ftl
+         | Pollux_Proto_Descriptors.P_SINT (uu___, uu___1) ->
+             fields_measure ftl
+         | Pollux_Proto_Descriptors.P_FIXED (uu___, uu___1) ->
+             fields_measure ftl
+         | Pollux_Proto_Descriptors.P_SFIXED (uu___, uu___1) ->
+             fields_measure ftl
+         | Pollux_Proto_Descriptors.P_BOOL uu___ -> fields_measure ftl
+         | Pollux_Proto_Descriptors.P_STRING uu___ -> fields_measure ftl
+         | Pollux_Proto_Descriptors.P_BYTES uu___ -> fields_measure ftl
+         | Pollux_Proto_Descriptors.P_ENUM uu___ -> fields_measure ftl
+         | Pollux_Proto_Descriptors.P_MSG (m, uu___) ->
+             (Prims.int_one +
+                (fields_measure m.Pollux_Proto_Descriptors.fields))
+               + (fields_measure ftl))
+let (p_measure : Pollux_Proto_Descriptors.md -> Prims.nat) =
+  fun md -> fields_measure md.Pollux_Proto_Descriptors.fields
+let rec (find_nested_md_f :
+  Pollux_Proto_Descriptors.fields ->
+    Pollux_Proto_Descriptors.vf ->
+      Pollux_Proto_Descriptors.md FStar_Pervasives_Native.option)
+  =
+  fun fs ->
+    fun f ->
+      match fs with
+      | [] -> FStar_Pervasives_Native.None
+      | h::t ->
+          if
+            (FStar_Pervasives_Native.__proj__Mktuple3__item___1 h) =
+              (FStar_Pervasives_Native.__proj__Mktuple2__item___1 f)
+          then
+            (match FStar_Pervasives_Native.__proj__Mktuple3__item___3 h with
+             | Pollux_Proto_Descriptors.P_MSG (m, uu___) ->
+                 FStar_Pervasives_Native.Some m
+             | uu___ -> FStar_Pervasives_Native.None)
+          else
+            (match find_nested_md_f t f with
+             | FStar_Pervasives_Native.None -> FStar_Pervasives_Native.None
+             | FStar_Pervasives_Native.Some m ->
+                 FStar_Pervasives_Native.Some m)
+let (find_nested_md :
+  Pollux_Proto_Descriptors.md ->
+    Pollux_Proto_Descriptors.vf ->
+      Pollux_Proto_Descriptors.md FStar_Pervasives_Native.option)
+  = fun m -> fun f -> find_nested_md_f m.Pollux_Proto_Descriptors.fields f
+let (v_measure : Pollux_Proto_Descriptors.vty -> Prims.nat) =
+  fun v ->
+    match v with
+    | Pollux_Proto_Descriptors.VDOUBLE v' ->
+        (match v' with
+         | Pollux_Proto_Descriptors.VIMPLICIT uu___ -> Prims.int_one
+         | Pollux_Proto_Descriptors.VOPTIONAL uu___ -> Prims.int_one
+         | Pollux_Proto_Descriptors.VREPEATED l ->
+             FStar_List_Tot_Base.length l)
+    | Pollux_Proto_Descriptors.VFLOAT v' ->
+        (match v' with
+         | Pollux_Proto_Descriptors.VIMPLICIT uu___ -> Prims.int_one
+         | Pollux_Proto_Descriptors.VOPTIONAL uu___ -> Prims.int_one
+         | Pollux_Proto_Descriptors.VREPEATED l ->
+             FStar_List_Tot_Base.length l)
+    | Pollux_Proto_Descriptors.VINT v' ->
+        (match v' with
+         | Pollux_Proto_Descriptors.VIMPLICIT uu___ -> Prims.int_one
+         | Pollux_Proto_Descriptors.VOPTIONAL uu___ -> Prims.int_one
+         | Pollux_Proto_Descriptors.VREPEATED l ->
+             FStar_List_Tot_Base.length l)
+    | Pollux_Proto_Descriptors.VBOOL v' ->
+        (match v' with
+         | Pollux_Proto_Descriptors.VIMPLICIT uu___ -> Prims.int_one
+         | Pollux_Proto_Descriptors.VOPTIONAL uu___ -> Prims.int_one
+         | Pollux_Proto_Descriptors.VREPEATED l ->
+             FStar_List_Tot_Base.length l)
+    | Pollux_Proto_Descriptors.VSTRING v' ->
+        (match v' with
+         | Pollux_Proto_Descriptors.VIMPLICIT uu___ -> Prims.int_one
+         | Pollux_Proto_Descriptors.VOPTIONAL uu___ -> Prims.int_one
+         | Pollux_Proto_Descriptors.VREPEATED l ->
+             FStar_List_Tot_Base.length l)
+    | Pollux_Proto_Descriptors.VBYTES v' ->
+        (match v' with
+         | Pollux_Proto_Descriptors.VIMPLICIT uu___ -> Prims.int_one
+         | Pollux_Proto_Descriptors.VOPTIONAL uu___ -> Prims.int_one
+         | Pollux_Proto_Descriptors.VREPEATED l ->
+             FStar_List_Tot_Base.length l)
+    | Pollux_Proto_Descriptors.VMSG v' ->
+        (match v' with
+         | Pollux_Proto_Descriptors.VIMPLICIT uu___ -> Prims.int_one
+         | Pollux_Proto_Descriptors.VOPTIONAL uu___ -> Prims.int_one
+         | Pollux_Proto_Descriptors.VREPEATED l ->
+             FStar_List_Tot_Base.length l)
+    | Pollux_Proto_Descriptors.VENUM v' ->
+        (match v' with
+         | Pollux_Proto_Descriptors.VIMPLICIT uu___ -> Prims.int_one
+         | Pollux_Proto_Descriptors.VOPTIONAL uu___ -> Prims.int_one
+         | Pollux_Proto_Descriptors.VREPEATED l ->
+             FStar_List_Tot_Base.length l)
+let rec (vs_measure : Pollux_Proto_Descriptors.msg -> Prims.nat) =
+  fun vs ->
+    match vs with
+    | [] -> Prims.int_zero
+    | h::t ->
+        (Prims.int_one +
+           (v_measure (FStar_Pervasives_Native.__proj__Mktuple2__item___2 h)))
+          + (vs_measure t)
 let rec (encode_field :
   Pollux_Proto_Descriptors.md ->
     Pollux_Proto_Descriptors.vf ->
@@ -458,11 +532,10 @@ and (encode_value :
           let rest =
             Pollux_Proto_Descriptors.VSTRING
               (Pollux_Proto_Descriptors.VREPEATED vt) in
-          let renc =
-            encode_field msg_d
-              ((FStar_Pervasives_Native.__proj__Mktuple2__item___1 field),
-                rest) in
-          (match renc with
+          (match encode_field msg_d
+                   ((FStar_Pervasives_Native.__proj__Mktuple2__item___1 field),
+                     rest)
+           with
            | FStar_Pervasives_Native.None ->
                FStar_Pervasives_Native.Some (encode_string vh)
            | FStar_Pervasives_Native.Some r ->
@@ -478,36 +551,72 @@ and (encode_value :
           let rest =
             Pollux_Proto_Descriptors.VBYTES
               (Pollux_Proto_Descriptors.VREPEATED vt) in
-          let renc =
-            encode_field msg_d
-              ((FStar_Pervasives_Native.__proj__Mktuple2__item___1 field),
-                rest) in
-          (match renc with
+          (match encode_field msg_d
+                   ((FStar_Pervasives_Native.__proj__Mktuple2__item___1 field),
+                     rest)
+           with
            | FStar_Pervasives_Native.None ->
                FStar_Pervasives_Native.Some (encode_bytes vh)
            | FStar_Pervasives_Native.Some r ->
                FStar_Pervasives_Native.Some
                  (FStar_List_Tot_Base.op_At (encode_bytes vh) r))
+      | Pollux_Proto_Descriptors.VMSG (Pollux_Proto_Descriptors.VIMPLICIT v')
+          ->
+          Pollux_Proto_Prelude.op_let_Question (find_nested_md msg_d field)
+            (fun md -> encode_message' md v')
+      | Pollux_Proto_Descriptors.VMSG (Pollux_Proto_Descriptors.VOPTIONAL
+          (FStar_Pervasives_Native.Some v')) ->
+          Pollux_Proto_Prelude.op_let_Question (find_nested_md msg_d field)
+            (fun md -> encode_message' md v')
+      | Pollux_Proto_Descriptors.VMSG (Pollux_Proto_Descriptors.VREPEATED
+          (vh::vt)) ->
+          Pollux_Proto_Prelude.op_let_Question (find_nested_md msg_d field)
+            (fun md ->
+               let rest =
+                 Pollux_Proto_Descriptors.VMSG
+                   (Pollux_Proto_Descriptors.VREPEATED vt) in
+               match encode_field msg_d
+                       ((FStar_Pervasives_Native.__proj__Mktuple2__item___1
+                           field), rest)
+               with
+               | FStar_Pervasives_Native.None -> encode_message' md vh
+               | FStar_Pervasives_Native.Some r ->
+                   (match encode_message' md vh with
+                    | FStar_Pervasives_Native.None ->
+                        FStar_Pervasives_Native.Some r
+                    | FStar_Pervasives_Native.Some e ->
+                        FStar_Pervasives_Native.Some
+                          (FStar_List_Tot_Base.op_At e r)))
       | uu___ -> FStar_Pervasives_Native.None
-let opt_append :
-  'a .
-    'a Prims.list ->
-      'a Prims.list FStar_Pervasives_Native.option -> 'a Prims.list
+and (encode_message' :
+  Pollux_Proto_Descriptors.md ->
+    Pollux_Proto_Descriptors.msg ->
+      Pollux_Proto_Prelude.bytes FStar_Pervasives_Native.option)
   =
-  fun l1 ->
-    fun l2 ->
-      match l2 with
-      | FStar_Pervasives_Native.None -> l1
-      | FStar_Pervasives_Native.Some l2' -> FStar_List_Tot_Base.op_At l1 l2'
+  fun msg_d ->
+    fun msg ->
+      match msg with
+      | [] -> FStar_Pervasives_Native.None
+      | h::t ->
+          let h_enc = encode_field msg_d h in
+          (match encode_message' msg_d t with
+           | FStar_Pervasives_Native.None -> h_enc
+           | FStar_Pervasives_Native.Some r ->
+               (match h_enc with
+                | FStar_Pervasives_Native.None ->
+                    FStar_Pervasives_Native.Some r
+                | FStar_Pervasives_Native.Some e ->
+                    FStar_Pervasives_Native.Some
+                      (FStar_List_Tot_Base.op_At e r)))
 let (encode_message :
   Pollux_Proto_Descriptors.md ->
     Pollux_Proto_Descriptors.msg -> Pollux_Proto_Prelude.bytes)
   =
-  fun md ->
+  fun msg_d ->
     fun msg ->
-      let encoder = encode_field md in
-      FStar_List_Tot_Base.fold_left opt_append []
-        (FStar_List_Tot_Base.map encoder msg)
+      match encode_message' msg_d msg with
+      | FStar_Pervasives_Native.None -> []
+      | FStar_Pervasives_Native.Some enc -> enc
 let (tag_from_num : FStar_UInt64.t -> tag FStar_Pervasives_Native.option) =
   fun n ->
     match n with

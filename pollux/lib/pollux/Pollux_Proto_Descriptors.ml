@@ -18,6 +18,48 @@ let (uu___is_P_OPTIONAL : pdec -> Prims.bool) =
   fun projectee -> match projectee with | P_OPTIONAL -> true | uu___ -> false
 let (uu___is_P_REPEATED : pdec -> Prims.bool) =
   fun projectee -> match projectee with | P_REPEATED -> true | uu___ -> false
+let sort_pair_fst :
+  'uuuuu 'uuuuu1 .
+    (Prims.string * 'uuuuu) -> (Prims.string * 'uuuuu1) -> Prims.bool
+  =
+  fun v1 ->
+    fun v2 ->
+      FStar_List_Tot_Base.bool_of_compare FStar_String.compare
+        (FStar_Pervasives_Native.fst v1) (FStar_Pervasives_Native.fst v2)
+let sort_pair_snd :
+  'uuuuu 'uuuuu1 .
+    ('uuuuu * Prims.string) -> ('uuuuu1 * Prims.string) -> Prims.bool
+  =
+  fun v1 ->
+    fun v2 ->
+      FStar_List_Tot_Base.bool_of_compare FStar_String.compare
+        (FStar_Pervasives_Native.snd v1) (FStar_Pervasives_Native.snd v2)
+let get_pair_fst :
+  'uuuuu 'uuuuu1 . ('uuuuu * 'uuuuu1) Prims.list -> 'uuuuu Prims.list =
+  fun l -> FStar_List_Tot_Base.map FStar_Pervasives_Native.fst l
+let get_pair_snd :
+  'uuuuu 'uuuuu1 . ('uuuuu * 'uuuuu1) Prims.list -> 'uuuuu1 Prims.list =
+  fun l -> FStar_List_Tot_Base.map FStar_Pervasives_Native.snd l
+let sort_triple_fst :
+  'a 'b . (Prims.string * 'a * 'b) -> (Prims.string * 'a * 'b) -> Prims.bool
+  =
+  fun v1 ->
+    fun v2 ->
+      FStar_List_Tot_Base.bool_of_compare FStar_String.compare
+        (FStar_Pervasives_Native.__proj__Mktuple3__item___1 v1)
+        (FStar_Pervasives_Native.__proj__Mktuple3__item___1 v2)
+let get_triple_fst : 'a 'b 'c . ('a * 'b * 'c) Prims.list -> 'a Prims.list =
+  fun l ->
+    FStar_List_Tot_Base.map
+      (fun e -> FStar_Pervasives_Native.__proj__Mktuple3__item___1 e) l
+let get_triple_snd : 'a 'b 'c . ('a * 'b * 'c) Prims.list -> 'b Prims.list =
+  fun l ->
+    FStar_List_Tot_Base.map
+      (fun e -> FStar_Pervasives_Native.__proj__Mktuple3__item___2 e) l
+let get_triple_thd : 'a 'b 'c . ('a * 'b * 'c) Prims.list -> 'c Prims.list =
+  fun l ->
+    FStar_List_Tot_Base.map
+      (fun e -> FStar_Pervasives_Native.__proj__Mktuple3__item___3 e) l
 type pty =
   | P_DOUBLE of pdec 
   | P_FLOAT of pdec 
@@ -29,8 +71,12 @@ type pty =
   | P_BOOL of pdec 
   | P_STRING of pdec 
   | P_BYTES of pdec 
-  | P_MSG of pdec 
+  | P_MSG of md * pdec 
   | P_ENUM of pdec 
+and md =
+  {
+  reserved: Prims.nat FStar_Set.set ;
+  fields: (Prims.string * Prims.nat * pty) Prims.list }
 let (uu___is_P_DOUBLE : pty -> Prims.bool) =
   fun projectee ->
     match projectee with | P_DOUBLE _0 -> true | uu___ -> false
@@ -89,38 +135,23 @@ let (uu___is_P_BYTES : pty -> Prims.bool) =
 let (__proj__P_BYTES__item___0 : pty -> pdec) =
   fun projectee -> match projectee with | P_BYTES _0 -> _0
 let (uu___is_P_MSG : pty -> Prims.bool) =
-  fun projectee -> match projectee with | P_MSG _0 -> true | uu___ -> false
-let (__proj__P_MSG__item___0 : pty -> pdec) =
-  fun projectee -> match projectee with | P_MSG _0 -> _0
+  fun projectee ->
+    match projectee with | P_MSG (m, _1) -> true | uu___ -> false
+let (__proj__P_MSG__item__m : pty -> md) =
+  fun projectee -> match projectee with | P_MSG (m, _1) -> m
+let (__proj__P_MSG__item___1 : pty -> pdec) =
+  fun projectee -> match projectee with | P_MSG (m, _1) -> _1
 let (uu___is_P_ENUM : pty -> Prims.bool) =
   fun projectee -> match projectee with | P_ENUM _0 -> true | uu___ -> false
 let (__proj__P_ENUM__item___0 : pty -> pdec) =
   fun projectee -> match projectee with | P_ENUM _0 -> _0
-type fd = (Prims.string * Prims.nat * pty)
-let (get_fids : fd Prims.list -> Prims.nat Prims.list) =
-  fun l ->
-    FStar_List_Tot_Base.map
-      (fun e -> FStar_Pervasives_Native.__proj__Mktuple3__item___2 e) l
-let (get_names : fd Prims.list -> Prims.string Prims.list) =
-  fun l ->
-    FStar_List_Tot_Base.map
-      (fun e -> FStar_Pervasives_Native.__proj__Mktuple3__item___1 e) l
-let (sort_fd : fd -> fd -> Prims.bool) =
-  fun f1 ->
-    fun f2 ->
-      FStar_List_Tot_Base.bool_of_compare FStar_String.compare
-        (FStar_Pervasives_Native.__proj__Mktuple3__item___1 f1)
-        (FStar_Pervasives_Native.__proj__Mktuple3__item___1 f2)
-type fields = fd Prims.list
-type md = {
-  reserved: Prims.nat FStar_Set.set ;
-  fields: fields }
 let (__proj__Mkmd__item__reserved : md -> Prims.nat FStar_Set.set) =
-  fun projectee ->
-    match projectee with | { reserved; fields = fields1;_} -> reserved
-let (__proj__Mkmd__item__fields : md -> fields) =
-  fun projectee ->
-    match projectee with | { reserved; fields = fields1;_} -> fields1
+  fun projectee -> match projectee with | { reserved; fields;_} -> reserved
+let (__proj__Mkmd__item__fields :
+  md -> (Prims.string * Prims.nat * pty) Prims.list) =
+  fun projectee -> match projectee with | { reserved; fields;_} -> fields
+type fd = (Prims.string * Prims.nat * pty)
+type fields = (Prims.string * Prims.nat * pty) Prims.list
 type 'v dvty =
   | VIMPLICIT of 'v 
   | VOPTIONAL of 'v FStar_Pervasives_Native.option 
@@ -148,7 +179,7 @@ type vty =
   | VBOOL of Prims.bool dvty 
   | VSTRING of Prims.string dvty 
   | VBYTES of Pollux_Proto_Prelude.bytes dvty 
-  | VMSG of unit dvty 
+  | VMSG of (Prims.string * vty) Prims.list dvty 
   | VENUM of unit dvty 
 let (uu___is_VDOUBLE : vty -> Prims.bool) =
   fun projectee -> match projectee with | VDOUBLE _0 -> true | uu___ -> false
@@ -176,24 +207,14 @@ let (__proj__VBYTES__item___0 : vty -> Pollux_Proto_Prelude.bytes dvty) =
   fun projectee -> match projectee with | VBYTES _0 -> _0
 let (uu___is_VMSG : vty -> Prims.bool) =
   fun projectee -> match projectee with | VMSG _0 -> true | uu___ -> false
-let (__proj__VMSG__item___0 : vty -> unit dvty) =
+let (__proj__VMSG__item___0 : vty -> (Prims.string * vty) Prims.list dvty) =
   fun projectee -> match projectee with | VMSG _0 -> _0
 let (uu___is_VENUM : vty -> Prims.bool) =
   fun projectee -> match projectee with | VENUM _0 -> true | uu___ -> false
 let (__proj__VENUM__item___0 : vty -> unit dvty) =
   fun projectee -> match projectee with | VENUM _0 -> _0
 type vf = (Prims.string * vty)
-let (sort_vf : vf -> vf -> Prims.bool) =
-  fun v1 ->
-    fun v2 ->
-      FStar_List_Tot_Base.bool_of_compare FStar_String.compare
-        (FStar_Pervasives_Native.__proj__Mktuple2__item___1 v1)
-        (FStar_Pervasives_Native.__proj__Mktuple2__item___1 v2)
-let (msg_names : vf Prims.list -> Prims.string Prims.list) =
-  fun m ->
-    FStar_List_Tot_Base.map
-      (fun f -> FStar_Pervasives_Native.__proj__Mktuple2__item___1 f) m
-type msg = vf Prims.list
+type msg = (Prims.string * vty) Prims.list
 let (empty_msg : msg) = []
 let init_dec : 'a . pdec -> 'a -> 'a dvty =
   fun dec ->
@@ -202,7 +223,7 @@ let init_dec : 'a . pdec -> 'a -> 'a dvty =
       | P_IMPLICIT -> VIMPLICIT def
       | P_OPTIONAL -> VOPTIONAL FStar_Pervasives_Native.None
       | P_REPEATED -> VREPEATED []
-let (init_field : fd -> vf) =
+let rec (init_field : fd -> vf) =
   fun f ->
     ((FStar_Pervasives_Native.__proj__Mktuple3__item___1 f),
       (match FStar_Pervasives_Native.__proj__Mktuple3__item___3 f with
@@ -216,9 +237,9 @@ let (init_field : fd -> vf) =
        | P_BOOL pd -> VBOOL (init_dec pd false)
        | P_STRING pd -> VSTRING (init_dec pd "")
        | P_BYTES pd -> VBYTES (init_dec pd [])
-       | P_MSG pd -> VMSG (init_dec pd ())
+       | P_MSG (md1, pd) -> VMSG (init_dec pd (init_msg md1))
        | P_ENUM pd -> VENUM (init_dec pd ())))
-let rec (init_fields : fields -> msg) =
+and (init_fields : fields -> msg) =
   fun fs ->
     match fs with
     | [] -> []
@@ -226,4 +247,4 @@ let rec (init_fields : fields -> msg) =
         let new_field = init_field hd in
         let rest_fields = init_fields tl in
         let fields1 = new_field :: rest_fields in fields1
-let (init_msg : md -> msg) = fun m -> init_fields m.fields
+and (init_msg : md -> msg) = fun m -> init_fields m.fields

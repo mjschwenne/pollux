@@ -172,19 +172,6 @@ let encode_string (s:string) : bytes = encode_packed (map Char.u32_of_char (Stri
 // Add the length prefix, separate function for consistency
 let encode_bytes (b:bytes) : bytes = encode_packed b (fun x -> [x])
 
-let v_measure (v:Desc.vty) : nat = 
-  Desc.(match v with 
-  | VDOUBLE v'
-  | VFLOAT v'
-  | VINT v' 
-  | VBOOL v' 
-  | VSTRING v' 
-  | VBYTES v' 
-  | VMSG v' 
-  | VENUM v' -> match v' with 
-               | VIMPLICIT _ -> 0
-               | VOPTIONAL _ -> 0
-               | VREPEATED l -> List.length l)
 
 let encode_dec_packed (#a:eqtype) (field:Desc.dvty a) (def:a) (encode_one:a -> bytes) : option bytes = 
   Desc.(match field with 
@@ -208,43 +195,115 @@ let find_encode_one (msg_d:Desc.md) (name:string) : option (int -> bytes) =
   | P_SFIXED 64 _ -> Some encode_sfixed64
   | _ -> None)
 
-let rec encode_field (msg_d:Desc.md) (field:Desc.vf) : Tot (option bytes) (decreases %[v_measure field._2;1]) = 
-  let? header : U64.t = encode_header msg_d field._1 in 
-  let header_bytes : bytes = Vint.encode header in 
-  let? value : bytes = encode_value msg_d field in
-  Some (header_bytes @ value)
-
-and encode_value (msg_d:Desc.md) (field:Desc.vf) : Tot (option bytes) (decreases %[v_measure field._2;0]) = 
-  Desc.(match field._2 with 
-  | VDOUBLE v' -> encode_dec_packed v' double_z id
-  | VFLOAT v' -> encode_dec_packed v' float_z id
-  | VINT v' -> let? encode_one = find_encode_one msg_d field._1 in encode_dec_packed v' 0 encode_one 
-  | VBOOL v' -> encode_dec_packed v' false encode_bool 
-  | VSTRING (VIMPLICIT v') -> encode_implicit v' "" encode_string
-  | VSTRING (VOPTIONAL (Some v')) -> Some (encode_string v')
-  | VSTRING (VREPEATED (vh :: vt)) -> let rest = (VSTRING (VREPEATED vt)) in 
-                                              let renc = (encode_field msg_d (field._1, rest)) in 
-                                              (match renc with 
-                                                | None -> Some (encode_string vh)
-                                                | Some r -> Some ((encode_string vh) @ r))
-  | VBYTES (VIMPLICIT v') -> encode_implicit v' [] encode_bytes
-  | VBYTES (VOPTIONAL (Some v')) -> Some (encode_bytes v')
-  | VBYTES (VREPEATED (vh :: vt)) -> let rest = (VBYTES (VREPEATED vt)) in 
-                                             let renc = (encode_field msg_d (field._1, rest)) in 
-                                             (match renc with 
-                                               | None -> Some (encode_bytes vh)
-                                               | Some r -> Some ((encode_bytes vh) @ r))
-  // TODO: Add message and enum support
-  | _ -> None)
-
 let opt_append (#a:Type) (l1:list a) (l2:option (list a)) : list a =
   match l2 with 
   | None -> l1
   | Some l2' -> l1 @ l2'
 
-let encode_message (md:Desc.md) (msg:Desc.msg) : bytes = 
-  let encoder : Desc.vf -> option bytes = encode_field md in 
-  fold_left opt_append [] (map encoder msg)
+let rec fields_measure (fs:Desc.fields) : nat = 
+  Desc.(match fs with 
+  | Nil -> 0 
+  | f :: ftl -> (match f._3 with 
+                | P_DOUBLE _
+                | P_FLOAT _ 
+                | P_INT _ _
+                | P_UINT _ _ 
+                | P_SINT _ _
+                | P_FIXED _ _ 
+                | P_SFIXED _ _ 
+                | P_BOOL _ 
+                | P_STRING _ 
+                | P_BYTES _
+                | P_ENUM _ -> fields_measure ftl
+                | P_MSG m _ -> 1 + fields_measure m.fields + fields_measure ftl))
+
+let p_measure (md:Desc.md) : nat = fields_measure md.fields
+
+let rec find_nested_md_f (fs:Desc.fields) (f:Desc.vf) : option (m:Desc.md{p_measure m < fields_measure fs}) = 
+  match fs with 
+  | Nil -> None 
+  | h :: t -> if h._1 = f._1 then (
+             match h._3 with 
+             | Desc.P_MSG m _ -> Some m
+             | _ -> None
+            ) else 
+              match find_nested_md_f t f with 
+              | None -> None
+              | Some m -> assert fields_measure t <= fields_measure fs; Some m
+
+let find_nested_md (m:Desc.md) (f:Desc.vf) : option (m':Desc.md{p_measure m' < p_measure m}) = 
+  find_nested_md_f m.fields f
+
+let v_measure (v:Desc.vty) : nat = 
+  Desc.(match v with 
+  | VDOUBLE v'
+  | VFLOAT v'
+  | VINT v' 
+  | VBOOL v' 
+  | VSTRING v' 
+  | VBYTES v' 
+  | VMSG v'
+  | VENUM v' -> (match v' with 
+               | VIMPLICIT _
+               | VOPTIONAL _ -> 1
+               | VREPEATED l -> List.length l))
+
+let rec vs_measure (vs:Desc.msg) : nat = 
+  match vs with 
+  | Nil -> 0 
+  | h :: t -> 1 + v_measure h._2 + vs_measure t
+
+let rec encode_field (msg_d:Desc.md) (field:Desc.vf) : Tot (option bytes) 
+  (decreases %[p_measure msg_d;vs_measure [field];1]) = 
+    let? header : U64.t = encode_header msg_d field._1 in 
+    let header_bytes : bytes = Vint.encode header in 
+    let? value : bytes = encode_value msg_d field in
+    Some (header_bytes @ value)
+
+and encode_value (msg_d:Desc.md) (field:Desc.vf) : Tot (option bytes) 
+  (decreases %[p_measure msg_d;vs_measure [field];0]) = 
+    Desc.(match field._2 with 
+    | VDOUBLE v' -> encode_dec_packed v' double_z id
+    | VFLOAT v' -> encode_dec_packed v' float_z id
+    | VINT v' -> let? encode_one = find_encode_one msg_d field._1 in encode_dec_packed v' 0 encode_one 
+    | VBOOL v' -> encode_dec_packed v' false encode_bool 
+    | VSTRING (VIMPLICIT v') -> encode_implicit v' "" encode_string
+    | VSTRING (VOPTIONAL (Some v')) -> Some (encode_string v')
+    | VSTRING (VREPEATED (vh :: vt)) -> let rest = (VSTRING (VREPEATED vt)) in 
+                                                (match encode_field msg_d (field._1, rest) with 
+                                                    | None -> Some (encode_string vh)
+                                                    | Some r -> Some ((encode_string vh) @ r))
+    | VBYTES (VIMPLICIT v') -> encode_implicit v' [] encode_bytes
+    | VBYTES (VOPTIONAL (Some v')) -> Some (encode_bytes v')
+    | VBYTES (VREPEATED (vh :: vt)) -> let rest = (VBYTES (VREPEATED vt)) in 
+                                                (match encode_field msg_d (field._1, rest) with 
+                                                | None -> Some (encode_bytes vh)
+                                                | Some r -> Some ((encode_bytes vh) @ r))
+    | VMSG (VIMPLICIT v')
+    | VMSG (VOPTIONAL (Some v')) -> let? md = find_nested_md msg_d field in encode_message' md v'
+    | VMSG (VREPEATED (vh :: vt)) -> let? md = find_nested_md msg_d field in 
+                                   let rest = (VMSG (VREPEATED vt)) in 
+                                   (match encode_field msg_d (field._1, rest) with 
+                                   | None -> encode_message' md vh
+                                   | Some r -> (match encode_message' md vh with 
+                                              | None -> Some r 
+                                              | Some e -> Some (e @ r)))
+    // TODO: Add enum, oneof and map support
+    | _ -> None)
+
+and encode_message' (msg_d:Desc.md) (msg:Desc.msg) : Tot (option bytes) 
+  (decreases %[p_measure msg_d;vs_measure msg;2]) = 
+    match msg with 
+    | Nil -> None
+    | h :: t -> let h_enc = encode_field msg_d h in 
+                match encode_message' msg_d t with 
+                | None -> h_enc
+                | Some r -> (match h_enc with | None -> Some r | Some e -> Some (e @ r))
+
+let encode_message (msg_d:Desc.md) (msg:Desc.msg) : bytes = 
+  match encode_message' msg_d msg with 
+  | None -> []
+  | Some enc -> enc 
 
 let tag_from_num (n:U64.t) : option tag = 
   match n with 
@@ -443,7 +502,7 @@ let update_field (#a:Type) (name:string) (ori_v:Desc.dvty a) (new_v:Desc.dvty a)
     | _ -> ori_v) 
 
 // Refinement and explicit splitting of hd purely for verification purposes.
-let rec update_msg (msg:Desc.msg) (name:string) (value:Desc.vty) : m:Desc.msg{Desc.msg_names msg = Desc.msg_names m} = 
+let rec update_msg (msg:Desc.msg) (name:string) (value:Desc.vty) : m:Desc.msg{Desc.get_pair_fst msg = Desc.get_pair_fst m} = 
   match msg with 
   | [] -> []
   | hd :: tl -> let n = (fst hd) in 
@@ -462,7 +521,7 @@ let rec update_msg (msg:Desc.msg) (name:string) (value:Desc.vty) : m:Desc.msg{De
                       )) :: tl
               else 
               let r = update_msg tl name value in 
-              List.noRepeats_cons n (Desc.msg_names r);
+              List.noRepeats_cons n (Desc.get_pair_fst r);
               hd :: r
 
 let merge_field (m:Desc.md) (msg:option Desc.msg) (f:nat & bytes) : option Desc.msg = 

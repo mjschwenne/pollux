@@ -88,7 +88,7 @@ let str_pollux_pty (p : D.pty) : string =
   | D.P_BOOL p' -> str_pollux_pdec p' ^ " BOOL"
   | D.P_STRING p' -> str_pollux_pdec p' ^ " STRING"
   | D.P_BYTES p' -> str_pollux_pdec p' ^ " BYTES"
-  | D.P_MSG p' -> str_pollux_pdec p' ^ " MSG"
+  | D.P_MSG (_, p') -> str_pollux_pdec p' ^ " MSG"
   | D.P_ENUM p' -> str_pollux_pdec p' ^ " ENUM"
 
 let str_pollux_dvty (v : 'a D.dvty) (str : 'a -> string) : string =
