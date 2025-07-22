@@ -321,8 +321,17 @@ let decode_header (enc:bytes) : option (nat & tag & b:bytes{length b < length en
   let? tag = tag_from_num tag_n in
   Some (fid, tag, bs)
 
-let find_field (md:Desc.md) (id:nat) : option (f:Desc.fd{f._2 = id}) = 
-  find (fun (f: Desc.fd) -> f._2 = id) md.fields
+let rec find_field' (fs:Desc.fields) (id:nat) : option (f:Desc.fd{f._2 = id /\ fields_measure [f] <= fields_measure fs}) = 
+  match fs with 
+  | Nil -> None 
+  | h :: t -> if h._2 = id then (assert fields_measure [h] <= fields_measure fs; Some h)
+            else 
+            match find_field' t id with 
+            | None -> None 
+            | Some m -> assert fields_measure t <= fields_measure fs; Some m
+               
+let find_field (m:Desc.md) (id:nat) : option (f:Desc.fd{f._2 = id /\ fields_measure [f] <= p_measure m}) =
+  find_field' m.fields id 
 
 let rec take (#a:Type) (n:nat) (l:list a) : option (list a & list a) = 
   if n = 0 then Some ([], l) 
@@ -332,48 +341,37 @@ let rec take (#a:Type) (n:nat) (l:list a) : option (list a & list a) =
     | hd :: tl -> let? l1, l2 = take (n-1) tl in 
                 Some (hd :: l1, l2)
 
-let rec lemma_take_snd_length (#a:Type) (n:nat) (l:list a) : 
+let rec lemma_take_length (#a:Type) (n:nat) (l:list a) : 
   Lemma 
-    (ensures (let t = take n l in Some? t ==> n <= length l /\ length (snd (Some?.v t)) = length l - n)) = 
+    (ensures (let t = take n l in Some? t ==> n <= length l /\ length (fst (Some?.v t)) = n /\ length (snd (Some?.v t)) = length l - n)) = 
   match n, l with 
   | 0, _ -> ()
   | _, [] -> ()
-  | _, _ :: l' -> lemma_take_snd_length (n-1) l'
+  | _, _ :: l' -> lemma_take_length (n-1) l'
 
-let rec lemma_take_fst_length (#a:Type) (n:nat) (l:list a) : 
-  Lemma 
-    (ensures (let t = take n l in Some? t ==> length (fst (Some?.v t)) = n)) = 
-  match n, l with 
-  | 0, _ -> ()
-  | _, [] -> () 
-  | _, _ :: l' -> lemma_take_fst_length (n-1) l'
-
-let decode_value (t:tag) (enc:bytes) : Tot (option (bytes & b:bytes{length b < length enc})) (decreases (length enc)) = 
+let decode_value (t:tag) (enc:bytes) : Tot (option (debytes enc & dbytes enc)) (decreases (length enc)) = 
   match t with 
-  | VARINT -> let? v = Vint.extract_varint enc in 
-             // I /should/ be able to write 'VARINT -> Vint.extract_varint enc', but the 
-             // SMT solver throws a fit...
-             let vint : bytes = v._1 in 
-             let byt : b:bytes{length b < length enc} = v._2 in 
-             Some (vint, byt)
+  | VARINT -> (match Vint.extract_varint enc with 
+             | None -> None 
+             | Some (vint, byt) -> Some (vint, byt))
   | I64 -> (match take 8 enc with 
           | None -> None 
-          | Some (i64, b) -> lemma_take_snd_length 8 enc; Some (i64, b))
+          | Some (i64, b) -> lemma_take_length 8 enc; Some (i64, b))
   | LEN -> let? len_byt, enc_byt = Vint.extract_varint enc in 
           let len = Vint.decode len_byt in 
-          if U64.(eq len 0uL) then Some ([], enc_byt) else 
+          if U64.(eq len 0uL) then let dbz : debytes enc = [] in Some (dbz, enc_byt) else 
           (match take (U64.v len) enc_byt with 
           | None -> None 
-          | Some tak -> lemma_take_snd_length (U64.v len) enc_byt; 
-                        let len_byt : bytes = fst tak in 
-                        let rest_byt : b:bytes{length b < length enc} = snd tak in 
+          | Some tak -> lemma_take_length (U64.v len) enc_byt; 
+                        let len_byt : debytes enc = fst tak in 
+                        let rest_byt : dbytes enc = snd tak in 
                         Some (len_byt, rest_byt))
   | I32 -> (match take 4 enc with 
           | None -> None 
-          | Some (i32, b) -> lemma_take_snd_length 4 enc; Some (i32, b))
+          | Some (i32, b) -> lemma_take_length 4 enc; Some (i32, b))
   | _ -> None
 
-let decode_field (enc:bytes) : Tot (option (nat & bytes & b:bytes{length b < length enc})) (decreases (length enc)) =
+let decode_field (enc:bytes) : Tot (option (nat & dbytes enc & dbytes enc)) (decreases (length enc)) =
   match decode_header enc with 
   | None -> None 
   | Some (fid, t, bs) -> match decode_value t bs with 
@@ -383,16 +381,22 @@ let decode_field (enc:bytes) : Tot (option (nat & bytes & b:bytes{length b < len
 // While decode_field performs one decode, this one decodes until either 
 // - the remaining bytes are empty 
 // - something fails to chunk
-let rec decode_fields (enc:bytes) : Tot (option (list (nat & bytes) & b:bytes{length b < length enc})) (decreases (length enc)) = 
+let rec decode_fields (enc:bytes) : Tot (option (list (nat & dbytes enc) & dbytes enc)) (decreases (length enc)) = 
   match enc with 
   | [] -> None
   | enc -> (match decode_field enc with 
           | None -> None
           | Some (fid, fbs, bs) -> (match decode_fields bs with 
                                   | None -> Some ([(fid, fbs)], bs)
-                                  | Some (rfs, rbyt) -> Some ((fid, fbs) :: rfs, rbyt)))
+                                  | Some (rfs, rbyt) -> assert length bs < length enc; 
+                                                       // Weird type casting bullshit
+                                                       let rfs' : list (nat & dbytes enc) = 
+                                                         map (fun (b:nat & dbytes bs) -> 
+                                                              let b' : dbytes enc = snd b in (fst b), b')
+                                                       rfs in 
+                                                       Some ((fid, fbs) :: rfs', rbyt)))
 
-type field_parser (a:Type) = b:bytes -> option (a & b':bytes{length b' < length b})
+type field_parser (a:Type) = b:bytes -> option (a & dbytes b)
 
 // Little-endian
 let rec assemble_nat (b:bytes) : n:nat{n < pow2 (8 * length b)} = 
@@ -407,12 +411,12 @@ val parse_double : field_parser Desc.double
 let parse_double b = 
   match take 8 b with 
   | None -> None 
-  | Some db -> lemma_take_fst_length 8 b; lemma_take_snd_length 8 b; Some ((fst db), (snd db))
+  | Some db -> lemma_take_length 8 b; Some ((fst db), (snd db))
 val parse_float : field_parser Desc.float
 let parse_float b = 
   match take 4 b with 
   | None -> None 
-  | Some db -> lemma_take_fst_length 4 b; lemma_take_snd_length 4 b; Some ((fst db), (snd db))
+  | Some db -> lemma_take_length 4 b; Some ((fst db), (snd db))
 val parse_int : w:Desc.width -> field_parser int 
 let parse_int w b = 
   match Vint.extract_varint b with 
@@ -440,16 +444,14 @@ let parse_fixed w b =
   assert n > 1;
   match take n b with 
   | None -> None 
-  | Some db -> lemma_take_fst_length n b; lemma_take_snd_length n b; 
-              Some (assemble_nat (fst db), (snd db))
+  | Some db -> lemma_take_length n b; Some (assemble_nat (fst db), (snd db))
 val parse_sfixed : w:Desc.width -> field_parser int 
 let parse_sfixed w b = 
   let n = w / 8 in
   assert n > 1;
   match take n b with 
   | None -> None 
-  | Some db -> lemma_take_fst_length n b; lemma_take_snd_length n b; 
-              Some (uint_int w (assemble_nat (fst db)), (snd db))
+  | Some db -> lemma_take_length n b; Some (uint_int w (assemble_nat (fst db)), (snd db))
 val parse_bool : field_parser bool 
 let parse_bool b = 
   match b with 
@@ -511,7 +513,7 @@ let parse_dec (#a:Type) (dec:Desc.pdec) (payload:bytes) (parse_one:field_parser 
   | P_OPTIONAL -> let? one, _ = parse_one payload in Some (VOPTIONAL (Some one))
   | P_REPEATED -> let? many = parse_list payload parse_one in Some (VREPEATED many))
 
-let rec parse_field (m:Desc.md) (ty:Desc.pty) (payload:bytes) : Tot (option Desc.vty) (decreases %[p_measure m;length payload]) = 
+let rec parse_field (ty:Desc.pty) (payload:bytes) : Tot (option Desc.vty) (decreases %[fields_measure ["", 0, ty];0]) = 
   Desc.(match ty with 
   | P_DOUBLE p' -> let? vdec = parse_dec p' payload parse_double in Some (VDOUBLE vdec)
   | P_FLOAT p' -> let? vdec = parse_dec p' payload parse_float in Some (VFLOAT vdec)
@@ -523,21 +525,27 @@ let rec parse_field (m:Desc.md) (ty:Desc.pty) (payload:bytes) : Tot (option Desc
   | P_BOOL p' -> let? vdec = parse_dec p' payload parse_bool in Some (VBOOL vdec)
   | P_STRING p' -> let? vdec = parse_dec p' payload parse_string in Some (VSTRING vdec)
   | P_BYTES p' -> let? vdec = parse_dec p' payload parse_bytes in Some (VBYTES vdec)
-  | P_MSG m' P_IMPLICIT -> assume p_measure m' < p_measure m; let? one, _ = parse_message m payload in Some (VMSG (VIMPLICIT one))
+  | P_MSG m' p' -> let? vdec = parse_dec p' payload (parse_message m') in Some (VMSG vdec)
   | _ -> None)
 
-and merge_field (m:Desc.md) (msg:option Desc.msg) (f:nat & bytes) : Tot (option Desc.msg) (decreases (%[p_measure m;length (snd f)])) = 
+and merge_field (m:Desc.md) (msg:option Desc.msg) (f:nat & bytes) : Tot (option Desc.msg) (decreases (%[p_measure m;1])) = 
   let? msg = msg in
   let fid, payload = f in
   let field_desc = find_field m fid in 
   match field_desc with 
   // msg is no longer an option, thanks to the let? on the first line of this function
   | None -> Some msg 
-  | Some (n, f, ty) -> let? typed_payload = parse_field m ty payload in 
+  | Some (n, f, ty) -> let? typed_payload = parse_field ty payload in 
                       let new_msg : Desc.msg = update_msg msg n typed_payload in
                       Some (new_msg)
 
-and parse_message (m:Desc.md) (enc:bytes) : Tot (option (Desc.msg & b:bytes{length b < length enc})) (decreases (%[p_measure m;length enc])) = 
+and parse_fields (m:Desc.md) (msg:option Desc.msg) (fs:list (nat & bytes)) : Tot (option Desc.msg) (decreases %[p_measure m;2;length fs]) = 
+  // Basically a custom fold_left to propagate the needed refinements
+  match fs with 
+  | Nil -> msg 
+  | h :: t -> parse_fields m (merge_field m msg h) t
+
+and parse_message (m:Desc.md) (enc:bytes) : Tot (option (Desc.msg & dbytes enc)) (decreases (%[p_measure m;3])) = 
   let? raw_fields, leftover_byt = decode_fields enc in 
   // Not sure if this is the right behavior, but leftover bytes 
   // indicates that something wasn't formatted correctly, and 
@@ -545,8 +553,11 @@ and parse_message (m:Desc.md) (enc:bytes) : Tot (option (Desc.msg & b:bytes{leng
   // None
   if leftover_byt <> [] then None else 
   let msg : Desc.msg = Desc.init_msg m in 
-  let field_merge = merge_field m in 
-  match fold_left field_merge (Some msg) raw_fields with 
+  // INFO: Needed for type checking, but shouldn't be
+  let raw_fields : list (nat & bytes) = map 
+    (fun (e:nat & dbytes enc) -> let b : bytes = e._2 in e._1, b) 
+  raw_fields in
+  match parse_fields m (Some msg) raw_fields with 
   | None -> None 
   | Some m -> Some (m, leftover_byt)
 

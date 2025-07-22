@@ -3,6 +3,8 @@ module Pollux.Proto.Prelude
 module U8 = FStar.UInt8
 
 type bytes = list U8.t
+type dbytes (b:bytes) = d:bytes{FStar.List.length d < FStar.List.length b}
+type debytes (b:bytes) = d:bytes{FStar.List.length d <= FStar.List.length b}
 
 (* The [option] monad *)
 // Bind operator

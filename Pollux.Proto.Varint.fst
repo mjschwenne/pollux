@@ -49,7 +49,9 @@ let rec decode (bs:varint) : U64.t =
                  let y = U64.((rx <<^ 7ul) |^ msx) in
                  y
 
-let rec extract_varint (bs:list U8.t) : option (varint & b:bytes{length b < length bs}) = 
+type dvarint (bs:bytes) = v:varint{length v <= length bs}
+
+let rec extract_varint (bs:list U8.t) : option (dvarint bs & dbytes bs) = 
   match bs with 
   | [] -> None
   | h :: tl -> if U8.(lte h 127uy) then 
