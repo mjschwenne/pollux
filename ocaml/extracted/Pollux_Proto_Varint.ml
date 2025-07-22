@@ -24,9 +24,11 @@ let rec (decode : varint -> FStar_UInt64.t) =
           FStar_UInt64.logor
             (FStar_UInt64.shift_left rx (Stdint.Uint32.of_int (7))) msx in
         y
+type 'bs dvarint = varint
 let rec (extract_varint :
   FStar_UInt8.t Prims.list ->
-    (varint * Pollux_Proto_Prelude.bytes) FStar_Pervasives_Native.option)
+    (Obj.t dvarint * Obj.t Pollux_Proto_Prelude.dbytes)
+      FStar_Pervasives_Native.option)
   =
   fun bs ->
     match bs with

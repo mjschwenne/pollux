@@ -648,15 +648,26 @@ let (decode_header :
                FStar_UInt64.logand header (Stdint.Uint64.of_int (7)) in
              Pollux_Proto_Prelude.op_let_Question (tag_from_num tag_n)
                (fun tag1 -> FStar_Pervasives_Native.Some (fid, tag1, bs)))
+let rec (find_field' :
+  Pollux_Proto_Descriptors.fields ->
+    Prims.nat -> Pollux_Proto_Descriptors.fd FStar_Pervasives_Native.option)
+  =
+  fun fs ->
+    fun id ->
+      match fs with
+      | [] -> FStar_Pervasives_Native.None
+      | h::t ->
+          if (FStar_Pervasives_Native.__proj__Mktuple3__item___2 h) = id
+          then FStar_Pervasives_Native.Some h
+          else
+            (match find_field' t id with
+             | FStar_Pervasives_Native.None -> FStar_Pervasives_Native.None
+             | FStar_Pervasives_Native.Some m ->
+                 FStar_Pervasives_Native.Some m)
 let (find_field :
   Pollux_Proto_Descriptors.md ->
     Prims.nat -> Pollux_Proto_Descriptors.fd FStar_Pervasives_Native.option)
-  =
-  fun md ->
-    fun id ->
-      FStar_List_Tot_Base.find
-        (fun f -> (FStar_Pervasives_Native.__proj__Mktuple3__item___2 f) = id)
-        md.Pollux_Proto_Descriptors.fields
+  = fun m -> fun id -> find_field' m.Pollux_Proto_Descriptors.fields id
 let rec take :
   'a .
     Prims.nat ->
@@ -679,19 +690,16 @@ let rec take :
 let (decode_value :
   tag ->
     Pollux_Proto_Prelude.bytes ->
-      (Pollux_Proto_Prelude.bytes * Pollux_Proto_Prelude.bytes)
-        FStar_Pervasives_Native.option)
+      (Obj.t Pollux_Proto_Prelude.debytes * Obj.t
+        Pollux_Proto_Prelude.dbytes) FStar_Pervasives_Native.option)
   =
   fun t ->
     fun enc ->
       match t with
       | VARINT ->
-          Pollux_Proto_Prelude.op_let_Question
-            (Pollux_Proto_Varint.extract_varint enc)
-            (fun v ->
-               let vint =
-                 FStar_Pervasives_Native.__proj__Mktuple2__item___1 v in
-               let byt = FStar_Pervasives_Native.__proj__Mktuple2__item___2 v in
+          (match Pollux_Proto_Varint.extract_varint enc with
+           | FStar_Pervasives_Native.None -> FStar_Pervasives_Native.None
+           | FStar_Pervasives_Native.Some (vint, byt) ->
                FStar_Pervasives_Native.Some (vint, byt))
       | I64 ->
           (match take (Prims.of_int (8)) enc with
@@ -706,7 +714,9 @@ let (decode_value :
                | (len_byt, enc_byt) ->
                    let len = Pollux_Proto_Varint.decode len_byt in
                    if FStar_UInt64.eq len Stdint.Uint64.zero
-                   then FStar_Pervasives_Native.Some ([], enc_byt)
+                   then
+                     let dbz = [] in
+                     FStar_Pervasives_Native.Some (dbz, enc_byt)
                    else
                      (match take (FStar_UInt64.v len) enc_byt with
                       | FStar_Pervasives_Native.None ->
@@ -723,8 +733,8 @@ let (decode_value :
       | uu___ -> FStar_Pervasives_Native.None
 let (decode_field :
   Pollux_Proto_Prelude.bytes ->
-    (Prims.nat * Pollux_Proto_Prelude.bytes * Pollux_Proto_Prelude.bytes)
-      FStar_Pervasives_Native.option)
+    (Prims.nat * Obj.t Pollux_Proto_Prelude.dbytes * Obj.t
+      Pollux_Proto_Prelude.dbytes) FStar_Pervasives_Native.option)
   =
   fun enc ->
     match decode_header enc with
@@ -736,8 +746,8 @@ let (decode_field :
              FStar_Pervasives_Native.Some (fid, v, b))
 let rec (decode_fields :
   Pollux_Proto_Prelude.bytes ->
-    ((Prims.nat * Pollux_Proto_Prelude.bytes) Prims.list *
-      Pollux_Proto_Prelude.bytes) FStar_Pervasives_Native.option)
+    ((Prims.nat * Obj.t Pollux_Proto_Prelude.dbytes) Prims.list * Obj.t
+      Pollux_Proto_Prelude.dbytes) FStar_Pervasives_Native.option)
   =
   fun enc ->
     match enc with
@@ -750,10 +760,15 @@ let rec (decode_fields :
               | FStar_Pervasives_Native.None ->
                   FStar_Pervasives_Native.Some ([(fid, fbs)], bs)
               | FStar_Pervasives_Native.Some (rfs, rbyt) ->
-                  FStar_Pervasives_Native.Some (((fid, fbs) :: rfs), rbyt)))
+                  let rfs' =
+                    FStar_List_Tot_Base.map
+                      (fun b ->
+                         let b' = FStar_Pervasives_Native.snd b in
+                         ((FStar_Pervasives_Native.fst b), b')) rfs in
+                  FStar_Pervasives_Native.Some (((fid, fbs) :: rfs'), rbyt)))
 type 'a field_parser =
   Pollux_Proto_Prelude.bytes ->
-    ('a * Pollux_Proto_Prelude.bytes) FStar_Pervasives_Native.option
+    ('a * Obj.t Pollux_Proto_Prelude.dbytes) FStar_Pervasives_Native.option
 let rec (assemble_nat : Pollux_Proto_Prelude.bytes -> Prims.nat) =
   fun b ->
     match b with
@@ -856,125 +871,6 @@ let (parse_bytes : Pollux_Proto_Prelude.bytes field_parser) =
     if FStar_List_Tot_Base.isEmpty b
     then FStar_Pervasives_Native.None
     else FStar_Pervasives_Native.Some (b, [])
-let rec parse_list :
-  'a .
-    Pollux_Proto_Prelude.bytes ->
-      'a field_parser -> 'a Prims.list FStar_Pervasives_Native.option
-  =
-  fun payload ->
-    fun parse_one ->
-      match parse_one payload with
-      | FStar_Pervasives_Native.None -> FStar_Pervasives_Native.None
-      | FStar_Pervasives_Native.Some (a1, bs) ->
-          if FStar_List_Tot_Base.isEmpty bs
-          then FStar_Pervasives_Native.Some [a1]
-          else
-            (let rest = parse_list bs parse_one in
-             match rest with
-             | FStar_Pervasives_Native.None -> FStar_Pervasives_Native.None
-             | FStar_Pervasives_Native.Some r ->
-                 FStar_Pervasives_Native.Some (a1 :: r))
-let parse_dec :
-  'a .
-    Pollux_Proto_Descriptors.pdec ->
-      Pollux_Proto_Prelude.bytes ->
-        'a field_parser ->
-          'a Pollux_Proto_Descriptors.dvty FStar_Pervasives_Native.option
-  =
-  fun dec ->
-    fun payload ->
-      fun parse_one ->
-        match dec with
-        | Pollux_Proto_Descriptors.P_IMPLICIT ->
-            Pollux_Proto_Prelude.op_let_Question (parse_one payload)
-              (fun uu___ ->
-                 match uu___ with
-                 | (one, uu___1) ->
-                     FStar_Pervasives_Native.Some
-                       (Pollux_Proto_Descriptors.VIMPLICIT one))
-        | Pollux_Proto_Descriptors.P_OPTIONAL ->
-            Pollux_Proto_Prelude.op_let_Question (parse_one payload)
-              (fun uu___ ->
-                 match uu___ with
-                 | (one, uu___1) ->
-                     FStar_Pervasives_Native.Some
-                       (Pollux_Proto_Descriptors.VOPTIONAL
-                          (FStar_Pervasives_Native.Some one)))
-        | Pollux_Proto_Descriptors.P_REPEATED ->
-            Pollux_Proto_Prelude.op_let_Question
-              (parse_list payload parse_one)
-              (fun many ->
-                 FStar_Pervasives_Native.Some
-                   (Pollux_Proto_Descriptors.VREPEATED many))
-let (parse_field :
-  Pollux_Proto_Descriptors.pty ->
-    Pollux_Proto_Prelude.bytes ->
-      Pollux_Proto_Descriptors.vty FStar_Pervasives_Native.option)
-  =
-  fun ty ->
-    fun payload ->
-      match ty with
-      | Pollux_Proto_Descriptors.P_DOUBLE p' ->
-          Pollux_Proto_Prelude.op_let_Question
-            (parse_dec p' payload parse_double)
-            (fun vdec ->
-               FStar_Pervasives_Native.Some
-                 (Pollux_Proto_Descriptors.VDOUBLE vdec))
-      | Pollux_Proto_Descriptors.P_FLOAT p' ->
-          Pollux_Proto_Prelude.op_let_Question
-            (parse_dec p' payload parse_float)
-            (fun vdec ->
-               FStar_Pervasives_Native.Some
-                 (Pollux_Proto_Descriptors.VFLOAT vdec))
-      | Pollux_Proto_Descriptors.P_INT (w, p') ->
-          Pollux_Proto_Prelude.op_let_Question
-            (parse_dec p' payload (parse_int w))
-            (fun vdec ->
-               FStar_Pervasives_Native.Some
-                 (Pollux_Proto_Descriptors.VINT vdec))
-      | Pollux_Proto_Descriptors.P_UINT (w, p') ->
-          Pollux_Proto_Prelude.op_let_Question
-            (parse_dec p' payload (parse_uint w))
-            (fun vdec ->
-               FStar_Pervasives_Native.Some
-                 (Pollux_Proto_Descriptors.VINT vdec))
-      | Pollux_Proto_Descriptors.P_SINT (w, p') ->
-          Pollux_Proto_Prelude.op_let_Question
-            (parse_dec p' payload (parse_sint w))
-            (fun vdec ->
-               FStar_Pervasives_Native.Some
-                 (Pollux_Proto_Descriptors.VINT vdec))
-      | Pollux_Proto_Descriptors.P_FIXED (w, p') ->
-          Pollux_Proto_Prelude.op_let_Question
-            (parse_dec p' payload (parse_fixed w))
-            (fun vdec ->
-               FStar_Pervasives_Native.Some
-                 (Pollux_Proto_Descriptors.VINT vdec))
-      | Pollux_Proto_Descriptors.P_SFIXED (w, p') ->
-          Pollux_Proto_Prelude.op_let_Question
-            (parse_dec p' payload (parse_sfixed w))
-            (fun vdec ->
-               FStar_Pervasives_Native.Some
-                 (Pollux_Proto_Descriptors.VINT vdec))
-      | Pollux_Proto_Descriptors.P_BOOL p' ->
-          Pollux_Proto_Prelude.op_let_Question
-            (parse_dec p' payload parse_bool)
-            (fun vdec ->
-               FStar_Pervasives_Native.Some
-                 (Pollux_Proto_Descriptors.VBOOL vdec))
-      | Pollux_Proto_Descriptors.P_STRING p' ->
-          Pollux_Proto_Prelude.op_let_Question
-            (parse_dec p' payload parse_string)
-            (fun vdec ->
-               FStar_Pervasives_Native.Some
-                 (Pollux_Proto_Descriptors.VSTRING vdec))
-      | Pollux_Proto_Descriptors.P_BYTES p' ->
-          Pollux_Proto_Prelude.op_let_Question
-            (parse_dec p' payload parse_bytes)
-            (fun vdec ->
-               FStar_Pervasives_Native.Some
-                 (Pollux_Proto_Descriptors.VBYTES vdec))
-      | uu___ -> FStar_Pervasives_Native.None
 let update_field :
   'a .
     Prims.string ->
@@ -1048,7 +944,132 @@ let rec (update_msg :
                   | uu___ -> v)))
               :: tl
             else (let r = update_msg tl name value in hd :: r)
-let (merge_field :
+let rec parse_list :
+  'a .
+    Pollux_Proto_Prelude.bytes ->
+      'a field_parser -> 'a Prims.list FStar_Pervasives_Native.option
+  =
+  fun payload ->
+    fun parse_one ->
+      match parse_one payload with
+      | FStar_Pervasives_Native.None -> FStar_Pervasives_Native.None
+      | FStar_Pervasives_Native.Some (a1, bs) ->
+          if FStar_List_Tot_Base.isEmpty bs
+          then FStar_Pervasives_Native.Some [a1]
+          else
+            (let rest = parse_list bs parse_one in
+             match rest with
+             | FStar_Pervasives_Native.None -> FStar_Pervasives_Native.None
+             | FStar_Pervasives_Native.Some r ->
+                 FStar_Pervasives_Native.Some (a1 :: r))
+let parse_dec :
+  'a .
+    Pollux_Proto_Descriptors.pdec ->
+      Pollux_Proto_Prelude.bytes ->
+        'a field_parser ->
+          'a Pollux_Proto_Descriptors.dvty FStar_Pervasives_Native.option
+  =
+  fun dec ->
+    fun payload ->
+      fun parse_one ->
+        match dec with
+        | Pollux_Proto_Descriptors.P_IMPLICIT ->
+            Pollux_Proto_Prelude.op_let_Question (parse_one payload)
+              (fun uu___ ->
+                 match uu___ with
+                 | (one, uu___1) ->
+                     FStar_Pervasives_Native.Some
+                       (Pollux_Proto_Descriptors.VIMPLICIT one))
+        | Pollux_Proto_Descriptors.P_OPTIONAL ->
+            Pollux_Proto_Prelude.op_let_Question (parse_one payload)
+              (fun uu___ ->
+                 match uu___ with
+                 | (one, uu___1) ->
+                     FStar_Pervasives_Native.Some
+                       (Pollux_Proto_Descriptors.VOPTIONAL
+                          (FStar_Pervasives_Native.Some one)))
+        | Pollux_Proto_Descriptors.P_REPEATED ->
+            Pollux_Proto_Prelude.op_let_Question
+              (parse_list payload parse_one)
+              (fun many ->
+                 FStar_Pervasives_Native.Some
+                   (Pollux_Proto_Descriptors.VREPEATED many))
+let rec (parse_field :
+  Pollux_Proto_Descriptors.pty ->
+    Pollux_Proto_Prelude.bytes ->
+      Pollux_Proto_Descriptors.vty FStar_Pervasives_Native.option)
+  =
+  fun ty ->
+    fun payload ->
+      match ty with
+      | Pollux_Proto_Descriptors.P_DOUBLE p' ->
+          Pollux_Proto_Prelude.op_let_Question
+            (parse_dec p' payload parse_double)
+            (fun vdec ->
+               FStar_Pervasives_Native.Some
+                 (Pollux_Proto_Descriptors.VDOUBLE vdec))
+      | Pollux_Proto_Descriptors.P_FLOAT p' ->
+          Pollux_Proto_Prelude.op_let_Question
+            (parse_dec p' payload parse_float)
+            (fun vdec ->
+               FStar_Pervasives_Native.Some
+                 (Pollux_Proto_Descriptors.VFLOAT vdec))
+      | Pollux_Proto_Descriptors.P_INT (w, p') ->
+          Pollux_Proto_Prelude.op_let_Question
+            (parse_dec p' payload (parse_int w))
+            (fun vdec ->
+               FStar_Pervasives_Native.Some
+                 (Pollux_Proto_Descriptors.VINT vdec))
+      | Pollux_Proto_Descriptors.P_UINT (w, p') ->
+          Pollux_Proto_Prelude.op_let_Question
+            (parse_dec p' payload (parse_uint w))
+            (fun vdec ->
+               FStar_Pervasives_Native.Some
+                 (Pollux_Proto_Descriptors.VINT vdec))
+      | Pollux_Proto_Descriptors.P_SINT (w, p') ->
+          Pollux_Proto_Prelude.op_let_Question
+            (parse_dec p' payload (parse_sint w))
+            (fun vdec ->
+               FStar_Pervasives_Native.Some
+                 (Pollux_Proto_Descriptors.VINT vdec))
+      | Pollux_Proto_Descriptors.P_FIXED (w, p') ->
+          Pollux_Proto_Prelude.op_let_Question
+            (parse_dec p' payload (parse_fixed w))
+            (fun vdec ->
+               FStar_Pervasives_Native.Some
+                 (Pollux_Proto_Descriptors.VINT vdec))
+      | Pollux_Proto_Descriptors.P_SFIXED (w, p') ->
+          Pollux_Proto_Prelude.op_let_Question
+            (parse_dec p' payload (parse_sfixed w))
+            (fun vdec ->
+               FStar_Pervasives_Native.Some
+                 (Pollux_Proto_Descriptors.VINT vdec))
+      | Pollux_Proto_Descriptors.P_BOOL p' ->
+          Pollux_Proto_Prelude.op_let_Question
+            (parse_dec p' payload parse_bool)
+            (fun vdec ->
+               FStar_Pervasives_Native.Some
+                 (Pollux_Proto_Descriptors.VBOOL vdec))
+      | Pollux_Proto_Descriptors.P_STRING p' ->
+          Pollux_Proto_Prelude.op_let_Question
+            (parse_dec p' payload parse_string)
+            (fun vdec ->
+               FStar_Pervasives_Native.Some
+                 (Pollux_Proto_Descriptors.VSTRING vdec))
+      | Pollux_Proto_Descriptors.P_BYTES p' ->
+          Pollux_Proto_Prelude.op_let_Question
+            (parse_dec p' payload parse_bytes)
+            (fun vdec ->
+               FStar_Pervasives_Native.Some
+                 (Pollux_Proto_Descriptors.VBYTES vdec))
+      | Pollux_Proto_Descriptors.P_MSG (m', p') ->
+          Pollux_Proto_Prelude.op_let_Question
+            (parse_dec p' payload (parse_message' m'))
+            (fun vdec ->
+               FStar_Pervasives_Native.Some
+                 (Pollux_Proto_Descriptors.VMSG vdec))
+      | uu___ -> FStar_Pervasives_Native.None
+and (merge_field :
   Pollux_Proto_Descriptors.md ->
     Pollux_Proto_Descriptors.msg FStar_Pervasives_Native.option ->
       (Prims.nat * Pollux_Proto_Prelude.bytes) ->
@@ -1072,10 +1093,22 @@ let (merge_field :
                         (fun typed_payload ->
                            let new_msg = update_msg msg1 n typed_payload in
                            FStar_Pervasives_Native.Some new_msg)))
-let (parse_message :
+and (parse_fields :
+  Pollux_Proto_Descriptors.md ->
+    Pollux_Proto_Descriptors.msg FStar_Pervasives_Native.option ->
+      (Prims.nat * Pollux_Proto_Prelude.bytes) Prims.list ->
+        Pollux_Proto_Descriptors.msg FStar_Pervasives_Native.option)
+  =
+  fun m ->
+    fun msg ->
+      fun fs ->
+        match fs with
+        | [] -> msg
+        | h::t -> parse_fields m (merge_field m msg h) t
+and (parse_message' :
   Pollux_Proto_Descriptors.md ->
     Pollux_Proto_Prelude.bytes ->
-      (Pollux_Proto_Descriptors.msg * Pollux_Proto_Prelude.bytes)
+      (Pollux_Proto_Descriptors.msg * Obj.t Pollux_Proto_Prelude.dbytes)
         FStar_Pervasives_Native.option)
   =
   fun m ->
@@ -1084,28 +1117,29 @@ let (parse_message :
         (fun uu___ ->
            match uu___ with
            | (raw_fields, leftover_byt) ->
-               if leftover_byt <> []
-               then FStar_Pervasives_Native.None
-               else
-                 (let msg = Pollux_Proto_Descriptors.init_msg m in
-                  let field_merge = merge_field m in
-                  match FStar_List_Tot_Base.fold_left field_merge
-                          (FStar_Pervasives_Native.Some msg) raw_fields
-                  with
-                  | FStar_Pervasives_Native.None ->
-                      FStar_Pervasives_Native.None
-                  | FStar_Pervasives_Native.Some m1 ->
-                      FStar_Pervasives_Native.Some (m1, leftover_byt)))
-let (parse :
+               let msg = Pollux_Proto_Descriptors.init_msg m in
+               let raw_fields1 =
+                 FStar_List_Tot_Base.map
+                   (fun e ->
+                      let b =
+                        FStar_Pervasives_Native.__proj__Mktuple2__item___2 e in
+                      ((FStar_Pervasives_Native.__proj__Mktuple2__item___1 e),
+                        b)) raw_fields in
+               (match parse_fields m (FStar_Pervasives_Native.Some msg)
+                        raw_fields1
+                with
+                | FStar_Pervasives_Native.None ->
+                    FStar_Pervasives_Native.None
+                | FStar_Pervasives_Native.Some m1 ->
+                    FStar_Pervasives_Native.Some (m1, leftover_byt)))
+let (parse_message :
   Pollux_Proto_Descriptors.md ->
     Pollux_Proto_Prelude.bytes ->
       Pollux_Proto_Descriptors.msg FStar_Pervasives_Native.option)
   =
   fun m ->
     fun enc ->
-      match parse_message m enc with
+      match parse_message' m enc with
       | FStar_Pervasives_Native.None -> FStar_Pervasives_Native.None
-      | FStar_Pervasives_Native.Some (uu___, []) ->
-          FStar_Pervasives_Native.None
-      | FStar_Pervasives_Native.Some (m1, leftover) ->
-          FStar_Pervasives_Native.Some m1
+      | FStar_Pervasives_Native.Some (m', uu___) ->
+          FStar_Pervasives_Native.Some m'

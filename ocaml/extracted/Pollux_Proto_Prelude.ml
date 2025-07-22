@@ -1,5 +1,7 @@
 open Prims
 type bytes = FStar_UInt8.t Prims.list
+type 'b dbytes = bytes
+type 'b debytes = bytes
 let op_let_Question :
   'a 'b .
     'a FStar_Pervasives_Native.option ->

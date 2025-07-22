@@ -1,0 +1,18 @@
+(library
+ (name proto)
+ (libraries ocaml-protoc-plugin)
+ (preprocess (pps ppx_deriving.show)))
+
+(rule
+ (targets everything.ml)
+ (deps
+  (:proto everything.proto))
+ (action
+  (run protoc "--ocaml_opt=annot=[@@deriving show { with_path = false }]" --ocaml_out=. %{proto})))
+
+(rule
+ (targets varint.ml)
+ (deps
+  (:proto varint.proto))
+ (action
+  (run protoc "--ocaml_opt=annot=[@@deriving show { with_path = false }];int64_as_int=false" --ocaml_out=. %{proto})))

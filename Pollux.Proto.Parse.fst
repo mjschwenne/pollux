@@ -525,7 +525,7 @@ let rec parse_field (ty:Desc.pty) (payload:bytes) : Tot (option Desc.vty) (decre
   | P_BOOL p' -> let? vdec = parse_dec p' payload parse_bool in Some (VBOOL vdec)
   | P_STRING p' -> let? vdec = parse_dec p' payload parse_string in Some (VSTRING vdec)
   | P_BYTES p' -> let? vdec = parse_dec p' payload parse_bytes in Some (VBYTES vdec)
-  | P_MSG m' p' -> let? vdec = parse_dec p' payload (parse_message m') in Some (VMSG vdec)
+  | P_MSG m' p' -> let? vdec = parse_dec p' payload (parse_message' m') in Some (VMSG vdec)
   | _ -> None)
 
 and merge_field (m:Desc.md) (msg:option Desc.msg) (f:nat & bytes) : Tot (option Desc.msg) (decreases (%[p_measure m;1])) = 
@@ -545,13 +545,8 @@ and parse_fields (m:Desc.md) (msg:option Desc.msg) (fs:list (nat & bytes)) : Tot
   | Nil -> msg 
   | h :: t -> parse_fields m (merge_field m msg h) t
 
-and parse_message (m:Desc.md) (enc:bytes) : Tot (option (Desc.msg & dbytes enc)) (decreases (%[p_measure m;3])) = 
+and parse_message' (m:Desc.md) (enc:bytes) : Tot (option (Desc.msg & dbytes enc)) (decreases (%[p_measure m;3])) = 
   let? raw_fields, leftover_byt = decode_fields enc in 
-  // Not sure if this is the right behavior, but leftover bytes 
-  // indicates that something wasn't formatted correctly, and 
-  // we should probably report a parse failure via returning 
-  // None
-  if leftover_byt <> [] then None else 
   let msg : Desc.msg = Desc.init_msg m in 
   // INFO: Needed for type checking, but shouldn't be
   let raw_fields : list (nat & bytes) = map 
@@ -561,8 +556,7 @@ and parse_message (m:Desc.md) (enc:bytes) : Tot (option (Desc.msg & dbytes enc))
   | None -> None 
   | Some m -> Some (m, leftover_byt)
 
-let parse (m:Desc.md) (enc:bytes) : option Desc.msg =
-  match parse_message m enc with 
-  | None 
-  | Some (_, []) -> None 
-  | Some (m, leftover) -> Some m
+let parse_message (m:Desc.md) (enc:bytes) : option Desc.msg =
+  match parse_message' m enc with 
+  | None -> None 
+  | Some (m', _) -> Some m'

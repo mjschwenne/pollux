@@ -1,24 +1,44 @@
-pollux/_build/default/bin/main.exe: pollux/lib/Proto3.ml pollux/lib/Encode.ml pollux/bin/main.ml
-	cd pollux; dune build
+all: verify compile
 
-pollux/lib/pollux/%.ml: %.fst
-	fstar.exe --codegen OCaml --extract $(basename $?) --odir pollux/lib $? 
+FSTAR_OPTIONS = --cache_checked_modules --ext optimize_let_vc \
+		    --cmi \
+	        --odir ocaml/extracted \
+			--warn_error -321
 
-run: pollux/_build/default/bin/main.exe
-	./pollux/_build/default/bin/main.exe 
-	@protoscope msg.bin 
-	@rm msg.bin
+FSTAR_EXE ?= fstar.exe
 
-capture: pollux/_build/default/bin/main.exe
-	./pollux/_build/default/bin/main.exe
+FSTAR = $(FSTAR_EXE) $(FSTAR_OPTIONS)
 
-dump: pollux/_build/default/bin/main.exe
-	./pollux/_build/default/bin/main.exe 
-	protoscope msg.bin
-	@xxd -b msg.bin
-	@rm msg.bin
+NOT_INCLUDED=$(wildcard Pollux.Old.*)
 
-clean: 
-	rm msg.bin
+ALL_SOURCE_FILES = $(filter-out $(NOT_INCLUDED), $(wildcard *.fst *.fsti))
 
-.PHONY: run capture dump clean
+.depend: $(ALL_SOURCE_FILES) Makefile
+	$(FSTAR) --dep full --extract '* -Prims -FStar' $(ALL_SOURCE_FILES) --output_deps_to $@
+
+depend: .depend
+
+-include .depend
+
+$(ALL_CHECKED_FILES): %.checked:
+	$(FSTAR) $<
+	@touch -c $@
+
+verify: $(ALL_CHECKED_FILES)
+	echo $*
+
+extract: $(ALL_ML_FILES)
+
+ocaml/extracted/%.ml:
+	$(FSTAR) $(notdir $(subst .checked,,$<)) --codegen OCaml --extract_module $(basename $(notdir $(subst .checked,,$<)))
+
+compile: extract
+	$(MAKE) -C ocaml
+	cp ocaml/_build/default/bin/main.exe bin
+	chmod +w bin/main.exe
+
+clean:
+	-rm -rf *.checked .depend bin/*.exe 
+	$(MAKE) -C ocaml clean
+
+.PHONY: all verify clean depend compile

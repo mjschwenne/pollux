@@ -142,7 +142,9 @@ let () =
   let output_file = open_out_bin "msg.bin" in
   Printf.fprintf output_file "%s" pollux_str;
   close_out output_file;
-  let pollux_from_pollux = Pollux_Proto_Parse.parse pollux_md pollux_enc in
+  let pollux_from_pollux =
+    Pollux_Proto_Parse.parse_message pollux_md pollux_enc
+  in
   (match pollux_from_pollux with
   | None -> printf "Failed to decode Pollux struct\n"
   | Some p -> printf "Reconstructed Pollux struct:%s\n" (str_pollux_msg p));
@@ -178,10 +180,11 @@ let () =
   | Error e ->
       printf "Error parsing pollux struct with proto: %s\n"
         (Runtime'.Result.show_error e));
-  let pollux_from_proto =
-    Pollux_Proto_Parse.parse pollux_md (pollux_bytes_of_string proto_enc)
+  let pollux_from_proto' =
+    Pollux_Proto_Parse.parse_message pollux_md
+      (pollux_bytes_of_string proto_enc)
   in
-  (match pollux_from_proto with
+  (match pollux_from_proto' with
   | None -> printf "Failed to decode Pollux from Proto struct\n"
   | Some p -> printf "Pollux from Proto struct:%s\n" (str_pollux_msg p));
   print_endline "================ end ================="

@@ -1,4 +1,0 @@
-(executable 
-  (public_name mwe)
-  (name main)
-  (libraries ocaml-protoc-plugin stdio))

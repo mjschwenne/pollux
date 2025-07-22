@@ -2,6 +2,8 @@
 .envrc
 .dir-locals.el
 
+bin/*
+.depend
 *.fst.checked
 *.bin
 
