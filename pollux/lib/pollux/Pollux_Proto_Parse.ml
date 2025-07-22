@@ -737,19 +737,20 @@ let (decode_field :
 let rec (decode_fields :
   Pollux_Proto_Prelude.bytes ->
     ((Prims.nat * Pollux_Proto_Prelude.bytes) Prims.list *
-      Pollux_Proto_Prelude.bytes))
+      Pollux_Proto_Prelude.bytes) FStar_Pervasives_Native.option)
   =
   fun enc ->
     match enc with
-    | [] -> ([], [])
+    | [] -> FStar_Pervasives_Native.None
     | enc1 ->
         (match decode_field enc1 with
-         | FStar_Pervasives_Native.None -> ([], enc1)
+         | FStar_Pervasives_Native.None -> FStar_Pervasives_Native.None
          | FStar_Pervasives_Native.Some (fid, fbs, bs) ->
-             let uu___ = decode_fields bs in
-             (match uu___ with
-              | (rest_fields, rest_byt) ->
-                  (((fid, fbs) :: rest_fields), rest_byt)))
+             (match decode_fields bs with
+              | FStar_Pervasives_Native.None ->
+                  FStar_Pervasives_Native.Some ([(fid, fbs)], bs)
+              | FStar_Pervasives_Native.Some (rfs, rbyt) ->
+                  FStar_Pervasives_Native.Some (((fid, fbs) :: rfs), rbyt)))
 type 'a field_parser =
   Pollux_Proto_Prelude.bytes ->
     ('a * Pollux_Proto_Prelude.bytes) FStar_Pervasives_Native.option
@@ -1071,6 +1072,30 @@ let (merge_field :
                         (fun typed_payload ->
                            let new_msg = update_msg msg1 n typed_payload in
                            FStar_Pervasives_Native.Some new_msg)))
+let (parse_message :
+  Pollux_Proto_Descriptors.md ->
+    Pollux_Proto_Prelude.bytes ->
+      (Pollux_Proto_Descriptors.msg * Pollux_Proto_Prelude.bytes)
+        FStar_Pervasives_Native.option)
+  =
+  fun m ->
+    fun enc ->
+      Pollux_Proto_Prelude.op_let_Question (decode_fields enc)
+        (fun uu___ ->
+           match uu___ with
+           | (raw_fields, leftover_byt) ->
+               if leftover_byt <> []
+               then FStar_Pervasives_Native.None
+               else
+                 (let msg = Pollux_Proto_Descriptors.init_msg m in
+                  let field_merge = merge_field m in
+                  match FStar_List_Tot_Base.fold_left field_merge
+                          (FStar_Pervasives_Native.Some msg) raw_fields
+                  with
+                  | FStar_Pervasives_Native.None ->
+                      FStar_Pervasives_Native.None
+                  | FStar_Pervasives_Native.Some m1 ->
+                      FStar_Pervasives_Native.Some (m1, leftover_byt)))
 let (parse :
   Pollux_Proto_Descriptors.md ->
     Pollux_Proto_Prelude.bytes ->
@@ -1078,13 +1103,9 @@ let (parse :
   =
   fun m ->
     fun enc ->
-      let uu___ = decode_fields enc in
-      match uu___ with
-      | (raw_fields, leftover_byt) ->
-          if leftover_byt <> []
-          then FStar_Pervasives_Native.None
-          else
-            (let msg = Pollux_Proto_Descriptors.init_msg m in
-             let field_merge = merge_field m in
-             FStar_List_Tot_Base.fold_left field_merge
-               (FStar_Pervasives_Native.Some msg) raw_fields)
+      match parse_message m enc with
+      | FStar_Pervasives_Native.None -> FStar_Pervasives_Native.None
+      | FStar_Pervasives_Native.Some (uu___, []) ->
+          FStar_Pervasives_Native.None
+      | FStar_Pervasives_Native.Some (m1, leftover) ->
+          FStar_Pervasives_Native.Some m1

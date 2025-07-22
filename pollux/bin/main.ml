@@ -146,30 +146,32 @@ let () =
   (match pollux_from_pollux with
   | None -> printf "Failed to decode Pollux struct\n"
   | Some p -> printf "Reconstructed Pollux struct:%s\n" (str_pollux_msg p));
-  let chunks, rest = Pollux_Proto_Parse.decode_fields pollux_enc in
-  printf "Decoded %d fields, %d leftover bytes\n" (List.length chunks)
-    (List.length rest);
-  List.iter
-    (fun e ->
-      printf "(%d, " (Z.to_int (fst e));
-      List.iter print_fstar_u8 (snd e);
-      printf ")\n")
-    chunks;
-  List.iter print_fstar_u8 rest;
-  print_newline ();
-  printf "Default Struct:%s\n" (str_pollux_msg (D.init_msg pollux_md));
-  List.iter
-    (fun e ->
-      let ty = Pollux_Proto_Parse.find_field pollux_md (fst e) in
-      match ty with
-      | None -> printf "Failed to find ty for %d\n" (Z.to_int (fst e))
-      | Some (n, f, pty) -> (
-          printf "Found field \"%s\" : %s for %d" n (str_pollux_pty pty)
-            (Z.to_int f);
-          match Pollux_Proto_Parse.parse_field pty (snd e) with
-          | None -> printf " -> Failed to parse\n"
-          | Some v -> printf " -> parsed to %s\n" (str_pollux_vty v)))
-    chunks;
+  (match Pollux_Proto_Parse.decode_fields pollux_enc with
+  | None -> printf "Failed to decode any fields\n"
+  | Some (chunks, rest) ->
+      printf "Decoded %d fields, %d leftover bytes\n" (List.length chunks)
+        (List.length rest);
+      List.iter
+        (fun e ->
+          printf "(%d, " (Z.to_int (fst e));
+          List.iter print_fstar_u8 (snd e);
+          printf ")\n")
+        chunks;
+      List.iter print_fstar_u8 rest;
+      print_newline ();
+      printf "Default Struct:%s\n" (str_pollux_msg (D.init_msg pollux_md));
+      List.iter
+        (fun e ->
+          let ty = Pollux_Proto_Parse.find_field pollux_md (fst e) in
+          match ty with
+          | None -> printf "Failed to find ty for %d\n" (Z.to_int (fst e))
+          | Some (n, f, pty) -> (
+              printf "Found field \"%s\" : %s for %d" n (str_pollux_pty pty)
+                (Z.to_int f);
+              match Pollux_Proto_Parse.parse_field pty (snd e) with
+              | None -> printf " -> Failed to parse\n"
+              | Some v -> printf " -> parsed to %s\n" (str_pollux_vty v)))
+        chunks);
   let proto_from_pollux = Everything.from_proto (Reader.create pollux_str) in
   (match proto_from_pollux with
   | Ok p -> printf "Proto from Pollux Struct: %s\n" (Everything.show p)

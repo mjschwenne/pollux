@@ -383,13 +383,14 @@ let decode_field (enc:bytes) : Tot (option (nat & bytes & b:bytes{length b < len
 // While decode_field performs one decode, this one decodes until either 
 // - the remaining bytes are empty 
 // - something fails to chunk
-let rec decode_fields (enc:bytes) : Tot (list (nat & bytes) & bytes) (decreases (length enc)) = 
+let rec decode_fields (enc:bytes) : Tot (option (list (nat & bytes) & b:bytes{length b < length enc})) (decreases (length enc)) = 
   match enc with 
-  | [] -> [], []
+  | [] -> None
   | enc -> (match decode_field enc with 
-          | None -> [], enc
-          | Some (fid, fbs, bs) -> let rest_fields, rest_byt = decode_fields bs in
-                                  (fid, fbs) :: rest_fields, rest_byt)
+          | None -> None
+          | Some (fid, fbs, bs) -> (match decode_fields bs with 
+                                  | None -> Some ([(fid, fbs)], bs)
+                                  | Some (rfs, rbyt) -> Some ((fid, fbs) :: rfs, rbyt)))
 
 type field_parser (a:Type) = b:bytes -> option (a & b':bytes{length b' < length b})
 
@@ -464,36 +465,6 @@ val parse_bytes : field_parser bytes
 let parse_bytes b = 
   if List.isEmpty b then None else Some (b, [])
 
-let rec parse_list (#a:Type) (payload:bytes) (parse_one:field_parser a) : 
-  Tot (option (list a)) (decreases (length payload)) = 
-    match parse_one payload with 
-    | None -> None
-    | Some (a, bs) -> if List.isEmpty bs then Some ([a]) else  
-                       let rest = parse_list bs parse_one in 
-                       (match rest with 
-                        | None -> None
-                        | Some r -> Some (a :: r))
-
-let parse_dec (#a:Type) (dec:Desc.pdec) (payload:bytes) (parse_one:field_parser a) : option (Desc.dvty a) = 
-  Desc.(match dec with 
-  | P_IMPLICIT -> let? one, _ = parse_one payload in Some (VIMPLICIT one)
-  | P_OPTIONAL -> let? one, _ = parse_one payload in Some (VOPTIONAL (Some one))
-  | P_REPEATED -> let? many = parse_list payload parse_one in Some (VREPEATED many))
-
-let parse_field (ty:Desc.pty) (payload:bytes) : option Desc.vty = 
-  Desc.(match ty with 
-  | P_DOUBLE p' -> let? vdec = parse_dec p' payload parse_double in Some (VDOUBLE vdec)
-  | P_FLOAT p' -> let? vdec = parse_dec p' payload parse_float in Some (VFLOAT vdec)
-  | P_INT w p' -> let? vdec = parse_dec p' payload (parse_int w) in Some (VINT vdec)
-  | P_UINT w p' -> let? vdec = parse_dec p' payload (parse_uint w) in Some (VINT vdec) 
-  | P_SINT w p' -> let? vdec = parse_dec p' payload (parse_sint w) in Some (VINT vdec)
-  | P_FIXED w p' -> let? vdec = parse_dec p' payload (parse_fixed w) in Some (VINT vdec)
-  | P_SFIXED w p' -> let? vdec = parse_dec p' payload (parse_sfixed w) in Some (VINT vdec)
-  | P_BOOL p' -> let? vdec = parse_dec p' payload parse_bool in Some (VBOOL vdec)
-  | P_STRING p' -> let? vdec = parse_dec p' payload parse_string in Some (VSTRING vdec)
-  | P_BYTES p' -> let? vdec = parse_dec p' payload parse_bytes in Some (VBYTES vdec)
-  | _ -> None)
-
 let update_field (#a:Type) (name:string) (ori_v:Desc.dvty a) (new_v:Desc.dvty a) : Desc.dvty a =
     Desc.(match ori_v, new_v with 
     | VIMPLICIT _, VIMPLICIT v' -> VIMPLICIT v'
@@ -524,19 +495,50 @@ let rec update_msg (msg:Desc.msg) (name:string) (value:Desc.vty) : m:Desc.msg{De
               List.noRepeats_cons n (Desc.get_pair_fst r);
               hd :: r
 
-let merge_field (m:Desc.md) (msg:option Desc.msg) (f:nat & bytes) : option Desc.msg = 
+let rec parse_list (#a:Type) (payload:bytes) (parse_one:field_parser a) :
+  Tot (option (list a)) (decreases (length payload)) = 
+    match parse_one payload with 
+    | None -> None
+    | Some (a, bs) -> if List.isEmpty bs then Some ([a]) else  
+                       let rest = parse_list bs parse_one in 
+                       (match rest with 
+                        | None -> None
+                        | Some r -> Some (a :: r))
+
+let parse_dec (#a:Type) (dec:Desc.pdec) (payload:bytes) (parse_one:field_parser a) : Tot (option (Desc.dvty a)) (decreases (length payload)) = 
+  Desc.(match dec with 
+  | P_IMPLICIT -> let? one, _ = parse_one payload in Some (VIMPLICIT one)
+  | P_OPTIONAL -> let? one, _ = parse_one payload in Some (VOPTIONAL (Some one))
+  | P_REPEATED -> let? many = parse_list payload parse_one in Some (VREPEATED many))
+
+let rec parse_field (m:Desc.md) (ty:Desc.pty) (payload:bytes) : Tot (option Desc.vty) (decreases %[p_measure m;length payload]) = 
+  Desc.(match ty with 
+  | P_DOUBLE p' -> let? vdec = parse_dec p' payload parse_double in Some (VDOUBLE vdec)
+  | P_FLOAT p' -> let? vdec = parse_dec p' payload parse_float in Some (VFLOAT vdec)
+  | P_INT w p' -> let? vdec = parse_dec p' payload (parse_int w) in Some (VINT vdec)
+  | P_UINT w p' -> let? vdec = parse_dec p' payload (parse_uint w) in Some (VINT vdec) 
+  | P_SINT w p' -> let? vdec = parse_dec p' payload (parse_sint w) in Some (VINT vdec)
+  | P_FIXED w p' -> let? vdec = parse_dec p' payload (parse_fixed w) in Some (VINT vdec)
+  | P_SFIXED w p' -> let? vdec = parse_dec p' payload (parse_sfixed w) in Some (VINT vdec)
+  | P_BOOL p' -> let? vdec = parse_dec p' payload parse_bool in Some (VBOOL vdec)
+  | P_STRING p' -> let? vdec = parse_dec p' payload parse_string in Some (VSTRING vdec)
+  | P_BYTES p' -> let? vdec = parse_dec p' payload parse_bytes in Some (VBYTES vdec)
+  | P_MSG m' P_IMPLICIT -> assume p_measure m' < p_measure m; let? one, _ = parse_message m payload in Some (VMSG (VIMPLICIT one))
+  | _ -> None)
+
+and merge_field (m:Desc.md) (msg:option Desc.msg) (f:nat & bytes) : Tot (option Desc.msg) (decreases (%[p_measure m;length (snd f)])) = 
   let? msg = msg in
   let fid, payload = f in
   let field_desc = find_field m fid in 
   match field_desc with 
   // msg is no longer an option, thanks to the let? on the first line of this function
   | None -> Some msg 
-  | Some (n, f, ty) -> let? typed_payload = parse_field ty payload in 
+  | Some (n, f, ty) -> let? typed_payload = parse_field m ty payload in 
                       let new_msg : Desc.msg = update_msg msg n typed_payload in
                       Some (new_msg)
 
-let parse (m:Desc.md) (enc:bytes) : option Desc.msg =
-  let raw_fields, leftover_byt = decode_fields enc in 
+and parse_message (m:Desc.md) (enc:bytes) : Tot (option (Desc.msg & b:bytes{length b < length enc})) (decreases (%[p_measure m;length enc])) = 
+  let? raw_fields, leftover_byt = decode_fields enc in 
   // Not sure if this is the right behavior, but leftover bytes 
   // indicates that something wasn't formatted correctly, and 
   // we should probably report a parse failure via returning 
@@ -544,4 +546,12 @@ let parse (m:Desc.md) (enc:bytes) : option Desc.msg =
   if leftover_byt <> [] then None else 
   let msg : Desc.msg = Desc.init_msg m in 
   let field_merge = merge_field m in 
-  fold_left field_merge (Some msg) raw_fields
+  match fold_left field_merge (Some msg) raw_fields with 
+  | None -> None 
+  | Some m -> Some (m, leftover_byt)
+
+let parse (m:Desc.md) (enc:bytes) : option Desc.msg =
+  match parse_message m enc with 
+  | None 
+  | Some (_, []) -> None 
+  | Some (m, leftover) -> Some m
