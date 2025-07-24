@@ -9,6 +9,8 @@
     karamel.inputs.fstar.follows = "fstar";
     # Use my nix flake for everparse
     everparse.url = "github:mjschwenne/everparse/nix";
+    everparse.inputs.fstar.follows = "fstar";
+    everparse.inputs.karamel.follows = "karamel";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -45,7 +47,15 @@
           karamel = karamel-pkg;
           everparse = everparse-pkg;
         };
+        pollux = pkgs.callPackage ./nix/pollux.nix {
+          inherit fstar ocaml-protoc-plugin;
+        };
       in {
+        packages = {
+          inherit pollux;
+          default = pollux;
+          github-cache.fstar = fstar-pkg;
+        };
         devShells.default = with pkgs;
           mkShell {
             buildInputs =

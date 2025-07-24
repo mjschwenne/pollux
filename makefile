@@ -34,11 +34,14 @@ ocaml/extracted/%.ml:
 
 compile: extract
 	$(MAKE) -C ocaml
-	cp ocaml/_build/default/bin/main.exe bin
-	chmod +w bin/main.exe
+
+install: PREFIX ?= .
+install: compile 
+	mkdir -p $(PREFIX)/bin
+	cp ocaml/_build/default/bin/main.exe $(PREFIX)/bin/pollux.exe
 
 clean:
 	-rm -rf *.checked .depend bin/*.exe 
 	$(MAKE) -C ocaml clean
 
-.PHONY: all verify clean depend compile
+.PHONY: all verify clean depend compile install
