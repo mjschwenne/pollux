@@ -39,6 +39,7 @@ jobs:
       - name: pollux 
         run: ./result/bin/pollux.exe
 
+
   build-pollux-macos:
     runs-on: macos-latest
     steps:
