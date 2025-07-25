@@ -35,6 +35,7 @@ ocaml/extracted/%.ml:
 compile: extract
 	$(MAKE) -C ocaml
 
+
 install: PREFIX ?= .
 install: compile 
 	mkdir -p $(PREFIX)/bin
