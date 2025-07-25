@@ -5,6 +5,7 @@
   protobuf,
   system,
   ocaml-protoc-plugin,
+  varint_conversion,
   ...
 }: let
   pname = "pollux";
@@ -35,4 +36,6 @@ in
     '';
     makeFlags = ["PREFIX=$(out)"];
     enableParallelBuilding = true;
+    doCheck = true;
+    nativeCheckInputs = [varint_conversion];
   }

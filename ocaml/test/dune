@@ -1,4 +1,5 @@
 (test
  (name test_pollux)
  (modules test_pollux)
+ (preprocess (pps ppx_deriving.show))
  (libraries proto pollux qcheck-core qcheck-core.runner stdint))

@@ -37,6 +37,7 @@
           # $out/krml rather than $out/bin/krml where nix wants it
           patches = [./nix/karamel-install.patch];
         };
+        varint_conversion = pkgs.callPackage ./nix/pollux_varint_conversion.nix {};
         everparse-pkg = everparse.packages."${system}".default;
         ocaml-protoc-plugin = pkgs.callPackage ./nix/ocaml-protoc-plugin.nix {
           buildDunePackage = pkgs.ocaml-ng.ocamlPackages_4_14.buildDunePackage;
@@ -48,7 +49,7 @@
           everparse = everparse-pkg;
         };
         pollux = pkgs.callPackage ./nix/pollux.nix {
-          inherit fstar ocaml-protoc-plugin;
+          inherit fstar ocaml-protoc-plugin varint_conversion;
         };
       in {
         packages = {
@@ -69,8 +70,10 @@
                 buf
                 xxd
                 go
-                dir-locals
                 ocaml-protoc-plugin
+                protoc-gen-go
+                dir-locals
+                varint_conversion
               ]
               ++ (with pkgs.ocaml-ng.ocamlPackages_4_14; [
                 base64

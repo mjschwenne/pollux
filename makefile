@@ -41,6 +41,9 @@ install: compile
 	mkdir -p $(PREFIX)/bin
 	cp ocaml/_build/default/bin/main.exe $(PREFIX)/bin/pollux.exe
 
+test: compile 
+	./ocaml/_build/default/test/test_pollux.exe
+
 clean:
 	-rm -rf *.checked .depend bin/*.exe 
 	$(MAKE) -C ocaml clean
