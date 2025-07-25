@@ -36,8 +36,9 @@ jobs:
           purge-last-accessed: 0
           # except any version with the key that is the same as the `primary-key`
           purge-primary-key: never     
-      - run: nix build -L
-      - name: pollux 
+      - name: Build Pollux
+        run: nix build -L
+      - name: Run Pollux 
         run: ./result/bin/pollux.exe
 
 
@@ -70,6 +71,7 @@ jobs:
           purge-last-accessed: 0
           # except any version with the key that is the same as the `primary-key`
           purge-primary-key: never     
-      - run: nix build -L
-      - name: pollux 
+      - name: Build Pollux 
+        run: nix build -L
+      - name: Run Pollux 
         run: ./result/bin/pollux.exe
