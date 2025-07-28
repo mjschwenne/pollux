@@ -1,5 +1,10 @@
 syntax = "proto3"; 
 
+message nested {
+  string nsr = 1;
+  optional uint32 nu32 = 2;
+}
+
 message everything {
   int32 i32i = 1;
   optional int64 i64o = 2;
@@ -14,4 +19,7 @@ message everything {
   optional bool bo = 12; 
   repeated string sr = 13;
   bytes bi = 14;
+  nested nest = 15;
+  optional nested nested = 16;
+  repeated nested nestrep = 17;
 }

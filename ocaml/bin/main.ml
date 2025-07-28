@@ -8,12 +8,28 @@ open Stdint
 
 let z = Z.of_int
 
+let test_nested : Nested.t =
+  Nested.make ~nsr:"Testing nested messages" ~nu32:32 ()
+
 let test_proto : Everything.t =
   Everything.make ~i32i:3 ~i64o:(-1) ~u32r:[ 1; 2; 3 ] ~u64i:0 ?s32o:None
     ~s64r:[ -1 ] ~f32i:1024l ~f64o:3668L ~sf32r:[ -19l ] ~sf64i:26L ?bo:None
     ~sr:[ "Hello"; "World" ]
     ~bi:(String.to_bytes "DEADBEEF")
+    ~nest:test_nested ~nested:test_nested
+    ~nestrep:[ test_nested; test_nested ]
     ()
+
+let nested_md : D.md =
+  let open D in
+  {
+    reserved = FStar_Set.empty ();
+    fields =
+      [
+        ("nsr", z 1, P_STRING P_IMPLICIT);
+        ("nu32", z 2, P_UINT (z 32, P_OPTIONAL));
+      ];
+  }
 
 let pollux_md : D.md =
   let open D in
@@ -34,8 +50,18 @@ let pollux_md : D.md =
         ("bo", z 12, P_BOOL P_OPTIONAL);
         ("sr", z 13, P_STRING P_REPEATED);
         ("bi", z 14, P_BYTES P_IMPLICIT);
+        ("nest", z 15, P_MSG (nested_md, P_IMPLICIT));
+        ("nested", z 16, P_MSG (nested_md, P_OPTIONAL));
+        ("nestrep", z 17, P_MSG (nested_md, P_REPEATED));
       ];
   }
+
+let pollux_test_nested : Pollux_Proto_Descriptors.msg =
+  let open D in
+  [
+    ("nsr", VSTRING (VIMPLICIT "Testing nested messages"));
+    ("nu32", VINT (VOPTIONAL (Some (z 32))));
+  ]
 
 let test_pollux : Pollux_Proto_Descriptors.msg =
   let open D in
@@ -53,6 +79,9 @@ let test_pollux : Pollux_Proto_Descriptors.msg =
     ("bo", VBOOL (VOPTIONAL None));
     ("sr", VSTRING (VREPEATED [ "Hello"; "World" ]));
     ("bi", VBYTES (VIMPLICIT [ 68; 69; 65; 68; 66; 69; 69; 70 ]));
+    ("nest", VMSG (VIMPLICIT pollux_test_nested));
+    ("nested", VMSG (VOPTIONAL (Some pollux_test_nested)));
+    ("nestrep", VMSG (VREPEATED [ pollux_test_nested; pollux_test_nested ]));
   ]
 
 (* Crazy that this isn't built in... *)
@@ -97,7 +126,7 @@ let str_pollux_dvty (v : 'a D.dvty) (str : 'a -> string) : string =
   | D.VOPTIONAL v' -> str_pollux_option v' str
   | D.VREPEATED v' -> str_pollux_list v' str
 
-let str_pollux_vty (v : D.vty) : string =
+let rec str_pollux_vty (v : D.vty) : string =
   match v with
   | D.VDOUBLE _ -> "DOUBLE"
   | D.VFLOAT _ -> "FLOAT"
@@ -105,14 +134,14 @@ let str_pollux_vty (v : D.vty) : string =
   | D.VBOOL v' -> str_pollux_dvty v' string_of_bool
   | D.VSTRING v' -> str_pollux_dvty v' id
   | D.VBYTES v' -> str_pollux_dvty v' str_bytes
-  | D.VMSG v' -> "MSG"
+  | D.VMSG v' -> str_pollux_dvty v' str_pollux_msg
   | D.VENUM v' -> "ENUM"
 
-let str_pollux_field (f : D.vf) : string =
+and str_pollux_field (f : D.vf) : string =
   let n, v = f in
   n ^ ": " ^ str_pollux_vty v
 
-let str_pollux_msg (m : D.msg) : string =
+and str_pollux_msg (m : D.msg) : string =
   List.fold_left (fun a f -> a ^ "\n  " ^ str_pollux_field f) "  " m
 
 let fstar_u8_to_char u8 = Char.chr (Z.to_int (FStar_UInt8.v u8))
