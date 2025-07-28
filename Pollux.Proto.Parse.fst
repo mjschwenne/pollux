@@ -280,12 +280,13 @@ and encode_value (msg_d:Desc.md) (field:Desc.vf) : Tot (option bytes)
                                                 | None -> Some (encode_bytes vh)
                                                 | Some r -> Some ((encode_bytes vh) @ r))
     | VMSG (VIMPLICIT v')
-    | VMSG (VOPTIONAL (Some v')) -> let? md = find_nested_md msg_d field in encode_message' md v'
+    | VMSG (VOPTIONAL (Some v')) -> let? md = find_nested_md msg_d field in 
+                                   len_prefix_encode_message' md v'
     | VMSG (VREPEATED (vh :: vt)) -> let? md = find_nested_md msg_d field in 
                                    let rest = (VMSG (VREPEATED vt)) in 
                                    (match encode_field msg_d (field._1, rest) with 
-                                   | None -> encode_message' md vh
-                                   | Some r -> (match encode_message' md vh with 
+                                   | None -> len_prefix_encode_message' md vh
+                                   | Some r -> (match len_prefix_encode_message' md vh with 
                                               | None -> Some r 
                                               | Some e -> Some (e @ r)))
     // TODO: Add enum, oneof and map support
@@ -299,6 +300,11 @@ and encode_message' (msg_d:Desc.md) (msg:Desc.msg) : Tot (option bytes)
                 match encode_message' msg_d t with 
                 | None -> h_enc
                 | Some r -> (match h_enc with | None -> Some r | Some e -> Some (e @ r))
+
+and len_prefix_encode_message' (msg_d:Desc.md) (msg:Desc.msg) : Tot (option bytes) 
+  (decreases %[p_measure msg_d;vs_measure msg; 3]) = 
+    let? msg_bytes = encode_message' msg_d msg in
+    Some (Vint.encode (nat_to_u64 (length msg_bytes)) @ msg_bytes)
 
 let encode_message (msg_d:Desc.md) (msg:Desc.msg) : bytes = 
   match encode_message' msg_d msg with 

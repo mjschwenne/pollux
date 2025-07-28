@@ -563,11 +563,11 @@ and (encode_value :
       | Pollux_Proto_Descriptors.VMSG (Pollux_Proto_Descriptors.VIMPLICIT v')
           ->
           Pollux_Proto_Prelude.op_let_Question (find_nested_md msg_d field)
-            (fun md -> encode_message' md v')
+            (fun md -> len_prefix_encode_message' md v')
       | Pollux_Proto_Descriptors.VMSG (Pollux_Proto_Descriptors.VOPTIONAL
           (FStar_Pervasives_Native.Some v')) ->
           Pollux_Proto_Prelude.op_let_Question (find_nested_md msg_d field)
-            (fun md -> encode_message' md v')
+            (fun md -> len_prefix_encode_message' md v')
       | Pollux_Proto_Descriptors.VMSG (Pollux_Proto_Descriptors.VREPEATED
           (vh::vt)) ->
           Pollux_Proto_Prelude.op_let_Question (find_nested_md msg_d field)
@@ -579,9 +579,10 @@ and (encode_value :
                        ((FStar_Pervasives_Native.__proj__Mktuple2__item___1
                            field), rest)
                with
-               | FStar_Pervasives_Native.None -> encode_message' md vh
+               | FStar_Pervasives_Native.None ->
+                   len_prefix_encode_message' md vh
                | FStar_Pervasives_Native.Some r ->
-                   (match encode_message' md vh with
+                   (match len_prefix_encode_message' md vh with
                     | FStar_Pervasives_Native.None ->
                         FStar_Pervasives_Native.Some r
                     | FStar_Pervasives_Native.Some e ->
@@ -608,6 +609,20 @@ and (encode_message' :
                 | FStar_Pervasives_Native.Some e ->
                     FStar_Pervasives_Native.Some
                       (FStar_List_Tot_Base.op_At e r)))
+and (len_prefix_encode_message' :
+  Pollux_Proto_Descriptors.md ->
+    Pollux_Proto_Descriptors.msg ->
+      Pollux_Proto_Prelude.bytes FStar_Pervasives_Native.option)
+  =
+  fun msg_d ->
+    fun msg ->
+      Pollux_Proto_Prelude.op_let_Question (encode_message' msg_d msg)
+        (fun msg_bytes ->
+           FStar_Pervasives_Native.Some
+             (FStar_List_Tot_Base.op_At
+                (Pollux_Proto_Varint.encode
+                   (nat_to_u64 (FStar_List_Tot_Base.length msg_bytes)))
+                msg_bytes))
 let (encode_message :
   Pollux_Proto_Descriptors.md ->
     Pollux_Proto_Descriptors.msg -> Pollux_Proto_Prelude.bytes)

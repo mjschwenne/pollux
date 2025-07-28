@@ -13,7 +13,7 @@ NOT_INCLUDED=$(wildcard Pollux.Old.*)
 
 ALL_SOURCE_FILES = $(filter-out $(NOT_INCLUDED), $(wildcard *.fst *.fsti))
 
-.depend: $(ALL_SOURCE_FILES) Makefile
+.depend: $(ALL_SOURCE_FILES) makefile
 	$(FSTAR) --dep full --extract '* -Prims -FStar' $(ALL_SOURCE_FILES) --output_deps_to $@
 
 depend: .depend
@@ -34,7 +34,6 @@ ocaml/extracted/%.ml:
 
 compile: extract
 	$(MAKE) -C ocaml
-
 
 install: PREFIX ?= .
 install: compile 

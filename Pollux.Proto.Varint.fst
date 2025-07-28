@@ -149,6 +149,7 @@ let rec encode (x: U64.t) : Tot (v:varint{U64.v (decode v) = U64.v x}) (decrease
   else 
     let lo8 = split_lo_to_u8 xn lo in
     pollux_split_hi_bound xn 7;
+    pollux_split_hi_val xn 7;
     pollux_split_lo_val xn 7;
     let rx = encode hi64 in 
     decode_prepend xn rx;
