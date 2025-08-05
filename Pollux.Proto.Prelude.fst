@@ -1,10 +1,24 @@
 module Pollux.Proto.Prelude 
 
+open FStar.Mul
+open FStar.List.Tot.Base
+
+module U = FStar.UInt
 module U8 = FStar.UInt8
+module U32 = FStar.UInt32
+module I32 = FStar.Int32
+module U64 = FStar.UInt64
+module I64 = FStar.Int64
+module Cast = FStar.Int.Cast.Full
+module Seq = FStar.Seq
+module Set = FStar.Set 
+module Str = FStar.String
+module Map = FStar.Map
 
 type bytes = list U8.t
-type dbytes (b:bytes) = d:bytes{FStar.List.length d < FStar.List.length b}
-type debytes (b:bytes) = d:bytes{FStar.List.length d <= FStar.List.length b}
+let empty_bytes : bytes = []
+type dbytes (b:bytes) = d:bytes{length d < length b}
+type debytes (b:bytes) = d:bytes{length d <= length b}
 
 (* The [option] monad *)
 // Bind operator

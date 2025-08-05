@@ -40,18 +40,18 @@ let get_triple_thd (#a:Type) (#b:Type) (#c:Type) (l:list (a & b & c)) = map (fun
 
 unopteq
 type pty = 
-| P_DOUBLE :           pdec -> pty
-| P_FLOAT :            pdec -> pty 
-| P_INT :    w:width -> pdec -> pty
-| P_UINT :   w:width -> pdec -> pty
-| P_SINT :   w:width -> pdec -> pty
-| P_FIXED :  w:width -> pdec -> pty
-| P_SFIXED : w:width -> pdec -> pty
-| P_BOOL :             pdec -> pty
-| P_STRING :           pdec -> pty
-| P_BYTES :            pdec -> pty
-| P_MSG :       m:md -> pdec -> pty
-| P_ENUM :             pdec -> pty
+| P_DOUBLE :           p:pdec -> pty
+| P_FLOAT :            p:pdec -> pty 
+| P_INT :    w:width -> p:pdec -> pty
+| P_UINT :   w:width -> p:pdec -> pty
+| P_SINT :   w:width -> p:pdec -> pty
+| P_FIXED :  w:width -> p:pdec -> pty
+| P_SFIXED : w:width -> p:pdec -> pty
+| P_BOOL :             p:pdec -> pty
+| P_STRING :           p:pdec -> pty
+| P_BYTES :            p:pdec -> pty
+| P_MSG :       m:md -> p:pdec -> pty
+| P_ENUM :             p:pdec -> pty
 
 and md : Type = {
   reserved: Set.set nat;
@@ -71,14 +71,14 @@ type dvty (v:Type) =
 | VREPEATED : list v -> dvty v
 
 type vty = 
-| VDOUBLE   : dvty double -> vty
-| VFLOAT    : dvty float -> vty
-| VINT      : dvty int -> vty 
-| VBOOL     : dvty bool -> vty 
-| VSTRING   : dvty string -> vty 
-| VBYTES    : dvty bytes -> vty 
-| VMSG      : dvty msg -> vty
-| VENUM     : dvty unit -> vty
+| VDOUBLE   : v:dvty double -> vty
+| VFLOAT    : v:dvty float -> vty
+| VINT      : v:dvty int -> vty 
+| VBOOL     : v:dvty bool -> vty 
+| VSTRING   : v:dvty string -> vty 
+| VBYTES    : v:dvty bytes -> vty 
+| VMSG      : v:dvty msg -> vty
+| VENUM     : v:dvty unit -> vty
 
 and vf = string & vty
 

@@ -182,37 +182,37 @@ type vty =
   | VMSG of (Prims.string * vty) Prims.list dvty 
   | VENUM of unit dvty 
 let (uu___is_VDOUBLE : vty -> Prims.bool) =
-  fun projectee -> match projectee with | VDOUBLE _0 -> true | uu___ -> false
-let (__proj__VDOUBLE__item___0 : vty -> double dvty) =
-  fun projectee -> match projectee with | VDOUBLE _0 -> _0
+  fun projectee -> match projectee with | VDOUBLE v -> true | uu___ -> false
+let (__proj__VDOUBLE__item__v : vty -> double dvty) =
+  fun projectee -> match projectee with | VDOUBLE v -> v
 let (uu___is_VFLOAT : vty -> Prims.bool) =
-  fun projectee -> match projectee with | VFLOAT _0 -> true | uu___ -> false
-let (__proj__VFLOAT__item___0 : vty -> float dvty) =
-  fun projectee -> match projectee with | VFLOAT _0 -> _0
+  fun projectee -> match projectee with | VFLOAT v -> true | uu___ -> false
+let (__proj__VFLOAT__item__v : vty -> float dvty) =
+  fun projectee -> match projectee with | VFLOAT v -> v
 let (uu___is_VINT : vty -> Prims.bool) =
-  fun projectee -> match projectee with | VINT _0 -> true | uu___ -> false
-let (__proj__VINT__item___0 : vty -> Prims.int dvty) =
-  fun projectee -> match projectee with | VINT _0 -> _0
+  fun projectee -> match projectee with | VINT v -> true | uu___ -> false
+let (__proj__VINT__item__v : vty -> Prims.int dvty) =
+  fun projectee -> match projectee with | VINT v -> v
 let (uu___is_VBOOL : vty -> Prims.bool) =
-  fun projectee -> match projectee with | VBOOL _0 -> true | uu___ -> false
-let (__proj__VBOOL__item___0 : vty -> Prims.bool dvty) =
-  fun projectee -> match projectee with | VBOOL _0 -> _0
+  fun projectee -> match projectee with | VBOOL v -> true | uu___ -> false
+let (__proj__VBOOL__item__v : vty -> Prims.bool dvty) =
+  fun projectee -> match projectee with | VBOOL v -> v
 let (uu___is_VSTRING : vty -> Prims.bool) =
-  fun projectee -> match projectee with | VSTRING _0 -> true | uu___ -> false
-let (__proj__VSTRING__item___0 : vty -> Prims.string dvty) =
-  fun projectee -> match projectee with | VSTRING _0 -> _0
+  fun projectee -> match projectee with | VSTRING v -> true | uu___ -> false
+let (__proj__VSTRING__item__v : vty -> Prims.string dvty) =
+  fun projectee -> match projectee with | VSTRING v -> v
 let (uu___is_VBYTES : vty -> Prims.bool) =
-  fun projectee -> match projectee with | VBYTES _0 -> true | uu___ -> false
-let (__proj__VBYTES__item___0 : vty -> Pollux_Proto_Prelude.bytes dvty) =
-  fun projectee -> match projectee with | VBYTES _0 -> _0
+  fun projectee -> match projectee with | VBYTES v -> true | uu___ -> false
+let (__proj__VBYTES__item__v : vty -> Pollux_Proto_Prelude.bytes dvty) =
+  fun projectee -> match projectee with | VBYTES v -> v
 let (uu___is_VMSG : vty -> Prims.bool) =
-  fun projectee -> match projectee with | VMSG _0 -> true | uu___ -> false
-let (__proj__VMSG__item___0 : vty -> (Prims.string * vty) Prims.list dvty) =
-  fun projectee -> match projectee with | VMSG _0 -> _0
+  fun projectee -> match projectee with | VMSG v -> true | uu___ -> false
+let (__proj__VMSG__item__v : vty -> (Prims.string * vty) Prims.list dvty) =
+  fun projectee -> match projectee with | VMSG v -> v
 let (uu___is_VENUM : vty -> Prims.bool) =
-  fun projectee -> match projectee with | VENUM _0 -> true | uu___ -> false
-let (__proj__VENUM__item___0 : vty -> unit dvty) =
-  fun projectee -> match projectee with | VENUM _0 -> _0
+  fun projectee -> match projectee with | VENUM v -> true | uu___ -> false
+let (__proj__VENUM__item__v : vty -> unit dvty) =
+  fun projectee -> match projectee with | VENUM v -> v
 type vf = (Prims.string * vty)
 type msg = (Prims.string * vty) Prims.list
 let (empty_msg : msg) = []

@@ -2,7 +2,6 @@ module Pollux.Proto.Parse
 
 open FStar.Mul
 open FStar.List.Tot.Base
-
 open Pollux.Proto.Prelude
 
 module U = FStar.UInt
@@ -58,18 +57,30 @@ let idnzw (w:Desc.width) c : (Desc.zw w) = if c then 1 else 0
 let uint_change_w (w:Desc.width) (v:int) : Desc.uw w = v % pow2 w
 let int_change_w (w:Desc.width) (v:int) : Desc.zw w = (v % pow2 (w-1) - (pow2 (w-1)) * idn ((v / pow2 (w-1)) % 2 = 1))
 let sint_change_w (w:Desc.width) (v:int) : Desc.zw w = (v % pow2 (w-1) - (pow2 (w-1)) * idn (v < 0))
-let uint_int (w:Desc.width) (v:Desc.uw w) : Desc.zw w = v - (pow2 w) * (idn (v >= pow2 (w - 1)))
-let int_uint (w:Desc.width) (v:Desc.zw w) : Desc.uw w = v + (pow2 w) * (idn (v < 0))
-let uint_sint (w:Desc.width) (v:Desc.uw w) : Desc.zw w = parity v * (v / 2) - (v % 2)
-let sint_uint (w:Desc.width) (v:Desc.zw w) : Desc.uw w = 2 * (abs v) - idn (v < 0)
-let int_sint (w:Desc.width) (v:Desc.zw w) : Desc.zw w = if v >= 0 then 
+
+let __uint_int (w:Desc.width) (v:int) : int = v - (pow2 w) * (idn (v >= pow2 (w - 1)))
+let uint_int (w:Desc.width) (v:Desc.uw w) : Desc.zw w = __uint_int w v
+
+let __int_uint (w:Desc.width) (v:int) : int = v + (pow2 w) * (idn (v < 0))
+let int_uint (w:Desc.width) (v:Desc.zw w) : Desc.uw w = __int_uint w v
+
+let __uint_sint (w:Desc.width) (v:int) : int = parity v * (v / 2) - (v % 2)
+let uint_sint (w:Desc.width) (v:Desc.uw w) : Desc.zw w = __uint_sint w v
+
+let __sint_uint (w:Desc.width) (v:int) : int = 2 * (abs v) - idn (v < 0)
+let sint_uint (w:Desc.width) (v:Desc.zw w) : Desc.uw w = __sint_uint w v
+
+let __int_sint (w:Desc.width) (v:int) : int = if v >= 0 then 
     parity v * (v / 2) - (v % 2)
   else 
     parity v * (v + (pow2 (w - 1)) - (v / 2))
-let sint_int (w:Desc.width) (v:Desc.zw w) : Desc.zw w = if -(pow2 (w-2)) <= v && v < pow2 (w-2) then 
+let int_sint (w:Desc.width) (v:Desc.zw w) : Desc.zw w = __int_sint w v
+
+let __sint_int (w:Desc.width) (v:int) : int = if -(pow2 (w-2)) <= v && v < pow2 (w-2) then 
       2 * (abs v) - idn (v < 0) 
   else 
       2 * (abs v) - pow2 w - idn (v < 0)
+let sint_int (w:Desc.width) (v:Desc.zw w) : Desc.zw w = __sint_int w v
 
 type tag = 
 | VARINT 

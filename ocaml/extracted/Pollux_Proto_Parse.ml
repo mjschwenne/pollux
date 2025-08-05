@@ -58,35 +58,39 @@ let (sint_change_w :
     fun v ->
       (v mod (Prims.pow2 (w - Prims.int_one))) -
         ((Prims.pow2 (w - Prims.int_one)) * (idn (v < Prims.int_zero)))
-let (uint_int :
-  Pollux_Proto_Descriptors.width ->
-    Obj.t Pollux_Proto_Descriptors.uw -> Obj.t Pollux_Proto_Descriptors.zw)
-  =
+let (__uint_int : Pollux_Proto_Descriptors.width -> Prims.int -> Prims.int) =
   fun w ->
     fun v ->
       v - ((Prims.pow2 w) * (idn (v >= (Prims.pow2 (w - Prims.int_one)))))
+let (uint_int :
+  Pollux_Proto_Descriptors.width ->
+    Obj.t Pollux_Proto_Descriptors.uw -> Obj.t Pollux_Proto_Descriptors.zw)
+  = fun w -> fun v -> __uint_int w v
+let (__int_uint : Pollux_Proto_Descriptors.width -> Prims.int -> Prims.int) =
+  fun w -> fun v -> v + ((Prims.pow2 w) * (idn (v < Prims.int_zero)))
 let (int_uint :
   Pollux_Proto_Descriptors.width ->
     Obj.t Pollux_Proto_Descriptors.zw -> Obj.t Pollux_Proto_Descriptors.uw)
-  = fun w -> fun v -> v + ((Prims.pow2 w) * (idn (v < Prims.int_zero)))
-let (uint_sint :
-  Pollux_Proto_Descriptors.width ->
-    Obj.t Pollux_Proto_Descriptors.uw -> Obj.t Pollux_Proto_Descriptors.zw)
+  = fun w -> fun v -> __int_uint w v
+let (__uint_sint : Pollux_Proto_Descriptors.width -> Prims.int -> Prims.int)
   =
   fun w ->
     fun v ->
       ((parity v) * (v / (Prims.of_int (2)))) - (v mod (Prims.of_int (2)))
-let (sint_uint :
+let (uint_sint :
   Pollux_Proto_Descriptors.width ->
-    Obj.t Pollux_Proto_Descriptors.zw -> Obj.t Pollux_Proto_Descriptors.uw)
+    Obj.t Pollux_Proto_Descriptors.uw -> Obj.t Pollux_Proto_Descriptors.zw)
+  = fun w -> fun v -> __uint_sint w v
+let (__sint_uint : Pollux_Proto_Descriptors.width -> Prims.int -> Prims.int)
   =
   fun w ->
     fun v ->
       ((Prims.of_int (2)) * (Prims.abs v)) - (idn (v < Prims.int_zero))
-let (int_sint :
+let (sint_uint :
   Pollux_Proto_Descriptors.width ->
-    Obj.t Pollux_Proto_Descriptors.zw -> Obj.t Pollux_Proto_Descriptors.zw)
-  =
+    Obj.t Pollux_Proto_Descriptors.zw -> Obj.t Pollux_Proto_Descriptors.uw)
+  = fun w -> fun v -> __sint_uint w v
+let (__int_sint : Pollux_Proto_Descriptors.width -> Prims.int -> Prims.int) =
   fun w ->
     fun v ->
       if v >= Prims.int_zero
@@ -95,10 +99,11 @@ let (int_sint :
       else
         (parity v) *
           ((v + (Prims.pow2 (w - Prims.int_one))) - (v / (Prims.of_int (2))))
-let (sint_int :
+let (int_sint :
   Pollux_Proto_Descriptors.width ->
     Obj.t Pollux_Proto_Descriptors.zw -> Obj.t Pollux_Proto_Descriptors.zw)
-  =
+  = fun w -> fun v -> __int_sint w v
+let (__sint_int : Pollux_Proto_Descriptors.width -> Prims.int -> Prims.int) =
   fun w ->
     fun v ->
       if
@@ -108,6 +113,10 @@ let (sint_int :
       else
         (((Prims.of_int (2)) * (Prims.abs v)) - (Prims.pow2 w)) -
           (idn (v < Prims.int_zero))
+let (sint_int :
+  Pollux_Proto_Descriptors.width ->
+    Obj.t Pollux_Proto_Descriptors.zw -> Obj.t Pollux_Proto_Descriptors.zw)
+  = fun w -> fun v -> __sint_int w v
 type tag =
   | VARINT 
   | I64 
