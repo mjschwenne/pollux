@@ -14,11 +14,11 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1753378773,
-        "narHash": "sha256-rfCU5bzGcJaFUY+krWnM75Qf34BKyOhZbMHuBkYGWuA=",
+        "lastModified": 1754604915,
+        "narHash": "sha256-cXkm9NfishO66mr/w/6lk6hNxo2yIe18vbKemlLfPvg=",
         "owner": "mjschwenne",
         "repo": "everparse",
-        "rev": "d1059e6f0a35170f1d68431d4ad540252e88ffd7",
+        "rev": "64ab284096d39bc84fe635d37529c394eecfcb14",
         "type": "github"
       },
       "original": {
