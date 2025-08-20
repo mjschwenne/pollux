@@ -74,6 +74,8 @@
                 protoc-gen-go
                 dir-locals
                 varint_conversion
+
+                nix-update
               ]
               ++ (with pkgs.ocaml-ng.ocamlPackages_4_14; [
                 base64
