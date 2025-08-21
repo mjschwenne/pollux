@@ -1,25 +1,19 @@
 {
-  description = "A Flake for F* and Pollux development";
+  description = "A Flake for Pollux development in Rocq";
 
   inputs = {
-    nixpkgs.url = "nixpkgs";
-    fstar.url = "github:FStarLang/FStar";
-    karamel.url = "github:FStarLang/karamel";
-    # Use the existing fstar install
-    karamel.inputs.fstar.follows = "fstar";
-    # Use my nix flake for everparse
-    everparse.url = "github:mjschwenne/everparse/nix";
-    everparse.inputs.fstar.follows = "fstar";
-    everparse.inputs.karamel.follows = "karamel";
+    nixpkgs.url = "github:/NixOS/nixpkgs/a595dde4d0d31606e19dcec73db02279db59d201";
     flake-utils.url = "github:numtide/flake-utils";
+    perennial = {
+      # The github fecther doesn't support submodules for some reason...
+      url = "git+https://github.com/mit-pdos/perennial.git";
+    };
   };
 
   outputs = {
     nixpkgs,
-    fstar,
-    karamel,
-    everparse,
     flake-utils,
+    perennial,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (
@@ -27,56 +21,41 @@
         pkgs = import nixpkgs {
           inherit system;
         };
-        fstar-pkg = fstar.packages.${system}.fstar;
-        karamel-pkg = karamel.packages.${system}.karamel.overrideAttrs {
-          # So karamel correctly exports everything it needs to,
-          # but everparse expects a different export structure.
-          #
-          # This patch changes the lib export to be krmllib and
-          # places an extra copy of the binary executable at
-          # $out/krml rather than $out/bin/krml where nix wants it
-          patches = [./nix/karamel-install.patch];
-        };
-        varint_conversion = pkgs.callPackage ./nix/pollux_varint_conversion.nix {};
-        everparse-pkg = everparse.packages."${system}".default;
-        ocaml-protoc-plugin = pkgs.callPackage ./nix/ocaml-protoc-plugin.nix {
-          buildDunePackage = pkgs.ocaml-ng.ocamlPackages_4_14.buildDunePackage;
-          ocaml = pkgs.ocaml-ng.ocamlPackages_4_14.ocaml;
-          ocamlPackages = pkgs.ocaml-ng.ocamlPackages_4_14;
-        };
-        dir-locals = pkgs.callPackage ./nix/dir-locals.nix {
-          karamel = karamel-pkg;
-          everparse = everparse-pkg;
-        };
-        pollux = pkgs.callPackage ./nix/pollux.nix {
-          inherit fstar ocaml-protoc-plugin varint_conversion;
-        };
+        varint_conversion = pkgs.callPackage ./varint_conversion {};
+        flocq = pkgs.callPackage ./nix/flocq {};
       in {
         packages = {
-          inherit pollux;
-          default = pollux;
-          github-cache.fstar = fstar-pkg;
+          inherit varint_conversion;
         };
         devShells.default = with pkgs;
           mkShell {
             buildInputs =
               [
-                fstar-pkg
-                karamel-pkg
-                everparse-pkg
-                just
+                # Rocq Deps
+                rocq-core
+                rocqPackages.stdlib
+                perennial.packages.${system}.default
+                flocq
+
+                # Protobuf Deps
                 protobuf
+                protoc-gen-go
                 protoscope
                 buf
-                xxd
+
+                # Go deps
                 go
-                ocaml-protoc-plugin
-                protoc-gen-go
-                dir-locals
                 varint_conversion
 
+                # Misc utilities
+                just
+                gnumake
+                xxd
+
+                # nix helpers
                 nix-update
               ]
+              # OCaml Deps
               ++ (with pkgs.ocaml-ng.ocamlPackages_4_14; [
                 base64
                 batteries
@@ -96,15 +75,8 @@
                 zarith
               ]);
 
-            dontDetectOcamlConflicts = true;
-
             shellHook = ''
-              export FSTAR_HOME=${fstar-pkg}
-              export KRML_HOME=${karamel-pkg}
-              export EVERPARSE_HOME=${everparse-pkg}
-              export OCAMLPATH=$OCAMLPATH:${fstar-pkg}/lib
-              export DIR_LOCALS=${dir-locals}
-              ln -f -s ${dir-locals}/dir-locals.el .dir-locals.el
+              unset COQPATH
             '';
           };
       }

@@ -4,6 +4,6 @@
 in
   buildGoModule {
     inherit name version;
-    src = ./../go_varint_conversion;
+    src = ./.;
     vendorHash = "sha256-k4HZj2GxcIowPDJWFPKbFHg97XHE9GDgMLIZUolargA=";
   }

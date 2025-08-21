@@ -1,0 +1,20 @@
+# Pollux 
+-Q src Pollux
+
+# Warnings, taken from Perennial
+-arg -w -arg -ssr-search-moved
+-arg -w -arg +deprecated-instance-without-locality
+# don't allow ambiguous coercions
+-arg -w -arg +ambiguous-paths
+-arg -w -arg +deprecated-hint-rewrite-without-locality
+-arg -w -arg -deprecated-field-instance-without-locality
+-arg -w -arg +deprecated-tactic-notation
+-arg -w -arg -deprecated-since-8.19
+-arg -w -arg -deprecated-since-8.20
+-arg -w -arg -deprecated-since-9.0
+# seems to have false positives
+-arg -w -arg -notation-incompatible-prefix
+# we haven't updated our code to fix this one
+-arg -w -arg -deprecated-typeclasses-transparency-without-locality
+# Iris-disabled warnings
+-arg -w -arg -notation-overridden,-redundant-canonical-projection,-unknown-warning,-argument-scope-delimiter
