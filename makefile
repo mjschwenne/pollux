@@ -1,50 +1,49 @@
-all: verify compile
+SRC_DIRS := 'src'
+ALL_VFILES := $(shell find $(SRC_DIRS) -name "*.v")
+PROJ_VFILES := $(shell find 'src' -name "*.v")
 
-FSTAR_OPTIONS = --cache_checked_modules --ext optimize_let_vc \
-		    --cmi \
-	        --odir ocaml/extracted \
-			--warn_error -321
+# extract any global arguments for Rocq from _RocqProject
+ROCQ_PROJECT_ARGS := $(shell sed -E -e '/^\#/d' -e "s/'([^']*)'/\1/g" -e 's/-arg //g' _RocqProject)
 
-FSTAR_EXE ?= fstar.exe
+# user configurable
+Q:=@
+ROCQ_ARGS := -noglob
+ROCQ_C := rocq compile
 
-FSTAR = $(FSTAR_EXE) $(FSTAR_OPTIONS)
+check: vo
 
-NOT_INCLUDED=$(wildcard Pollux.Old.*)
+vo: $(PROJ_VFILES:.v=.vo)
+vos: $(PROJ_VFILES:.v=.vos)
+vok: $(PROJ_VFILES:.v=.vok)
 
-ALL_SOURCE_FILES = $(filter-out $(NOT_INCLUDED), $(wildcard *.fst *.fsti))
+.rocqdeps.d: $(ALL_VFILES) _RocqProject
+	@echo "ROCQ DEP $@"
+	$(Q)rocq dep -vos -f _RocqProject $(ALL_VFILES) > $@
 
-.depend: $(ALL_SOURCE_FILES) makefile
-	$(FSTAR) --dep full --extract '* -Prims -FStar' $(ALL_SOURCE_FILES) --output_deps_to $@
+# do not try to build dependencies if cleaning
+ifeq ($(filter clean,$(MAKECMDGOALS)),)
+-include .rocqdeps.d
+endif
 
-depend: .depend
+%.vo: %.v _RocqProject | .rocqdeps.d
+	@echo "ROCQ COMPILE $<"
+	$(Q)$(ROCQ_C) $(ROCQ_PROJECT_ARGS) $(ROCQ_ARGS) -o $@ $<
 
--include .depend
+%.vos: %.v _RocqProject | .rocqdeps.d
+	@echo "ROCQ COMPILE -vos $<"
+	$(Q)$(ROCQ_C) $(ROCQ_PROJECT_ARGS) -vos $(ROCQ_ARGS) $< -o $@
 
-$(ALL_CHECKED_FILES): %.checked:
-	$(FSTAR) $<
-	@touch -c $@
-
-verify: $(ALL_CHECKED_FILES)
-	echo $*
-
-extract: $(ALL_ML_FILES)
-
-ocaml/extracted/%.ml:
-	$(FSTAR) $(notdir $(subst .checked,,$<)) --codegen OCaml --extract_module $(basename $(notdir $(subst .checked,,$<)))
-
-compile: extract
-	$(MAKE) -C ocaml
-
-install: PREFIX ?= .
-install: compile 
-	mkdir -p $(PREFIX)/bin
-	cp ocaml/_build/default/bin/main.exe $(PREFIX)/bin/pollux.exe
-
-test: compile 
-	./ocaml/_build/default/test/test_pollux.exe
+%.vok: %.v _RocqProject | .rocqdeps.d
+	@echo "ROCQ COMPILE -vok $<"
+	$(Q)$(ROCQ) $(ROCQ_PROJECT_ARGS) -vok $(ROCQ_ARGS) $< -o $@
 
 clean:
-	-rm -rf *.checked .depend bin/*.exe 
-	$(MAKE) -C ocaml clean
+	@echo "CLEAN vo glob aux"
+	$(Q)find $(SRC_DIRS) \( -name "*.vo" -o -name "*.vo[sk]" \
+		-o -name ".*.aux" -o -name ".*.cache" -name "*.glob" \) -delete
+	$(Q)rm -f .timing.sqlite3
+	rm -f .rocqdeps.d
 
-.PHONY: all verify clean depend compile install
+.PHONY: default
+.DELETE_ON_ERROR:
+

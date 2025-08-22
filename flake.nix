@@ -23,9 +23,14 @@
         };
         varint_conversion = pkgs.callPackage ./varint_conversion {};
         flocq = pkgs.callPackage ./nix/flocq {};
+        rocq-build = pkgs.callPackage ./nix/pollux-rocq {
+          perennial = perennial.packages.${system}.default;
+          inherit flocq;
+        };
       in {
         packages = {
-          inherit varint_conversion;
+          inherit varint_conversion rocq-build;
+          default = rocq-build;
         };
         devShells.default = with pkgs;
           mkShell {

@@ -1,12 +1,59 @@
-.direnv
-.envrc
-.dir-locals.el
+# Rocq build files
+.*.aux
+.*.d
+*.a
+*.cma
+*.cmi
+*.cmo
+*.cmx
+*.cmxa
+*.cmxs
+*.glob
+*.ml.d
+*.ml4.d
+*.mlg.d
+*.mli.d
+*.mllib.d
+*.mlpack.d
+*.native
+*.o
+*.v.d
+*.vio
+*.vo
+*.vok
+*.vos
+.coq-native
+.csdp.cache
+.lia.cache
+.nia.cache
+.nlia.cache
+.nra.cache
+.roqcdeps
+csdp.cache
+lia.cache
+nia.cache
+nlia.cache
+nra.cache
+native_compute_profile_*.data
+.rocqdeps.d
 
+# Pollux produces binaries
 bin/*
-.depend
+
+# FStar output
 *.fst.checked
+
+# Sample encoded protobuf messages
 *.bin
 
+# OCaml / dune build outputs
 _build
 _log
 _digests
+
+# direnv
+.direnv
+.envrc
+
+# Editor setup
+.dir-locals.el
