@@ -1,3 +1,5 @@
+From Stdlib Require Import ZArith.BinInt.
+From Stdlib Require Import Program.Wf.
 From coqutil Require Import Word.Interface.
 From Perennial Require Import Helpers.Word.Integers.
 
@@ -23,6 +25,9 @@ Module Varint.
 
   (* TODO is there a guide to all the heavily abbreviated word ops? *)
 
+  Definition set_msb_u8 (u : u8) : u8 :=
+    word.or u (U8 255).
+
   Definition unset_msb_u8 (u : u8) : u8 :=
     word.or u (U8 127).
 
@@ -35,5 +40,18 @@ Module Varint.
                 let rx := decode tl in
                 word.or (word.slu rx (U64 7)) msx
     end.
+
+  Definition split (x:u64) (n:Z) : u64 * u64 := (word.srs x (U64 n), word.and x (U64 ((2^n) - 1))).
+
+  Fixpoint encode_fuel (fuel: nat) (x:w64) {struct fuel} : list u8 :=
+    let (hi, lo) := split x 7%Z in
+    if word.ltu hi (U64 0) then
+      [(W8 (uint.Z lo))]
+    else match fuel with
+           | O => [(W8 (uint.Z lo))]
+           | S f => (set_msb_u8 (W8 (uint.Z lo))) :: (encode_fuel f hi)
+         end.
+
+  Definition encode := encode_fuel 10%nat.
   
 End Varint.

@@ -7,42 +7,40 @@ From stdpp Require Import mapset.
 
 Module Descriptors.
 
-  Inductive deco_desc :=
+  Inductive DecoDesc :=
   | D_IMPLICIT
   | D_OPTIONAL
   | D_REPEATED.
   
-  Definition reserved_id := nat.
-  (* Which one of these should the later definitions use? While I think that the prop is largely
-   more useful, somehow having a prop in the set of a message descriptor doesn't feel right... *)
-  Definition reserved_set := (mapset (gmap reserved_id)).
-  Definition reserved_set_prop := FinSet reserved_id reserved_set.
+  Definition ReservedId := nat.
+  Definition ReservedSet := (mapset (gmap ReservedId)).
+  Definition ReservedSetProp := FinSet ReservedId ReservedSet.
 
-  Definition width_prop (n : nat) : Prop := n = 32%nat \/ n = 64%nat.
-  Definition width := {n : nat | width_prop n }.
+  Definition WidthProp (n : nat) : Prop := n = 32%nat \/ n = 64%nat.
+  Definition Width := {n : nat | WidthProp n }.
 
-  Lemma width_32_prop : width_prop 32.
-  Proof. unfold width_prop. left. reflexivity. Qed.
+  Lemma width_32_prop : WidthProp 32.
+  Proof. unfold WidthProp. left. reflexivity. Qed.
 
-  Lemma width_64_prop : width_prop 64.
-  Proof. unfold width_prop. right. reflexivity. Qed.
+  Lemma width_64_prop : WidthProp 64.
+  Proof. unfold WidthProp. right. reflexivity. Qed.
 
-  Definition width32 : width := exist width_prop 32 width_32_prop.
-  Definition width64 : width := exist width_prop 64 width_64_prop.
+  Definition width32 : Width := exist WidthProp 32 width_32_prop.
+  Definition width64 : Width := exist WidthProp 64 width_64_prop.
 
-  Inductive val_desc : Type :=
-  | D_DOUBLE :            deco_desc -> val_desc
-  | D_FLOAT  :            deco_desc -> val_desc
-  | D_INT    :    width -> deco_desc -> val_desc
-  | D_UINT   :    width -> deco_desc -> val_desc
-  | D_SINT   :    width -> deco_desc -> val_desc
-  | D_FIXED  :    width -> deco_desc -> val_desc
-  | D_SFIXED :    width -> deco_desc -> val_desc
-  | D_BOOL   :            deco_desc -> val_desc
-  | D_STRING :            deco_desc -> val_desc
-  | D_BYTES  :            deco_desc -> val_desc
-  | D_MSG    : msg_desc -> deco_desc -> val_desc
-  | D_ENUM   :            deco_desc -> val_desc
+  Inductive ValDesc : Type :=
+  | D_DOUBLE (deco: DecoDesc)
+  | D_FLOAT  (deco: DecoDesc)
+  | D_INT    (w: Width) (deco: DecoDesc)
+  | D_UINT   (w: Width) (deco: DecoDesc)
+  | D_SINT   (w: Width) (deco: DecoDesc)
+  | D_FIXED  (w: Width) (deco: DecoDesc)
+  | D_SFIXED (w: Width) (deco: DecoDesc)
+  | D_BOOL   (deco: DecoDesc)
+  | D_STRING (deco: DecoDesc)
+  | D_BYTES  (deco: DecoDesc)
+  | D_MSG    (msg: MsgDesc) (deco: DecoDesc)
+  | D_ENUM   (deco: DecoDesc)
                       
   (*
     Looks like I can't define a mfield_desc as a record, like in F*, since I'm getting this error:
@@ -57,62 +55,64 @@ Module Descriptors.
     Although, without providing an example, it does claim that mutually inductive record
     definitions are allow if "as long as all of the types in the block are records."
    *)
-    with field_desc := D_FIELD : string -> nat -> val_desc -> field_desc
-    with msg_desc := D_MESSAGE : reserved_set -> list field_desc -> msg_desc.
+    with FieldDesc := D_FIELD (name: string) (id: nat) (val: ValDesc)
+    with MsgDesc := D_MESSAGE (reserved: ReservedSet) (fields: list FieldDesc).
 
-  Definition field_desc_get_name (f:field_desc) : string :=
+  Definition field_desc_get_name (f:FieldDesc) : string :=
     match f with
     | D_FIELD name _ _ => name
     end.
   
-  Definition field_desc_get_id (f:field_desc) : nat :=
+  Definition field_desc_get_id (f:FieldDesc) : nat :=
     match f with
     | D_FIELD _ id _ => id
     end.
 
-  Definition field_desc_get_val (f:field_desc) : val_desc :=
+  Definition field_desc_get_val (f:FieldDesc) : ValDesc :=
     match f with
     | D_FIELD _ _ val => val
     end.
 
-  Definition msg_desc_get_reserved (m:msg_desc) : reserved_set :=
+  Definition msg_desc_get_reserved (m:MsgDesc) : ReservedSet :=
     match m with
     | D_MESSAGE rset _ => rset
     end.
 
-  Definition msg_desc_get_fields (m:msg_desc) : list field_desc :=
+  Definition msg_desc_get_fields (m:MsgDesc) : list FieldDesc :=
     match m with
     | D_MESSAGE _ fields => fields
     end.
 
-  Inductive deco_val {v : Type} : Type :=
-    | V_IMPLICIT : v -> deco_val
-    | V_OPTIONAL : option v -> deco_val
-    | V_REPEATED : list v -> deco_val.
+  Inductive DecoVal {v : Type} : Type :=
+    | V_IMPLICIT (x : v)
+    | V_OPTIONAL (x : option v)
+    | V_REPEATED (x : list v).
+
+  Arguments DecoVal v : clear implicits.
 
   Definition f32 := binary_float 24 128.
   Definition f32_zero := B754_zero 24 128 false.
   Definition f64 := binary_float 53 1024.
   Definition f64_zero := B754_zero 53 1024 false.
   
-  Inductive val_val :=
-  | V_DOUBLE : @deco_val f64 -> val_val
-  | V_FLOAT  : @deco_val f32 -> val_val
-  | V_INT    : @deco_val Z -> val_val
-  | V_BOOL   : @deco_val bool -> val_val
-  | V_STRING : @deco_val string -> val_val
-  | V_BYTES  : @deco_val (list u8) -> val_val
-  | V_MSG    : @deco_val msg_val -> val_val
-  | V_ENUM   : @deco_val unit -> val_val
+  Inductive ValVal :=
+  | V_DOUBLE (v: DecoVal f64)
+  | V_FLOAT  (v: DecoVal f32)
+  | V_INT    (v: DecoVal Z)
+  | V_BOOL   (v: DecoVal bool)
+  | V_STRING (v: DecoVal string)
+  | V_BYTES  (v: DecoVal (list w8))
+  | V_MSG    (v: DecoVal MsgVal)
+  | V_ENUM   (v: DecoVal unit)
 
-  with field_val := V_FIELD : string -> val_val -> field_val
-  with msg_val := V_MESSAGE : list field_val -> msg_val.
+  with FieldVal := V_FIELD (name: string) (v: ValVal)
+  with MsgVal := V_MESSAGE (fields: list FieldVal).
 
-  Definition empty_message : msg_val := V_MESSAGE nil.
+  Definition empty_message : MsgVal := V_MESSAGE nil.
   
   (* MESSAGE INITIALIZATION *)
 
-  Definition init_deco {A : Type} (deco : deco_desc) (def : A) :=
+  Definition init_deco {A : Type} (deco : DecoDesc) (def : A) :=
     match deco with
     | D_IMPLICIT => V_IMPLICIT def
     | D_OPTIONAL => V_OPTIONAL None
@@ -128,8 +128,8 @@ Module Descriptors.
 
      https://cs.stackexchange.com/a/120
    *)
-  Fixpoint init_msg (m:msg_desc) : msg_val := 
-  let init_field := (fix init_field (f:field_desc) : field_val :=
+  Fixpoint init_msg (m:MsgDesc) : MsgVal := 
+  let init_field := (fix init_field (f:FieldDesc) : FieldVal :=
     V_FIELD (field_desc_get_name f)
       (match (field_desc_get_val f) with
        | D_DOUBLE dd => V_DOUBLE (init_deco dd f64_zero)
@@ -145,7 +145,7 @@ Module Descriptors.
        | D_MSG m dd => V_MSG (init_deco dd (init_msg m))
        | D_ENUM dd => V_ENUM (init_deco dd ())
        end)) in
-  let init_fields := (fix init_fields (fs:list field_desc) : list field_val :=
+  let init_fields := (fix init_fields (fs:list FieldDesc) : list FieldVal :=
     match fs with
     | nil => nil
     | hd :: tl => init_field hd :: init_fields tl
