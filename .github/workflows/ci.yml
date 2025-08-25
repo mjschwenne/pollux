@@ -38,8 +38,6 @@ jobs:
           purge-primary-key: never     
       - name: Build Pollux
         run: nix build -L
-      - name: Run Pollux 
-        run: ./result/bin/pollux.exe
 
 
   build-pollux-macos:
@@ -73,5 +71,3 @@ jobs:
           purge-primary-key: never     
       - name: Build Pollux 
         run: nix build -L
-      - name: Run Pollux 
-        run: ./result/bin/pollux.exe
