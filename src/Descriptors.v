@@ -1,9 +1,4 @@
-From Stdlib Require Import Strings.String.
-From coqutil Require Import Word.Interface.
-From Flocq Require Import IEEE754.Binary.
-From Perennial Require Import Helpers.Word.Integers.
-From stdpp Require Import gmap.
-From stdpp Require Import mapset.
+From Pollux Require Import Prelude.
 
 Module Descriptors.
 
@@ -16,8 +11,8 @@ Module Descriptors.
   Definition ReservedSet := (mapset (gmap ReservedId)).
   Definition ReservedSetProp := FinSet ReservedId ReservedSet.
 
-  Definition WidthProp (n : nat) : Prop := n = 32%nat \/ n = 64%nat.
-  Definition Width := {n : nat | WidthProp n }.
+  Definition WidthProp (z : Z) : Prop := z = 32%Z \/ z = 64%Z.
+  Definition Width := {z : Z | WidthProp z }.
 
   Lemma width_32_prop : WidthProp 32.
   Proof. unfold WidthProp. left. reflexivity. Qed.
@@ -25,8 +20,12 @@ Module Descriptors.
   Lemma width_64_prop : WidthProp 64.
   Proof. unfold WidthProp. right. reflexivity. Qed.
 
-  Definition width32 : Width := exist WidthProp 32 width_32_prop.
-  Definition width64 : Width := exist WidthProp 64 width_64_prop.
+  Definition width32 : Width := exist WidthProp 32%Z width_32_prop.
+  Definition width64 : Width := exist WidthProp 64%Z width_64_prop.
+
+  Definition unwrap_width (w : Width) : Z := match w with
+                                             | exist _ z _ => z
+                                             end.
 
   Inductive ValDesc : Type :=
   | D_DOUBLE (deco: DecoDesc)
@@ -82,6 +81,18 @@ Module Descriptors.
     match m with
     | D_MESSAGE _ fields => fields
     end.
+
+  Definition msg_desc_get_field_ids (m:MsgDesc) : list nat :=
+    map field_desc_get_id (msg_desc_get_fields m).
+
+  Definition msg_desc_get_field_names (m:MsgDesc) : list string :=
+    map field_desc_get_name (msg_desc_get_fields m).
+  
+  Definition msg_desc_get_field_vals (m:MsgDesc) : list ValDesc :=
+    map field_desc_get_val (msg_desc_get_fields m).
+
+  Definition valid_desc (d : MsgDesc) : Prop :=
+    NoDup (msg_desc_get_field_ids d) /\ NoDup (msg_desc_get_field_names d).
 
   Inductive DecoVal {v : Type} : Type :=
     | V_IMPLICIT (x : v)
@@ -147,7 +158,7 @@ Module Descriptors.
        end)) in
   let init_fields := (fix init_fields (fs:list FieldDesc) : list FieldVal :=
     match fs with
-    | nil => nil
+    | [] => []
     | hd :: tl => init_field hd :: init_fields tl
     end) in
   V_MESSAGE (init_fields $ msg_desc_get_fields m).
@@ -164,4 +175,5 @@ Module Descriptors.
    the rest of the port. This property on the descriptors will need to be restored via
    a predicate over the descriptor and proven or assumed in all the proofs.
  *)
+  
 End Descriptors.
