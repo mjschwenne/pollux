@@ -101,9 +101,9 @@ Module Descriptors.
 
   Arguments DecoVal v : clear implicits.
 
-  Definition f32 := binary_float 24 128.
+  Definition f32 := binary32.
   Definition f32_zero := B754_zero 24 128 false.
-  Definition f64 := binary_float 53 1024.
+  Definition f64 := binary64.
   Definition f64_zero := B754_zero 53 1024 false.
   
   Inductive ValVal :=
@@ -118,6 +118,21 @@ Module Descriptors.
 
   with FieldVal := V_FIELD (name: string) (v: ValVal)
   with MsgVal := V_MESSAGE (fields: list FieldVal).
+
+  Definition field_val_get_name (f : FieldVal) : string :=
+    match f with
+    | V_FIELD s _ => s
+    end.
+  
+  Definition field_val_get_val (f : FieldVal) : ValVal :=
+    match f with
+    | V_FIELD _ v => v
+    end.
+
+  Definition msg_val_get_fields (m : MsgVal) : list FieldVal :=
+    match m with
+    | V_MESSAGE fs => fs
+    end.
 
   Definition empty_message : MsgVal := V_MESSAGE nil.
   

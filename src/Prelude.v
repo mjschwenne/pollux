@@ -11,6 +11,7 @@ Export ListNotations.
 From Perennial Require Export Helpers.Word.Integers.
 From Stdlib Require Export Strings.String.
 From coqutil Require Export Word.Interface.
+From Flocq Require Export IEEE754.Bits.
 From Flocq Require Export IEEE754.Binary.
 From stdpp Require Export gmap.
 From stdpp Require Export mapset.

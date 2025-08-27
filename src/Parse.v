@@ -1,4 +1,6 @@
 From Pollux Require Import Prelude.
+From Perennial Require Import Helpers.Word.LittleEndian.
+From Stdlib Require Import Structures.Equalities.
 
 From Pollux Require Import Descriptors.
 From Pollux Require Import Varint.
@@ -39,5 +41,239 @@ Module Parse.
        had this assurance, so the formula could still be wrong, which is why there were / are
        tested against the official protobuf implementation.
      *)
+
+  Inductive Tag :=
+  | VARINT
+  | I64
+  | LEN
+  | I32.
+  
+  Definition tag_num (t:Tag) : Z :=
+    match t with
+    | VARINT => 0
+    | I64 => 1
+    | LEN => 2
+    | I32 => 5
+    end.
+  
+  Definition find_field_string (msg : MsgDesc) (id : string) : option FieldDesc :=
+   find (fun f => String.eqb (field_desc_get_name f) id) (msg_desc_get_fields msg). 
+  
+  Definition find_tag (d : ValDesc) : Tag :=
+    match d with
+    | D_INT _ D_REPEATED
+    | D_UINT _ D_REPEATED
+    | D_SINT _ D_REPEATED
+    | D_BOOL D_REPEATED
+    | D_ENUM D_REPEATED
+    | D_FIXED _ D_REPEATED
+    | D_SFIXED _ D_REPEATED
+    | D_FLOAT D_REPEATED
+    | D_DOUBLE D_REPEATED => LEN
+    | D_INT _ _
+    | D_UINT _ _
+    | D_SINT _ _
+    | D_BOOL _
+    | D_ENUM _ => VARINT
+    | D_FIXED (exist _ 32%Z _) _
+    | D_SFIXED (exist _ 32%Z _) _
+    | D_FLOAT _ => I32
+    | D_FIXED (exist _ 64%Z _) _
+    | D_SFIXED (exist _ 64%Z _) _
+    | D_DOUBLE _ => I64
+    | _ => LEN
+    end.
+
+  (* FIXME / TODO: The loss of let? is going to make the rest of this code a lot more annoying to
+     translate from F*... *)
+  Definition encode_header (msg : MsgDesc) (name : string) : option w64 :=
+    (* TODO: Check tag number. Valid numbers are 1 to 536870911 excluding 19000 - 19999 *)
+    match find_field_string msg name with
+      | Some f => let id_n := W64 $ Z.of_nat (field_desc_get_id f) in
+                 let tag_n := W64 (tag_num (find_tag (field_desc_get_val f))) in
+                 Some (word.or (word.slu id_n (W64 3)) tag_n)
+      | None => None
+    end.
+
+  (* Since W64 handles cases like negative numbers correctly, explicitly casting from signed
+     to unsigned isn't needed. *)
+
+  Definition encode_int (z : Z) : list byte := Varint.encode $ W64 z.
+  Definition encode_sint32 (s : Z) : list byte := encode_int $ sint_uint width32 (uint.Z (W32 s)).
+  Definition encode_sint64 (s : Z) : list byte := encode_int $ sint_uint width64 (uint.Z (W64 s)).
+
+  Definition encode_fixed32 (f : Z) : list byte := u32_le $ W32 f.
+  Definition encode_fixed64 (f : Z) : list byte := u64_le $ W64 f.
+  Definition encode_bool (b : bool) : list byte := if b then [(W8 1)] else [(W8 0)].
+  (* FIXME: Is the rev needed? This should shift us back to big-endian which I think (?)
+     we need for encoding a float... *)
+  Definition encode_float (f : f32) : list byte := rev (u32_le $ W32 (bits_of_b32 f)).
+  Definition encode_double (f : f64) : list byte := rev (u64_le $ W64 (bits_of_b64 f)).
+  Definition float_eqb (f1 : f32) (f2 : f32) : bool :=
+    match b32_compare f1 f2 with
+    | Some comp => match comp with
+                  | Eq => true
+                  | _ => false
+                  end
+    (* May not be the best choice, but it will work for detecting the default value, I hope... *)
+    | None => false
+    end.
+  Definition double_eqb (f1 : f64) (f2 : f64) : bool :=
+    match b64_compare f1 f1 with
+    | Some comp => match comp with
+                  | Eq => true
+                  | _ => false
+                  end
+    | None => false
+    end.
+
+  (* Higher order encoding functions *)
+  (* TODO is there a better way to handle decidable equality? I was honestly expecting
+     that I would just need to restrict to a typeclass, but such a wide-spread type class
+     doesn't seem to exist in the Core / Standard libraries... *)
+  Definition encode_implicit {A: Type} (v : A) (d : A) (eq : A -> A -> bool) (enc : A -> list byte) :
+    option (list byte) := 
+    if eq v d then None else Some (enc v).
+
+  Definition encode_packed {A : Type} (l : list A) (enc_one : A -> list byte) : list byte :=
+    let bytes := fold_left (++) (map enc_one l) [] in
+    let length := Varint.encode $ W64 (Z.of_nat $ length bytes) in
+    length ++ bytes.
+
+  (* Add the length prefix, using a separate function for consistency *)
+  Definition encode_bytes (b : list byte) : list byte := encode_packed b (fun x => [x]).
+  Fixpoint bytes_eqb (b1 : list byte) (b2 : list byte) : bool :=
+    match b1, b2 with
+    | [], [] => true
+    | [], _ => false
+    | _, [] => false
+    | (h1 :: t1), (h2 :: t2) => if (word.eqb h1 h2) then
+                                 bytes_eqb t1 t2
+                               else
+                                 false
+    end.
+        
+  (* TODO looks like we lost native UTF-8 support. *)
+  Definition encode_string (s : string) : list byte := encode_bytes
+                                                         (* This collection of casts is ugly... *)
+                                                         (map (fun b => W8 (Z.of_nat $ Byte.to_nat b))
+                                                            (list_byte_of_string s)).
+
+  Definition encode_deco_packed {A : Type} (deco : DecoVal A) (def : A) (eq : A -> A -> bool)
+    (enc_one : A -> list byte) : option (list byte) :=
+    match deco with
+    | V_IMPLICIT v => encode_implicit v def eq enc_one
+    | V_OPTIONAL (Some v) => Some (enc_one v)
+    | V_REPEATED (vh :: vt) => Some (encode_packed (vh :: vt) enc_one)
+    | _ => None
+    end.
+
+  Definition find_int_enc_one (m : MsgDesc) (name : string) : option (Z -> list byte) :=
+    match find_field_string m name with
+    | Some f => (match field_desc_get_val f with
+                | D_INT _ _ => Some encode_int
+                | D_UINT _ _ => Some encode_int
+                | D_SINT (exist _ 32%Z _) _ => Some encode_sint32
+                | D_SINT (exist _ 64%Z _) _ => Some encode_sint64
+                | D_FIXED (exist _ 32%Z _) _
+                | D_SFIXED (exist _ 32%Z _) _ => Some encode_fixed32
+                | D_FIXED (exist _ 64%Z _) _
+                | D_SFIXED (exist _ 64%Z _) _ => Some encode_fixed64
+                | _ => None
+                end)
+    | None => None
+    end.
+
+  Definition opt_append {A : Type} (l1 : list A) (l2 : option (list A)) : list A :=
+    match l2 with
+    | None => l1
+    | Some l2 => l1 ++ l2
+    end.
+
+  Fixpoint find_nested_md_f (fs : list FieldDesc) (f : FieldVal) : option MsgDesc :=
+    match fs with
+    | [] => None
+    | h :: t => if String.eqb (field_desc_get_name h) (field_val_get_name f) then
+                 match field_desc_get_val h with
+                 | D_MSG m _ => Some m
+                 | _ => None
+                 end
+               else
+                 find_nested_md_f t f
+    end.
+  Definition find_nested_msg_desc (m : MsgDesc) (f : FieldVal) : option MsgDesc :=
+    find_nested_md_f (msg_desc_get_fields m) f.
+
+  Fail Fixpoint encode_field (m : MsgDesc) (f : FieldVal) : option (list byte) :=
+    match encode_header m (field_val_get_name f) with
+    | Some header => (match encode_value m f with
+                     | Some bytes => Some (Varint.encode header ++ bytes)
+                     | None => None
+                     end)
+    | None => None
+    end
+  with encode_value (m : MsgDesc) (f : FieldVal) : option (list byte) :=
+         match (field_val_get_val f) with
+         | V_DOUBLE v => encode_deco_packed v f64_zero double_eqb encode_double
+         | V_FLOAT v => encode_deco_packed v f32_zero float_eqb encode_float
+         | V_INT v => match find_int_enc_one m (field_val_get_name f) with
+                     | Some enc_one => encode_deco_packed v 0%Z Z.eqb enc_one
+                     | None => None
+                     end
+         | V_BOOL v => encode_deco_packed v false eqb encode_bool
+         | V_STRING (V_IMPLICIT v) => encode_implicit v EmptyString String.eqb encode_string
+         | V_STRING (V_OPTIONAL (Some v)) => Some (encode_string v)
+         | V_STRING (V_REPEATED (vh :: vt)) => match encode_field m (V_FIELD (field_val_get_name f)
+                                                                      (V_STRING (V_REPEATED vt))) with
+                                              | Some r => Some ((encode_string vh) ++ r)
+                                              | None => Some (encode_string vh)
+                                              end
+         | V_BYTES (V_IMPLICIT v) => encode_implicit v [] bytes_eqb encode_bytes
+         | V_BYTES (V_OPTIONAL (Some v)) => Some (encode_bytes v)
+         | V_BYTES (V_REPEATED (vh :: vt)) => match encode_field m (V_FIELD (field_val_get_name f)
+                                                                      (V_BYTES (V_REPEATED vt))) with
+                                              | Some r => Some ((encode_bytes vh) ++ r)
+                                              | None => Some (encode_bytes vh)
+                                              end
+         | V_MSG (V_IMPLICIT v)
+         | V_MSG (V_OPTIONAL (Some v)) => match find_nested_msg_desc m f with
+                                         | Some md => len_prefix_encode_message' md v
+                                         | None => None
+                                         end
+         | V_MSG (V_REPEATED (vh :: vt)) => match find_nested_msg_desc m f with
+                                           | Some md => match encode_field m (V_FIELD (field_val_get_name f)
+                                                                               (V_MSG (V_REPEATED vt))) with
+                                                       | Some r => match len_prefix_encode_message' md vh with
+                                                                  | Some e => Some (e ++ r)
+                                                                  | None => Some r
+                                                                  end
+                                                       | None => len_prefix_encode_message' md vh
+                                                       end
+                                           | None => None
+                                           end
+         (* TODO: Add enum, oneof and map support *)
+         | _ => None
+         end
+  with encode_message' (m : MsgDesc) (msg : MsgVal) : option (list byte) :=
+         let fs := msg_val_get_fields msg in
+         match fs with
+         | [] => None
+         | h :: tl => let h_enc := encode_field m h in
+                     match encode_message' m (V_MESSAGE tl) with
+                     | None => h_enc
+                     | Some r => (match h_enc with | None => Some r | Some e => Some (e ++ r) end)
+                     end
+         end
+  with len_prefix_encode_message' (m : MsgDesc) (msg : MsgVal) : option (list byte) :=
+         match encode_message' m msg with
+         | Some bytes => Some ((encode_int $ Z.of_nat $ length bytes) ++ bytes)
+         | None => None
+         end.
+
+  Fail Definition encode_message (m : MsgDesc) (msg : MsgVal) : byte :=
+    match encode_message' m msg with
+    | Some enc => enc
+    | None => []
+    end.
   
 End Parse.
