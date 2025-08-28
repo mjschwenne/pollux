@@ -249,45 +249,67 @@ Module Parse.
   Definition find_nested_msg_desc (m : MsgDesc) (f : FieldVal) : option MsgDesc :=
     find_nested_md_f (msg_desc_get_fields m) f.
 
-  (* FIXME: Move to Descriptors.v and complete *)
-  Definition msg_eqb (m1 : MsgVal) (m2 : MsgVal) : bool := false.
+  (* NOTE I /really/ want to move encode_fields, encode_message and encode_messages to
+     mutually recursive functions via the `with` keyword. However, moving any of them
+     outside the body of encode_field causes an error about not knowing which argument
+     is the decreasing one. Annotating that Fixpoint with Program and a {struct f} field
+     lets Rocq accept the fixpoint, but it also generates some complex Obligations that
+     I'd rather not deal with. Given all that, I've elected to leave the functions
+     internal to encode_field. Proving correctness of this function will also be hard. *)
+  Fixpoint encode_field (m : MsgDesc) (f : FieldVal) : option (list byte) :=
+    match encode_header m (field_val_get_name f) with
+    | Some header => let header_bytes := Varint.encode header in
+                    let encode_fields := fun m' fs => fold_left opt_append_opt (map (encode_field m') fs)
+                                                     (Some header_bytes) in
+                    let encode_message := fun m' msg => encode_fields m' (msg_val_get_fields msg) in
+                    let encode_messages := fun m' ms => fold_left opt_append_opt (map (encode_message m') ms)
+                                                       (Some []) in
+                    match (field_val_get_val f) with
+                    | V_DOUBLE v => encode_deco_packed v f64_zero double_eqb encode_double header_bytes
+                    | V_FLOAT v => encode_deco_packed v f32_zero float_eqb encode_float header_bytes
+                    | V_INT v => match find_int_enc_one m (field_val_get_name f) with
+                                | Some enc_one => encode_deco_packed v 0%Z Z.eqb enc_one header_bytes
+                                | None => None
+                                end
+                    | V_BOOL v => encode_deco_packed v false eqb encode_bool header_bytes
+                    | V_STRING v => encode_deco_unpacked v EmptyString String.eqb encode_string header_bytes
+                    | V_BYTES v => encode_deco_unpacked v [] bytes_eqb encode_bytes header_bytes
+                    | V_MSG (V_IMPLICIT v)
+                    | V_MSG (V_OPTIONAL (Some v)) => match find_nested_msg_desc m f with
+                                                    | Some m' => encode_message m' v
+                                                    | None => None
+                                                    end
+                    | V_MSG (V_REPEATED (ms)) => match find_nested_msg_desc m f with
+                                                | Some m' => encode_messages m' ms
+                                                | None => None
+                                                end
+                    | _ => None
+                    end
+    | None => None
+    end.
 
-  Fixpoint encode_fields (m : MsgDesc) (fs : list FieldVal) : option (list byte) :=
-    let encode_field := (fix encode_field (m : MsgDesc) (f : FieldVal) {struct f} : option (list byte) := 
-                           match encode_header m (field_val_get_name f) with
-                           | Some header => let header_bytes := Varint.encode header in
-                                           let fs_helper := fun m' fs => fold_left opt_append_opt (map (encode_field m') fs) (Some header_bytes) in
-                                           match (field_val_get_val f) with
-                                           | V_DOUBLE v => encode_deco_packed v f64_zero double_eqb encode_double header_bytes
-                                           | V_FLOAT v => encode_deco_packed v f32_zero float_eqb encode_float header_bytes
-                                           | V_INT v => match find_int_enc_one m (field_val_get_name f) with
-                                                       | Some enc_one => encode_deco_packed v 0%Z Z.eqb enc_one header_bytes
-                                                       | None => None
-                                                       end
-                                           | V_BOOL v => encode_deco_packed v false eqb encode_bool header_bytes
-                                           | V_STRING v => encode_deco_unpacked v EmptyString String.eqb encode_string header_bytes
-                                           | V_BYTES v => encode_deco_unpacked v [] bytes_eqb encode_bytes header_bytes
-                                           | V_MSG (V_IMPLICIT (V_MESSAGE fs)) => match find_nested_msg_desc m f with
-                                                                                 | Some m' => fs_helper m' fs
-                                                                                 | None => None
-                                                                                 end
-                                           | V_MSG (V_OPTIONAL (Some (V_MESSAGE fs))) => match find_nested_msg_desc m f with
-                                                                                 | Some m' => fs_helper m' fs
-                                                                                 | None => None
-                                                                                 end
-                                           | V_MSG (V_REPEATED (ms)) => match find_nested_msg_desc m f with
-                                                                       | Some m' => fold_left opt_append_opt (map (fun msg => fs_helper m' (msg_val_get_fields msg)) ms) (Some [])
-                                                                       | None => None
-                                                                       end
-                                           | _ => None
-                                           end
-                           | None => None
-                           end
-                        ) in 
-    match fs with
-    | [] => None
-    | f :: [] => encode_field m f
-    | f :: fs' => opt_append_opt (encode_field m f) (encode_fields m fs')
+  Definition encode_message (m : MsgDesc) (msg : MsgVal) : option (list byte) :=
+    fold_left opt_append_opt (map (encode_field m) (msg_val_get_fields msg)) (Some []).
+
+  Definition tag_from_num (n : Z) : option Tag :=
+    match n with
+    | 0%Z => Some VARINT
+    | 1%Z => Some I64
+    | 2%Z => Some LEN
+    | 5%Z => Some I32
+    | _ => None
+    end.
+
+  Definition decode_header (enc : list byte) : option (Z * Tag * list byte) :=
+    match Varint.extract_varint enc with
+    | Some (header_bytes, bs) => let header : w64 := Varint.decode header_bytes in
+                                let fid : Z := uint.Z $ word.sru header (U64 3) in
+                                let tag_n : Z := uint.Z $ word.and header (U64 7) in
+                                match tag_from_num tag_n with
+                                | None => None
+                                | Some tag => Some (fid, tag, bs)
+                                end
+    | None => None
     end.
 
 End Parse.

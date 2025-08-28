@@ -5,7 +5,7 @@ From Pollux Require Import Descriptors.
 
 Module Varint.
 
-  Definition t := list w8.
+  Definition t := list byte.
 
   Fixpoint valid (v : t) : bool :=
     match v with
@@ -38,9 +38,21 @@ Module Varint.
                 word.or (word.slu rx (W64 7)) msx
     end.
 
+  Fixpoint extract_varint (bs : list byte) : option (t * list byte) :=
+    match bs with
+    | [] => None
+    | h :: tl => if word.ltu h (W8 128) then
+                  Some ([h], tl)
+                else
+                  match extract_varint tl with
+                  | Some (v, rest) => Some (h :: v, rest)
+                  | None => None
+                  end
+    end.
+
   Definition split (x:w64) (n:Z) : w64 * w64 := (word.srs x (W64 n), word.and x (W64 ((2^n) - 1))).
 
-  Fixpoint encode_fuel (fuel: nat) (x:w64) {struct fuel} : list w8 :=
+  Fixpoint encode_fuel (fuel: nat) (x:w64) : t :=
     let (hi, lo) := split x 7%Z in
     if word.ltu hi (W64 0) then
       [(W8 (uint.Z lo))]
