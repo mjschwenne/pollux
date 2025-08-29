@@ -2,6 +2,8 @@ From Pollux Require Import Prelude.
 From Perennial Require Import Helpers.Word.LittleEndian.
 From Stdlib Require Import Structures.Equalities.
 
+From Stdlib Require Import Program.Wf.
+
 From Pollux Require Import Descriptors.
 From Pollux Require Import Varint.
 
@@ -127,17 +129,52 @@ Module Parse.
     | None => false
     end.
 
+  Definition len_prefix (b : list byte) : list byte :=
+    let length := encode_int (Z.of_nat $ length b) in
+    length ++ b.
+
+  Definition len_prefix_opt (b : option (list byte)) : option (list byte) :=
+    match b with
+    | Some b => Some (len_prefix b)
+    | None => None
+    end.
+
+  Definition prefix_opt (pfx : list byte) (b : option (list byte)) : option (list byte) :=
+    match b with
+    | Some b => Some (pfx ++ b)
+    | None => None
+    end.
+
+  (* Add the length prefix, using a separate function for consistency *)
+  Definition encode_bytes := len_prefix.
+  Fixpoint bytes_eqb (b1 : list byte) (b2 : list byte) : bool :=
+    match b1, b2 with
+    | [], [] => true
+    | [], _ => false
+    | _, [] => false
+    | (h1 :: t1), (h2 :: t2) => if (word.eqb h1 h2) then
+                                 bytes_eqb t1 t2
+                               else
+                                 false
+    end.
+        
+  (* WARN looks like we may have lost native UTF-8 support,
+     although this blog post seems to suggest otherwise:
+
+     https://ju-sh.github.io/blog/coq-strings.html
+   *)
+  Definition encode_string (s : string) : list byte := len_prefix
+                                                         (* This collection of casts is ugly... *)
+                                                         (map (fun b => W8 (Z.of_nat $ Byte.to_nat b))
+                                                            (list_byte_of_string s)).
+
   (* Higher order encoding functions *)
   (* TODO is there a better way to handle decidable equality? I was honestly expecting
      that I would just need to restrict to a typeclass, but such a wide-spread type class
      doesn't seem to exist in the Core / Standard libraries... *)
   Definition encode_implicit {A: Type} (v : A) (d : A) (eq : A -> A -> bool) (enc : A -> list byte) :
     option (list byte) := 
-    if eq v d then None else Some (enc v).
-
-  Definition len_prefix (b : list byte) : list byte :=
-    let length := encode_int (Z.of_nat $ length b) in
-    length ++ b.
+    if eq v d then Some [] else Some (enc v).
 
   Definition encode_packed {A : Type} (l : list A) (enc_one : A -> list byte) : list byte :=
     len_prefix $ fold_left (++) (map enc_one l) [].
@@ -159,32 +196,13 @@ Module Parse.
                end
     end.
 
-  (* Add the length prefix, using a separate function for consistency *)
-  Definition encode_bytes := len_prefix.
-  Fixpoint bytes_eqb (b1 : list byte) (b2 : list byte) : bool :=
-    match b1, b2 with
-    | [], [] => true
-    | [], _ => false
-    | _, [] => false
-    | (h1 :: t1), (h2 :: t2) => if (word.eqb h1 h2) then
-                                 bytes_eqb t1 t2
-                               else
-                                 false
-    end.
-        
-  (* TODO looks like we lost native UTF-8 support. *)
-  Definition encode_string (s : string) : list byte := len_prefix
-                                                         (* This collection of casts is ugly... *)
-                                                         (map (fun b => W8 (Z.of_nat $ Byte.to_nat b))
-                                                            (list_byte_of_string s)).
-
   Definition encode_deco_packed {A : Type} (deco : DecoVal A) (def : A) (eq : A -> A -> bool)
     (enc_one : A -> list byte) (header : list byte) : option (list byte) :=
     match deco with
     | V_IMPLICIT v => encode_implicit v def eq enc_one
     | V_OPTIONAL (Some v) => Some (header ++ enc_one v)
     | V_REPEATED (vh :: vt) => Some (header ++ encode_packed (vh :: vt) enc_one)
-    | _ => None
+    | _ => Some []
     end.
 
   Definition encode_deco_unpacked {A : Type} (deco : DecoVal A) (def : A) (eq : A -> A -> bool)
@@ -229,9 +247,9 @@ Module Parse.
 
   Definition opt_append_opt {A : Type} (l1 : option (list A)) (l2 : option (list A)) : option (list A) :=
     match l1, l2 with 
-    | None, None 
-    | None, Some _
-    | Some _, None => None
+    | None, None => None
+    | None, Some l => Some l
+    | Some l, None => Some l
     | Some l1', Some l2' => Some (l1' ++ l2')
     end.
 
@@ -246,6 +264,7 @@ Module Parse.
                else
                  find_nested_md_f t f
     end.
+
   Definition find_nested_msg_desc (m : MsgDesc) (f : FieldVal) : option MsgDesc :=
     find_nested_md_f (msg_desc_get_fields m) f.
 
@@ -260,10 +279,11 @@ Module Parse.
     match encode_header m (field_val_get_name f) with
     | Some header => let header_bytes := Varint.encode header in
                     let encode_fields := fun m' fs => fold_left opt_append_opt (map (encode_field m') fs)
-                                                     (Some header_bytes) in
-                    let encode_message := fun m' msg => encode_fields m' (msg_val_get_fields msg) in
+                                                     None in
+                    let encode_message := fun m' msg => prefix_opt header_bytes $ len_prefix_opt $
+                                                       encode_fields m' (msg_val_get_fields msg) in
                     let encode_messages := fun m' ms => fold_left opt_append_opt (map (encode_message m') ms)
-                                                       (Some []) in
+                                                       None in
                     match (field_val_get_val f) with
                     | V_DOUBLE v => encode_deco_packed v f64_zero double_eqb encode_double header_bytes
                     | V_FLOAT v => encode_deco_packed v f32_zero float_eqb encode_float header_bytes
@@ -312,4 +332,329 @@ Module Parse.
     | None => None
     end.
 
+  Lemma decode_header_consume (enc : list byte) (fid : Z) (tag : Tag) (rest : list byte) :
+    decode_header enc = Some (fid, tag, rest) -> length rest < length enc.
+  Proof.
+    unfold decode_header.
+    destruct (Varint.extract_varint enc) as [Hexr |] eqn:Hex.
+    + destruct Hexr as [header_bytes bs].
+      pose proof (Varint.extract_varint_consume enc header_bytes bs).
+      apply H in Hex.
+      destruct (tag_from_num (uint.Z (word.and (Varint.decode header_bytes) (W64 7)))).
+      - intro Heq. inversion Heq. subst. apply Hex.
+      - discriminate.
+    + discriminate.
+  Qed.
+       
+  Definition find_field (m : MsgDesc) (id : nat) : option FieldDesc :=
+    (* Hide the recursion on the fields via a nested fix *)
+    let find_field := (fix find_field (fs : list FieldDesc) : option FieldDesc :=
+                         match fs with
+                         | [] => None
+                         | h :: t => if (Nat.eqb id $ field_desc_get_id h) then
+                                     Some h
+                                   else
+                                     find_field t
+                         end
+                      ) in
+    find_field (msg_desc_get_fields m).
+
+  (* Try to split the input list into a list with the n elements, then the rest.
+     Return None if there aren't n elements in the list. *)
+  Definition consume {A : Type} (n : nat) (l : list A) : option (list A * list A) :=
+    let prefix := take n l in
+    let suffix := drop n l in
+    if Nat.eqb n $ length prefix then
+      Some (prefix, suffix)
+    else
+      None.
+
+  Lemma consume_consume {A : Type} (n : nat) (l : list A) (p : list A) (s : list A) :
+    n > 0 -> consume n l = Some (p, s) -> length p = n /\ length s < length l.
+  Proof.
+    intros Hn.
+    unfold consume.
+    destruct (n =? length (take n l)) eqn:Hlen.
+    + apply Nat.eqb_eq in Hlen. intros Heq. inversion Heq. subst.
+      split.
+      - symmetry. apply Hlen.
+      - rewrite length_drop. symmetry in Hlen. apply Nat.sub_lt.
+        * rewrite length_take in Hlen. rewrite Nat.min_l_iff in Hlen. apply Hlen.
+        * done.
+    + discriminate.
+  Qed.
+
+  Definition decode_value (t : Tag) (enc : list byte) : option (list byte * list byte) :=
+    match t with
+    | VARINT => Varint.extract_varint enc
+    | I64 => consume 8 enc
+    | LEN => match Varint.extract_varint enc with
+            | Some (len_byt, enc_byt) => let len : nat := uint.nat (Varint.decode len_byt) in
+                                        if Nat.eqb 0 len then
+                                          Some ([], enc_byt)
+                                        else
+                                          consume len enc_byt
+            | None => None
+            end
+    | I32 => consume 4 enc
+    end.
+
+  Lemma decode_value_consume (t : Tag) (enc : list byte) (fenc : list byte) (rest : list byte) :
+    decode_value t enc = Some (fenc, rest) -> length rest < length enc.
+  Proof.
+    unfold decode_value.
+    destruct t.
+    + apply Varint.extract_varint_consume.
+    + apply consume_consume. lia.
+    + destruct (Varint.extract_varint enc) as [[len_byt enc_byt] |] eqn:Hex.
+      - destruct (0 =? uint.nat (Varint.decode len_byt)) eqn:Hlen.
+        * apply Varint.extract_varint_consume in Hex.
+          intro Heq. inversion Heq. subst. apply Hex.
+        * intro Hconsume. 
+          apply Varint.extract_varint_consume in Hex.
+          apply consume_consume in Hconsume as [_ Hconsume].
+          { lia. } { apply Nat.eqb_neq in Hlen. lia. }
+      - discriminate.
+    + apply consume_consume. lia.
+  Qed.
+
+  Definition decode_field (enc : list byte) : option (Z * list byte * list byte) :=
+    match decode_header enc with
+    | Some (fid, t, bs) => match decode_value t bs with
+                          | Some (v, b) => Some (fid, v, b)
+                          | None => None
+                          end
+    | None => None
+    end.
+
+  Lemma decode_field_consume (enc : list byte) (fid : Z) (field_enc : list byte) (rest_enc : list byte) :
+    decode_field enc = Some (fid, field_enc, rest_enc) -> length rest_enc < length enc.
+  Proof.
+    unfold decode_field.
+    destruct (decode_header enc) as [[[fid__h t__h] bs__h] |] eqn:Hhd.
+    + destruct (decode_value t__h bs__h) as [[v b] |] eqn:Hvl.
+      - apply decode_header_consume in Hhd. apply decode_value_consume in Hvl.
+        intro Heq. inversion Heq. subst. lia.
+      - discriminate.
+    + discriminate.
+  Qed.
+  
+  (* While deocde_field performs one chunk, this decodes until either
+     - The remaining bytes are empty
+     - Something fails to chunk. *)
+  Program Fixpoint decode_fields (enc : list byte) {measure (length enc)} :
+    option (list (Z * list byte) * list byte) :=
+    match enc with
+    | [] => None
+    | enc => match decode_field enc with
+            | Some (fid, fbs, bs) => match decode_fields bs with
+                                    | Some (rfs, rbyt) => Some ((fid, fbs) :: rfs, rbyt)
+                                    | None => Some ([(fid, fbs)], bs)
+                                    end
+            | None => None
+            end
+    end.
+  Next Obligation.
+    intros enc decode_fields enc' Henc_nonempty Hencenc Hcall fid fbs bs Hreturn.
+    subst. replace Hcall with (decode_field enc).
+    + symmetry in Hreturn. apply decode_field_consume in Hreturn.
+      apply Hreturn.
+    + easy.
+  Qed.
+  Next Obligation.
+    intros. replace enc with (w :: l).
+    + unfold not. intro Hcontra. discriminate.
+    + easy.
+  Qed.
+  Next Obligation.
+    apply measure_wf.
+    apply lt_wf.
+  Qed.
+
+  Fixpoint assemble_Z (enc : list byte) : Z :=
+    match enc with
+    | [] => 0
+    | h :: tl => (2^(uint.Z h) * assemble_Z tl) + (uint.Z h)
+    end.
+
+  Definition FieldParser (A : Type) := list byte -> option (A * list byte).
+
+  Definition consuming {A : Type} (f : FieldParser A) : Prop :=
+    forall enc a rest, f enc = Some (a, rest) -> length rest < length enc.
+
+  (* Probably not the best name, but it means that the function actually consumes bytes, so 🤷 *)
+  Class Hungry {A : Type} (f : FieldParser A) :=
+    {
+      consume_proof : consuming f
+    }.
+
+  Definition parse_double : FieldParser f64 :=
+    fun enc =>
+      match consume 8 enc with
+      | Some (byt, rest) => Some (b64_of_bits $ assemble_Z byt, rest)
+      | None => None
+      end.
+
+  Lemma double_consuming : consuming parse_double.
+  Proof.
+    unfold consuming.
+    intros enc a rest.
+    unfold parse_double.
+    destruct (consume 8 enc) as [[byt__c rest__c] |] eqn:Hconsume.
+    + intro Heq. inversion Heq. subst.
+      apply consume_consume in Hconsume as [_ Hlen].
+      * done.
+      * lia.
+    + discriminate.
+  Qed.
+
+  Instance double_hunary : Hungry parse_double := {| consume_proof := double_consuming |}.
+
+  Definition parse_float : FieldParser f32 :=
+    fun enc =>
+      match consume 4 enc with
+      | Some (byt, rest) => Some (b32_of_bits $ assemble_Z byt, rest)
+      | None => None
+      end.
+
+  Lemma float_consuming : consuming parse_float.
+  Proof.
+    unfold consuming.
+    intros enc a rest.
+    unfold parse_float.
+    destruct (consume 4 enc) as [[byt__c rest__c] |] eqn:Hconsume.
+    + intro Heq. inversion Heq. subst.
+      apply consume_consume in Hconsume as [_ Hlen].
+      * done.
+      * lia.
+    + discriminate.
+  Qed.
+
+  Instance float_hunary : Hungry parse_float := {| consume_proof := float_consuming |}.
+
+  Definition parse_int : Width -> FieldParser Z :=
+    fun w enc =>
+      match Varint.extract_varint enc with
+      | Some (vint, rest) => Some (uint_int w $ uint_change_w w $ uint.Z $ Varint.decode vint, rest)
+      | None => None
+      end.
+  
+  Definition parse_uint : Width -> FieldParser Z :=
+    fun w enc =>
+      match Varint.extract_varint enc with
+      | Some (vint, rest) => Some (uint_change_w w $ uint.Z $ Varint.decode vint, rest)
+      | None => None
+      end.
+
+  Definition parse_sint : Width -> FieldParser Z :=
+    fun w enc =>
+      match Varint.extract_varint enc with
+      | Some (vint, rest) => Some (uint_sint w $ uint_change_w w $ uint.Z $ Varint.decode vint, rest)
+      | None => None
+      end.
+  
+  Definition parse_fixed : Width -> FieldParser Z :=
+    fun w enc =>
+      match consume (Z.to_nat (unwrap_width w)) enc with
+      | Some (byt, rest) => Some (assemble_Z byt, rest)
+      | None => None
+      end.
+  
+  Definition parse_sfixed : Width -> FieldParser Z :=
+    fun w enc =>
+      match consume (Z.to_nat (unwrap_width w)) enc with
+      | Some (byt, rest) => Some (uint_int w $ assemble_Z byt, rest)
+      | None => None
+      end.
+
+  Definition parse_bool : FieldParser bool :=
+    fun enc =>
+      match enc with
+      | [] => None
+      | h :: tl => if word.eqb h (W8 0) then Some (false, tl) else Some (true, tl)
+      end.
+
+  Definition parse_string : FieldParser string :=
+    fun enc =>
+      match enc with
+      | [] => None
+      | bytes => Some (string_of_list_ascii (map Properties.u8_to_ascii bytes) , [])
+      end.
+
+  Definition parse_bytes : FieldParser (list byte) :=
+    fun enc =>
+      match enc with
+      | [] => None
+      | bytes => Some (bytes, [])
+      end.
+
+  Definition update_field {A : Type} (name : string) (ori_v : DecoVal A) (new_v : DecoVal A) : DecoVal A :=
+    match ori_v, new_v with
+    | V_IMPLICIT _, V_IMPLICIT v => V_IMPLICIT v
+    | V_OPTIONAL _, V_OPTIONAL v => V_OPTIONAL v
+    | V_REPEATED v', V_REPEATED v => V_REPEATED (v' ++ v)                                       
+    | _, _ => ori_v (* Incompatible update, should never happen *)
+    end.
+
+   Definition update_message (m : MsgVal) (name : string) (value : ValVal) : MsgVal :=
+    let update_fields := (fix update_fields (fs : list FieldVal) : list FieldVal :=
+                            match fs with
+                            | [] => []
+                            | (V_FIELD n v) :: tl => if String.eqb n name then
+                                                      (V_FIELD n (match v, value with
+                                                                  | V_DOUBLE orig, V_DOUBLE newv =>
+                                                                      V_DOUBLE (update_field n orig newv)
+                                                                  | V_FLOAT orig, V_FLOAT newv =>
+                                                                      V_FLOAT (update_field n orig newv)
+                                                                  | V_INT orig, V_INT newv =>
+                                                                      V_INT (update_field n orig newv)
+                                                                  | V_BOOL orig, V_BOOL newv =>
+                                                                      V_BOOL (update_field n orig newv)
+                                                                  | V_STRING orig, V_STRING newv =>
+                                                                      V_STRING (update_field n orig newv)
+                                                                  | V_BYTES orig, V_BYTES newv =>
+                                                                      V_BYTES (update_field n orig newv)
+                                                                  | V_MSG orig, V_MSG newv =>
+                                                                      V_MSG (update_field n orig newv)
+                                                                  | V_ENUM orig, V_ENUM newv =>
+                                                                      V_ENUM (update_field n orig newv)
+                                                                  | _, _ => v
+                                                                  end) :: tl)
+                                                    else
+                                                      (V_FIELD n v) :: update_fields tl
+                            end) in
+    V_MESSAGE (update_fields (msg_val_get_fields m)).
+        
+   Program Fixpoint parse_list {A : Type} (payload : list byte) (parse_one : FieldParser A)
+     `{Hungry A parse_one} {measure (length payload)} : option (list A) :=
+     match parse_one payload with
+     | Some (a, bs) => match bs with
+                      | [] => Some [a]
+                      | bs => match parse_list bs parse_one with
+                             | Some r => Some (a :: r)
+                             | None => None
+                             end
+                      end
+     | None => None
+     end.
+
+   Next Obligation.
+    intros A payload parse_one Hhungry parse_list Hp1 one rest Hp1_ret bs Hbs_nemp Heq_bs.
+    subst. symmetry in Hp1_ret. replace Hp1 with (parse_one payload) in Hp1_ret.
+    + apply (@consume_proof A parse_one) in Hhungry.
+      unfold consuming in Hhungry.
+      pose proof (Hhungry payload one rest) as Hhungry.
+      apply Hhungry in Hp1_ret. done.
+    + easy.
+   Qed.
+   Next Obligation.
+    intros. replace bs with (w :: l).
+    + unfold not. intro Hcontra. discriminate.
+    + easy.
+   Qed.
+   Next Obligation.
+    apply measure_wf.
+    apply lt_wf.
+   Qed.
+                                           
 End Parse.

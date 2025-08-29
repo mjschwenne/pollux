@@ -50,6 +50,28 @@ Module Varint.
                   end
     end.
 
+  Lemma extract_varint_consume :
+    forall (bs : list byte) (vint : t) (rest : list byte),
+    extract_varint bs = Some (vint, rest) -> length rest < length bs.
+  Proof.
+    intros bs.
+    induction bs as [| w tl HI].
+    + intros vint rest Hcontra. discriminate.
+    + intros vint rest. simpl. 
+      destruct (word.ltu w (W8 128)).
+      - intro Heq. inversion Heq.
+        apply Nat.lt_succ_diag_r. 
+      - destruct (extract_varint tl).
+        * destruct p as [v rest0].
+          intro Hrecurse. inversion Hrecurse. subst.
+          pose proof (HI v rest) as Hcall.
+          assert (Some (v, rest) = Some (v, rest)) as Hlt; first reflexivity.
+          apply Hcall in Hlt.
+          apply Nat.lt_lt_succ_r in Hlt.
+          apply Hlt.
+        * intro Hcontra. discriminate.
+  Qed.      
+
   Definition split (x:w64) (n:Z) : w64 * w64 := (word.srs x (W64 n), word.and x (W64 ((2^n) - 1))).
 
   Fixpoint encode_fuel (fuel: nat) (x:w64) : t :=
