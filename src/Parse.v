@@ -538,6 +538,20 @@ Module Parse.
       | Some (vint, rest) => Some (uint_int w $ uint_change_w w $ uint.Z $ Varint.decode vint, rest)
       | None => None
       end.
+
+  Lemma int_consuming (w : Width) : consuming (parse_int w).
+  Proof.
+    unfold consuming.
+    intros enc a rest.
+    unfold parse_int.
+    destruct (Varint.extract_varint enc) as [[vint rest__b] |] eqn:Hconsume.
+    + intro Heq. inversion Heq. subst.
+      apply Varint.extract_varint_consume in Hconsume.
+      done.
+    + discriminate.
+  Qed.
+
+  Instance int_hungry (w : Width) : Hungry (parse_int w) := {| consume_proof := int_consuming w |}.
   
   Definition parse_uint : Width -> FieldParser Z :=
     fun w enc =>
@@ -546,6 +560,20 @@ Module Parse.
       | None => None
       end.
 
+  Lemma uint_consuming (w : Width) : consuming (parse_uint w).
+  Proof.
+    unfold consuming.
+    intros enc a rest.
+    unfold parse_uint.
+    destruct (Varint.extract_varint enc) as [[vint rest__b] |] eqn:Hconsume.
+    + intro Heq. inversion Heq. subst.
+      apply Varint.extract_varint_consume in Hconsume.
+      done.
+    + discriminate.
+  Qed.
+
+  Instance uint_hungry (w : Width) : Hungry (parse_uint w) := {| consume_proof := uint_consuming w |}.
+
   Definition parse_sint : Width -> FieldParser Z :=
     fun w enc =>
       match Varint.extract_varint enc with
@@ -553,12 +581,41 @@ Module Parse.
       | None => None
       end.
   
+  Lemma sint_consuming (w : Width) : consuming (parse_sint w).
+  Proof.
+    unfold consuming.
+    intros enc a rest.
+    unfold parse_sint.
+    destruct (Varint.extract_varint enc) as [[vint rest__b] |] eqn:Hconsume.
+    + intro Heq. inversion Heq. subst.
+      apply Varint.extract_varint_consume in Hconsume.
+      done.
+    + discriminate.
+  Qed.
+
+  Instance sint_hungry (w : Width) : Hungry (parse_sint w) := {| consume_proof := sint_consuming w |}.
+
   Definition parse_fixed : Width -> FieldParser Z :=
     fun w enc =>
       match consume (Z.to_nat (unwrap_width w)) enc with
       | Some (byt, rest) => Some (assemble_Z byt, rest)
       | None => None
       end.
+
+  Lemma fixed_consuming (w : Width) : consuming (parse_fixed w).
+  Proof.
+    unfold consuming.
+    intros enc a rest.
+    unfold parse_fixed.
+    destruct (consume (Z.to_nat (unwrap_width w)) enc) as [[byt__c rest__c] |] eqn:Hconsume.
+    + intro Heq. inversion Heq. subst.
+      apply consume_consume in Hconsume as [_ Hlen].
+      * done.
+      * destruct w. unfold WidthProp in w. simpl. lia.
+    + discriminate.
+  Qed.
+  
+  Instance fixed_hungry (w : Width) : Hungry (parse_fixed w) := {| consume_proof := fixed_consuming w |}.
   
   Definition parse_sfixed : Width -> FieldParser Z :=
     fun w enc =>
@@ -567,12 +624,41 @@ Module Parse.
       | None => None
       end.
 
+  Lemma sfixed_consuming (w : Width) : consuming (parse_sfixed w).
+  Proof.
+    unfold consuming.
+    intros enc a rest.
+    unfold parse_sfixed.
+    destruct (consume (Z.to_nat (unwrap_width w)) enc) as [[byt__c rest__c] |] eqn:Hconsume.
+    + intro Heq. inversion Heq. subst.
+      apply consume_consume in Hconsume as [_ Hlen].
+      * done.
+      * destruct w. unfold WidthProp in w. simpl. lia.
+    + discriminate.
+  Qed.
+  
+  Instance sfixed_hungry (w : Width) : Hungry (parse_sfixed w) := {| consume_proof := sfixed_consuming w |}.
+
   Definition parse_bool : FieldParser bool :=
     fun enc =>
       match enc with
       | [] => None
       | h :: tl => if word.eqb h (W8 0) then Some (false, tl) else Some (true, tl)
       end.
+
+  Lemma bool_consuming : consuming parse_bool.
+  Proof.
+    unfold consuming.
+    intros enc a rest.
+    unfold parse_bool.
+    destruct enc.
+    + discriminate.
+    + destruct (word.eqb w (W8 0)).
+      * intros Heq. inversion Heq. subst. simpl. lia.
+      * intros Heq. inversion Heq. subst. simpl. lia.
+  Qed.
+
+  Instance bool_hungry : Hungry parse_bool := {| consume_proof := bool_consuming |}.
 
   Definition parse_string : FieldParser string :=
     fun enc =>
@@ -581,12 +667,36 @@ Module Parse.
       | bytes => Some (string_of_list_ascii (map Properties.u8_to_ascii bytes) , [])
       end.
 
+  Lemma string_consuming : consuming parse_string.
+  Proof.
+    unfold consuming.
+    intros enc a rest.
+    unfold parse_string.
+    destruct enc.
+    + discriminate.
+    + intros Heq. inversion Heq. subst. simpl. lia.
+  Qed.
+
+  Instance string_hungry : Hungry parse_string := {| consume_proof := string_consuming |}.
+
   Definition parse_bytes : FieldParser (list byte) :=
     fun enc =>
       match enc with
       | [] => None
       | bytes => Some (bytes, [])
       end.
+
+  Lemma bytes_consuming : consuming parse_bytes.
+  Proof.
+    unfold consuming.
+    intros enc a rest.
+    unfold parse_bytes.
+    destruct enc.
+    + discriminate.
+    + intros Heq. inversion Heq. subst. simpl. lia.
+  Qed.
+
+  Instance bytes_hungry : Hungry parse_bytes := {| consume_proof := bytes_consuming |}.
 
   Definition update_field {A : Type} (name : string) (ori_v : DecoVal A) (new_v : DecoVal A) : DecoVal A :=
     match ori_v, new_v with
