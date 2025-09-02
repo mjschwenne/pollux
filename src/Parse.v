@@ -346,12 +346,12 @@ Module Parse.
     + discriminate.
   Qed.
        
-  Definition find_field (m : MsgDesc) (id : nat) : option FieldDesc :=
+  Definition find_field (m : MsgDesc) (id : Z) : option FieldDesc :=
     (* Hide the recursion on the fields via a nested fix *)
     let find_field := (fix find_field (fs : list FieldDesc) : option FieldDesc :=
                          match fs with
                          | [] => None
-                         | h :: t => if (Nat.eqb id $ field_desc_get_id h) then
+                         | h :: t => if (Nat.eqb (Z.to_nat id) $ field_desc_get_id h) then
                                      Some h
                                    else
                                      find_field t
@@ -735,12 +735,12 @@ Module Parse.
                             end) in
     V_MESSAGE (update_fields (msg_val_get_fields m)).
         
-   Program Fixpoint parse_list {A : Type} (payload : list byte) (parse_one : FieldParser A)
+   Program Fixpoint parse_packed {A : Type} (payload : list byte) (parse_one : FieldParser A)
      `{Hungry A parse_one} {measure (length payload)} : option (list A) :=
      match parse_one payload with
      | Some (a, bs) => match bs with
                       | [] => Some [a]
-                      | bs => match parse_list bs parse_one with
+                      | bs => match parse_packed bs parse_one with
                              | Some r => Some (a :: r)
                              | None => None
                              end
@@ -749,7 +749,7 @@ Module Parse.
      end.
 
    Next Obligation.
-    intros A payload parse_one Hhungry parse_list Hp1 one rest Hp1_ret bs Hbs_nemp Heq_bs.
+    intros A payload parse_one Hhungry parse_packed Hp1 one rest Hp1_ret bs Hbs_nemp Heq_bs.
     subst. symmetry in Hp1_ret. replace Hp1 with (parse_one payload) in Hp1_ret.
     + apply (@consume_proof A parse_one) in Hhungry.
       unfold consuming in Hhungry.
@@ -766,5 +766,127 @@ Module Parse.
     apply measure_wf.
     apply lt_wf.
    Qed.
-                                           
+
+   Definition parse_deco {A : Type} (deco : DecoDesc) (payload : list byte) (parse_one : FieldParser A)
+     `{Hungry A parse_one} : option (DecoVal A) :=
+     match deco with
+     | D_IMPLICIT => match parse_one payload with
+                    | Some (one, _) => Some (V_IMPLICIT one)
+                    | None => None
+                    end
+     | D_OPTIONAL => match parse_one payload with
+                    | Some (one, _) => Some (V_OPTIONAL (Some one))
+                    | None => None
+                    end
+     | D_REPEATED => match parse_packed payload parse_one with
+                    | Some many => Some (V_REPEATED many)
+                    | None => None
+                    end
+     end.
+
+   Definition update_message__t (m : MsgVal) (f__new : FieldVal) : MsgVal :=
+    let update_fields := (fix update_fields (fs : list FieldVal) : list FieldVal :=
+                            match fs with
+                            | [] => []
+                            | (V_FIELD n v) :: tl => if String.eqb n (field_val_get_name f__new) then
+                                                      (V_FIELD n (match v, (field_val_get_val f__new) with
+                                                                  | V_DOUBLE orig, V_DOUBLE newv =>
+                                                                      V_DOUBLE (update_field n orig newv)
+                                                                  | V_FLOAT orig, V_FLOAT newv =>
+                                                                      V_FLOAT (update_field n orig newv)
+                                                                  | V_INT orig, V_INT newv =>
+                                                                      V_INT (update_field n orig newv)
+                                                                  | V_BOOL orig, V_BOOL newv =>
+                                                                      V_BOOL (update_field n orig newv)
+                                                                  | V_STRING orig, V_STRING newv =>
+                                                                      V_STRING (update_field n orig newv)
+                                                                  | V_BYTES orig, V_BYTES newv =>
+                                                                      V_BYTES (update_field n orig newv)
+                                                                  | V_MSG orig, V_MSG newv =>
+                                                                      V_MSG (update_field n orig newv)
+                                                                  | V_ENUM orig, V_ENUM newv =>
+                                                                      V_ENUM (update_field n orig newv)
+                                                                  | _, _ => v
+                                                                  end) :: tl)
+                                                    else
+                                                      (V_FIELD n v) :: update_fields tl
+                            end) in
+    V_MESSAGE (update_fields (msg_val_get_fields m)).
+
+   Program Fixpoint parse_message__t (m: MsgDesc) (msg: option MsgVal) (enc: list byte) {measure (length enc)} : option (MsgVal * list byte) :=
+     match parse_field__t m enc with
+     | Some (fv, rest) => match msg with
+                         | Some msg => parse_message__t m (Some (update_message__t msg fv)) rest
+                         | None => None
+                         end
+     | None => None
+     end
+   with
+     parse_field__t (m : MsgDesc) (enc : list byte) : option (FieldVal * list byte) :=
+       match decode_field enc with
+       | Some (fid, payload, rest) =>
+           match find_field m fid with
+           | Some (D_FIELD name fid vdesc) =>
+               match vdesc with
+               | D_DOUBLE dd =>
+                   match parse_deco dd payload parse_double with
+                   | Some vdeco => Some (V_FIELD name (V_DOUBLE vdeco), rest)
+                   | None => None
+                   end
+               | D_FLOAT dd =>
+                   match parse_deco dd payload parse_float with
+                   | Some vdeco => Some (V_FIELD name (V_FLOAT vdeco), rest)
+                   | None => None
+                   end
+               | D_MSG md dd =>
+                   let parser := parse_message__t md (Some (init_msg md)) in
+                   (* FIXME: without the measure annotation, this call works but after all the obligations,
+                      rocq complains about not knowing the decreasing argument. With the measure annotation,
+                      I get that parser has the wrong type, namely that it has type
+
+                      parser := parse_message__t md (Some (init_msg md)) :
+                        ∀ enc : list w8, length enc < length Heq_vdesc → option (MsgVal * list w8)
+
+                      Which is not `list byte → option (MsgVal * list w8)`
+
+                      This below statement seems to let me introduce a type class constraint, but
+                      I expect to need to prove it as an Obligation, but it never comes up...
+                    *)
+                   let _ : Hungry parser := _ in
+                   match parse_deco dd payload parser with
+                   | Some vdeco => Some (V_FIELD name (V_MSG vdeco), rest)
+                   | None => None
+                   end
+               | _ => None
+               end
+           | None => None
+           end
+       | None => None
+       end
+   .
+   
+   Next Obligation.
+   Admitted.
+   Next Obligation.
+   Admitted.
+   Next Obligation.
+   Admitted.
+   Next Obligation.
+   Admitted.
+   Next Obligation.
+   Admitted.
+   Next Obligation.
+   Admitted.
+   Next Obligation.
+   Admitted.
+   Next Obligation.
+   Admitted.
+   Next Obligation.
+   Admitted.
+   Next Obligation.
+     intros. replace wildcard' with (D_ENUM d).
+     * done.
+     * done.
+    Admitted.
+   
 End Parse.
