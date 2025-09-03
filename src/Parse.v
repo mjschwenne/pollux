@@ -784,109 +784,189 @@ Module Parse.
                     end
      end.
 
-   Definition update_message__t (m : MsgVal) (f__new : FieldVal) : MsgVal :=
-    let update_fields := (fix update_fields (fs : list FieldVal) : list FieldVal :=
-                            match fs with
-                            | [] => []
-                            | (V_FIELD n v) :: tl => if String.eqb n (field_val_get_name f__new) then
-                                                      (V_FIELD n (match v, (field_val_get_val f__new) with
-                                                                  | V_DOUBLE orig, V_DOUBLE newv =>
-                                                                      V_DOUBLE (update_field n orig newv)
-                                                                  | V_FLOAT orig, V_FLOAT newv =>
-                                                                      V_FLOAT (update_field n orig newv)
-                                                                  | V_INT orig, V_INT newv =>
-                                                                      V_INT (update_field n orig newv)
-                                                                  | V_BOOL orig, V_BOOL newv =>
-                                                                      V_BOOL (update_field n orig newv)
-                                                                  | V_STRING orig, V_STRING newv =>
-                                                                      V_STRING (update_field n orig newv)
-                                                                  | V_BYTES orig, V_BYTES newv =>
-                                                                      V_BYTES (update_field n orig newv)
-                                                                  | V_MSG orig, V_MSG newv =>
-                                                                      V_MSG (update_field n orig newv)
-                                                                  | V_ENUM orig, V_ENUM newv =>
-                                                                      V_ENUM (update_field n orig newv)
-                                                                  | _, _ => v
-                                                                  end) :: tl)
-                                                    else
-                                                      (V_FIELD n v) :: update_fields tl
-                            end) in
-    V_MESSAGE (update_fields (msg_val_get_fields m)).
-
-   Program Fixpoint parse_message__t (m: MsgDesc) (msg: option MsgVal) (enc: list byte) {measure (length enc)} : option (MsgVal * list byte) :=
-     match parse_field__t m enc with
-     | Some (fv, rest) => match msg with
-                         | Some msg => parse_message__t m (Some (update_message__t msg fv)) rest
+   Program Fixpoint parse_message__t (m: MsgDesc) (msg: option MsgVal) (enc: list byte) {measure (length enc)} :
+     option (MsgVal * list byte) :=
+     match msg with
+     | Some msg => match decode_field enc with
+                         | Some (fid, payload, rest) =>
+                             match find_field m fid with
+                             | Some (D_FIELD name fid vdesc) =>
+                                 match vdesc with
+                                 | D_DOUBLE dd =>
+                                     match parse_deco dd payload parse_double with
+                                     | Some vdeco =>
+                                         parse_message__t m (Some
+                                                             (update_message msg name (V_DOUBLE vdeco))) rest
+                                     | None => None
+                                     end
+                                 | D_FLOAT dd =>
+                                     match parse_deco dd payload parse_float with
+                                     | Some vdeco =>
+                                         parse_message__t m (Some
+                                                             (update_message msg name (V_FLOAT vdeco))) rest
+                                     | None => None
+                                     end
+                                 | D_INT w dd =>
+                                     match parse_deco dd payload (parse_int w) with
+                                     | Some vdeco =>
+                                         parse_message__t m (Some
+                                                             (update_message msg name (V_INT vdeco))) rest
+                                     | None => None
+                                     end
+                                 | D_UINT w dd =>
+                                     match parse_deco dd payload (parse_uint w) with
+                                     | Some vdeco =>
+                                         parse_message__t m (Some
+                                                             (update_message msg name (V_INT vdeco))) rest
+                                     | None => None
+                                     end
+                                 | D_SINT w dd =>
+                                     match parse_deco dd payload (parse_sint w) with
+                                     | Some vdeco =>
+                                         parse_message__t m (Some
+                                                             (update_message msg name (V_INT vdeco))) rest
+                                     | None => None
+                                     end
+                                 | D_FIXED w dd =>
+                                     match parse_deco dd payload (parse_fixed w) with
+                                     | Some vdeco =>
+                                         parse_message__t m (Some
+                                                             (update_message msg name (V_INT vdeco))) rest
+                                     | None => None
+                                     end
+                                 | D_SFIXED w dd =>
+                                     match parse_deco dd payload (parse_sfixed w) with
+                                     | Some vdeco =>
+                                         parse_message__t m (Some
+                                                             (update_message msg name (V_INT vdeco))) rest
+                                     | None => None
+                                     end
+                                 | D_BOOL dd =>
+                                     match parse_deco dd payload parse_bool with
+                                     | Some vdeco =>
+                                         parse_message__t m (Some
+                                                             (update_message msg name (V_BOOL vdeco))) rest
+                                     | None => None
+                                     end
+                                 | D_STRING dd =>
+                                     match parse_deco dd payload parse_string with
+                                     | Some vdeco =>
+                                         parse_message__t m (Some
+                                                             (update_message msg name (V_STRING vdeco))) rest
+                                     | None => None
+                                     end
+                                 | D_BYTES dd =>
+                                     match parse_deco dd payload parse_bytes with
+                                     | Some vdeco =>
+                                         parse_message__t m (Some
+                                                             (update_message msg name (V_BYTES vdeco))) rest
+                                     | None => None
+                                     end
+                                 | D_MSG md dd =>
+                                     match dd, parse_message__t md (Some (init_msg md)) rest with
+                                     | _, None => None
+                                     | D_IMPLICIT, Some (msg, _) =>
+                                         parse_message__t m
+                                           (Some (update_message msg name
+                                                    (V_MSG (V_IMPLICIT msg)))) rest
+                                     | D_OPTIONAL, Some (msg, _) =>
+                                         parse_message__t m
+                                           (Some (update_message msg name
+                                                    (V_MSG (V_OPTIONAL (Some msg))))) rest
+                                     | D_REPEATED, Some (msg, _) =>
+                                         parse_message__t m
+                                           (Some (update_message msg name
+                                                    (V_MSG (V_REPEATED [msg])))) rest
+                                     end
+                                 (* TODO parse enums *)
+                                 | D_ENUM _  => None
+                                 end
+                             | None => None
+                             end
                          | None => None
                          end
      | None => None
-     end
-   with
-     parse_field__t (m : MsgDesc) (enc : list byte) : option (FieldVal * list byte) :=
-       match decode_field enc with
-       | Some (fid, payload, rest) =>
-           match find_field m fid with
-           | Some (D_FIELD name fid vdesc) =>
-               match vdesc with
-               | D_DOUBLE dd =>
-                   match parse_deco dd payload parse_double with
-                   | Some vdeco => Some (V_FIELD name (V_DOUBLE vdeco), rest)
-                   | None => None
-                   end
-               | D_FLOAT dd =>
-                   match parse_deco dd payload parse_float with
-                   | Some vdeco => Some (V_FIELD name (V_FLOAT vdeco), rest)
-                   | None => None
-                   end
-               | D_MSG md dd =>
-                   let parser := parse_message__t md (Some (init_msg md)) in
-                   (* FIXME: without the measure annotation, this call works but after all the obligations,
-                      rocq complains about not knowing the decreasing argument. With the measure annotation,
-                      I get that parser has the wrong type, namely that it has type
-
-                      parser := parse_message__t md (Some (init_msg md)) :
-                        ∀ enc : list w8, length enc < length Heq_vdesc → option (MsgVal * list w8)
-
-                      Which is not `list byte → option (MsgVal * list w8)`
-
-                      This below statement seems to let me introduce a type class constraint, but
-                      I expect to need to prove it as an Obligation, but it never comes up...
-                    *)
-                   let _ : Hungry parser := _ in
-                   match parse_deco dd payload parser with
-                   | Some vdeco => Some (V_FIELD name (V_MSG vdeco), rest)
-                   | None => None
-                   end
-               | _ => None
-               end
-           | None => None
-           end
-       | None => None
-       end
-   .
+     end.
    
    Next Obligation.
-   Admitted.
+     intros m msg' enc parse_message msg Hmsg_eq decode_field__c fid' payload rest decode_field__r
+       find_field__c name fid vdesc find_field__r dd Heq_vdesc parse_deco__c vdeco Heq_vdeco. subst.
+     symmetry in decode_field__r. replace decode_field__c with (decode_field enc) in decode_field__r.
+     * apply decode_field_consume in decode_field__r. done.
+     * easy.
+   Qed.
    Next Obligation.
-   Admitted.
+     intros. symmetry in Heq_anonymous0. replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     * apply decode_field_consume in Heq_anonymous0. done.
+     * easy.
+   Qed.
    Next Obligation.
-   Admitted.
+     intros. symmetry in Heq_anonymous0. replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     * apply decode_field_consume in Heq_anonymous0. done.
+     * easy.
+   Qed.
    Next Obligation.
-   Admitted.
+     intros. clear filtered_var Heq_anonymous. symmetry in Heq_anonymous0. replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     * apply decode_field_consume in Heq_anonymous0. done.
+     * easy.
+   Qed.
    Next Obligation.
-   Admitted.
+     intros. clear filtered_var Heq_anonymous. symmetry in Heq_anonymous0. replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     * apply decode_field_consume in Heq_anonymous0. done.
+     * easy.
+   Qed.
    Next Obligation.
-   Admitted.
+     intros. clear filtered_var Heq_anonymous. symmetry in Heq_anonymous0.
+     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     * apply decode_field_consume in Heq_anonymous0. done.
+     * easy.
+   Qed.
    Next Obligation.
-   Admitted.
+     intros. symmetry in Heq_anonymous0. replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     * apply decode_field_consume in Heq_anonymous0. done.
+     * easy.
+   Qed.
    Next Obligation.
-   Admitted.
+     intros. symmetry in Heq_anonymous0. replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     * apply decode_field_consume in Heq_anonymous0. done.
+     * easy.
+   Qed.
    Next Obligation.
-   Admitted.
+     intros. symmetry in Heq_anonymous0. replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     * apply decode_field_consume in Heq_anonymous0. done.
+     * easy.
+   Qed.
    Next Obligation.
-     intros. replace wildcard' with (D_ENUM d).
-     * done.
-     * done.
-    Admitted.
-   
+     intros. symmetry in Heq_anonymous0. replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     * apply decode_field_consume in Heq_anonymous0. done.
+     * easy.
+   Qed.
+   Next Obligation.
+     intros. symmetry in Heq_anonymous0. replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     * apply decode_field_consume in Heq_anonymous0. done.
+     * easy.
+   Qed.
+   Next Obligation.
+     intros. clear filtered_var Heq_anonymous. symmetry in Heq_anonymous0.
+     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     * apply decode_field_consume in Heq_anonymous0. done.
+     * easy.
+   Qed.
+   Next Obligation.
+     intros. clear filtered_var Heq_anonymous. symmetry in Heq_anonymous0.
+     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     * apply decode_field_consume in Heq_anonymous0. done.
+     * easy.
+   Qed.
+   Next Obligation.
+     intros. clear filtered_var Heq_anonymous. symmetry in Heq_anonymous0.
+     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     * apply decode_field_consume in Heq_anonymous0. done.
+     * easy.
+   Qed.
+   Next Obligation.
+     apply measure_wf.
+     apply lt_wf.
+   Qed.
+
 End Parse.
