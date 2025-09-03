@@ -3,6 +3,8 @@ From Perennial Require Import Helpers.Word.LittleEndian.
 From Stdlib Require Import Structures.Equalities.
 
 From Stdlib Require Import Program.Wf.
+From Stdlib Require Import FunInd.
+From Stdlib Require Import Recdef.
 
 From Pollux Require Import Descriptors.
 From Pollux Require Import Varint.
@@ -784,7 +786,9 @@ Module Parse.
                     end
      end.
 
-   Program Fixpoint parse_message__t (m: MsgDesc) (msg: option MsgVal) (enc: list byte) {measure (length enc)} :
+
+   (* Function parse_message' (m: MsgDesc) (msg: option MsgVal) (enc: list byte) {measure length enc}: *)
+   Program Fixpoint parse_message' (m: MsgDesc) (msg: option MsgVal) (enc: list byte) {measure (length enc)}:
      option (MsgVal * list byte) :=
      match msg with
      | Some msg => match decode_field enc with
@@ -795,86 +799,86 @@ Module Parse.
                                  | D_DOUBLE dd =>
                                      match parse_deco dd payload parse_double with
                                      | Some vdeco =>
-                                         parse_message__t m (Some
+                                         parse_message' m (Some
                                                              (update_message msg name (V_DOUBLE vdeco))) rest
                                      | None => None
                                      end
                                  | D_FLOAT dd =>
                                      match parse_deco dd payload parse_float with
                                      | Some vdeco =>
-                                         parse_message__t m (Some
+                                         parse_message' m (Some
                                                              (update_message msg name (V_FLOAT vdeco))) rest
                                      | None => None
                                      end
                                  | D_INT w dd =>
                                      match parse_deco dd payload (parse_int w) with
                                      | Some vdeco =>
-                                         parse_message__t m (Some
+                                         parse_message' m (Some
                                                              (update_message msg name (V_INT vdeco))) rest
                                      | None => None
                                      end
                                  | D_UINT w dd =>
                                      match parse_deco dd payload (parse_uint w) with
                                      | Some vdeco =>
-                                         parse_message__t m (Some
+                                         parse_message' m (Some
                                                              (update_message msg name (V_INT vdeco))) rest
                                      | None => None
                                      end
                                  | D_SINT w dd =>
                                      match parse_deco dd payload (parse_sint w) with
                                      | Some vdeco =>
-                                         parse_message__t m (Some
+                                         parse_message' m (Some
                                                              (update_message msg name (V_INT vdeco))) rest
                                      | None => None
                                      end
                                  | D_FIXED w dd =>
                                      match parse_deco dd payload (parse_fixed w) with
                                      | Some vdeco =>
-                                         parse_message__t m (Some
+                                         parse_message' m (Some
                                                              (update_message msg name (V_INT vdeco))) rest
                                      | None => None
                                      end
                                  | D_SFIXED w dd =>
                                      match parse_deco dd payload (parse_sfixed w) with
                                      | Some vdeco =>
-                                         parse_message__t m (Some
+                                         parse_message' m (Some
                                                              (update_message msg name (V_INT vdeco))) rest
                                      | None => None
                                      end
                                  | D_BOOL dd =>
                                      match parse_deco dd payload parse_bool with
                                      | Some vdeco =>
-                                         parse_message__t m (Some
+                                         parse_message' m (Some
                                                              (update_message msg name (V_BOOL vdeco))) rest
                                      | None => None
                                      end
                                  | D_STRING dd =>
                                      match parse_deco dd payload parse_string with
                                      | Some vdeco =>
-                                         parse_message__t m (Some
+                                         parse_message' m (Some
                                                              (update_message msg name (V_STRING vdeco))) rest
                                      | None => None
                                      end
                                  | D_BYTES dd =>
                                      match parse_deco dd payload parse_bytes with
                                      | Some vdeco =>
-                                         parse_message__t m (Some
+                                         parse_message' m (Some
                                                              (update_message msg name (V_BYTES vdeco))) rest
                                      | None => None
                                      end
                                  | D_MSG md dd =>
-                                     match dd, parse_message__t md (Some (init_msg md)) rest with
+                                     match dd, parse_message' md (Some (init_msg md)) rest with
                                      | _, None => None
                                      | D_IMPLICIT, Some (msg, _) =>
-                                         parse_message__t m
+                                         parse_message' m
                                            (Some (update_message msg name
                                                     (V_MSG (V_IMPLICIT msg)))) rest
                                      | D_OPTIONAL, Some (msg, _) =>
-                                         parse_message__t m
+                                         parse_message' m
                                            (Some (update_message msg name
                                                     (V_MSG (V_OPTIONAL (Some msg))))) rest
                                      | D_REPEATED, Some (msg, _) =>
-                                         parse_message__t m
+                                         parse_message' m
                                            (Some (update_message msg name
                                                     (V_MSG (V_REPEATED [msg])))) rest
                                      end
@@ -887,31 +891,15 @@ Module Parse.
                          end
      | None => None
      end.
-   
    Next Obligation.
-     intros m msg' enc parse_message msg Hmsg_eq decode_field__c fid' payload rest decode_field__r
-       find_field__c name fid vdesc find_field__r dd Heq_vdesc parse_deco__c vdeco Heq_vdeco. subst.
-     symmetry in decode_field__r. replace decode_field__c with (decode_field enc) in decode_field__r.
-     * apply decode_field_consume in decode_field__r. done.
-     * easy.
-   Qed.
-   Next Obligation.
-     intros. symmetry in Heq_anonymous0. replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     intros. symmetry in Heq_anonymous0.
+     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
      * apply decode_field_consume in Heq_anonymous0. done.
      * easy.
    Qed.
    Next Obligation.
-     intros. symmetry in Heq_anonymous0. replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
-     * apply decode_field_consume in Heq_anonymous0. done.
-     * easy.
-   Qed.
-   Next Obligation.
-     intros. clear filtered_var Heq_anonymous. symmetry in Heq_anonymous0. replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
-     * apply decode_field_consume in Heq_anonymous0. done.
-     * easy.
-   Qed.
-   Next Obligation.
-     intros. clear filtered_var Heq_anonymous. symmetry in Heq_anonymous0. replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     intros. symmetry in Heq_anonymous0.
+     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
      * apply decode_field_consume in Heq_anonymous0. done.
      * easy.
    Qed.
@@ -922,27 +910,50 @@ Module Parse.
      * easy.
    Qed.
    Next Obligation.
-     intros. symmetry in Heq_anonymous0. replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     intros. clear filtered_var Heq_anonymous. symmetry in Heq_anonymous0.
+     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
      * apply decode_field_consume in Heq_anonymous0. done.
      * easy.
    Qed.
    Next Obligation.
-     intros. symmetry in Heq_anonymous0. replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     intros. clear filtered_var Heq_anonymous. symmetry in Heq_anonymous0.
+     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
      * apply decode_field_consume in Heq_anonymous0. done.
      * easy.
    Qed.
    Next Obligation.
-     intros. symmetry in Heq_anonymous0. replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     intros. symmetry in Heq_anonymous0.
+     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
      * apply decode_field_consume in Heq_anonymous0. done.
      * easy.
    Qed.
    Next Obligation.
-     intros. symmetry in Heq_anonymous0. replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     intros. symmetry in Heq_anonymous0.
+     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
      * apply decode_field_consume in Heq_anonymous0. done.
      * easy.
    Qed.
    Next Obligation.
-     intros. symmetry in Heq_anonymous0. replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     intros. symmetry in Heq_anonymous0.
+     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     * apply decode_field_consume in Heq_anonymous0. done.
+     * easy.
+   Qed.
+   Next Obligation.
+     intros. symmetry in Heq_anonymous0.
+     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     * apply decode_field_consume in Heq_anonymous0. done.
+     * easy.
+   Qed.
+   Next Obligation.
+     intros. symmetry in Heq_anonymous0.
+     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
+     * apply decode_field_consume in Heq_anonymous0. done.
+     * easy.
+   Qed.
+   Next Obligation.
+     intros. clear filtered_var Heq_anonymous. symmetry in Heq_anonymous0.
+     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
      * apply decode_field_consume in Heq_anonymous0. done.
      * easy.
    Qed.
@@ -968,5 +979,51 @@ Module Parse.
      apply measure_wf.
      apply lt_wf.
    Qed.
+
+   Definition parse_message (m : MsgDesc) (enc : list byte) : option MsgVal :=
+     match parse_message' m (Some (init_msg m)) enc with
+     | Some (msg, _) => Some msg
+     | None => None
+     end.
+
+   Lemma decode_nil : decode_field [] = None.
+   Proof. Admitted.
+
+   Lemma consuming_message (m : MsgDesc) (msg : option MsgVal) : consuming (parse_message' m msg).
+   Proof.
+     unfold consuming.
+     intros enc.
+   Admitted.
+     (* induction (Wf_nat.lt_wf (length enc)) eqn:Henc. *)
+     (* * apply nil_length_inv in Henc. subst. *)
+     (*             Admitted. *)
+
+(* FIXME: Without knowing that the recursive call decreases the measure,
+   I think it will be impossible to complete this proof.
+
+   I tried changing from Program Fixpoint to Function, which compressed all the
+   Obligation proofs into one that I was able to compress down to one line, but 
+   both Qed and Defined threw an error, stating that
+
+   "error: cannot create equation lemma. this may be because the function is nested-recursive"
+
+   I don't think this function is nested-recursive, but I'm not sure what the formal meaning of
+   the term is. There certainly aren't any mutually recursive functions (however cheekily defined)
+   such that the measure needs to be tracked across multiple different functions. Moreover, I've
+   basically off-loaded all of the measure proofs to decode_fields (which seem to have been a wise choice).
+
+   The documentation for the Function keyword suggests using the newer Equations plugin instead of this
+   old library, but they seem to depart a bit further from standard rocq syntax, although there is a
+   tutorial on the rocq website I could complete.
+
+   https://rocq-prover.org/doc/v9.0/refman/using/libraries/funind.html
+   https://mattam82.github.io/Coq-Equations/
+   https://rocq-prover.org/docs/equations-docs
+
+   Stepping back a bit, I don't technically need to prove that parse_message is consuming. However,
+   I will need to reason about it in the future (I have to believe) and so there is an incentive to
+   doing this proof to establish how to reason about it for a basic property like that the output
+   byte list is shorter than the input one.
+ *)
 
 End Parse.
