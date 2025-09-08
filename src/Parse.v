@@ -986,17 +986,43 @@ Module Parse.
      | None => None
      end.
 
-   Lemma decode_nil : decode_field [] = None.
-   Proof. Admitted.
+   Lemma deocde_header_nil : decode_header [] = None.
+   Proof. reflexivity. Qed.
+
+   Lemma decode_field_nil : decode_field [] = None.
+   Proof. reflexivity. Qed.
+
+   Lemma parse_message_nil m msg : parse_message' m msg [] = None.
+   Proof.
+     unfold parse_message'.
+     unfold parse_message'_func.
+     rewrite fix_sub_eq; repeat fold parse_message'_func.
+     * simpl. destruct msg; try done.
+     * intros. 
+   Admitted.
+       
 
    Lemma consuming_message (m : MsgDesc) (msg : option MsgVal) : consuming (parse_message' m msg).
    Proof.
      unfold consuming.
-     intros enc.
-   Admitted.
-     (* induction (Wf_nat.lt_wf (length enc)) eqn:Henc. *)
-     (* * apply nil_length_inv in Henc. subst. *)
-     (*             Admitted. *)
+     intros enc a rest.
+     (* induction (length enc) as [| n' HI] eqn:Henc. *)
+     (* * admit. *)
+     (* * generalize n' as n'' in HI. intros. *)
+     (* remember (length enc). *)
+     induction (Wf_nat.lt_wf (length enc)) as [x Hacc Hlt].
+     destruct enc as [| h tl] eqn:Henc.
+     * rewrite parse_message_nil. discriminate.
+     * assert (x = length enc). { admit. }
+       subst.
+       assert (length tl < length (h :: tl)).
+       { simpl. lia. }
+       intros Hsome.
+       pose proof (Hlt (length tl)).
+       apply H0 in H.
+       - simpl. lia.
+       - done.
+    Admitted.
 
 (* FIXME: Without knowing that the recursive call decreases the measure,
    I think it will be impossible to complete this proof.

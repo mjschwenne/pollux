@@ -72,6 +72,9 @@ Module Varint.
         * intro Hcontra. discriminate.
   Qed.      
 
+  Lemma extract_varint_nil : extract_varint [] = None.
+  Proof. reflexivity. Qed.
+
   Definition split (x:w64) (n:Z) : w64 * w64 := (word.srs x (W64 n), word.and x (W64 ((2^n) - 1))).
 
   Fixpoint encode_fuel (fuel: nat) (x:w64) : t :=
