@@ -2,8 +2,8 @@
   stdenv,
   rocq-core,
   rocqPackages,
+  coqPackages,
   perennial,
-  flocq,
   ...
 }:
 stdenv.mkDerivation {
@@ -17,7 +17,8 @@ stdenv.mkDerivation {
   ];
   buildInputs = [
     perennial
-    flocq
+    coqPackages.flocq
+    coqPackages.equations
     rocqPackages.stdlib
   ];
 

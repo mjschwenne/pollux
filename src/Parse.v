@@ -1002,26 +1002,31 @@ Module Parse.
    Admitted.
        
 
-   Lemma consuming_message (m : MsgDesc) (msg : option MsgVal) : consuming (parse_message' m msg).
+   Lemma consuming_message (m : MsgDesc) (msg : option MsgVal) : 
+    forall enc a rest, parse_message' m msg enc = Some (a, rest) -> length rest < length enc.
    Proof.
      unfold consuming.
-     intros enc a rest.
+     intros enc.
      (* induction (length enc) as [| n' HI] eqn:Henc. *)
      (* * admit. *)
      (* * generalize n' as n'' in HI. intros. *)
-     (* remember (length enc). *)
-     induction (Wf_nat.lt_wf (length enc)) as [x Hacc Hlt].
+     remember (length enc).
+     (* assert (n <= length enc) as Hlen by lia. *)
+     generalize dependent enc.
+     (* clear Heqn. *)
+     induction (n) using lt_wf_ind.
+     intros. subst.
      destruct enc as [| h tl] eqn:Henc.
-     * rewrite parse_message_nil. discriminate.
-     * assert (x = length enc). { admit. }
-       subst.
+     * rewrite parse_message_nil in H0. discriminate.
+     * 
        assert (length tl < length (h :: tl)).
        { simpl. lia. }
-       intros Hsome.
-       pose proof (Hlt (length tl)).
-       apply H0 in H.
-       - simpl. lia.
-       - done.
+       destruct msg.
+       + simpl in H0. unfold parse_message' in H0. simpl in H0.
+         cbn in H0.
+         admit.
+       + 
+       pose proof (H (length tl)). admit.
     Admitted.
 
 (* FIXME: Without knowing that the recursive call decreases the measure,

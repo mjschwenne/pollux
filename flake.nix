@@ -22,10 +22,8 @@
           inherit system;
         };
         varint_conversion = pkgs.callPackage ./varint_conversion {};
-        flocq = pkgs.callPackage ./nix/flocq {};
         rocq-build = pkgs.callPackage ./nix/pollux-rocq {
           perennial = perennial.packages.${system}.default;
-          inherit flocq;
         };
       in {
         packages = {
@@ -39,8 +37,9 @@
                 # Rocq Deps
                 rocq-core
                 rocqPackages.stdlib
+                coqPackages.equations # And now we can interop these?
                 perennial.packages.${system}.default
-                flocq
+                coqPackages.flocq
 
                 # Protobuf Deps
                 protobuf
