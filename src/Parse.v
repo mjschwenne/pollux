@@ -12,33 +12,34 @@ From Pollux Require Import Varint.
 Module Parse.
 
   Include Descriptors.
-  Infix "%" := Z.modulo (at level 35) : Z_scope.
-  Infix "==" := Z.eqb (at level 35) : Z_scope.
+  Notation "x % y" := (Z.modulo x y) (at level 35) : Z_scope.
+  Notation "x == y" := (decide (eq x y)) (no associativity, at level 70).
 
   Definition parity (z : Z) : Z :=
-    if ((z % 2) == 0)%Z then 1 else (-1).
+    if ((z % 2) == 0%Z) then 1 else (-1).
 
-  Definition idn (c : bool) : Z := if c then 1 else 0.
+  Definition idn__p {P} (c : {P} + {¬ P}) : Z := if c then 1 else 0.
+  Definition idn__b (c : bool) : Z := if c then 1 else 0.
 
   Definition uint_change_w (w : Width) (v : Z) : Z := v % (2^(unwrap_width w)).
   Definition int_change_w (w : Width) (v : Z) : Z := let pow2__w := (2^((unwrap_width w) - 1))%Z in
-                                                     (v `mod` pow2__w - pow2__w * idn (( v / pow2__w) % 2 == 1)).
+                                                     (v `mod` pow2__w - pow2__w * idn__p (( v / pow2__w) % 2 == 1%Z)).
   Definition sint_change_w (w : Width) (v : Z) : Z := let pow2__w := (2^((unwrap_width w) - 1))%Z in
-                                                      (v `mod` pow2__w - pow2__w * idn (Z.ltb v 0)).
+                                                      (v `mod` pow2__w - pow2__w * idn__b (Z.ltb v 0)).
   Definition uint_int (w : Width) (v : Z) : Z := v - (2^(unwrap_width w)) *
-                                                       (idn (Z.geb v (2^(unwrap_width w - 1))%Z)).
-  Definition int_uint (w : Width) (v : Z) : Z := v + (2^(unwrap_width w)) * (idn (Z.ltb v 0)).
+                                                       (idn__b (Z.geb v (2^(unwrap_width w - 1))%Z)).
+  Definition int_uint (w : Width) (v : Z) : Z := v + (2^(unwrap_width w)) * (idn__b (Z.ltb v 0)).
   Definition uint_sint (w : Width) (v : Z) : Z := parity v * (v / 2) - (v % 2).
-  Definition sint_uint (w : Width) (v : Z) : Z := 2 * (Z.abs v) - idn (Z.ltb v 0).
+  Definition sint_uint (w : Width) (v : Z) : Z := 2 * (Z.abs v) - idn__b (Z.ltb v 0).
   Definition int_sint (w : Width) (v : Z) : Z := if Z.geb v 0 then
                                                    parity v * (v / 2) - (v % 2)
                                                  else
                                                    parity v * (v + (2^(unwrap_width w - 1)) - (v / 2)).
   Definition sint_int (w : Width) (v : Z) : Z := if Z.leb (- 2^(unwrap_width w - 2)) v &&
                                                       Z.leb v (2^(unwrap_width w - 2)) then
-                                                   2 * (Z.abs v) - idn (Z.ltb v 0)
+                                                   2 * (Z.abs v) - idn__b (Z.ltb v 0)
                                                  else
-                                                   2 * (Z.abs v) - (2^(unwrap_width w)) - idn (Z.ltb v 0).
+                                                   2 * (Z.abs v) - (2^(unwrap_width w)) - idn__b (Z.ltb v 0).
 
     (* NOTE: Compared to the F* version, these functions no longer have type-level assurances
        that the resulting integer is in-bounds for the given width. Now, the F* functions only
@@ -88,8 +89,6 @@ Module Parse.
     | _ => LEN
     end.
 
-  (* FIXME / TODO: The loss of let? is going to make the rest of this code a lot more annoying to
-     translate from F*... *)
   Definition encode_header (msg : MsgDesc) (name : string) : option w64 :=
     (* TODO: Check tag number. Valid numbers are 1 to 536870911 excluding 19000 - 19999 *)
     match find_field_string msg name with
@@ -128,8 +127,32 @@ Module Parse.
                   | Eq => true
                   | _ => false
                   end
-    | None => false
+    | None => true
     end.
+
+  Lemma float_reflect : forall x y, reflect (x = y) (float_eqb x y).
+  Proof.
+    Admitted.
+
+  Definition float_dec (x y : f32) : {x = y} + {~(x = y)}.
+    destruct (float_reflect x y) as [P|Q].
+    + left. apply P.
+    + right. apply Q.
+  Defined.
+
+  Instance float_decide : EqDecision f32 := float_dec.
+
+  Lemma double_reflect : forall x y, reflect (x = y) (double_eqb x y).
+  Proof.
+    Admitted.
+
+  Definition double_dec (x y : f64) : {x = y} + {~(x = y)}.
+    destruct (double_reflect x y) as [P|Q].
+    + left. apply P.
+    + right. apply Q.
+  Defined.
+
+  Instance double_decide : EqDecision f64 := double_dec.
 
   Definition len_prefix (b : list byte) : list byte :=
     let length := encode_int (Z.of_nat $ length b) in
@@ -159,7 +182,40 @@ Module Parse.
                                else
                                  false
     end.
-        
+
+  Lemma bytes_reflect : forall x y, reflect (x = y) (bytes_eqb x y).
+  Proof.
+    intros.
+    apply iff_reflect.
+    split.
+    - intros. subst.
+      induction y.
+      + reflexivity.
+      + simpl. assert (a = a); first reflexivity.
+        apply Properties.word.eqb_eq in H. rewrite H.
+        apply IHy.
+    - generalize dependent y.
+      induction x.
+      + intros. destruct y.
+        * reflexivity.
+        * discriminate.
+      + intros y. simpl.
+        destruct y.
+        * discriminate.
+        * destruct (word.eqb a w) eqn:Heq.
+          ** apply Properties.word.eqb_true in Heq. subst.
+             intro H. apply IHx in H. congruence.
+          ** discriminate.
+  Qed.
+
+  Definition bytes_dec (x y : list byte) : {x = y} + {~(x = y)}.
+    destruct (bytes_reflect x y) as [P|Q].
+    + left. apply P.
+    + right. apply Q.
+  Defined.
+
+  Instance bytes_decide : EqDecision (list byte) := bytes_dec.
+  
   (* WARN looks like we may have lost native UTF-8 support,
      although this blog post seems to suggest otherwise:
 
@@ -174,9 +230,9 @@ Module Parse.
   (* TODO is there a better way to handle decidable equality? I was honestly expecting
      that I would just need to restrict to a typeclass, but such a wide-spread type class
      doesn't seem to exist in the Core / Standard libraries... *)
-  Definition encode_implicit {A: Type} (v : A) (d : A) (eq : A -> A -> bool) (enc : A -> list byte) :
+  Definition encode_implicit {A: Type} `{EqDecision A} (v : A) (d : A) (enc : A -> list byte) :
     option (list byte) := 
-    if eq v d then Some [] else Some (enc v).
+    if v == d then Some [] else Some (enc v).
 
   Definition encode_packed {A : Type} (l : list A) (enc_one : A -> list byte) : list byte :=
     len_prefix $ fold_left (++) (map enc_one l) [].
@@ -198,29 +254,29 @@ Module Parse.
                end
     end.
 
-  Definition encode_deco_packed {A : Type} (deco : DecoVal A) (def : A) (eq : A -> A -> bool)
+  Definition encode_deco_packed {A : Type} `{EqDecision A} (deco : DecoVal A) (def : A)
     (enc_one : A -> list byte) (header : list byte) : option (list byte) :=
     match deco with
-    | V_IMPLICIT v => encode_implicit v def eq enc_one
+    | V_IMPLICIT v => encode_implicit v def enc_one
     | V_OPTIONAL (Some v) => Some (header ++ enc_one v)
     | V_REPEATED (vh :: vt) => Some (header ++ encode_packed (vh :: vt) enc_one)
     | _ => Some []
     end.
 
-  Definition encode_deco_unpacked {A : Type} (deco : DecoVal A) (def : A) (eq : A -> A -> bool)
+  Definition encode_deco_unpacked {A : Type} `{EqDecision A} (deco : DecoVal A) (def : A)
     (enc_one : A -> list byte) (header : list byte) : option (list byte) :=
     match deco with
     | V_IMPLICIT v
-    | V_OPTIONAL (Some v) => if eq v def then None else Some (enc_one v)
+    | V_OPTIONAL (Some v) => if v == def then None else Some (enc_one v)
     | V_REPEATED (vh :: vt) => Some (encode_unpacked (vh :: vt) header enc_one)
     | _ => None
     end.
 
-  Definition encode_deco_unpacked_opt {A : Type} (deco : DecoVal A) (def : A) (eq : A -> A -> bool)
+  Definition encode_deco_unpacked_opt {A : Type} `{EqDecision A} (deco : DecoVal A) (def : A)
     (enc_one : A -> option (list byte)) (header : list byte) : option (list byte) :=
     match deco with
     | V_IMPLICIT v
-    | V_OPTIONAL (Some v) => if eq v def then None else enc_one v
+    | V_OPTIONAL (Some v) => if v == def then None else enc_one v
     | V_REPEATED (vh :: vt) => encode_unpacked_opt (vh :: vt) header enc_one
     | _ => None
     end.
@@ -287,15 +343,15 @@ Module Parse.
                     let encode_messages := fun m' ms => fold_left opt_append_opt (map (encode_message m') ms)
                                                        None in
                     match (field_val_get_val f) with
-                    | V_DOUBLE v => encode_deco_packed v f64_zero double_eqb encode_double header_bytes
-                    | V_FLOAT v => encode_deco_packed v f32_zero float_eqb encode_float header_bytes
+                    | V_DOUBLE v => encode_deco_packed v f64_zero encode_double header_bytes
+                    | V_FLOAT v => encode_deco_packed v f32_zero encode_float header_bytes
                     | V_INT v => match find_int_enc_one m (field_val_get_name f) with
-                                | Some enc_one => encode_deco_packed v 0%Z Z.eqb enc_one header_bytes
+                                | Some enc_one => encode_deco_packed v 0%Z enc_one header_bytes
                                 | None => None
                                 end
-                    | V_BOOL v => encode_deco_packed v false eqb encode_bool header_bytes
-                    | V_STRING v => encode_deco_unpacked v EmptyString String.eqb encode_string header_bytes
-                    | V_BYTES v => encode_deco_unpacked v [] bytes_eqb encode_bytes header_bytes
+                    | V_BOOL v => encode_deco_packed v false encode_bool header_bytes
+                    | V_STRING v => encode_deco_unpacked v EmptyString encode_string header_bytes
+                    | V_BYTES v => encode_deco_unpacked v [] encode_bytes header_bytes
                     | V_MSG (V_IMPLICIT v)
                     | V_MSG (V_OPTIONAL (Some v)) => match find_nested_msg_desc m f with
                                                     | Some m' => encode_message m' v
