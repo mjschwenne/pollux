@@ -12,27 +12,27 @@ From Pollux Require Import Varint.
 Module Parse.
 
   Include Descriptors.
-  Notation "x % y" := (Z.modulo x y) (at level 35) : Z_scope.
+  Notation "x %% y" := (Z.modulo x y) (at level 35) : Z_scope.
   Notation "x == y" := (decide (eq x y)) (no associativity, at level 70).
 
   Definition parity (z : Z) : Z :=
-    if ((z % 2) == 0%Z) then 1 else (-1).
+    if ((z %% 2) == 0%Z) then 1 else (-1).
 
   Definition idn__p {P} (c : {P} + {¬ P}) : Z := if c then 1 else 0.
   Definition idn__b (c : bool) : Z := if c then 1 else 0.
 
-  Definition uint_change_w (w : Width) (v : Z) : Z := v % (2^(unwrap_width w)).
+  Definition uint_change_w (w : Width) (v : Z) : Z := v %% (2^(unwrap_width w)).
   Definition int_change_w (w : Width) (v : Z) : Z := let pow2__w := (2^((unwrap_width w) - 1))%Z in
-                                                     (v `mod` pow2__w - pow2__w * idn__p (( v / pow2__w) % 2 == 1%Z)).
+                                                     (v %% pow2__w - pow2__w * idn__p (( v / pow2__w) %% 2 == 1%Z)).
   Definition sint_change_w (w : Width) (v : Z) : Z := let pow2__w := (2^((unwrap_width w) - 1))%Z in
-                                                      (v `mod` pow2__w - pow2__w * idn__b (Z.ltb v 0)).
+                                                      (v %% pow2__w - pow2__w * idn__b (Z.ltb v 0)).
   Definition uint_int (w : Width) (v : Z) : Z := v - (2^(unwrap_width w)) *
                                                        (idn__b (Z.geb v (2^(unwrap_width w - 1))%Z)).
   Definition int_uint (w : Width) (v : Z) : Z := v + (2^(unwrap_width w)) * (idn__b (Z.ltb v 0)).
-  Definition uint_sint (w : Width) (v : Z) : Z := parity v * (v / 2) - (v % 2).
+  Definition uint_sint (w : Width) (v : Z) : Z := parity v * (v / 2) - (v %% 2).
   Definition sint_uint (w : Width) (v : Z) : Z := 2 * (Z.abs v) - idn__b (Z.ltb v 0).
   Definition int_sint (w : Width) (v : Z) : Z := if Z.geb v 0 then
-                                                   parity v * (v / 2) - (v % 2)
+                                                   parity v * (v / 2) - (v %% 2)
                                                  else
                                                    parity v * (v + (2^(unwrap_width w - 1)) - (v / 2)).
   Definition sint_int (w : Width) (v : Z) : Z := if Z.leb (- 2^(unwrap_width w - 2)) v &&
