@@ -8,6 +8,8 @@ From Stdlib Require Import Recdef.
 
 From Pollux Require Import Descriptors.
 From Pollux Require Import Varint.
+From Flocq Require Import Core.Raux.
+From Equations Require Import Equations.
 
 Module Parse.
 
@@ -118,11 +120,11 @@ Module Parse.
                   | Eq => true
                   | _ => false
                   end
-    (* May not be the best choice, but it will work for detecting the default value, I hope... *)
-    | None => false
+    (* May not be the best choice, but the reflection proof need two NaNs to be equal... *)
+    | None => true
     end.
   Definition double_eqb (f1 : f64) (f2 : f64) : bool :=
-    match b64_compare f1 f1 with
+    match b64_compare f1 f2 with
     | Some comp => match comp with
                   | Eq => true
                   | _ => false
@@ -130,9 +132,79 @@ Module Parse.
     | None => true
     end.
 
+  Definition double_eqb' (f1 : f64) (f2 : f64) : bool :=
+    match f1, f2 with
+    | B754_zero _ _ s1, B754_zero _ _ s2 => eqb s1 s2
+    | B754_infinity _ _ s1, B754_infinity _ _ s2 => eqb s1 s2
+    | B754_nan _ _ s1 pl1 _, B754_nan _ _ s2 pl2 _ => andb (eqb s1 s2) (Pos.eqb pl1 pl2)
+    | B754_finite _ _ s1 m1 e1 _, B754_finite _ _ s2 m2 e2 _ => andb (eqb s1 s2)
+                                                                 (andb (Pos.eqb m1 m2) (Z.eqb e1 e2))
+    | _, _ => false
+    end.
+
+  Lemma double_reflect' : forall x y, reflect (x = y) (double_eqb' x y).
+  Proof.
+    intros.
+    apply iff_reflect.
+    split.
+    - intro. subst.
+      destruct y eqn:Hy.
+      + simpl. rewrite eqb_reflx. reflexivity.
+      + simpl. rewrite eqb_reflx. reflexivity.
+      + simpl. rewrite eqb_reflx. rewrite Pos.eqb_refl. done.
+      + simpl. rewrite eqb_reflx. rewrite Pos.eqb_refl. rewrite Z.eqb_refl. done. 
+    - destruct x, y; try (simpl; intro; discriminate).
+      + simpl. intro. apply eqb_prop in H. congruence.
+      + simpl. intro. apply eqb_prop in H. congruence.
+      + simpl. intro. apply andb_prop in H. destruct H as [Hs Hpl].
+        apply eqb_prop in Hs. apply Peqb_true_eq in Hpl. subst.
+        assert (e = e0) as He. { admit. } congruence.
+      + simpl. intro. apply andb_prop in H. destruct H as [Hs Hrest].
+        apply andb_prop in Hrest. destruct Hrest as [Hm He].
+        apply eqb_prop in Hs. apply Peqb_true_eq in Hm. apply Zeq_bool_eq in He.
+        subst.
+        assert (e0 = e2) as He'. { admit. } congruence.
+  Admitted.
+
   Lemma float_reflect : forall x y, reflect (x = y) (float_eqb x y).
   Proof.
-    Admitted.
+    intros.
+    apply iff_reflect.
+    split.
+    - intro.
+      unfold float_eqb.
+      unfold b32_compare.
+      destruct (Bcompare 24 128 x y) eqn:Hbcomp; last reflexivity.
+      rewrite H in Hbcomp.
+      destruct y eqn:Hy.
+      + assert (is_finite 24 128 y = true) as Hfin. { rewrite Hy. reflexivity. }
+        rewrite <- Hy in Hbcomp.
+        apply (Bcompare_correct _ _ y y) in Hfin; last assumption.
+        rewrite Hbcomp in Hfin. inversion Hfin as [Hcomp].
+        destruct (Rcompare (B2R 24 128 y) (B2R 24 128 y)) eqn:Hrcomp; first reflexivity.
+        * apply Rcompare_Lt_inv in Hrcomp. 
+          pose proof (RIneq.Rlt_irrefl (B2R 24 128 y)) as Hcontra.
+          contradiction.
+        * apply Rcompare_Gt_inv in Hrcomp.
+          pose proof (RIneq.Rlt_irrefl (B2R 24 128 y)) as Hcontra.
+          contradiction.
+      + vm_compute in Hbcomp. destruct s.
+        * inversion Hbcomp. reflexivity.
+        * inversion Hbcomp. reflexivity.
+      + vm_compute in Hbcomp. discriminate.
+      + assert (is_finite 24 128 y = true) as Hfin. { rewrite Hy. reflexivity. }
+        rewrite <- Hy in Hbcomp.
+        apply (Bcompare_correct _ _ y y) in Hfin; last assumption.
+        rewrite Hbcomp in Hfin. inversion Hfin as [Hcomp].
+        destruct (Rcompare (B2R 24 128 y) (B2R 24 128 y)) eqn:Hrcomp; first reflexivity.
+        * apply Rcompare_Lt_inv in Hrcomp. 
+          pose proof (RIneq.Rlt_irrefl (B2R 24 128 y)) as Hcontra.
+          contradiction.
+        * apply Rcompare_Gt_inv in Hrcomp.
+          pose proof (RIneq.Rlt_irrefl (B2R 24 128 y)) as Hcontra.
+          contradiction.
+    - admit.
+  Admitted.
 
   Definition float_dec (x y : f32) : {x = y} + {~(x = y)}.
     destruct (float_reflect x y) as [P|Q].
@@ -144,7 +216,24 @@ Module Parse.
 
   Lemma double_reflect : forall x y, reflect (x = y) (double_eqb x y).
   Proof.
-    Admitted.
+    intros.
+    apply iff_reflect.
+    split.
+    - admit.
+    - unfold double_eqb. 
+      destruct x, y.
+      + simpl. intro H.
+      (*
+        So this just isn't going to work. The b64_compare function traces down to SFcompare in
+
+        https://rocq-prover.org/doc/V9.0.0/corelib/Corelib.Floats.SpecFloat.html#SFcompare
+
+        Consider the S754_zero case, which is "| S754_zero _, S754_zero _ => Some Eq" and notice
+        that the boolean included in the constructor (positive or negative zero) is lost here, so
+        double_eqb would actually return true for two 'different' floating point numbers, making the
+        theorem I'm trying to prove false.
+       *)
+  Admitted.
 
   Definition double_dec (x y : f64) : {x = y} + {~(x = y)}.
     destruct (double_reflect x y) as [P|Q].
@@ -168,6 +257,14 @@ Module Parse.
     match b with
     | Some b => Some (pfx ++ b)
     | None => None
+    end.
+
+  Definition opt_prefix_opt (pfx : option (list byte)) (b : option (list byte)) : option (list byte) :=
+    match pfx, b with
+    | Some pfx, Some b => Some (pfx ++ b)
+    | Some pfx, None => Some pfx
+    | None, Some b => Some b
+    | None, None => None
     end.
 
   (* Add the length prefix, using a separate function for consistency *)
@@ -227,9 +324,6 @@ Module Parse.
                                                             (list_byte_of_string s)).
 
   (* Higher order encoding functions *)
-  (* TODO is there a better way to handle decidable equality? I was honestly expecting
-     that I would just need to restrict to a typeclass, but such a wide-spread type class
-     doesn't seem to exist in the Core / Standard libraries... *)
   Definition encode_implicit {A: Type} `{EqDecision A} (v : A) (d : A) (enc : A -> list byte) :
     option (list byte) := 
     if v == d then Some [] else Some (enc v).
@@ -314,7 +408,7 @@ Module Parse.
   Fixpoint find_nested_md_f (fs : list FieldDesc) (f : FieldVal) : option MsgDesc :=
     match fs with
     | [] => None
-    | h :: t => if String.eqb (field_desc_get_name h) (field_val_get_name f) then
+    | h :: t => if ((field_desc_get_name h) =? (field_val_get_name f))%string then
                  match field_desc_get_val h with
                  | D_MSG m _ => Some m
                  | _ => None
@@ -365,6 +459,64 @@ Module Parse.
                     end
     | None => None
     end.
+
+  Fail Equations encode_field' (m : MsgDesc) (f : FieldVal) : option (list byte) := 
+    encode_field' m (V_FIELD n (V_DOUBLE v)) with encode_header m n => {
+      | Some header => encode_deco_packed v f64_zero encode_double (Varint.encode header)
+      | None => None 
+      };
+    encode_field' m (V_FIELD n (V_FLOAT v)) with encode_header m n => {
+      | Some header => encode_deco_packed v f32_zero encode_float (Varint.encode header)
+      | None => None 
+      };
+    encode_field' m (V_FIELD n (V_INT v)) with encode_header m n, find_int_enc_one m n => {
+      | Some header, Some enc_one => encode_deco_packed v 0%Z enc_one (Varint.encode header)
+      | _, _ => None
+      };
+    encode_field' m (V_FIELD n (V_BOOL v)) with encode_header m n => {
+      | Some header => encode_deco_packed v false encode_bool (Varint.encode header)
+      | None => None 
+      };
+    encode_field' m (V_FIELD n (V_STRING v)) with encode_header m n => {
+      | Some header => encode_deco_unpacked v EmptyString encode_string (Varint.encode header)
+      | None => None
+      };
+    encode_field' m (V_FIELD n (V_BYTES v)) with encode_header m n => {
+      | Some header => encode_deco_unpacked v [] encode_bytes (Varint.encode header)
+      | None => None
+      };
+    encode_field' m (V_FIELD n (V_MSG (V_IMPLICIT msg))) with encode_header m n,
+      find_nested_msg_desc m (V_FIELD n (V_MSG (V_IMPLICIT msg))) => {
+      | Some header, Some m' => prefix_opt (Varint.encode header) $ len_prefix_opt $
+                                 encode_fields m' (msg_val_get_fields msg)
+      | _, _ => None
+      };
+    encode_field' m (V_FIELD n (V_MSG (V_OPTIONAL (Some msg)))) with encode_header m n,
+      find_nested_msg_desc m (V_FIELD n (V_MSG (V_OPTIONAL (Some msg)))) => {
+      | Some header, Some m' => prefix_opt (Varint.encode header) $ len_prefix_opt $
+                                 encode_fields m' (msg_val_get_fields msg)
+      | _, _ => None
+      };
+    encode_field' m (V_FIELD n (V_MSG (V_REPEATED []))) := None;
+    encode_field' m (V_FIELD n (V_MSG (V_REPEATED (mh :: mtl)))) with encode_header m n,
+      find_nested_msg_desc m (V_FIELD n (V_MSG (V_REPEATED (mh :: mtl)))) => {
+      | Some header, Some m' => let msg := prefix_opt (Varint.encode header) $ len_prefix_opt $
+                                            encode_fields m' (msg_val_get_fields mh) in
+                               opt_prefix_opt msg (encode_field' m (V_FIELD n (V_MSG (V_REPEATED (mtl)))))
+      | _, _ => None
+      };
+    encode_field' m (V_FIELD n _) with encode_header m n => {
+      | Some header => None
+      | None => None
+      }
+  where encode_fields : MsgDesc -> list FieldVal -> option (list byte) :=
+    encode_fields m' [] := None;
+    encode_fields m' (f :: fs) with encode_field' m' f, encode_fields m' fs => {
+      | Some bs, Some enc => Some (bs ++ enc)
+      | Some bs, None => Some bs
+      | None, Some enc => Some enc
+      | None, None => None
+      }.
 
   Definition encode_message (m : MsgDesc) (msg : MsgVal) : option (list byte) :=
     fold_left opt_append_opt (map (encode_field m) (msg_val_get_fields msg)) (Some []).
