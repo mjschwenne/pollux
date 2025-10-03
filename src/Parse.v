@@ -427,40 +427,99 @@ Module Parse.
      lets Rocq accept the fixpoint, but it also generates some complex Obligations that
      I'd rather not deal with. Given all that, I've elected to leave the functions
      internal to encode_field. Proving correctness of this function will also be hard. *)
-  Fixpoint encode_field (m : MsgDesc) (f : FieldVal) : option (list byte) :=
-    match encode_header m (field_val_get_name f) with
-    | Some header => let header_bytes := Varint.encode header in
-                    let encode_fields := fun m' fs => fold_left opt_append_opt (map (encode_field m') fs)
-                                                     None in
-                    let encode_message := fun m' msg => prefix_opt header_bytes $ len_prefix_opt $
-                                                       encode_fields m' (msg_val_get_fields msg) in
-                    let encode_messages := fun m' ms => fold_left opt_append_opt (map (encode_message m') ms)
-                                                       None in
-                    match (field_val_get_val f) with
-                    | V_DOUBLE v => encode_deco_packed v f64_zero encode_double header_bytes
-                    | V_FLOAT v => encode_deco_packed v f32_zero encode_float header_bytes
-                    | V_INT v => match find_int_enc_one m (field_val_get_name f) with
-                                | Some enc_one => encode_deco_packed v 0%Z enc_one header_bytes
-                                | None => None
-                                end
-                    | V_BOOL v => encode_deco_packed v false encode_bool header_bytes
-                    | V_STRING v => encode_deco_unpacked v EmptyString encode_string header_bytes
-                    | V_BYTES v => encode_deco_unpacked v [] encode_bytes header_bytes
-                    | V_MSG (V_IMPLICIT v)
-                    | V_MSG (V_OPTIONAL (Some v)) => match find_nested_msg_desc m f with
-                                                    | Some m' => encode_message m' v
-                                                    | None => None
-                                                    end
-                    | V_MSG (V_REPEATED (ms)) => match find_nested_msg_desc m f with
-                                                | Some m' => encode_messages m' ms
-                                                | None => None
-                                                end
-                    | _ => None
-                    end
-    | None => None
+  (* Fixpoint encode_field (m : MsgDesc) (f : FieldVal) : option (list byte) := *)
+  (*   match encode_header m (field_val_get_name f) with *)
+  (*   | Some header => let header_bytes := Varint.encode header in *)
+  (*                   let encode_fields := fun m' fs => fold_left opt_append_opt (map (encode_field m') fs) *)
+  (*                                                    None in *)
+  (*                   let encode_message := fun m' msg => prefix_opt header_bytes $ len_prefix_opt $ *)
+  (*                                                      encode_fields m' (msg_val_get_fields msg) in *)
+  (*                   let encode_messages := fun m' ms => fold_left opt_append_opt (map (encode_message m') ms) *)
+  (*                                                      None in *)
+  (*                   match (field_val_get_val f) with *)
+  (*                   | V_DOUBLE v => encode_deco_packed v f64_zero encode_double header_bytes *)
+  (*                   | V_FLOAT v => encode_deco_packed v f32_zero encode_float header_bytes *)
+  (*                   | V_INT v => match find_int_enc_one m (field_val_get_name f) with *)
+  (*                               | Some enc_one => encode_deco_packed v 0%Z enc_one header_bytes *)
+  (*                               | None => None *)
+  (*                               end *)
+  (*                   | V_BOOL v => encode_deco_packed v false encode_bool header_bytes *)
+  (*                   | V_STRING v => encode_deco_unpacked v EmptyString encode_string header_bytes *)
+  (*                   | V_BYTES v => encode_deco_unpacked v [] encode_bytes header_bytes *)
+  (*                   | V_MSG (V_IMPLICIT v) *)
+  (*                   | V_MSG (V_OPTIONAL (Some v)) => match find_nested_msg_desc m f with *)
+  (*                                                   | Some m' => encode_message m' v *)
+  (*                                                   | None => None *)
+  (*                                                   end *)
+  (*                   | V_MSG (V_REPEATED (ms)) => match find_nested_msg_desc m f with *)
+  (*                                               | Some m' => encode_messages m' ms *)
+  (*                                               | None => None *)
+  (*                                               end *)
+  (*                   | _ => None *)
+  (*                   end *)
+  (*   | None => None *)
+  (*   end. *)
+
+  Equations field_desc_measure (f : FieldDesc) : nat :=
+    field_desc_measure (D_FIELD _ _ (D_MSG (D_MESSAGE _ fs') _)) :=
+      1 + fields_desc_measure fs';
+    field_desc_measure (D_FIELD _ _ _) := 0;
+  where fields_desc_measure (fs : list FieldDesc) : nat :=
+    fields_desc_measure [] := 0;
+    fields_desc_measure (f :: ftl) := field_desc_measure f + fields_desc_measure ftl.
+
+  (* This measure counts the number of nested message descriptors in a message descriptor. *)
+  Definition message_desc_measure (msg : MsgDesc) : nat := fields_desc_measure $ msg_desc_get_fields msg.
+
+  (* This measure over-counts the number of values that need to be encoded in a field. *)
+  Equations field_val_measure (f : FieldVal) : nat :=
+    field_val_measure (V_FIELD _ (V_DOUBLE d)) with d => {
+      | V_REPEATED l => length l
+      | _ => 1
+      };
+    field_val_measure (V_FIELD _ (V_FLOAT d)) with d => {
+      | V_REPEATED l => length l
+      | _ => 1
+      };
+    field_val_measure (V_FIELD _ (V_INT d)) with d => {
+      | V_REPEATED l => length l
+      | _ => 1
+      };
+    field_val_measure (V_FIELD _ (V_BOOL d)) with d => {
+      | V_REPEATED l => length l
+      | _ => 1
+      };
+    field_val_measure (V_FIELD _ (V_STRING d)) with d => {
+      | V_REPEATED l => length l
+      | _ => 1
+      };
+    field_val_measure (V_FIELD _ (V_BYTES d)) with d => {
+      | V_REPEATED l => length l
+      | _ => 1
+      };
+    field_val_measure (V_FIELD _ (V_MSG d)) with d => {
+      | V_REPEATED l => length l
+      | _ => 1
+      };
+    field_val_measure (V_FIELD _ (V_ENUM d)) with d => {
+      | V_REPEATED l => length l
+      | _ => 1
+      }.
+
+  (* This measure over-counts the number of values to be encoded in a list of fields *)
+  Fixpoint fields_val_measure (fs : list FieldVal) : nat :=
+    match fs with
+    | [] => 0
+    | h :: tl => field_val_measure h + fields_val_measure tl
     end.
 
-  Fail Equations encode_field' (m : MsgDesc) (f : FieldVal) : option (list byte) := 
+  (* This measure over-counts the number of values to be encoded in a list of messages *)
+  Definition message_val_measure (msg : MsgVal) : nat := fields_val_measure $ msg_val_get_fields msg.
+
+  (* I'm not sure that this is any better than the last one (well, it is a little bit, but it's still not great)
+     Hopefully the equations plugin will provide some better reasoning principles though...
+   *)
+  Equations encode_field' (m : MsgDesc) (f : FieldVal) : option (list byte) := 
     encode_field' m (V_FIELD n (V_DOUBLE v)) with encode_header m n => {
       | Some header => encode_deco_packed v f64_zero encode_double (Varint.encode header)
       | None => None 
@@ -487,39 +546,28 @@ Module Parse.
       };
     encode_field' m (V_FIELD n (V_MSG (V_IMPLICIT msg))) with encode_header m n,
       find_nested_msg_desc m (V_FIELD n (V_MSG (V_IMPLICIT msg))) => {
-      | Some header, Some m' => prefix_opt (Varint.encode header) $ len_prefix_opt $
-                                 encode_fields m' (msg_val_get_fields msg)
+      | Some header, Some m' => prefix_opt (Varint.encode header) $ len_prefix_opt $ encode_message m' msg
       | _, _ => None
       };
     encode_field' m (V_FIELD n (V_MSG (V_OPTIONAL (Some msg)))) with encode_header m n,
       find_nested_msg_desc m (V_FIELD n (V_MSG (V_OPTIONAL (Some msg)))) => {
-      | Some header, Some m' => prefix_opt (Varint.encode header) $ len_prefix_opt $
-                                 encode_fields m' (msg_val_get_fields msg)
+      | Some header, Some m' => prefix_opt (Varint.encode header) $ len_prefix_opt $ encode_message m' msg
       | _, _ => None
       };
-    encode_field' m (V_FIELD n (V_MSG (V_REPEATED []))) := None;
-    encode_field' m (V_FIELD n (V_MSG (V_REPEATED (mh :: mtl)))) with encode_header m n,
-      find_nested_msg_desc m (V_FIELD n (V_MSG (V_REPEATED (mh :: mtl)))) => {
-      | Some header, Some m' => let msg := prefix_opt (Varint.encode header) $ len_prefix_opt $
-                                            encode_fields m' (msg_val_get_fields mh) in
-                               opt_prefix_opt msg (encode_field' m (V_FIELD n (V_MSG (V_REPEATED (mtl)))))
+    encode_field' m (V_FIELD n (V_MSG (V_REPEATED msgs))) with encode_header m n,
+      find_nested_msg_desc m (V_FIELD n (V_MSG (V_REPEATED msgs))) => {
+      | Some header, Some m' =>
+          let encode_prefix_message := fun m' msg => prefix_opt (Varint.encode header) $ len_prefix_opt $
+                                                    encode_message m' msg in
+          fold_left opt_append_opt (map (encode_message m') msgs) None
       | _, _ => None
       };
     encode_field' m (V_FIELD n _) with encode_header m n => {
       | Some header => None
       | None => None
-      }
-  where encode_fields : MsgDesc -> list FieldVal -> option (list byte) :=
-    encode_fields m' [] := None;
-    encode_fields m' (f :: fs) with encode_field' m' f, encode_fields m' fs => {
-      | Some bs, Some enc => Some (bs ++ enc)
-      | Some bs, None => Some bs
-      | None, Some enc => Some enc
-      | None, None => None
-      }.
-
-  Definition encode_message (m : MsgDesc) (msg : MsgVal) : option (list byte) :=
-    fold_left opt_append_opt (map (encode_field m) (msg_val_get_fields msg)) (Some []).
+      };
+  where encode_message (md : MsgDesc) (msgv : MsgVal) : option (list byte) :=
+    encode_message md msgv := fold_left opt_append_opt (map (encode_field' md) (msg_val_get_fields msgv)) None.
 
   Definition tag_from_num (n : Z) : option Tag :=
     match n with
@@ -665,16 +713,7 @@ Module Parse.
             end
     end.
   Next Obligation.
-    intros enc decode_fields enc' Henc_nonempty Hencenc Hcall fid fbs bs Hreturn.
-    subst. replace Hcall with (decode_field enc).
-    + symmetry in Hreturn. apply decode_field_consume in Hreturn.
-      apply Hreturn.
-    + easy.
-  Qed.
-  Next Obligation.
-    intros. replace enc with (w :: l).
-    + unfold not. intro Hcontra. discriminate.
-    + easy.
+    symmetry in Heq_anonymous. apply decode_field_consume in Heq_anonymous. apply Heq_anonymous.
   Qed.
   Next Obligation.
     apply measure_wf.
@@ -959,18 +998,8 @@ Module Parse.
      end.
 
    Next Obligation.
-    intros A payload parse_one Hhungry parse_packed Hp1 one rest Hp1_ret bs Hbs_nemp Heq_bs.
-    subst. symmetry in Hp1_ret. replace Hp1 with (parse_one payload) in Hp1_ret.
-    + apply (@consume_proof A parse_one) in Hhungry.
-      unfold consuming in Hhungry.
-      pose proof (Hhungry payload one rest) as Hhungry.
-      apply Hhungry in Hp1_ret. done.
-    + easy.
-   Qed.
-   Next Obligation.
-    intros. replace bs with (w :: l).
-    + unfold not. intro Hcontra. discriminate.
-    + easy.
+    symmetry in Heq_anonymous.
+    apply (@consume_proof A parse_one) in Heq_anonymous; assumption.
    Qed.
    Next Obligation.
     apply measure_wf.
@@ -993,7 +1022,6 @@ Module Parse.
                     | None => None
                     end
      end.
-
 
    (* Function parse_message' (m: MsgDesc) (msg: option MsgVal) (enc: list byte) {measure length enc}: *)
    Program Fixpoint parse_message' (m: MsgDesc) (msg: option MsgVal) (enc: list byte) {measure (length enc)}:
@@ -1100,88 +1128,46 @@ Module Parse.
      | None => None
      end.
    Next Obligation.
-     intros. symmetry in Heq_anonymous0.
-     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
-     * apply decode_field_consume in Heq_anonymous0. done.
-     * easy.
+     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
    Qed.
    Next Obligation.
-     intros. symmetry in Heq_anonymous0.
-     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
-     * apply decode_field_consume in Heq_anonymous0. done.
-     * easy.
+     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
    Qed.
    Next Obligation.
-     intros. clear filtered_var Heq_anonymous. symmetry in Heq_anonymous0.
-     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
-     * apply decode_field_consume in Heq_anonymous0. done.
-     * easy.
+     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
    Qed.
    Next Obligation.
-     intros. clear filtered_var Heq_anonymous. symmetry in Heq_anonymous0.
-     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
-     * apply decode_field_consume in Heq_anonymous0. done.
-     * easy.
+     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
    Qed.
    Next Obligation.
-     intros. clear filtered_var Heq_anonymous. symmetry in Heq_anonymous0.
-     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
-     * apply decode_field_consume in Heq_anonymous0. done.
-     * easy.
+     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
    Qed.
    Next Obligation.
-     intros. symmetry in Heq_anonymous0.
-     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
-     * apply decode_field_consume in Heq_anonymous0. done.
-     * easy.
+     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
    Qed.
    Next Obligation.
-     intros. symmetry in Heq_anonymous0.
-     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
-     * apply decode_field_consume in Heq_anonymous0. done.
-     * easy.
+     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
    Qed.
    Next Obligation.
-     intros. symmetry in Heq_anonymous0.
-     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
-     * apply decode_field_consume in Heq_anonymous0. done.
-     * easy.
+     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
    Qed.
    Next Obligation.
-     intros. symmetry in Heq_anonymous0.
-     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
-     * apply decode_field_consume in Heq_anonymous0. done.
-     * easy.
+     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
    Qed.
    Next Obligation.
-     intros. symmetry in Heq_anonymous0.
-     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
-     * apply decode_field_consume in Heq_anonymous0. done.
-     * easy.
+     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
    Qed.
    Next Obligation.
-     intros. clear filtered_var Heq_anonymous. symmetry in Heq_anonymous0.
-     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
-     * apply decode_field_consume in Heq_anonymous0. done.
-     * easy.
+     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
    Qed.
    Next Obligation.
-     intros. clear filtered_var Heq_anonymous. symmetry in Heq_anonymous0.
-     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
-     * apply decode_field_consume in Heq_anonymous0. done.
-     * easy.
+     clear Heq_anonymous. symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
    Qed.
    Next Obligation.
-     intros. clear filtered_var Heq_anonymous. symmetry in Heq_anonymous0.
-     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
-     * apply decode_field_consume in Heq_anonymous0. done.
-     * easy.
+     clear Heq_anonymous. symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
    Qed.
    Next Obligation.
-     intros. clear filtered_var Heq_anonymous. symmetry in Heq_anonymous0.
-     replace filtered_var0 with (decode_field enc) in Heq_anonymous0.
-     * apply decode_field_consume in Heq_anonymous0. done.
-     * easy.
+     clear Heq_anonymous. symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
    Qed.
    Next Obligation.
      apply measure_wf.

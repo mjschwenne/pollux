@@ -15,16 +15,17 @@ stdenv.mkDerivation {
   nativeBuildInputs = [
     rocq-core
   ];
-  buildInputs = [
+  propagatedBuildInputs = [
+    coqPackages.equations
     perennial
     coqPackages.flocq
-    coqPackages.equations
     rocqPackages.stdlib
   ];
 
   enableParallelBuilding = true;
 
   buildPhase = ''
+    export OCAMLPATH=${coqPackages.equations}/lib/ocaml/4.14.2/site-lib/
     make -j$NIX_BUILD_CORES
   '';
 
