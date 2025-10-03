@@ -56,6 +56,10 @@
                 gnumake
                 xxd
 
+                # eval utilities
+                gh
+                jq
+
                 # nix helpers
                 nix-update
               ]

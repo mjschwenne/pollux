@@ -1,0 +1,53 @@
+#+TITLE: Pollux Evaluation
+
+* Table of Contents :toc_4_gh:
+- [[#scripts][Scripts]]
+  - [[#get_proto_history_jsonfish][=get_proto_history_json.fish=]]
+- [[#repos][Repos]]
+  - [[#observations][Observations]]
+
+* Scripts
+
+** =get_proto_history_json.fish=
+
+When given as arguments a GitHub user and repo, it will use the GitHub API to query for =proto= files
+in that repo, find each commit which updated that file and then output a JSON blob into
+=$owner-$repo.json= in the current working directory.
+
+Several examples are included. 
+
+* Repos
+
+Here is a collection of repos we might be interested in, listed in no particular order. Some of the
+repos came from looking at packages which import the =go= protobuf library, but a lot of them are from
+looking at repositories with a high number of stars and the "protobuf" GitHub tag or test suites in
+protobuf language implementations.
+
+- [[https://github.com/googleapis/google-cloud-go][googleapis/google-cloud-go]]
+- [[https://github.com/JannoCAT/hdfs][JannoCAT/hdfs]]
+- [[https://github.com/etcd-io/etcd][etcd-io/etcd]]
+- [[https://github.com/protocolbuffers/protobuf/tree/3a7ef796c8ec2328edf54851ada2b5ab7b6ddce0/rust/test][protocolbuffers/protobuf/rust]]
+- [[https://github.com/protocolbuffers/protobuf-go/tree/master/internal/testprotos][protobuf-go/internal/testprotos]]
+- [[https://github.com/google/protobuf.dart/tree/master/protoc_plugin/test/protos][protobuf.dart/protoc_plugin/test/protos]]
+- [[https://github.com/bufbuild/buf/tree/58e10d4a854ea55d1945abcb66e3691ec5a39b3c/private/bufpkg/bufcheck/testdata][buf/private/bufpkg/bufcheck/testdata]]
+- [[https://github.com/bufbuild/buf][bufbuild/buf]]
+- [[https://github.com/go-kratos/kratos][go-kratos/kratos]]
+- [[https://github.com/cloudwego/kitex][cloudwego/kitex]]
+- [[https://github.com/twitchtv/twirp][twitchtv/twirp]]
+- [[https://github.com/asynkron/protoactor-go][asynkron/protoactor-go]]
+- [[https://github.com/samchon/typia][samchon/typia]]
+- [[https://github.com/uber/prototool][uber/prototool]]
+- [[https://github.com/streamdal/plumber][streamdal/plumber]]
+- [[https://github.com/google/rejoiner][google/rejoiner]]
+
+  Not GitHub:
+
+  - [[https://chromium.googlesource.com/external/github.com/google/protobuf/+/HEAD/benchmarks][benchmarks - external/github.com/google/protobuf - Git at Google]]
+
+** Observations
+
+With Grackle, we could arbitrarily handled the parts of protobuf we wanted to. That is no longer the
+case. Two syntactic structures we ignored with grackle but would want here are
+
+- Nested message definition
+- Defining =grpc= services
