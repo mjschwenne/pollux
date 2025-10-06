@@ -8,7 +8,6 @@ From Stdlib Require Import Recdef.
 
 From Pollux Require Import Descriptors.
 From Pollux Require Import Varint.
-From Flocq Require Import Core.Raux.
 From Equations Require Import Equations.
 
 Module Parse.
@@ -74,20 +73,16 @@ Module Parse.
     | D_BOOL D_REPEATED
     | D_ENUM D_REPEATED
     | D_FIXED _ D_REPEATED
-    | D_SFIXED _ D_REPEATED
-    | D_FLOAT D_REPEATED
-    | D_DOUBLE D_REPEATED => LEN
+    | D_SFIXED _ D_REPEATED => LEN
     | D_INT _ _
     | D_UINT _ _
     | D_SINT _ _
     | D_BOOL _
     | D_ENUM _ => VARINT
     | D_FIXED (exist _ 32%Z _) _
-    | D_SFIXED (exist _ 32%Z _) _
-    | D_FLOAT _ => I32
+    | D_SFIXED (exist _ 32%Z _) _ => I32
     | D_FIXED (exist _ 64%Z _) _
-    | D_SFIXED (exist _ 64%Z _) _
-    | D_DOUBLE _ => I64
+    | D_SFIXED (exist _ 64%Z _) _ => I64
     | _ => LEN
     end.
 
@@ -110,138 +105,6 @@ Module Parse.
   Definition encode_fixed32 (f : Z) : list byte := u32_le $ W32 f.
   Definition encode_fixed64 (f : Z) : list byte := u64_le $ W64 f.
   Definition encode_bool (b : bool) : list byte := if b then [(W8 1)] else [(W8 0)].
-  (* FIXME: Is the rev needed? This should shift us back to big-endian which I think (?)
-     we need for encoding a float... *)
-  Definition encode_float (f : f32) : list byte := rev (u32_le $ W32 (bits_of_b32 f)).
-  Definition encode_double (f : f64) : list byte := rev (u64_le $ W64 (bits_of_b64 f)).
-  Definition float_eqb (f1 : f32) (f2 : f32) : bool :=
-    match b32_compare f1 f2 with
-    | Some comp => match comp with
-                  | Eq => true
-                  | _ => false
-                  end
-    (* May not be the best choice, but the reflection proof need two NaNs to be equal... *)
-    | None => true
-    end.
-  Definition double_eqb (f1 : f64) (f2 : f64) : bool :=
-    match b64_compare f1 f2 with
-    | Some comp => match comp with
-                  | Eq => true
-                  | _ => false
-                  end
-    | None => true
-    end.
-
-  Definition double_eqb' (f1 : f64) (f2 : f64) : bool :=
-    match f1, f2 with
-    | B754_zero _ _ s1, B754_zero _ _ s2 => eqb s1 s2
-    | B754_infinity _ _ s1, B754_infinity _ _ s2 => eqb s1 s2
-    | B754_nan _ _ s1 pl1 _, B754_nan _ _ s2 pl2 _ => andb (eqb s1 s2) (Pos.eqb pl1 pl2)
-    | B754_finite _ _ s1 m1 e1 _, B754_finite _ _ s2 m2 e2 _ => andb (eqb s1 s2)
-                                                                 (andb (Pos.eqb m1 m2) (Z.eqb e1 e2))
-    | _, _ => false
-    end.
-
-  Lemma double_reflect' : forall x y, reflect (x = y) (double_eqb' x y).
-  Proof.
-    intros.
-    apply iff_reflect.
-    split.
-    - intro. subst.
-      destruct y eqn:Hy.
-      + simpl. rewrite eqb_reflx. reflexivity.
-      + simpl. rewrite eqb_reflx. reflexivity.
-      + simpl. rewrite eqb_reflx. rewrite Pos.eqb_refl. done.
-      + simpl. rewrite eqb_reflx. rewrite Pos.eqb_refl. rewrite Z.eqb_refl. done. 
-    - destruct x, y; try (simpl; intro; discriminate).
-      + simpl. intro. apply eqb_prop in H. congruence.
-      + simpl. intro. apply eqb_prop in H. congruence.
-      + simpl. intro. apply andb_prop in H. destruct H as [Hs Hpl].
-        apply eqb_prop in Hs. apply Peqb_true_eq in Hpl. subst.
-        assert (e = e0) as He. { admit. } congruence.
-      + simpl. intro. apply andb_prop in H. destruct H as [Hs Hrest].
-        apply andb_prop in Hrest. destruct Hrest as [Hm He].
-        apply eqb_prop in Hs. apply Peqb_true_eq in Hm. apply Zeq_bool_eq in He.
-        subst.
-        assert (e0 = e2) as He'. { admit. } congruence.
-  Admitted.
-
-  Lemma float_reflect : forall x y, reflect (x = y) (float_eqb x y).
-  Proof.
-    intros.
-    apply iff_reflect.
-    split.
-    - intro.
-      unfold float_eqb.
-      unfold b32_compare.
-      destruct (Bcompare 24 128 x y) eqn:Hbcomp; last reflexivity.
-      rewrite H in Hbcomp.
-      destruct y eqn:Hy.
-      + assert (is_finite 24 128 y = true) as Hfin. { rewrite Hy. reflexivity. }
-        rewrite <- Hy in Hbcomp.
-        apply (Bcompare_correct _ _ y y) in Hfin; last assumption.
-        rewrite Hbcomp in Hfin. inversion Hfin as [Hcomp].
-        destruct (Rcompare (B2R 24 128 y) (B2R 24 128 y)) eqn:Hrcomp; first reflexivity.
-        * apply Rcompare_Lt_inv in Hrcomp. 
-          pose proof (RIneq.Rlt_irrefl (B2R 24 128 y)) as Hcontra.
-          contradiction.
-        * apply Rcompare_Gt_inv in Hrcomp.
-          pose proof (RIneq.Rlt_irrefl (B2R 24 128 y)) as Hcontra.
-          contradiction.
-      + vm_compute in Hbcomp. destruct s.
-        * inversion Hbcomp. reflexivity.
-        * inversion Hbcomp. reflexivity.
-      + vm_compute in Hbcomp. discriminate.
-      + assert (is_finite 24 128 y = true) as Hfin. { rewrite Hy. reflexivity. }
-        rewrite <- Hy in Hbcomp.
-        apply (Bcompare_correct _ _ y y) in Hfin; last assumption.
-        rewrite Hbcomp in Hfin. inversion Hfin as [Hcomp].
-        destruct (Rcompare (B2R 24 128 y) (B2R 24 128 y)) eqn:Hrcomp; first reflexivity.
-        * apply Rcompare_Lt_inv in Hrcomp. 
-          pose proof (RIneq.Rlt_irrefl (B2R 24 128 y)) as Hcontra.
-          contradiction.
-        * apply Rcompare_Gt_inv in Hrcomp.
-          pose proof (RIneq.Rlt_irrefl (B2R 24 128 y)) as Hcontra.
-          contradiction.
-    - admit.
-  Admitted.
-
-  Definition float_dec (x y : f32) : {x = y} + {~(x = y)}.
-    destruct (float_reflect x y) as [P|Q].
-    + left. apply P.
-    + right. apply Q.
-  Defined.
-
-  Instance float_decide : EqDecision f32 := float_dec.
-
-  Lemma double_reflect : forall x y, reflect (x = y) (double_eqb x y).
-  Proof.
-    intros.
-    apply iff_reflect.
-    split.
-    - admit.
-    - unfold double_eqb. 
-      destruct x, y.
-      + simpl. intro H.
-      (*
-        So this just isn't going to work. The b64_compare function traces down to SFcompare in
-
-        https://rocq-prover.org/doc/V9.0.0/corelib/Corelib.Floats.SpecFloat.html#SFcompare
-
-        Consider the S754_zero case, which is "| S754_zero _, S754_zero _ => Some Eq" and notice
-        that the boolean included in the constructor (positive or negative zero) is lost here, so
-        double_eqb would actually return true for two 'different' floating point numbers, making the
-        theorem I'm trying to prove false.
-       *)
-  Admitted.
-
-  Definition double_dec (x y : f64) : {x = y} + {~(x = y)}.
-    destruct (double_reflect x y) as [P|Q].
-    + left. apply P.
-    + right. apply Q.
-  Defined.
-
-  Instance double_decide : EqDecision f64 := double_dec.
 
   Definition len_prefix (b : list byte) : list byte :=
     let length := encode_int (Z.of_nat $ length b) in
@@ -433,14 +296,6 @@ Module Parse.
 
   (* This measure over-counts the number of values that need to be encoded in a field. *)
   Equations field_val_measure (f : FieldVal) : nat :=
-    field_val_measure (V_FIELD _ (V_DOUBLE d)) with d => {
-      | V_REPEATED l => length l
-      | _ => 1
-      };
-    field_val_measure (V_FIELD _ (V_FLOAT d)) with d => {
-      | V_REPEATED l => length l
-      | _ => 1
-      };
     field_val_measure (V_FIELD _ (V_INT d)) with d => {
       | V_REPEATED l => length l
       | _ => 1
@@ -480,14 +335,6 @@ Module Parse.
      Hopefully the equations plugin will provide some better reasoning principles though...
    *)
   Equations encode_field' (m : MsgDesc) (f : FieldVal) : option (list byte) := 
-    encode_field' m (V_FIELD n (V_DOUBLE v)) with encode_header m n => {
-      | Some header => encode_deco_packed v f64_zero encode_double (Varint.encode header)
-      | None => None 
-      };
-    encode_field' m (V_FIELD n (V_FLOAT v)) with encode_header m n => {
-      | Some header => encode_deco_packed v f32_zero encode_float (Varint.encode header)
-      | None => None 
-      };
     encode_field' m (V_FIELD n (V_INT v)) with encode_header m n, find_int_enc_one m n => {
       | Some header, Some enc_one => encode_deco_packed v 0%Z enc_one (Varint.encode header)
       | _, _ => None
@@ -691,38 +538,6 @@ Module Parse.
       consume_proof : forall enc a rest, parse enc = Some (a, rest) -> length rest < length enc;
     }.
 
-  Definition parse_double (enc : list byte) : option (f64 * list byte) :=
-    match consume 8 enc with
-    | Some (byt, rest) => Some (b64_of_bits $ assemble_Z byt, rest)
-    | None => None
-    end.
-
-  Program Instance double_field_parser : FieldParser f64 := {| parse := parse_double |}.
-  Next Obligation.
-    unfold parse_double in H.
-    destruct (consume 8 enc) as [[byt__c rest__c] |] eqn:Hconsume in H.
-    + inversion H. subst. apply consume_consume in Hconsume as [_ Hlen].
-      * assumption.
-      * lia.
-    + discriminate.
-  Qed.
-
-  Definition parse_float (enc : list byte) : option (f32 * list byte) :=
-    match consume 4 enc with
-    | Some (byt, rest) => Some (b32_of_bits $ assemble_Z byt, rest)
-    | None => None
-    end.
-
-  Program Instance float_field_parser : FieldParser f32 := {| parse := parse_float |}.
-  Next Obligation.
-    unfold parse_float in H.
-    destruct (consume 4 enc) as [[byt__c rest__c] |] eqn:Hconsume in H.
-    + inversion H. subst. apply consume_consume in Hconsume as [_ Hlen].
-      * assumption.
-      * lia.
-    + discriminate.
-  Qed.
-
   Definition parse_int (w : Width) (enc : list byte) : option (Z * list byte) :=
     match Varint.extract_varint enc with
     | Some (vint, rest) => Some (uint_int w $ uint_change_w w $ uint.Z $ Varint.decode vint, rest)
@@ -858,10 +673,6 @@ Module Parse.
                             | [] => []
                             | (V_FIELD n v) :: tl => if String.eqb n name then
                                                       (V_FIELD n (match v, value with
-                                                                  | V_DOUBLE orig, V_DOUBLE newv =>
-                                                                      V_DOUBLE (update_field n orig newv)
-                                                                  | V_FLOAT orig, V_FLOAT newv =>
-                                                                      V_FLOAT (update_field n orig newv)
                                                                   | V_INT orig, V_INT newv =>
                                                                       V_INT (update_field n orig newv)
                                                                   | V_BOOL orig, V_BOOL newv =>
@@ -919,20 +730,6 @@ Module Parse.
        | Some (fid, payload, rest) eqn:Hf => match find_field m fid with
                                             | Some (D_FIELD name fid vdesc) =>
                                                 match vdesc with 
-                                                | D_DOUBLE dd =>
-                                                    match parse_deco dd payload double_field_parser with
-                                                    | Some vdeco =>
-                                                        parse_message' m (Some (update_message msg name
-                                                                                  (V_DOUBLE vdeco))) rest
-                                                    | None => None
-                                                    end
-                                                | D_FLOAT dd =>
-                                                    match parse_deco dd payload float_field_parser with
-                                                    | Some vdeco =>
-                                                        parse_message' m (Some (update_message msg name
-                                                                                  (V_FLOAT vdeco))) rest
-                                                    | None => None
-                                                    end
                                                 | D_INT w dd =>
                                                     match parse_deco dd payload (int_field_parser w) with
                                                     | Some vdeco =>
@@ -1027,40 +824,36 @@ Module Parse.
    Proof.
      intros enc rmsg rest.
      funelim (parse_message' m msg enc); try discriminate.
-     cbn. clear H9. apply decode_field_consume in Hf.
+     cbn. clear H7. apply decode_field_consume in Hf.
      destruct (find_field m fid); last discriminate.
      destruct f eqn:Hfd. destruct val eqn:Hval.
-     * destruct (parse_deco deco payload double_field_parser) eqn:Hdeco; last discriminate.
-       intro Hcall. pose proof (H f _ id val deco _ _ rest0 Hcall) as H'. lia.
-     * destruct (parse_deco deco payload float_field_parser) eqn:Hdeco; last discriminate.
-       intro Hcall. pose proof (H0 f _ id val deco _ _ rest0 Hcall) as H'. lia.
      * destruct (parse_deco deco payload (int_field_parser w)) eqn:Hdeco; last discriminate.
-       intro Hcall. pose proof (H1 f _ id val w deco _ _ rest0 Hcall) as H'. lia.
+       intro Hcall. pose proof (H f _ id val w deco _ _ rest0 Hcall) as H'. lia.
      * destruct (parse_deco deco payload (uint_field_parser w)) eqn:Hdeco; last discriminate.
-       intro Hcall. pose proof (H1 f _ id val w deco _ _ rest0 Hcall) as H'. lia.
+       intro Hcall. pose proof (H f _ id val w deco _ _ rest0 Hcall) as H'. lia.
      * destruct (parse_deco deco payload (sint_field_parser w)) eqn:Hdeco; last discriminate.
-       intro Hcall. pose proof (H1 f _ id val w deco _ _ rest0 Hcall) as H'. lia.
+       intro Hcall. pose proof (H f _ id val w deco _ _ rest0 Hcall) as H'. lia.
      * destruct (parse_deco deco payload (fixed_field_parser w)) eqn:Hdeco; last discriminate.
-       intro Hcall. pose proof (H1 f _ id val w deco _ _ rest0 Hcall) as H'. lia.
+       intro Hcall. pose proof (H f _ id val w deco _ _ rest0 Hcall) as H'. lia.
      * destruct (parse_deco deco payload (sfixed_field_parser w)) eqn:Hdeco; last discriminate.
-       intro Hcall. pose proof (H1 f _ id val w deco _ _ rest0 Hcall) as H'. lia.
+       intro Hcall. pose proof (H f _ id val w deco _ _ rest0 Hcall) as H'. lia.
      * destruct (parse_deco deco payload bool_field_parser) eqn:Hdeco; last discriminate.
-       intro Hcall. pose proof (H2 f _ id val deco _ _ rest0 Hcall) as H'. lia.
+       intro Hcall. pose proof (H0 f _ id val deco _ _ rest0 Hcall) as H'. lia.
      * destruct (parse_deco deco payload string_field_parser) eqn:Hdeco; last discriminate.
-       intro Hcall. pose proof (H3 f _ id val deco _ _ rest0 Hcall) as H'. lia.
+       intro Hcall. pose proof (H1 f _ id val deco _ _ rest0 Hcall) as H'. lia.
      * destruct (parse_deco deco payload bytes_field_parser) eqn:Hdeco; last discriminate.
-       intro Hcall. pose proof (H4 f _ id val deco _ _ rest0 Hcall) as H'. lia.
+       intro Hcall. pose proof (H2 f _ id val deco _ _ rest0 Hcall) as H'. lia.
      * destruct deco eqn:Hdeco.
        - destruct (parse_message' msg0 (Some (init_msg msg0)) rest) eqn:Hmsg; last discriminate.
          destruct p eqn:Hp. intro Hcall.
+         pose proof (H4 f _ id val msg0 deco p _ payload rmsg rest0 Hcall) as H'. lia.
+       - destruct (parse_message' msg0 (Some (init_msg msg0)) rest) eqn:Hmsg; last discriminate.
+         destruct p eqn:Hp. intro Hcall.
+         pose proof (H5 f _ id val msg0 deco p _ payload rmsg rest0 Hcall) as H'. lia.
+       - destruct (parse_message' msg0 (Some (init_msg msg0)) rest) eqn:Hmsg; last discriminate.
+         destruct p eqn:Hp. intro Hcall.
          pose proof (H6 f _ id val msg0 deco p _ payload rmsg rest0 Hcall) as H'. lia.
-       - destruct (parse_message' msg0 (Some (init_msg msg0)) rest) eqn:Hmsg; last discriminate.
-         destruct p eqn:Hp. intro Hcall.
-         pose proof (H7 f _ id val msg0 deco p _ payload rmsg rest0 Hcall) as H'. lia.
-       - destruct (parse_message' msg0 (Some (init_msg msg0)) rest) eqn:Hmsg; last discriminate.
-         destruct p eqn:Hp. intro Hcall.
-         pose proof (H8 f _ id val msg0 deco p _ payload rmsg rest0 Hcall) as H'. lia.
      * discriminate.
    Qed.
-   
+
 End Parse.

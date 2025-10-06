@@ -28,8 +28,6 @@ Module Descriptors.
                                              end.
 
   Inductive ValDesc : Type :=
-  | D_DOUBLE (deco: DecoDesc)
-  | D_FLOAT  (deco: DecoDesc)
   | D_INT    (w: Width) (deco: DecoDesc)
   | D_UINT   (w: Width) (deco: DecoDesc)
   | D_SINT   (w: Width) (deco: DecoDesc)
@@ -101,14 +99,7 @@ Module Descriptors.
 
   Arguments DecoVal v : clear implicits.
 
-  Definition f32 := binary32.
-  Definition f32_zero := B754_zero 24 128 false.
-  Definition f64 := binary64.
-  Definition f64_zero := B754_zero 53 1024 false.
-  
   Inductive ValVal :=
-  | V_DOUBLE (v: DecoVal f64)
-  | V_FLOAT  (v: DecoVal f32)
   | V_INT    (v: DecoVal Z)
   | V_BOOL   (v: DecoVal bool)
   | V_STRING (v: DecoVal string)
@@ -158,8 +149,6 @@ Module Descriptors.
   let init_field := (fix init_field (f:FieldDesc) : FieldVal :=
     V_FIELD (field_desc_get_name f)
       (match (field_desc_get_val f) with
-       | D_DOUBLE dd => V_DOUBLE (init_deco dd f64_zero)
-       | D_FLOAT dd => V_FLOAT (init_deco dd f32_zero)
        | D_INT _ dd
        | D_UINT _ dd
        | D_SINT _ dd

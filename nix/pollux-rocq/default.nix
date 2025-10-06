@@ -18,7 +18,6 @@ stdenv.mkDerivation {
   propagatedBuildInputs = [
     coqPackages.equations
     perennial
-    coqPackages.flocq
     rocqPackages.stdlib
   ];
 

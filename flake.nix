@@ -39,7 +39,6 @@
                 rocqPackages.stdlib
                 coqPackages.equations # And now we can interop these?
                 perennial.packages.${system}.default
-                coqPackages.flocq
 
                 # Protobuf Deps
                 protobuf
