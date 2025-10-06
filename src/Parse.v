@@ -420,46 +420,6 @@ Module Parse.
   Definition find_nested_msg_desc (m : MsgDesc) (f : FieldVal) : option MsgDesc :=
     find_nested_md_f (msg_desc_get_fields m) f.
 
-  (* NOTE I /really/ want to move encode_fields, encode_message and encode_messages to
-     mutually recursive functions via the `with` keyword. However, moving any of them
-     outside the body of encode_field causes an error about not knowing which argument
-     is the decreasing one. Annotating that Fixpoint with Program and a {struct f} field
-     lets Rocq accept the fixpoint, but it also generates some complex Obligations that
-     I'd rather not deal with. Given all that, I've elected to leave the functions
-     internal to encode_field. Proving correctness of this function will also be hard. *)
-  (* Fixpoint encode_field (m : MsgDesc) (f : FieldVal) : option (list byte) := *)
-  (*   match encode_header m (field_val_get_name f) with *)
-  (*   | Some header => let header_bytes := Varint.encode header in *)
-  (*                   let encode_fields := fun m' fs => fold_left opt_append_opt (map (encode_field m') fs) *)
-  (*                                                    None in *)
-  (*                   let encode_message := fun m' msg => prefix_opt header_bytes $ len_prefix_opt $ *)
-  (*                                                      encode_fields m' (msg_val_get_fields msg) in *)
-  (*                   let encode_messages := fun m' ms => fold_left opt_append_opt (map (encode_message m') ms) *)
-  (*                                                      None in *)
-  (*                   match (field_val_get_val f) with *)
-  (*                   | V_DOUBLE v => encode_deco_packed v f64_zero encode_double header_bytes *)
-  (*                   | V_FLOAT v => encode_deco_packed v f32_zero encode_float header_bytes *)
-  (*                   | V_INT v => match find_int_enc_one m (field_val_get_name f) with *)
-  (*                               | Some enc_one => encode_deco_packed v 0%Z enc_one header_bytes *)
-  (*                               | None => None *)
-  (*                               end *)
-  (*                   | V_BOOL v => encode_deco_packed v false encode_bool header_bytes *)
-  (*                   | V_STRING v => encode_deco_unpacked v EmptyString encode_string header_bytes *)
-  (*                   | V_BYTES v => encode_deco_unpacked v [] encode_bytes header_bytes *)
-  (*                   | V_MSG (V_IMPLICIT v) *)
-  (*                   | V_MSG (V_OPTIONAL (Some v)) => match find_nested_msg_desc m f with *)
-  (*                                                   | Some m' => encode_message m' v *)
-  (*                                                   | None => None *)
-  (*                                                   end *)
-  (*                   | V_MSG (V_REPEATED (ms)) => match find_nested_msg_desc m f with *)
-  (*                                               | Some m' => encode_messages m' ms *)
-  (*                                               | None => None *)
-  (*                                               end *)
-  (*                   | _ => None *)
-  (*                   end *)
-  (*   | None => None *)
-  (*   end. *)
-
   Equations field_desc_measure (f : FieldDesc) : nat :=
     field_desc_measure (D_FIELD _ _ (D_MSG (D_MESSAGE _ fs') _)) :=
       1 + fields_desc_measure fs';
@@ -559,7 +519,7 @@ Module Parse.
       | Some header, Some m' =>
           let encode_prefix_message := fun m' msg => prefix_opt (Varint.encode header) $ len_prefix_opt $
                                                     encode_message m' msg in
-          fold_left opt_append_opt (map (encode_message m') msgs) None
+          fold_left opt_append_opt (map (encode_prefix_message m') msgs) None
       | _, _ => None
       };
     encode_field' m (V_FIELD n _) with encode_header m n => {
@@ -726,226 +686,163 @@ Module Parse.
     | h :: tl => (2^(uint.Z h) * assemble_Z tl) + (uint.Z h)
     end.
 
-  Definition FieldParser (A : Type) := list byte -> option (A * list byte).
-
-  Definition consuming {A : Type} (f : FieldParser A) : Prop :=
-    forall enc a rest, f enc = Some (a, rest) -> length rest < length enc.
-
-  (* Probably not the best name, but it means that the function actually consumes bytes, so 🤷 *)
-  Class Hungry {A : Type} (f : FieldParser A) :=
-    {
-      consume_proof : consuming f
+  Class FieldParser (A : Type) := {
+      parse : list byte -> option (A * list byte);
+      consume_proof : forall enc a rest, parse enc = Some (a, rest) -> length rest < length enc;
     }.
 
-  Definition parse_double : FieldParser f64 :=
-    fun enc =>
-      match consume 8 enc with
-      | Some (byt, rest) => Some (b64_of_bits $ assemble_Z byt, rest)
-      | None => None
-      end.
+  Definition parse_double (enc : list byte) : option (f64 * list byte) :=
+    match consume 8 enc with
+    | Some (byt, rest) => Some (b64_of_bits $ assemble_Z byt, rest)
+    | None => None
+    end.
 
-  Lemma double_consuming : consuming parse_double.
-  Proof.
-    unfold consuming.
-    intros enc a rest.
-    unfold parse_double.
-    destruct (consume 8 enc) as [[byt__c rest__c] |] eqn:Hconsume.
-    + intro Heq. inversion Heq. subst.
-      apply consume_consume in Hconsume as [_ Hlen].
-      * done.
+  Program Instance double_field_parser : FieldParser f64 := {| parse := parse_double |}.
+  Next Obligation.
+    unfold parse_double in H.
+    destruct (consume 8 enc) as [[byt__c rest__c] |] eqn:Hconsume in H.
+    + inversion H. subst. apply consume_consume in Hconsume as [_ Hlen].
+      * assumption.
       * lia.
     + discriminate.
   Qed.
 
-  Instance double_hunary : Hungry parse_double := {| consume_proof := double_consuming |}.
+  Definition parse_float (enc : list byte) : option (f32 * list byte) :=
+    match consume 4 enc with
+    | Some (byt, rest) => Some (b32_of_bits $ assemble_Z byt, rest)
+    | None => None
+    end.
 
-  Definition parse_float : FieldParser f32 :=
-    fun enc =>
-      match consume 4 enc with
-      | Some (byt, rest) => Some (b32_of_bits $ assemble_Z byt, rest)
-      | None => None
-      end.
-
-  Lemma float_consuming : consuming parse_float.
-  Proof.
-    unfold consuming.
-    intros enc a rest.
-    unfold parse_float.
-    destruct (consume 4 enc) as [[byt__c rest__c] |] eqn:Hconsume.
-    + intro Heq. inversion Heq. subst.
-      apply consume_consume in Hconsume as [_ Hlen].
-      * done.
+  Program Instance float_field_parser : FieldParser f32 := {| parse := parse_float |}.
+  Next Obligation.
+    unfold parse_float in H.
+    destruct (consume 4 enc) as [[byt__c rest__c] |] eqn:Hconsume in H.
+    + inversion H. subst. apply consume_consume in Hconsume as [_ Hlen].
+      * assumption.
       * lia.
     + discriminate.
   Qed.
 
-  Instance float_hunary : Hungry parse_float := {| consume_proof := float_consuming |}.
+  Definition parse_int (w : Width) (enc : list byte) : option (Z * list byte) :=
+    match Varint.extract_varint enc with
+    | Some (vint, rest) => Some (uint_int w $ uint_change_w w $ uint.Z $ Varint.decode vint, rest)
+    | None => None
+    end.
 
-  Definition parse_int : Width -> FieldParser Z :=
-    fun w enc =>
-      match Varint.extract_varint enc with
-      | Some (vint, rest) => Some (uint_int w $ uint_change_w w $ uint.Z $ Varint.decode vint, rest)
-      | None => None
-      end.
-
-  Lemma int_consuming (w : Width) : consuming (parse_int w).
-  Proof.
-    unfold consuming.
-    intros enc a rest.
-    unfold parse_int.
-    destruct (Varint.extract_varint enc) as [[vint rest__b] |] eqn:Hconsume.
-    + intro Heq. inversion Heq. subst.
-      apply Varint.extract_varint_consume in Hconsume.
-      done.
+  Program Instance int_field_parser (w : Width) : FieldParser Z := {| parse := parse_int w |}.
+  Next Obligation.
+    unfold parse_int in H.
+    destruct (Varint.extract_varint enc) as [[vint rest__b] |] eqn:Hconsume in H.
+    + inversion H. subst. apply Varint.extract_varint_consume in Hconsume.
+      assumption.
     + discriminate.
   Qed.
 
-  Instance int_hungry (w : Width) : Hungry (parse_int w) := {| consume_proof := int_consuming w |}.
-  
-  Definition parse_uint : Width -> FieldParser Z :=
-    fun w enc =>
-      match Varint.extract_varint enc with
-      | Some (vint, rest) => Some (uint_change_w w $ uint.Z $ Varint.decode vint, rest)
-      | None => None
-      end.
+  Definition parse_uint (w : Width) (enc : list byte) : option (Z * list byte) :=
+    match Varint.extract_varint enc with
+    | Some (vint, rest) => Some (uint_change_w w $ uint.Z $ Varint.decode vint, rest)
+    | None => None
+    end.
 
-  Lemma uint_consuming (w : Width) : consuming (parse_uint w).
-  Proof.
-    unfold consuming.
-    intros enc a rest.
-    unfold parse_uint.
-    destruct (Varint.extract_varint enc) as [[vint rest__b] |] eqn:Hconsume.
-    + intro Heq. inversion Heq. subst.
-      apply Varint.extract_varint_consume in Hconsume.
-      done.
+  Program Instance uint_field_parser (w : Width) : FieldParser Z := {| parse := parse_uint w |}.
+  Next Obligation.
+    unfold parse_uint in H.
+    destruct (Varint.extract_varint enc) as [[vint rest__b] |] eqn:Hconsume in H.
+    + inversion H. subst. apply Varint.extract_varint_consume in Hconsume.
+      assumption.
     + discriminate.
   Qed.
 
-  Instance uint_hungry (w : Width) : Hungry (parse_uint w) := {| consume_proof := uint_consuming w |}.
+  Definition parse_sint (w : Width) (enc : list byte) : option (Z * list byte) :=
+    match Varint.extract_varint enc with
+    | Some (vint, rest) => Some (uint_sint w $ uint_change_w w $ uint.Z $ Varint.decode vint, rest)
+    | None => None
+    end.
 
-  Definition parse_sint : Width -> FieldParser Z :=
-    fun w enc =>
-      match Varint.extract_varint enc with
-      | Some (vint, rest) => Some (uint_sint w $ uint_change_w w $ uint.Z $ Varint.decode vint, rest)
-      | None => None
-      end.
-  
-  Lemma sint_consuming (w : Width) : consuming (parse_sint w).
-  Proof.
-    unfold consuming.
-    intros enc a rest.
-    unfold parse_sint.
-    destruct (Varint.extract_varint enc) as [[vint rest__b] |] eqn:Hconsume.
-    + intro Heq. inversion Heq. subst.
-      apply Varint.extract_varint_consume in Hconsume.
-      done.
+  Program Instance sint_field_parser (w : Width) : FieldParser Z := {| parse := parse_sint w |}.
+  Next Obligation.
+    unfold parse_sint in H.
+    destruct (Varint.extract_varint enc) as [[vint rest__b] |] eqn:Hconsume in H.
+    + inversion H. subst. apply Varint.extract_varint_consume in Hconsume.
+      assumption.
     + discriminate.
   Qed.
+    
+  Definition parse_fixed  (w : Width) (enc : list byte) : option (Z * list byte) :=
+    match consume (Z.to_nat (unwrap_width w)) enc with
+    | Some (byt, rest) => Some (assemble_Z byt, rest)
+    | None => None
+    end.
 
-  Instance sint_hungry (w : Width) : Hungry (parse_sint w) := {| consume_proof := sint_consuming w |}.
-
-  Definition parse_fixed : Width -> FieldParser Z :=
-    fun w enc =>
-      match consume (Z.to_nat (unwrap_width w)) enc with
-      | Some (byt, rest) => Some (assemble_Z byt, rest)
-      | None => None
-      end.
-
-  Lemma fixed_consuming (w : Width) : consuming (parse_fixed w).
-  Proof.
-    unfold consuming.
-    intros enc a rest.
-    unfold parse_fixed.
+  Program Instance fixed_field_parser (w : Width) : FieldParser Z := {| parse := parse_fixed w |}.
+  Next Obligation.
+    unfold parse_fixed in H.
     destruct (consume (Z.to_nat (unwrap_width w)) enc) as [[byt__c rest__c] |] eqn:Hconsume.
-    + intro Heq. inversion Heq. subst.
-      apply consume_consume in Hconsume as [_ Hlen].
-      * done.
+    + inversion H. subst. apply consume_consume in Hconsume as [_ Hlen].
+      * assumption.
       * destruct w. unfold WidthProp in w. simpl. lia.
     + discriminate.
   Qed.
-  
-  Instance fixed_hungry (w : Width) : Hungry (parse_fixed w) := {| consume_proof := fixed_consuming w |}.
-  
-  Definition parse_sfixed : Width -> FieldParser Z :=
-    fun w enc =>
-      match consume (Z.to_nat (unwrap_width w)) enc with
-      | Some (byt, rest) => Some (uint_int w $ assemble_Z byt, rest)
-      | None => None
-      end.
 
-  Lemma sfixed_consuming (w : Width) : consuming (parse_sfixed w).
-  Proof.
-    unfold consuming.
-    intros enc a rest.
-    unfold parse_sfixed.
+  Definition parse_sfixed  (w : Width) (enc : list byte) : option (Z * list byte) :=
+    match consume (Z.to_nat (unwrap_width w)) enc with
+    | Some (byt, rest) => Some (uint_int w $ assemble_Z byt, rest)
+    | None => None
+    end.
+
+  Program Instance sfixed_field_parser (w : Width) : FieldParser Z := {| parse := parse_sfixed w |}.
+  Next Obligation.
+    unfold parse_sfixed in H.
     destruct (consume (Z.to_nat (unwrap_width w)) enc) as [[byt__c rest__c] |] eqn:Hconsume.
-    + intro Heq. inversion Heq. subst.
-      apply consume_consume in Hconsume as [_ Hlen].
-      * done.
+    + inversion H. subst. apply consume_consume in Hconsume as [_ Hlen].
+      * assumption.
       * destruct w. unfold WidthProp in w. simpl. lia.
     + discriminate.
   Qed.
-  
-  Instance sfixed_hungry (w : Width) : Hungry (parse_sfixed w) := {| consume_proof := sfixed_consuming w |}.
 
-  Definition parse_bool : FieldParser bool :=
-    fun enc =>
-      match enc with
-      | [] => None
-      | h :: tl => if word.eqb h (W8 0) then Some (false, tl) else Some (true, tl)
-      end.
+  Definition parse_bool (enc : list byte) : option (bool * list byte) :=
+    match enc with
+    | [] => None
+    | h :: tl => if word.eqb h (W8 0) then Some (false, tl) else Some (true, tl)
+    end.
 
-  Lemma bool_consuming : consuming parse_bool.
-  Proof.
-    unfold consuming.
-    intros enc a rest.
-    unfold parse_bool.
+  Program Instance bool_field_parser : FieldParser bool := {| parse := parse_bool |}.
+  Next Obligation.
+    unfold parse_bool in H.
     destruct enc.
     + discriminate.
     + destruct (word.eqb w (W8 0)).
-      * intros Heq. inversion Heq. subst. simpl. lia.
-      * intros Heq. inversion Heq. subst. simpl. lia.
+      * inversion H. subst. simpl. lia.
+      * inversion H. subst. simpl. lia.
   Qed.
 
-  Instance bool_hungry : Hungry parse_bool := {| consume_proof := bool_consuming |}.
+  Definition parse_string (enc : list byte) : option (string * list byte) :=
+    match enc with
+    | [] => None
+    | bytes => Some (string_of_list_ascii (map Properties.u8_to_ascii bytes) , [])
+    end.
 
-  Definition parse_string : FieldParser string :=
-    fun enc =>
-      match enc with
-      | [] => None
-      | bytes => Some (string_of_list_ascii (map Properties.u8_to_ascii bytes) , [])
-      end.
-
-  Lemma string_consuming : consuming parse_string.
-  Proof.
-    unfold consuming.
-    intros enc a rest.
-    unfold parse_string.
+  Program Instance string_field_parser : FieldParser string := {| parse := parse_string |}.
+  Next Obligation.
+    unfold parse_string in H.
     destruct enc.
     + discriminate.
-    + intros Heq. inversion Heq. subst. simpl. lia.
+    + inversion H. subst. simpl. lia.
   Qed.
 
-  Instance string_hungry : Hungry parse_string := {| consume_proof := string_consuming |}.
+  Definition parse_bytes (enc : list byte) : option (list byte * list byte) :=
+    match enc with
+    | [] => None
+    | bytes => Some (bytes, [])
+    end.
 
-  Definition parse_bytes : FieldParser (list byte) :=
-    fun enc =>
-      match enc with
-      | [] => None
-      | bytes => Some (bytes, [])
-      end.
-
-  Lemma bytes_consuming : consuming parse_bytes.
-  Proof.
-    unfold consuming.
-    intros enc a rest.
+  Program Instance bytes_field_parser : FieldParser (list byte) := {| parse := parse_bytes |}.
+  Next Obligation.
     unfold parse_bytes.
     destruct enc.
     + discriminate.
-    + intros Heq. inversion Heq. subst. simpl. lia.
+    + inversion H. subst. simpl. lia.
   Qed.
-
-  Instance bytes_hungry : Hungry parse_bytes := {| consume_proof := bytes_consuming |}.
 
   Definition update_field {A : Type} (name : string) (ori_v : DecoVal A) (new_v : DecoVal A) : DecoVal A :=
     match ori_v, new_v with
@@ -983,37 +880,30 @@ Module Parse.
                                                       (V_FIELD n v) :: update_fields tl
                             end) in
     V_MESSAGE (update_fields (msg_val_get_fields m)).
+
+   Equations? parse_packed {A : Type} (payload : list byte) (parse_one : FieldParser A) :
+     option (list A) by wf (length payload) lt :=
+     parse_packed pyl parse_one with inspect (parse_one.(parse) pyl) := {
+       | Some (a, []) eqn:Hp => Some [a]
+       | Some (a, bs) eqn:Hp => match parse_packed bs parse_one with
+                              | Some r => Some (a :: r)
+                              | None => None
+                              end
+       | None eqn:Hp => None
+       }.
+   Proof.
+     apply parse_one.(consume_proof) in Hp. 
+     replace bs with (w :: l); done.
+   Qed.
         
-   Program Fixpoint parse_packed {A : Type} (payload : list byte) (parse_one : FieldParser A)
-     `{Hungry A parse_one} {measure (length payload)} : option (list A) :=
-     match parse_one payload with
-     | Some (a, bs) => match bs with
-                      | [] => Some [a]
-                      | bs => match parse_packed bs parse_one with
-                             | Some r => Some (a :: r)
-                             | None => None
-                             end
-                      end
-     | None => None
-     end.
-
-   Next Obligation.
-    symmetry in Heq_anonymous.
-    apply (@consume_proof A parse_one) in Heq_anonymous; assumption.
-   Qed.
-   Next Obligation.
-    apply measure_wf.
-    apply lt_wf.
-   Qed.
-
    Definition parse_deco {A : Type} (deco : DecoDesc) (payload : list byte) (parse_one : FieldParser A)
-     `{Hungry A parse_one} : option (DecoVal A) :=
+     : option (DecoVal A) :=
      match deco with
-     | D_IMPLICIT => match parse_one payload with
+     | D_IMPLICIT => match parse_one.(parse) payload with
                     | Some (one, _) => Some (V_IMPLICIT one)
                     | None => None
                     end
-     | D_OPTIONAL => match parse_one payload with
+     | D_OPTIONAL => match parse_one.(parse) payload with
                     | Some (one, _) => Some (V_OPTIONAL (Some one))
                     | None => None
                     end
@@ -1023,155 +913,107 @@ Module Parse.
                     end
      end.
 
-   (* Function parse_message' (m: MsgDesc) (msg: option MsgVal) (enc: list byte) {measure length enc}: *)
-   Program Fixpoint parse_message' (m: MsgDesc) (msg: option MsgVal) (enc: list byte) {measure (length enc)}:
-     option (MsgVal * list byte) :=
-     match msg with
-     | Some msg => match decode_field enc with
-                         | Some (fid, payload, rest) =>
-                             match find_field m fid with
-                             | Some (D_FIELD name fid vdesc) =>
-                                 match vdesc with
-                                 | D_DOUBLE dd =>
-                                     match parse_deco dd payload parse_double with
-                                     | Some vdeco =>
-                                         parse_message' m (Some
-                                                             (update_message msg name (V_DOUBLE vdeco))) rest
-                                     | None => None
-                                     end
-                                 | D_FLOAT dd =>
-                                     match parse_deco dd payload parse_float with
-                                     | Some vdeco =>
-                                         parse_message' m (Some
-                                                             (update_message msg name (V_FLOAT vdeco))) rest
-                                     | None => None
-                                     end
-                                 | D_INT w dd =>
-                                     match parse_deco dd payload (parse_int w) with
-                                     | Some vdeco =>
-                                         parse_message' m (Some
-                                                             (update_message msg name (V_INT vdeco))) rest
-                                     | None => None
-                                     end
-                                 | D_UINT w dd =>
-                                     match parse_deco dd payload (parse_uint w) with
-                                     | Some vdeco =>
-                                         parse_message' m (Some
-                                                             (update_message msg name (V_INT vdeco))) rest
-                                     | None => None
-                                     end
-                                 | D_SINT w dd =>
-                                     match parse_deco dd payload (parse_sint w) with
-                                     | Some vdeco =>
-                                         parse_message' m (Some
-                                                             (update_message msg name (V_INT vdeco))) rest
-                                     | None => None
-                                     end
-                                 | D_FIXED w dd =>
-                                     match parse_deco dd payload (parse_fixed w) with
-                                     | Some vdeco =>
-                                         parse_message' m (Some
-                                                             (update_message msg name (V_INT vdeco))) rest
-                                     | None => None
-                                     end
-                                 | D_SFIXED w dd =>
-                                     match parse_deco dd payload (parse_sfixed w) with
-                                     | Some vdeco =>
-                                         parse_message' m (Some
-                                                             (update_message msg name (V_INT vdeco))) rest
-                                     | None => None
-                                     end
-                                 | D_BOOL dd =>
-                                     match parse_deco dd payload parse_bool with
-                                     | Some vdeco =>
-                                         parse_message' m (Some
-                                                             (update_message msg name (V_BOOL vdeco))) rest
-                                     | None => None
-                                     end
-                                 | D_STRING dd =>
-                                     match parse_deco dd payload parse_string with
-                                     | Some vdeco =>
-                                         parse_message' m (Some
-                                                             (update_message msg name (V_STRING vdeco))) rest
-                                     | None => None
-                                     end
-                                 | D_BYTES dd =>
-                                     match parse_deco dd payload parse_bytes with
-                                     | Some vdeco =>
-                                         parse_message' m (Some
-                                                             (update_message msg name (V_BYTES vdeco))) rest
-                                     | None => None
-                                     end
-                                 | D_MSG md dd =>
-                                     match dd, parse_message' md (Some (init_msg md)) rest with
-                                     | _, None => None
-                                     | D_IMPLICIT, Some (msg, _) =>
-                                         parse_message' m
-                                           (Some (update_message msg name
-                                                    (V_MSG (V_IMPLICIT msg)))) rest
-                                     | D_OPTIONAL, Some (msg, _) =>
-                                         parse_message' m
-                                           (Some (update_message msg name
-                                                    (V_MSG (V_OPTIONAL (Some msg))))) rest
-                                     | D_REPEATED, Some (msg, _) =>
-                                         parse_message' m
-                                           (Some (update_message msg name
-                                                    (V_MSG (V_REPEATED [msg])))) rest
-                                     end
-                                 (* TODO parse enums *)
-                                 | D_ENUM _  => None
-                                 end
-                             | None => None
-                             end
-                         | None => None
-                         end
-     | None => None
-     end.
-   Next Obligation.
-     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
-   Qed.
-   Next Obligation.
-     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
-   Qed.
-   Next Obligation.
-     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
-   Qed.
-   Next Obligation.
-     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
-   Qed.
-   Next Obligation.
-     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
-   Qed.
-   Next Obligation.
-     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
-   Qed.
-   Next Obligation.
-     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
-   Qed.
-   Next Obligation.
-     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
-   Qed.
-   Next Obligation.
-     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
-   Qed.
-   Next Obligation.
-     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
-   Qed.
-   Next Obligation.
-     symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
-   Qed.
-   Next Obligation.
-     clear Heq_anonymous. symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
-   Qed.
-   Next Obligation.
-     clear Heq_anonymous. symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
-   Qed.
-   Next Obligation.
-     clear Heq_anonymous. symmetry in Heq_anonymous0. apply decode_field_consume in Heq_anonymous0. done.
-   Qed.
-   Next Obligation.
-     apply measure_wf.
-     apply lt_wf.
+   Equations? parse_message' (m : MsgDesc) (msg : option MsgVal) (enc : list byte) :
+     option (MsgVal * list byte) by wf (length enc) lt :=
+     parse_message' m (Some msg) enc with inspect (decode_field enc) := {
+       | Some (fid, payload, rest) eqn:Hf => match find_field m fid with
+                                            | Some (D_FIELD name fid vdesc) =>
+                                                match vdesc with 
+                                                | D_DOUBLE dd =>
+                                                    match parse_deco dd payload double_field_parser with
+                                                    | Some vdeco =>
+                                                        parse_message' m (Some (update_message msg name
+                                                                                  (V_DOUBLE vdeco))) rest
+                                                    | None => None
+                                                    end
+                                                | D_FLOAT dd =>
+                                                    match parse_deco dd payload float_field_parser with
+                                                    | Some vdeco =>
+                                                        parse_message' m (Some (update_message msg name
+                                                                                  (V_FLOAT vdeco))) rest
+                                                    | None => None
+                                                    end
+                                                | D_INT w dd =>
+                                                    match parse_deco dd payload (int_field_parser w) with
+                                                    | Some vdeco =>
+                                                        parse_message' m (Some (update_message msg name
+                                                                                  (V_INT vdeco))) rest
+                                                    | None => None
+                                                    end
+                                                | D_UINT w dd =>
+                                                    match parse_deco dd payload (uint_field_parser w) with
+                                                    | Some vdeco =>
+                                                        parse_message' m (Some (update_message msg name
+                                                                                  (V_INT vdeco))) rest
+                                                    | None => None
+                                                    end
+                                                | D_SINT w dd =>
+                                                    match parse_deco dd payload (sint_field_parser w) with
+                                                    | Some vdeco =>
+                                                        parse_message' m (Some (update_message msg name
+                                                                                  (V_INT vdeco))) rest
+                                                    | None => None
+                                                    end
+                                                | D_FIXED w dd =>
+                                                    match parse_deco dd payload (fixed_field_parser w) with
+                                                    | Some vdeco =>
+                                                        parse_message' m (Some (update_message msg name
+                                                                                  (V_INT vdeco))) rest
+                                                    | None => None
+                                                    end
+                                                | D_SFIXED w dd =>
+                                                    match parse_deco dd payload (sfixed_field_parser w) with
+                                                    | Some vdeco =>
+                                                        parse_message' m (Some (update_message msg name
+                                                                                  (V_INT vdeco))) rest
+                                                    | None => None
+                                                    end
+                                                | D_BOOL dd =>
+                                                    match parse_deco dd payload bool_field_parser with 
+                                                    | Some vdeco =>
+                                                        parse_message' m (Some (update_message msg name
+                                                                                  (V_BOOL vdeco))) rest
+                                                    | None => None
+                                                    end
+                                                | D_STRING dd =>
+                                                    match parse_deco dd payload string_field_parser with
+                                                    | Some vdeco =>
+                                                        parse_message' m (Some (update_message msg name
+                                                                                  (V_STRING vdeco))) rest
+                                                    | None => None
+                                                    end
+                                                | D_BYTES dd =>
+                                                    match parse_deco dd payload bytes_field_parser with
+                                                    | Some vdeco =>
+                                                        parse_message' m (Some (update_message msg name
+                                                                                  (V_BYTES vdeco))) rest
+                                                    | None => None
+                                                    end
+                                                | D_MSG md dd =>
+                                                    match dd, parse_message' md (Some (init_msg md)) rest with
+                                                    | D_IMPLICIT, Some (msg, _) =>
+                                                        parse_message' m (Some (update_message msg name
+                                                                                  (V_MSG (V_IMPLICIT msg))))
+                                                          rest
+                                                    | D_OPTIONAL, Some (msg, _) =>
+                                                        parse_message' m (Some (update_message msg name
+                                                                                  (V_MSG (V_OPTIONAL
+                                                                                            (Some msg))))) rest
+                                                    | D_REPEATED, Some (msg, _) =>
+                                                        parse_message' m (Some (update_message msg name
+                                                                                  (V_MSG (V_REPEATED [msg]))))
+                                                          rest
+                                                    | _, None => None
+                                                    end
+                                                | D_ENUM _ => None
+                                                end
+                                            | None => None
+                                            end
+       | None eqn:Hf => None
+       };
+     parse_message' _ None _ := None.
+   Proof.
+     all: apply decode_field_consume in Hf; assumption.
    Qed.
 
    Definition parse_message (m : MsgDesc) (enc : list byte) : option MsgVal :=
@@ -1180,75 +1022,45 @@ Module Parse.
      | None => None
      end.
 
-   Lemma deocde_header_nil : decode_header [] = None.
-   Proof. reflexivity. Qed.
-
-   Lemma decode_field_nil : decode_field [] = None.
-   Proof. reflexivity. Qed.
-
-   Lemma parse_message_nil m msg : parse_message' m msg [] = None.
-   Proof.
-     unfold parse_message'.
-     unfold parse_message'_func.
-     rewrite fix_sub_eq; repeat fold parse_message'_func.
-     * simpl. destruct msg; try done.
-     * intros. 
-   Admitted.
-       
-
    Lemma consuming_message (m : MsgDesc) (msg : option MsgVal) : 
     forall enc a rest, parse_message' m msg enc = Some (a, rest) -> length rest < length enc.
    Proof.
-     unfold consuming.
-     intros enc.
-     (* induction (length enc) as [| n' HI] eqn:Henc. *)
-     (* * admit. *)
-     (* * generalize n' as n'' in HI. intros. *)
-     remember (length enc).
-     (* assert (n <= length enc) as Hlen by lia. *)
-     generalize dependent enc.
-     (* clear Heqn. *)
-     induction (n) using lt_wf_ind.
-     intros. subst.
-     destruct enc as [| h tl] eqn:Henc.
-     * rewrite parse_message_nil in H0. discriminate.
-     * 
-       assert (length tl < length (h :: tl)).
-       { simpl. lia. }
-       destruct msg.
-       + simpl in H0. unfold parse_message' in H0. simpl in H0.
-         cbn in H0.
-         admit.
-       + 
-       pose proof (H (length tl)). admit.
-    Admitted.
-
-(* FIXME: Without knowing that the recursive call decreases the measure,
-   I think it will be impossible to complete this proof.
-
-   I tried changing from Program Fixpoint to Function, which compressed all the
-   Obligation proofs into one that I was able to compress down to one line, but 
-   both Qed and Defined threw an error, stating that
-
-   "error: cannot create equation lemma. this may be because the function is nested-recursive"
-
-   I don't think this function is nested-recursive, but I'm not sure what the formal meaning of
-   the term is. There certainly aren't any mutually recursive functions (however cheekily defined)
-   such that the measure needs to be tracked across multiple different functions. Moreover, I've
-   basically off-loaded all of the measure proofs to decode_fields (which seem to have been a wise choice).
-
-   The documentation for the Function keyword suggests using the newer Equations plugin instead of this
-   old library, but they seem to depart a bit further from standard rocq syntax, although there is a
-   tutorial on the rocq website I could complete.
-
-   https://rocq-prover.org/doc/v9.0/refman/using/libraries/funind.html
-   https://mattam82.github.io/Coq-Equations/
-   https://rocq-prover.org/docs/equations-docs
-
-   Stepping back a bit, I don't technically need to prove that parse_message is consuming. However,
-   I will need to reason about it in the future (I have to believe) and so there is an incentive to
-   doing this proof to establish how to reason about it for a basic property like that the output
-   byte list is shorter than the input one.
- *)
-
+     intros enc rmsg rest.
+     funelim (parse_message' m msg enc); try discriminate.
+     cbn. clear H9. apply decode_field_consume in Hf.
+     destruct (find_field m fid); last discriminate.
+     destruct f eqn:Hfd. destruct val eqn:Hval.
+     * destruct (parse_deco deco payload double_field_parser) eqn:Hdeco; last discriminate.
+       intro Hcall. pose proof (H f _ id val deco _ _ rest0 Hcall) as H'. lia.
+     * destruct (parse_deco deco payload float_field_parser) eqn:Hdeco; last discriminate.
+       intro Hcall. pose proof (H0 f _ id val deco _ _ rest0 Hcall) as H'. lia.
+     * destruct (parse_deco deco payload (int_field_parser w)) eqn:Hdeco; last discriminate.
+       intro Hcall. pose proof (H1 f _ id val w deco _ _ rest0 Hcall) as H'. lia.
+     * destruct (parse_deco deco payload (uint_field_parser w)) eqn:Hdeco; last discriminate.
+       intro Hcall. pose proof (H1 f _ id val w deco _ _ rest0 Hcall) as H'. lia.
+     * destruct (parse_deco deco payload (sint_field_parser w)) eqn:Hdeco; last discriminate.
+       intro Hcall. pose proof (H1 f _ id val w deco _ _ rest0 Hcall) as H'. lia.
+     * destruct (parse_deco deco payload (fixed_field_parser w)) eqn:Hdeco; last discriminate.
+       intro Hcall. pose proof (H1 f _ id val w deco _ _ rest0 Hcall) as H'. lia.
+     * destruct (parse_deco deco payload (sfixed_field_parser w)) eqn:Hdeco; last discriminate.
+       intro Hcall. pose proof (H1 f _ id val w deco _ _ rest0 Hcall) as H'. lia.
+     * destruct (parse_deco deco payload bool_field_parser) eqn:Hdeco; last discriminate.
+       intro Hcall. pose proof (H2 f _ id val deco _ _ rest0 Hcall) as H'. lia.
+     * destruct (parse_deco deco payload string_field_parser) eqn:Hdeco; last discriminate.
+       intro Hcall. pose proof (H3 f _ id val deco _ _ rest0 Hcall) as H'. lia.
+     * destruct (parse_deco deco payload bytes_field_parser) eqn:Hdeco; last discriminate.
+       intro Hcall. pose proof (H4 f _ id val deco _ _ rest0 Hcall) as H'. lia.
+     * destruct deco eqn:Hdeco.
+       - destruct (parse_message' msg0 (Some (init_msg msg0)) rest) eqn:Hmsg; last discriminate.
+         destruct p eqn:Hp. intro Hcall.
+         pose proof (H6 f _ id val msg0 deco p _ payload rmsg rest0 Hcall) as H'. lia.
+       - destruct (parse_message' msg0 (Some (init_msg msg0)) rest) eqn:Hmsg; last discriminate.
+         destruct p eqn:Hp. intro Hcall.
+         pose proof (H7 f _ id val msg0 deco p _ payload rmsg rest0 Hcall) as H'. lia.
+       - destruct (parse_message' msg0 (Some (init_msg msg0)) rest) eqn:Hmsg; last discriminate.
+         destruct p eqn:Hp. intro Hcall.
+         pose proof (H8 f _ id val msg0 deco p _ payload rmsg rest0 Hcall) as H'. lia.
+     * discriminate.
+   Qed.
+   
 End Parse.

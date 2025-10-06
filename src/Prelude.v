@@ -4,6 +4,10 @@ Number Notation BinNums.Z BinIntDef.Z.of_num_int BinIntDef.Z.to_num_int : Z_scop
 Number Notation BinNums.positive BinPosDef.Pos.of_num_int BinPosDef.Pos.to_num_int : positive_scope.
 Number Notation BinNums.N BinNatDef.N.of_num_int BinNatDef.N.to_num_int : N_scope.
 
+Definition inspect {A} (a : A) : {b | a = b} := exist _ a eq_refl.
+
+Notation "x 'eqn' ':' p" := (exist _ x p) (only parsing, at level 20).
+
 Require Export List.
 From Stdlib Require Export Lists.List.
 Export ListNotations.
