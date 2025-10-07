@@ -57,3 +57,6 @@ _digests
 
 # Editor setup
 .dir-locals.el
+
+# Eval files 
+eval/__pycache__
