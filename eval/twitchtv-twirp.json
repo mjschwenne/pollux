@@ -6,8 +6,83 @@
     "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
     "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
   ],
-  "clientcompat/clientcompat.proto": [
+  "internal/gen/typemap/testdata/root_pkg.proto": [
+    "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
+  ],
+  "internal/gen/typemap/testdata/importer.proto": [
+    "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
+  ],
+  "internal/gen/typemap/testdata/service.proto": [
+    "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
+  ],
+  "internal/gen/typemap/testdata/public_reimporter.proto": [
+    "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
+  ],
+  "internal/gen/typemap/testdata/public_importer.proto": [
+    "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
+  ],
+  "internal/twirptest/google_protobuf_imports/service.proto": [
+    "fc4abd9212a29436a3d9b92d7c97d84713fd842f",
+    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
+    "dde3caeb4958d5f6e1af2d3ec81c7b6fcd1cbe64"
+  ],
+  "internal/twirptest/no_package_name_importer/no_package_name_importer.proto": [
+    "150e12d6eb70c2fec447e9c9e59f23dd8ec1b94e",
+    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
+    "5cc665333bbacc8b6ad42737ea3b6ae5fdeb91ec"
+  ],
+  "internal/twirptest/no_package_name/no_package_name.proto": [
+    "150e12d6eb70c2fec447e9c9e59f23dd8ec1b94e",
+    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
+    "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
+  ],
+  "internal/twirptest/importmapping/y/y.proto": [
+    "871290ab9f446b64ab896f02b89549e326239390",
+    "fc4abd9212a29436a3d9b92d7c97d84713fd842f",
+    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
+    "aea986c7a02b67af356cab9897183ea2850c8282"
+  ],
+  "internal/twirptest/importmapping/x/x.proto": [
+    "5f9e9a80f2d8586de9e00dd60d14b50094f6c399",
+    "fc4abd9212a29436a3d9b92d7c97d84713fd842f",
+    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
+    "aea986c7a02b67af356cab9897183ea2850c8282"
+  ],
+  "internal/twirptest/empty_service/empty_service.proto": [
     "00ce9bc38b0d2435751699b1d835abeb3130d698",
+    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
+    "9009a438aa09cbb046415d51a43906fe71d25a34"
+  ],
+  "internal/twirptest/json_serialization/json_serialization.proto": [
+    "fc4abd9212a29436a3d9b92d7c97d84713fd842f",
+    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
+    "ccfdd1d1ec878b68ec34e8b2cfc4343b3f193f48"
+  ],
+  "internal/twirptest/service.proto": [
+    "150e12d6eb70c2fec447e9c9e59f23dd8ec1b94e",
+    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
+    "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
+  ],
+  "internal/twirptest/importer_local/importer_local.proto": [
+    "e79ada9397b4d98f3ebef813f196a873311282e6"
+  ],
+  "internal/twirptest/importer_local/importer_local_msgdef.proto": [
+    "e79ada9397b4d98f3ebef813f196a873311282e6"
+  ],
+  "internal/twirptest/snake_case_names/snake_case_names.proto": [
+    "150e12d6eb70c2fec447e9c9e59f23dd8ec1b94e",
+    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
+    "21ccd0c943e3d6b3cf704d7057ec1f99494d0c78",
+    "f917783c5f543b93f996337b2c795a9387bb4ca8"
+  ],
+  "internal/twirptest/multiple/multiple2.proto": [
+    "fc4abd9212a29436a3d9b92d7c97d84713fd842f",
+    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
+    "d85f6880addfb3edbf5b88f03f779812c60fdbeb",
+    "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
+  ],
+  "internal/twirptest/multiple/multiple1.proto": [
+    "fc4abd9212a29436a3d9b92d7c97d84713fd842f",
     "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
     "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
   ],
@@ -16,39 +91,10 @@
     "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
     "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
   ],
-  "internal/twirptest/importmapping/x/x.proto": [
-    "5f9e9a80f2d8586de9e00dd60d14b50094f6c399",
-    "fc4abd9212a29436a3d9b92d7c97d84713fd842f",
-    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
-    "aea986c7a02b67af356cab9897183ea2850c8282"
-  ],
-  "internal/twirptest/multiple/multiple1.proto": [
+  "internal/twirptest/importable/importable.proto": [
     "fc4abd9212a29436a3d9b92d7c97d84713fd842f",
     "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
     "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
-  ],
-  "internal/twirptest/importer_local/importer_local.proto": [
-    "e79ada9397b4d98f3ebef813f196a873311282e6"
-  ],
-  "internal/twirptest/multiple/multiple2.proto": [
-    "fc4abd9212a29436a3d9b92d7c97d84713fd842f",
-    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
-    "d85f6880addfb3edbf5b88f03f779812c60fdbeb",
-    "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
-  ],
-  "internal/twirptest/empty_service/empty_service.proto": [
-    "00ce9bc38b0d2435751699b1d835abeb3130d698",
-    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
-    "9009a438aa09cbb046415d51a43906fe71d25a34"
-  ],
-  "internal/twirptest/importer_local/importer_local_msgdef.proto": [
-    "e79ada9397b4d98f3ebef813f196a873311282e6"
-  ],
-  "internal/twirptest/importmapping/y/y.proto": [
-    "871290ab9f446b64ab896f02b89549e326239390",
-    "fc4abd9212a29436a3d9b92d7c97d84713fd842f",
-    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
-    "aea986c7a02b67af356cab9897183ea2850c8282"
   ],
   "internal/twirptest/service_method_same_name/service_method_same_name.proto": [
     "150e12d6eb70c2fec447e9c9e59f23dd8ec1b94e",
@@ -57,55 +103,9 @@
     "3c495b5d77725bf168e8989fcf1dcdb68606aca0",
     "90eba140cd8427315072b5b03ec780a837cf4ddb"
   ],
-  "internal/twirptest/json_serialization/json_serialization.proto": [
-    "fc4abd9212a29436a3d9b92d7c97d84713fd842f",
+  "clientcompat/clientcompat.proto": [
+    "00ce9bc38b0d2435751699b1d835abeb3130d698",
     "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
-    "ccfdd1d1ec878b68ec34e8b2cfc4343b3f193f48"
-  ],
-  "internal/twirptest/no_package_name/no_package_name.proto": [
-    "150e12d6eb70c2fec447e9c9e59f23dd8ec1b94e",
-    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
-    "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
-  ],
-  "internal/twirptest/snake_case_names/snake_case_names.proto": [
-    "150e12d6eb70c2fec447e9c9e59f23dd8ec1b94e",
-    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
-    "21ccd0c943e3d6b3cf704d7057ec1f99494d0c78",
-    "f917783c5f543b93f996337b2c795a9387bb4ca8"
-  ],
-  "internal/twirptest/google_protobuf_imports/service.proto": [
-    "fc4abd9212a29436a3d9b92d7c97d84713fd842f",
-    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
-    "dde3caeb4958d5f6e1af2d3ec81c7b6fcd1cbe64"
-  ],
-  "internal/twirptest/importable/importable.proto": [
-    "fc4abd9212a29436a3d9b92d7c97d84713fd842f",
-    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
-    "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
-  ],
-  "internal/twirptest/service.proto": [
-    "150e12d6eb70c2fec447e9c9e59f23dd8ec1b94e",
-    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
-    "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
-  ],
-  "internal/twirptest/no_package_name_importer/no_package_name_importer.proto": [
-    "150e12d6eb70c2fec447e9c9e59f23dd8ec1b94e",
-    "ca347b4a182a28d1ed1fdc9a570af31f61e1bc12",
-    "5cc665333bbacc8b6ad42737ea3b6ae5fdeb91ec"
-  ],
-  "internal/gen/typemap/testdata/root_pkg.proto": [
-    "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
-  ],
-  "internal/gen/typemap/testdata/public_importer.proto": [
-    "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
-  ],
-  "internal/gen/typemap/testdata/public_reimporter.proto": [
-    "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
-  ],
-  "internal/gen/typemap/testdata/importer.proto": [
-    "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
-  ],
-  "internal/gen/typemap/testdata/service.proto": [
     "db96cdf354e8dc053e5ee5fe890bb0a7f18123ab"
   ]
 }

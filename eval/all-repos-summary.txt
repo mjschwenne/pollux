@@ -1,0 +1,93 @@
+Creating visualizations from proto commit history...
+Using data from: asynkron-protoactor-go.json, bufbuild-buf.json, cloudwego-kitex.json, colinmarc-hdfs.json, etcd-io-etcd.json, go-kratos-kratos.json, google-protobuf.dart.json, googleapis-google-cloud-go.json, googleapis-googleapis.json, protocolbuffers-protobuf-go.json, protocolbuffers-protobuf.json, samchon-typia.json, streamdal-plumber.json, twitchtv-twirp.json
+
+asynkron-protoactor-go Summary:
+  Proto files: 36
+  Total commits: 69
+  Average commits per file: 1.92
+
+bufbuild-buf Summary:
+  Proto files: 948
+  Total commits: 1682
+  Average commits per file: 1.77
+
+cloudwego-kitex Summary:
+  Proto files: 10
+  Total commits: 11
+  Average commits per file: 1.10
+
+colinmarc-hdfs Summary:
+  Proto files: 28
+  Total commits: 51
+  Average commits per file: 1.82
+
+etcd-io-etcd Summary:
+  Proto files: 12
+  Total commits: 49
+  Average commits per file: 4.08
+
+go-kratos-kratos Summary:
+  Proto files: 8
+  Total commits: 22
+  Average commits per file: 2.75
+
+google-protobuf.dart Summary:
+  Proto files: 106
+  Total commits: 165
+  Average commits per file: 1.56
+
+googleapis-google-cloud-go Summary:
+  Proto files: 25
+  Total commits: 54
+  Average commits per file: 2.16
+
+googleapis-googleapis Summary:
+  Proto files: 5581
+  Total commits: 31265
+  Average commits per file: 5.60
+
+protocolbuffers-protobuf-go Summary:
+  Proto files: 128
+  Total commits: 389
+  Average commits per file: 3.04
+
+protocolbuffers-protobuf Summary:
+  Proto files: 389
+  Total commits: 2195
+  Average commits per file: 5.64
+
+samchon-typia Summary:
+  Proto files: 78
+  Total commits: 389
+  Average commits per file: 4.99
+
+streamdal-plumber Summary:
+  Proto files: 19
+  Total commits: 36
+  Average commits per file: 1.89
+
+twitchtv-twirp Summary:
+  Proto files: 23
+  Total commits: 63
+  Average commits per file: 2.74
+
+Combined Data Summary:
+  Total repositories: 14
+  Total proto files: 7391
+  Total commits: 36440
+  Average commits per file: 4.93
+  Min commits per file: 1
+  Max commits per file: 154
+  Standard deviation: 6.24
+
+Top files by commit count (across all repositories):
+  1. protocolbuffers-protobuf:src/google/protobuf/descriptor.proto: 154 commits
+  2. protocolbuffers-protobuf:src/google/protobuf/unittest.proto: 102 commits
+  3. googleapis-googleapis:google/pubsub/v1/pubsub.proto: 87 commits
+  4. googleapis-googleapis:google/container/v1/cluster_service.proto: 85 commits
+  5. googleapis-googleapis:google/container/v1beta1/cluster_service.proto: 81 commits
+
+Creating combined histogram plot...
+Plot saved to all-repos-histogram.png
+
+Visualization complete!

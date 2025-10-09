@@ -1,0 +1,379 @@
+{
+  "benchmarks/protos/packed_fields.proto": [
+    "e4fca1614bae58b563e3a552c64b7ee154bf1d87",
+    "de6bcc2a2c80c3f652ed6bf47e717c6d36e0e658",
+    "9daf5ca744e1ac773a07ee13e185b2ada6909b96"
+  ],
+  "protoc_plugin/protos/dart_options.proto": [
+    "c8954ea6712b5e988f01ef66836f097e641f61b6",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/protos/google/api/http.proto": [
+    "c8954ea6712b5e988f01ef66836f097e641f61b6"
+  ],
+  "protoc_plugin/protos/google/protobuf/unittest_features.proto": [
+    "456e2ee704af27225e25ba092164f66dcbf63000"
+  ],
+  "protoc_plugin/protos/google/api/routing.proto": [
+    "976ebb83969045ad285d56474ff12b33900d6371"
+  ],
+  "benchmarks/protos/query_benchmark/f21.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f4.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f13.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "protoc_plugin/protos/google/api/client.proto": [
+    "c8954ea6712b5e988f01ef66836f097e641f61b6"
+  ],
+  "benchmarks/protos/query_benchmark/f23.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f6.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f12.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f5.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f28.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f9.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f17.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f24.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f16.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f27.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f25.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f1.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f19.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f22.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f26.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f15.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "protoc_plugin/protos/google/protobuf/compiler/plugin.proto": [
+    "c21502957def72916685c955a3fde1eb66ab5585",
+    "976ebb83969045ad285d56474ff12b33900d6371",
+    "c8954ea6712b5e988f01ef66836f097e641f61b6"
+  ],
+  "benchmarks/protos/google_message2.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f8.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/google_message1_proto2.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "protoc_plugin/protos/google/protobuf/duration.proto": [
+    "c8954ea6712b5e988f01ef66836f097e641f61b6"
+  ],
+  "benchmarks/protos/query_benchmark/f2.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f10.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f18.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f14.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f11.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f20.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "protoc_plugin/protos/google/protobuf/descriptor.proto": [
+    "c21502957def72916685c955a3fde1eb66ab5585",
+    "976ebb83969045ad285d56474ff12b33900d6371",
+    "c8954ea6712b5e988f01ef66836f097e641f61b6"
+  ],
+  "benchmarks/protos/google_message1_proto3.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "protoc_plugin/protos/google/api/launch_stage.proto": [
+    "c8954ea6712b5e988f01ef66836f097e641f61b6"
+  ],
+  "benchmarks/protos/query_benchmark/f3.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f0.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "benchmarks/protos/query_benchmark/f7.proto": [
+    "708468226b3c348cec42d8504336aaf3d7992654"
+  ],
+  "protoc_plugin/test/protos/nested_extension.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/google/protobuf/unittest_well_known_types.proto": [
+    "da47e027fe15190a8a353e22caa3539dd93db8c6"
+  ],
+  "protoc_plugin/test/protos/proto3_repeated.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "eed09c4e390ff24ae41da4b3cd65ffe88eb51e58"
+  ],
+  "protoc_plugin/test/protos/duplicate_names_import.proto": [
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/google/protobuf/wrappers.proto": [
+    "da47e027fe15190a8a353e22caa3539dd93db8c6"
+  ],
+  "protoc_plugin/test/protos/toplevel.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/json_name.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "d12b233a1125e761ff3a7eadffb59458474547c0",
+    "ce4d5d5dd22a020152d410ec7a9067ba4aeaaad0"
+  ],
+  "protoc_plugin/test/protos/ExtensionEnumNameConflict.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/extend_unittest.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "4f736d12e86cfbda0373939c45c2579963d17eb6",
+    "8c251322e8dfe91709f43a39f36df6f98d51f2de",
+    "36686e1ac50eb7c88f0a1cca7a0a829ffd7af3ff"
+  ],
+  "protoc_plugin/test/protos/package2.proto": [
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/package3.proto": [
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/dart_name.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "6957c980aa0069917b8d0088a4153f0cfa51eeb4",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/reserved_names.proto": [
+    "8137057c2f1f0aa33d5cb7f49410160e15bae6e2",
+    "1f6a628c887727bc22e1c37363bb95094186783e",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/google/protobuf/api.proto": [
+    "da47e027fe15190a8a353e22caa3539dd93db8c6"
+  ],
+  "protoc_plugin/test/protos/custom_option_unlinked.proto": [
+    "660bbc87d6067c49eac039b7f502125d7ca658b3"
+  ],
+  "protoc_plugin/test/protos/google/protobuf/unittest_optimize_for.proto": [
+    "431c23f55bba5c21b11b2047e8e073d385c48827",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/enums.proto": [
+    "a6c8e56996c63ce7b0f83c7743a393ecb41c77c6"
+  ],
+  "protoc_plugin/test/protos/map_api.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/enum_name.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "41adc13e00932050052404684628a31ca192d819"
+  ],
+  "protoc_plugin/test/protos/toplevel_import.proto": [
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/entity.proto": [
+    "4d01e7ee1566e3d9236e5f17ca0b3cee6dd1e5fc"
+  ],
+  "protoc_plugin/test/protos/service2.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/map_field.proto": [
+    "18346f53e18dfd9d758f640ccbfae6a95311fa58",
+    "da47e027fe15190a8a353e22caa3539dd93db8c6",
+    "431c23f55bba5c21b11b2047e8e073d385c48827",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/doc_comments.proto": [
+    "a293fb9c866b1def3d3e7fffc5f6763a2ec59cc9",
+    "9a408a7ef0591d5e04dc651f8888b6850cee0ee1"
+  ],
+  "protoc_plugin/test/protos/google/protobuf/unittest_import_public.proto": [
+    "c69077d83ce5a66d21127019f45b81bcd1e777c4"
+  ],
+  "protoc_plugin/test/protos/map_enum_value.proto": [
+    "2afbe82e5ad0bd91f80166c4f708b05dd8a1c142"
+  ],
+  "protoc_plugin/test/protos/foo.proto": [
+    "edf8e923c3ba6d94bc24066f677356debf9cc031",
+    "deeacd719abae356a249724778b03365f47a6490",
+    "431c23f55bba5c21b11b2047e8e073d385c48827",
+    "26cd116da0fa7e9bccfaca2a84f36a01859ac778",
+    "49345f41908b7a0d95efa0cf68a55c159f0c3823",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/default_value_escape.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "e96efd526caff4cdf62426d7db56eaf12d3a4e9e"
+  ],
+  "protoc_plugin/test/protos/package1.proto": [
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/google/protobuf/duration.proto": [
+    "da47e027fe15190a8a353e22caa3539dd93db8c6"
+  ],
+  "protoc_plugin/test/protos/import_clash.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/google/protobuf/field_mask.proto": [
+    "da47e027fe15190a8a353e22caa3539dd93db8c6"
+  ],
+  "protoc_plugin/test/protos/multiple_files_test.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/google/protobuf/any.proto": [
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/service.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/google/protobuf/timestamp.proto": [
+    "f99c371da77fd31f23fae0e41966d78feed3ba8c"
+  ],
+  "protoc_plugin/test/protos/ExtensionNameConflict.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/reserved_names_message.proto": [
+    "1f6a628c887727bc22e1c37363bb95094186783e"
+  ],
+  "protoc_plugin/test/protos/proto2_repeated.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "eed09c4e390ff24ae41da4b3cd65ffe88eb51e58"
+  ],
+  "protoc_plugin/test/protos/google/protobuf/unittest_import.proto": [
+    "c69077d83ce5a66d21127019f45b81bcd1e777c4",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/message_set.proto": [
+    "a912f76df9e00d789baccf25b12fcb5d19ac14be",
+    "2996e1ddd22b4570d35f48a8f03a4f877d04ef19"
+  ],
+  "protoc_plugin/test/protos/google/protobuf/source_context.proto": [
+    "da47e027fe15190a8a353e22caa3539dd93db8c6"
+  ],
+  "protoc_plugin/test/protos/oneof.proto": [
+    "e2c27d68af54b239ee366644df04181ad2ed6430",
+    "26d9a1fc0d19287ac3fe7ef3fc6cd9f1d4169112"
+  ],
+  "protoc_plugin/test/protos/mixins.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/google/protobuf/empty.proto": [
+    "da47e027fe15190a8a353e22caa3539dd93db8c6"
+  ],
+  "protoc_plugin/test/protos/using_any.proto": [
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/deprecations.proto": [
+    "a293fb9c866b1def3d3e7fffc5f6763a2ec59cc9"
+  ],
+  "protoc_plugin/test/protos/_leading_underscores.proto": [
+    "72bdbf4fdee3715bb3411ab8d14bb9972c3f9516",
+    "431c23f55bba5c21b11b2047e8e073d385c48827",
+    "26d9a1fc0d19287ac3fe7ef3fc6cd9f1d4169112",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/service3.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/google/protobuf/struct.proto": [
+    "da47e027fe15190a8a353e22caa3539dd93db8c6"
+  ],
+  "protoc_plugin/test/protos/reserved_names_extension.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "1f6a628c887727bc22e1c37363bb95094186783e"
+  ],
+  "protoc_plugin/test/protos/custom_option.proto": [
+    "c8954ea6712b5e988f01ef66836f097e641f61b6",
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "d7bff4e65caf9dd7d326cd7ba6d38b46c4229a69",
+    "aa9958e9e7ae42cb404d8c67a78b0dbbff97fb8e",
+    "938dd9d80a83060054a27613ae7e88c256e5e69f"
+  ],
+  "protoc_plugin/test/protos/enum_extension.proto": [
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/non_nested_extension.proto": [
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/google/protobuf/type.proto": [
+    "da47e027fe15190a8a353e22caa3539dd93db8c6"
+  ],
+  "protoc_plugin/test/protos/google/protobuf/unittest.proto": [
+    "7bd9cbd6bac75c197f893d5cf65feee4a7e49802",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/import_option.proto": [
+    "660bbc87d6067c49eac039b7f502125d7ca658b3"
+  ],
+  "protoc_plugin/test/protos/import_public.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "0dcb9a97b89b25b1ef2655f58a196a065031d276"
+  ],
+  "protoc_plugin/test/protos/map_api2.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "5349c1d5baa233ab453071b34fd63d640f0ea894"
+  ],
+  "protoc_plugin/test/protos/nested_any.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615"
+  ],
+  "protoc_plugin/test/protos/enum_test.proto": [
+    "6bce9d7239a37aed69d59b2fe7e0e454771ada90"
+  ],
+  "protoc_plugin/test/protos/proto3_optional.proto": [
+    "11983dafc42775c56698af06107d626780e9cb69",
+    "504eefeae9892602ea50c20159db1db3768012a9",
+    "13198471df7f0bbe60b264f061cfe011cf29e89b"
+  ],
+  "protoc_plugin/test/protos/nested_message.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "e61c1789f18ea7e0f0ea796c94bd99182032dcc6"
+  ],
+  "protoc_plugin/test/protos/high_tagnumber.proto": [
+    "9297b3d4d057b245d6a9d421880032fb60e19615",
+    "a96a9ed43e144c32250bdf6329dc26f6ff766c10"
+  ]
+}

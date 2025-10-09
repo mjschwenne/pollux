@@ -58,13 +58,20 @@
                 # eval utilities
                 gh
                 jq
-                python3
-                python313Packages.python-lsp-server
-                pyright
-                python313Packages.altair
-                python313Packages.vl-convert-python
-                python313Packages.requests
-                python313Packages.rich
+                (python313.withPackages (ps:
+                  with ps; [
+                    python-lsp-server
+                    pyright
+                    numpy
+                    nptyping
+                    scipy
+                    pandas
+                    pandas-stubs
+                    altair
+                    vl-convert-python
+                    requests
+                    rich
+                  ]))
 
                 # nix helpers
                 nix-update

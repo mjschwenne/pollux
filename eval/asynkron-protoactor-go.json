@@ -1,0 +1,143 @@
+{
+  "examples/remote-advertised-address/messages/protos.proto": [
+    "8e9cc8b1db92afb51a4c57166881066a00120c83"
+  ],
+  "examples/remote-activate/messages/protos.proto": [
+    "8e9cc8b1db92afb51a4c57166881066a00120c83"
+  ],
+  "examples/remote-chat/messages/protos.proto": [
+    "8e9cc8b1db92afb51a4c57166881066a00120c83"
+  ],
+  "examples/cluster-grain/shared/protos.proto": [
+    "8e9cc8b1db92afb51a4c57166881066a00120c83"
+  ],
+  "examples/cluster-reentrancy/hello.proto": [
+    "8e9cc8b1db92afb51a4c57166881066a00120c83"
+  ],
+  "examples/remote-benchmark/messages/protos.proto": [
+    "8e9cc8b1db92afb51a4c57166881066a00120c83"
+  ],
+  "examples/cluster-pubsub-batching-producer/protos.proto": [
+    "8e9cc8b1db92afb51a4c57166881066a00120c83"
+  ],
+  "examples/cluster-basic/shared/protos.proto": [
+    "6557e1a4775eed0d5f4f4996eb9426d914e90717",
+    "8e9cc8b1db92afb51a4c57166881066a00120c83"
+  ],
+  "examples/cluster-broadcast/shared/protos.proto": [
+    "8e9cc8b1db92afb51a4c57166881066a00120c83",
+    "f0e1ff462e48d8783dc312a37fef892decbc0720",
+    "c11c1d5bb8abd855fae75a0413b253c58fd013ba"
+  ],
+  "examples/cluster-eventstream-broadcast/protos.proto": [
+    "8e9cc8b1db92afb51a4c57166881066a00120c83"
+  ],
+  "examples/cluster-restartgracefully/shared/protos.proto": [
+    "8e9cc8b1db92afb51a4c57166881066a00120c83"
+  ],
+  "examples/cluster-pubsub/protos.proto": [
+    "8e9cc8b1db92afb51a4c57166881066a00120c83"
+  ],
+  "examples/cluster-node-failure-opentelemetry/protos.proto": [
+    "17005c6cc2c83ce2dffbf8930928e30f6af8eb13"
+  ],
+  "examples/remote-ssl/messages/messages.proto": [
+    "8e9cc8b1db92afb51a4c57166881066a00120c83"
+  ],
+  "examples/cluster-gossip/shared/protos.proto": [
+    "70c85594c0daf48e07b3d15e570289006b4e3228",
+    "6557e1a4775eed0d5f4f4996eb9426d914e90717"
+  ],
+  "examples/kubernetes-sample/protos.proto": [
+    "8e9cc8b1db92afb51a4c57166881066a00120c83"
+  ],
+  "examples/cluster-metrics/shared/protos.proto": [
+    "8e9cc8b1db92afb51a4c57166881066a00120c83",
+    "f0e1ff462e48d8783dc312a37fef892decbc0720",
+    "3e3355443b9aba891605df30744a77acd45f7f6b"
+  ],
+  "examples/remote-routing/messages/messages.proto": [
+    "8e9cc8b1db92afb51a4c57166881066a00120c83"
+  ],
+  "examples/remote-header/messages/protos.proto": [
+    "8e9cc8b1db92afb51a4c57166881066a00120c83"
+  ],
+  "examples/cluster-error-response/protos.proto": [
+    "472713b5cd6ee916ed3279b5fe63b1de2cb59c29"
+  ],
+  "examples/remote-watch/messages/protos.proto": [
+    "8e9cc8b1db92afb51a4c57166881066a00120c83"
+  ],
+  "examples/remote-channels/messages/protos.proto": [
+    "8e9cc8b1db92afb51a4c57166881066a00120c83"
+  ],
+  "remote/remote.proto": [
+    "7769d197b43e637933c636089df3adeb1ee24c4b",
+    "e0df7fbc058acbdc2d5b12363411ae2c1a45b6fb",
+    "8686748f380d8a47e0686afb34239963673a0310",
+    "f17dcf750b1dd71834c06acf9299fe647b1e1995",
+    "0c6de3d793b16cc66db217ab25b61030526e22f2"
+  ],
+  "cluster/cluster.proto": [
+    "f2d271d44e4f03283863b360a5548f244fbeddc9",
+    "01b9f2ede1d562bdce6bbe35826c3fea6e49f321",
+    "8686748f380d8a47e0686afb34239963673a0310",
+    "f17dcf750b1dd71834c06acf9299fe647b1e1995",
+    "041261143a2ec121683323e8e3c222d8548468b8",
+    "0c6de3d793b16cc66db217ab25b61030526e22f2"
+  ],
+  "cluster/gossip.proto": [
+    "f2d271d44e4f03283863b360a5548f244fbeddc9",
+    "4e1ad3583e6fdedb8dbebc22870175e78a72e651",
+    "e25c1341b12d5f3448f4b19902ef8468638bd3d8",
+    "435617da53335b93863d5439608e57853ff5d325",
+    "8686748f380d8a47e0686afb34239963673a0310",
+    "f17dcf750b1dd71834c06acf9299fe647b1e1995",
+    "041261143a2ec121683323e8e3c222d8548468b8",
+    "d1b1aa2137e611a07ce3b3e0f345d0ad9c919080",
+    "0bb01b93caa5a86b65b821c0bd86d4336c53654f"
+  ],
+  "cluster/pubsub.proto": [
+    "5829d2a21f5cb6288d6691c09da4b33b164af54f"
+  ],
+  "cluster/cluster_test_tool/pubsub_cluster.proto": [
+    "d585198d6786950a30c37ba325170e7469715c71"
+  ],
+  "cluster/grain.proto": [
+    "472713b5cd6ee916ed3279b5fe63b1de2cb59c29",
+    "8686748f380d8a47e0686afb34239963673a0310",
+    "f17dcf750b1dd71834c06acf9299fe647b1e1995",
+    "f628df1b8078e40866f4b9ab70f5f71048d18c19"
+  ],
+  "cluster/pubsub_test.proto": [
+    "e3bbd3f9d7cda78713bd20767db809844c56182c"
+  ],
+  "protobuf/protoc-gen-go-grain/options/options.proto": [
+    "f72a8a42c19723644549892f6d9196c3b5bf7ddc",
+    "c07c38c231e6c297260fbf0c237813b5529ffcc6",
+    "f0ddf7dc8f5cbaaf2e0670cd81856bd308a96112"
+  ],
+  "protobuf/protoc-gen-go-grain/test/multi-services/services.proto": [
+    "f9650ee928f84ee9574e9c693a1eb2b80f9391f2"
+  ],
+  "protobuf/protoc-gen-go-grain/test/hello/hello.proto": [
+    "f9650ee928f84ee9574e9c693a1eb2b80f9391f2"
+  ],
+  "protobuf/protoc-gen-go-grain/test/error/error.proto": [
+    "f9650ee928f84ee9574e9c693a1eb2b80f9391f2"
+  ],
+  "protobuf/protoc-gen-go-grain/test/reenter/hello.proto": [
+    "f9650ee928f84ee9574e9c693a1eb2b80f9391f2"
+  ],
+  "actor/actor.proto": [
+    "69a5538e680e75374dea603e4fff07bcb047b1d2",
+    "f17dcf750b1dd71834c06acf9299fe647b1e1995",
+    "0c6de3d793b16cc66db217ab25b61030526e22f2",
+    "ba63eaf17f817c6c47697df20d1d7265c9f26056",
+    "e2db274515b3e8e61c383be082b3139ea8feec55"
+  ],
+  "router/routercontracts.proto": [
+    "8686748f380d8a47e0686afb34239963673a0310",
+    "3b9542e42eaa4d734d121397a0a93fa82bcb1fb0"
+  ]
+}

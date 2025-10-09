@@ -1,0 +1,75 @@
+{
+  "api/mvccpb/kv.proto": [
+    "522b69892834aca459ade254f1ea4093e738c1ca",
+    "389642dd169b8865a9798dbeb043a2afcbd0ad31"
+  ],
+  "api/etcdserverpb/etcdserver.proto": [
+    "522b69892834aca459ade254f1ea4093e738c1ca",
+    "389642dd169b8865a9798dbeb043a2afcbd0ad31"
+  ],
+  "api/etcdserverpb/rpc.proto": [
+    "c501d6bfc91ec86299ba519a65de198b7783c5f0",
+    "f5409c4227cc01800a9d499cd7879b45ec96f93a",
+    "022b9b22cf9b8563a9f4f384bb35c30f02aca657",
+    "97c63c9fde2b864241be4752a908a83d5b3364a1",
+    "9d57554c4c0824460bc2799d82f026cd78a2d582",
+    "63fe0f28510bcb09729110e245671a435dc983db",
+    "4155d8bb5b5d108b8cce2e8632269e338757664a",
+    "bdcff246cb789f42d7a9d3155084e43e3c1e6e66",
+    "522b69892834aca459ade254f1ea4093e738c1ca",
+    "f3121fb76505ba071e4dc512eed92bba2c3b61f9",
+    "b4f49a55a5aba85a30cae5742a87989132a0f750",
+    "cd746de14e9b38f403c3cd13005a54de1fd230bc",
+    "beeb44d4eeaf396b17b4be0f15053875bc219701",
+    "d0688e0158045b773f1326a5c69a71bf89406531",
+    "edce939f6e8b414df4170577ab7a3cd243d8c2e9",
+    "1b4e54c238114b77448daf8f9375c2da9f969f88",
+    "10c9fae5156043027e2298da3d3bab9207f05da4",
+    "e1b1d93548b8cd642ea6ae3fdc10d5566fa096c5",
+    "58f78df1deea73793cfd2c274b4624836d480a0a",
+    "28f2b07623312377814b896c360f3cce7052adc4",
+    "389642dd169b8865a9798dbeb043a2afcbd0ad31"
+  ],
+  "api/membershippb/membership.proto": [
+    "522b69892834aca459ade254f1ea4093e738c1ca",
+    "1b4e54c238114b77448daf8f9375c2da9f969f88",
+    "389642dd169b8865a9798dbeb043a2afcbd0ad31"
+  ],
+  "api/versionpb/version.proto": [
+    "522b69892834aca459ade254f1ea4093e738c1ca",
+    "1b4e54c238114b77448daf8f9375c2da9f969f88"
+  ],
+  "api/etcdserverpb/raft_internal.proto": [
+    "2eca68e345b265d313d8aa360bcbbb879a54c487",
+    "522b69892834aca459ade254f1ea4093e738c1ca",
+    "1b4e54c238114b77448daf8f9375c2da9f969f88",
+    "28f2b07623312377814b896c360f3cce7052adc4",
+    "389642dd169b8865a9798dbeb043a2afcbd0ad31"
+  ],
+  "server/storage/wal/walpb/record.proto": [
+    "522b69892834aca459ade254f1ea4093e738c1ca",
+    "cc58edecf2721b91e07401ddcece1d9ac1ee291b",
+    "44b8ae145b505811775f5af915dd19198d556d55"
+  ],
+  "server/etcdserver/api/snap/snappb/snap.proto": [
+    "522b69892834aca459ade254f1ea4093e738c1ca",
+    "4a5e9d12611e61eacf0e1ab7a3ce2662a6aabe11"
+  ],
+  "server/lease/leasepb/lease.proto": [
+    "522b69892834aca459ade254f1ea4093e738c1ca",
+    "4a5e9d12611e61eacf0e1ab7a3ce2662a6aabe11"
+  ],
+  "server/etcdserver/api/v3lock/v3lockpb/v3lock.proto": [
+    "522b69892834aca459ade254f1ea4093e738c1ca",
+    "4a5e9d12611e61eacf0e1ab7a3ce2662a6aabe11"
+  ],
+  "api/authpb/auth.proto": [
+    "522b69892834aca459ade254f1ea4093e738c1ca",
+    "389642dd169b8865a9798dbeb043a2afcbd0ad31"
+  ],
+  "server/etcdserver/api/v3election/v3electionpb/v3election.proto": [
+    "f5409c4227cc01800a9d499cd7879b45ec96f93a",
+    "522b69892834aca459ade254f1ea4093e738c1ca",
+    "4a5e9d12611e61eacf0e1ab7a3ce2662a6aabe11"
+  ]
+}

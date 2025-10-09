@@ -2,19 +2,68 @@
 
 * Table of Contents :toc_4_gh:
 - [[#scripts][Scripts]]
-  - [[#get_proto_history_jsonfish][=get_proto_history_json.fish=]]
+  - [[#evalpy][=eval.py=]]
+    - [[#fetch-methods][Fetch Methods]]
+      - [[#github-api-method-default][GitHub API Method (Default)]]
+      - [[#local-cloning-method][Local Cloning Method]]
+      - [[#comparison-mode][Comparison Mode]]
+    - [[#visualization][Visualization]]
 - [[#repos][Repos]]
   - [[#observations][Observations]]
 
 * Scripts
 
-** =get_proto_history_json.fish=
+** =eval.py=
 
-When given as arguments a GitHub user and repo, it will use the GitHub API to query for =proto= files
-in that repo, find each commit which updated that file and then output a JSON blob into
-=$owner-$repo.json= in the current working directory.
+Python script for fetching protobuf commit histories and creating visualizations. Supports multiple methods:
 
-Several examples are included. 
+#+begin_src bash
+# Fetch proto commit history using GitHub API (requires GITHUB_TOKEN)
+python eval.py fetch googleapis google-cloud-go
+
+# Fetch proto commit history using local cloning (bypasses API limits)
+python eval.py fetch googleapis google-cloud-go --local
+
+# Create histogram visualization from single repository
+python eval.py visualize data.json --type histogram --output single-repo.png
+
+# Create combined histogram from multiple repositories
+python eval.py visualize --type histogram mjschwenne-grackle.json googleapis-googleapis.json --output combined-histogram.png
+
+# Create KDE visualization from multiple repositories with verbose stats
+python eval.py visualize file1.json file2.json file3.json --type kde --verbose --output multi-repo-kde.html
+
+# Analyze all repositories at once using glob pattern
+python eval.py visualize *.json --type histogram --verbose --output all-repos-analysis.html
+
+# Get detailed statistics about combined datasets
+python eval.py visualize googleapis-googleapis.json samchon-typia.json --verbose
+#+end_src
+
+*** Fetch Methods
+
+**** GitHub API Method (Default)
+- Fast, no local disk space required
+- Limited to 1000 protobuf files due to GitHub Search API constraints
+- Requires =GITHUB_TOKEN= environment variable
+- Usage: =python eval.py fetch owner repo=
+
+**** Local Cloning Method
+- Bypasses all API limits, gets complete commit history
+- Clones repository temporarily, extracts data with git commands
+- Requires git installation but no GitHub token
+- Usage: =python eval.py fetch owner repo --local=
+
+**** Comparison Mode
+- Tests both methods on the same repository to verify consistency
+- Useful for validating results on smaller repositories
+- Usage: =python eval.py compare owner repo=
+
+*** Visualization
+- Create histograms of commit distributions
+- Multi-repository analysis: combine data from multiple JSON files
+- Single repo: =python eval.py visualize data.json --type histogram --output plot.png=
+- Multi repo: =python eval.py visualize repo1.json repo2.json --type histogram --output combined.html=
 
 * Repos
 
@@ -23,26 +72,27 @@ repos came from looking at packages which import the =go= protobuf library, but 
 looking at repositories with a high number of stars and the "protobuf" GitHub tag or test suites in
 protobuf language implementations.
 
-- [[https://github.com/googleapis/google-cloud-go][googleapis/google-cloud-go]]
-- [[https://github.com/JannoCAT/hdfs][JannoCAT/hdfs]]
-- [[https://github.com/etcd-io/etcd][etcd-io/etcd]]
-- [[https://github.com/protocolbuffers/protobuf/tree/3a7ef796c8ec2328edf54851ada2b5ab7b6ddce0/rust/test][protocolbuffers/protobuf/rust]]
-- [[https://github.com/protocolbuffers/protobuf-go/tree/master/internal/testprotos][protobuf-go/internal/testprotos]]
-- [[https://github.com/google/protobuf.dart/tree/master/protoc_plugin/test/protos][protobuf.dart/protoc_plugin/test/protos]]
-- [[https://github.com/bufbuild/buf/tree/58e10d4a854ea55d1945abcb66e3691ec5a39b3c/private/bufpkg/bufcheck/testdata][buf/private/bufpkg/bufcheck/testdata]]
-- [[https://github.com/bufbuild/buf][bufbuild/buf]]
-- [[https://github.com/go-kratos/kratos][go-kratos/kratos]]
-- [[https://github.com/cloudwego/kitex][cloudwego/kitex]]
-- [[https://github.com/twitchtv/twirp][twitchtv/twirp]]
-- [[https://github.com/asynkron/protoactor-go][asynkron/protoactor-go]]
-- [[https://github.com/samchon/typia][samchon/typia]]
-- [[https://github.com/uber/prototool][uber/prototool]]
-- [[https://github.com/streamdal/plumber][streamdal/plumber]]
-- [[https://github.com/google/rejoiner][google/rejoiner]]
+- [X] [[https://github.com/googleapis/googleapis][googleapis/googleapis]]
+- [X] [[https://github.com/googleapis/google-cloud-go][googleapis/google-cloud-go]]
+- [X] [[https://github.com/colinmarc/hdfs][colinmarc/hdfs]] 
+- [X] [[https://github.com/etcd-io/etcd][etcd-io/etcd]]
+- [X] [[https://github.com/protocolbuffers/protobuf/tree/3a7ef796c8ec2328edf54851ada2b5ab7b6ddce0/rust/test][protocolbuffers/protobuf/rust]]
+- [X] [[https://github.com/protocolbuffers/protobuf-go/tree/master/internal/testprotos][protocolbuffers/protobuf-go]]
+- [X] [[https://github.com/google/protobuf.dart/tree/master/protoc_plugin/test/protos][google/protobuf.dart]]
+- [X] [[https://github.com/bufbuild/buf/tree/58e10d4a854ea55d1945abcb66e3691ec5a39b3c/private/bufpkg/bufcheck/testdata][bufbuild/buf/private/bufpkg/bufcheck/testdata]]
+- [X] [[https://github.com/bufbuild/buf][bufbuild/buf]]
+- [X] [[https://github.com/go-kratos/kratos][go-kratos/kratos]]
+- [X] [[https://github.com/cloudwego/kitex][cloudwego/kitex]]
+- [X] [[https://github.com/twitchtv/twirp][twitchtv/twirp]]
+- [X] [[https://github.com/asynkron/protoactor-go][asynkron/protoactor-go]]
+- [X] [[https://github.com/samchon/typia][samchon/typia]]
+- [ ] [[https://github.com/uber/prototool][uber/prototool]]
+- [X] [[https://github.com/streamdal/plumber][streamdal/plumber]]
+- [ ] [[https://github.com/google/rejoiner][google/rejoiner]]
 
-  Not GitHub:
+Not GitHub:
 
-  - [[https://chromium.googlesource.com/external/github.com/google/protobuf/+/HEAD/benchmarks][benchmarks - external/github.com/google/protobuf - Git at Google]]
+- [[https://chromium.googlesource.com/external/github.com/google/protobuf/+/HEAD/benchmarks][benchmarks - external/github.com/google/protobuf - Git at Google]]
 
 ** Observations
 

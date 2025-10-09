@@ -1,0 +1,40 @@
+{
+  "errors/errors.proto": [
+    "a72fc68ffd1736f956234cf7bd123625c10f8d74",
+    "50e3dea2ee18c514ba2e55fb0ad80106c7013e50",
+    "0834128e57c7e6dad3c8e0908ac24ec7e18a979f",
+    "66412031fdf4d6cc4c7137a3bd72f823ca97d178",
+    "cc0221b5cefbf7d36d36b2e63c03a250e9ecacd6",
+    "9806191b7f3277393f69f049dcc9d8450533fc0d",
+    "3566386a89922e1e7535038a46dcd44819d82dc1"
+  ],
+  "api/metadata/metadata.proto": [
+    "ed6ab7caf9ca2a8571f85a10831d18109df136f2",
+    "ba5b8d1ee372b31c5f8061ca55a04a8b444a4d61"
+  ],
+  "cmd/protoc-gen-go-errors/errors/errors.proto": [
+    "828a7c5219980504eda57ba6d88d9384719afaac"
+  ],
+  "internal/testdata/complex/complex.proto": [
+    "afc564b37697d70eec6751991aa51e8266df7eb1",
+    "bfafeca13daf0541b64170d5d134da6ff3b544ff",
+    "fecfb7dc86aeac95372bb53ab0279f89a9a37bec"
+  ],
+  "internal/testdata/helloworld/helloworld.proto": [
+    "b3eff576ce0d5cbadf53ec2a9ab1232d45e5cef3",
+    "91714bcd34dd30892b1124af5d3f9fd5434e9077"
+  ],
+  "internal/testdata/binding/test.proto": [
+    "b3eff576ce0d5cbadf53ec2a9ab1232d45e5cef3",
+    "0bcdb8d59caa2bdfd0bf0eb27b8af2ff954df381",
+    "a0e624c0b8601fe2649af4b2b4038b1ce1bdf3f6",
+    "1dd8786ed91fe6c6761dd9a9640dc9fedc25c980"
+  ],
+  "internal/testdata/encoding/test.proto": [
+    "c8c870b77f70d545367fb77ec638dac8dc6543fa",
+    "7b6332ee751a54d5d484ea823d5a27eaf9cf5eca"
+  ],
+  "contrib/middleware/validate/internal/testdata/test.proto": [
+    "54f8e11d9fc437a10a94955dea56848d4abd4603"
+  ]
+}

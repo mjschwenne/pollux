@@ -1,0 +1,2975 @@
+{
+  "benchmarks/empty.proto": [
+    "0fab773c1dc272f5383ce6724c9040937fb1a925",
+    "501ececd39fed69f0c50c2c87f04ce75932dde72"
+  ],
+  "examples/addressbook.proto": [
+    "1bbf6f37cc3a8bf1fb4d2111ed367807aa9c464e",
+    "c8dfe32b5ac190cecd8750db438c4151ab07a3da",
+    "32af37aa387f7480669388cad5ebbc22ec75ed8b",
+    "9d175493a341885019d8fad6571ddc0cf69473a2",
+    "74bf45f379b35e1d103940f35d7a04545b0235d4",
+    "bc4723481a8ee30b918c9938e25b7e4ba8282893",
+    "b0e5ba697eb281b4ea9e53e1dc9f5ebeccf28f9a",
+    "359d32d4f711b7f8f774a1ceaa3ad55aa13167cf",
+    "69c14071ad58b1dad9e5e52c33140ece139577d0",
+    "734393d0f9e1f746f4bd228f709c5b1142faa16d",
+    "40ee551715c3a784ea6132dbf604b0e665ca2def"
+  ],
+  "upb/mini_table/message_benchmark.proto": [
+    "e5199878d9b07c09b7d45378e0e58764c84ae1ca"
+  ],
+  "src/google/protobuf/bridge/message_set.proto": [
+    "177036a37e83a2bcb732e817b94b5fabb1b07713",
+    "13405fccd961042dca2deafeaa096f0e3e985069",
+    "e73127d6bbf737c4250cf273803279b3f7205feb",
+    "c04f84261327bf1a2bd02c0db3c8538fd403d7e7"
+  ],
+  "editions/proto/editions_transform_proto2_lite.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "src/google/protobuf/duration.proto": [
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "23f148138654a564b5690f6a5453aab480a6a049",
+    "dfab275eca9481b5de31122db6fc91b31db3382a",
+    "7bff8393cab939bfbb9b5c69b3fe76b4d83c41ee",
+    "176f7db11d8242b36a3ea6abb1cc436fca5bf75d",
+    "d36c0c538a545fac5d9db6ba65c525246d4efa95",
+    "cc8ca5b6a5478b40546d4206392eb1471454460d",
+    "3b3c8abb9635eb3ea078a821a99c9ef29d66dff7",
+    "e841bac4fcf47f809e089a70d5f84ac37b3883df",
+    "c3bc155aceda36ecb01cde2367a3b427f2d7ce40",
+    "b0f661181d10bddc08e380992590a1cdd92be92b",
+    "739d13d5d1f93e8bf8770081d1500372758fffa1",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "ffa2e377f3fc884f2c59ac0b942ad55b4037f76b",
+    "41113108303afbc1458c1c82b267cc17703ea8ce",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "30650d81d9baa446dbc8deb784ba53794cafda5b",
+    "ca9d1a053a8590caa1a1f81491b0381f052fa734",
+    "96e379ff8bc6907d044c62c1381b8e5a793b6a7a"
+  ],
+  "java/core/src/main/resources/google/protobuf/java_mutable_features.proto": [
+    "4edff4a9714dcc7c17485d45e5bcb1bc878e72ea",
+    "df7f12a35b48f9e74d37f12d36aa44fdf7cbba2a",
+    "2cebd6c187c1244f9ed454681271c440d7152de6",
+    "9dd4b66ddd10dcb5e5d3c4e8a7d3019dda26c535",
+    "613aada100d2ef2389663fb8e36066b75b5eca8f"
+  ],
+  "csharp/protos/unittest_import.proto": [
+    "f4f73699b075c908674f9a13ea99668f18a56acd",
+    "943bd5a7d8a8a32a4e6b98fd17b0284c389ee308",
+    "8a57ec847b0213791dd586ab3c554e1e49513825"
+  ],
+  "src/google/protobuf/unittest_proto3_extensions.proto": [
+    "dc484c131e5e9fa50a005f0ffbdf1c18928b2216",
+    "7de0ad1adb0198ce75a36b39cca1f1be19fa85ae"
+  ],
+  "conformance/conformance.proto": [
+    "3f908cfff7428a01cceaef7574610811bc0bd356",
+    "ecb8214f22500ac4f514a77cb158ad13226a9b2d",
+    "b4ca493e300c709a3658a9f377354817edb23b36",
+    "023e69d6ccf07cfa8ce6afa695f26008be08e476",
+    "a83da510c47b16e4e399ae77552513dbe889c253",
+    "0bcc8ef9f25273f94a7ce2284b0050dbb4674eda",
+    "8a4bfd645da4fd4e700bfe714dda37a0616f22be",
+    "0ab63a7699ea47fac827804cf9d660bbae1cc584",
+    "32bea52ee660abeb6a2891e3dce979a909cbd6ea",
+    "76c3e69146e3151ca2960cb3a2c30e96d3619e2e",
+    "a3c8e2deb05186334b7ee8c1174f44802e38b43d",
+    "e5c570bb572bebe706d0389f2ea734a3e1a7d821",
+    "e2cc2de304f8bc33b91ab18fa0b7cef8aaf26c8b",
+    "a104dffcb6b1958a424f5fa6f9e6bdc0ab9b6f9e",
+    "394f5c8c0f82348a35764eeb1ca79e0336f5895c",
+    "58d4420e2dd8a3cd354fff9db0052881c25369ce",
+    "2f864fdfdf18318ef24b02141733adb356508370",
+    "a2a0afb5468dc423782344a2047abc041e75323e",
+    "cb95a7f6a8b66315969b74fa00b439f8f259fc8c",
+    "b1b9eaa6c7630c8588a47d9f0cc2ec0823c173ba",
+    "0adb74c2d36833be37b35a9ab45e4f699a1d645c",
+    "cecba296b8c49b9dca789a9dc24e01c6c3cfa98f",
+    "6bbe197e9c1b6fc38cbdc45e3bf83fa7ced792a3",
+    "26eeec93e44024ee10c0b8c536ea2410e4bfa7f3",
+    "9a4692d8af01697571c0fa33b17223df79423992",
+    "364502102afe62bc0a9068032a177d1827aa4774",
+    "2ad74e1606728564cc777aa4917d7e2299317eda",
+    "f1ce60e7b45c16affa4c8a92a9a129755c5fcfd5",
+    "e3891655868a465ad0d17ddc2b1ea95dd0a39adf",
+    "27c89625057a56d4559f94d0adac4776600cfe03",
+    "e841bac4fcf47f809e089a70d5f84ac37b3883df",
+    "b0500b37b231b8f93a5b1b95e23d13830e11eb07",
+    "5db217305f37a79eeccd70f000088a06ec82fcec",
+    "420f938bac63af49c00292c7c09eb0d237ce4e0b",
+    "4e63b52088ce409bbe43e4a37863d43b136143f0",
+    "35a1cc7a7c7cfd205641f15258ca991f6d3ec2bc"
+  ],
+  "src/google/protobuf/unittest_no_generic_services.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "ab4585a6956675ce14a1cba5d321fde980bbf12b",
+    "d0f91c863ae0fbb75b41460c8bbb786ade197a0f",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "4de8f55113007fdc8e34107950e605fc0209d465",
+    "33165fe0d5c265c92f2a67fc2b437b567c24e294",
+    "5e744ff9612da1add0dd0f893242703246c00d0c"
+  ],
+  "src/google/protobuf/internal_options.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "3cca08d520bb0a8b88a25f15eae19e3b5e7597fe"
+  ],
+  "src/google/protobuf/field_mask.proto": [
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "dfab275eca9481b5de31122db6fc91b31db3382a",
+    "58d4420e2dd8a3cd354fff9db0052881c25369ce",
+    "6bbe197e9c1b6fc38cbdc45e3bf83fa7ced792a3",
+    "0400cca3236de1ca303af38bf81eab332d042b7c",
+    "1a7a7fca804afa1cf67f8be5e71092898ba40334",
+    "5a76e633ea9b5adb215e93fdc11e1c0c08b3fc74",
+    "cc8ca5b6a5478b40546d4206392eb1471454460d",
+    "d64a2d9941c36a7bc2a7959ea10ab8363192ac14",
+    "cf14183bcd5485b4a71541599ddce0b35eb71352",
+    "3b3c8abb9635eb3ea078a821a99c9ef29d66dff7",
+    "e841bac4fcf47f809e089a70d5f84ac37b3883df",
+    "c3bc155aceda36ecb01cde2367a3b427f2d7ce40",
+    "b0f661181d10bddc08e380992590a1cdd92be92b",
+    "739d13d5d1f93e8bf8770081d1500372758fffa1",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "41113108303afbc1458c1c82b267cc17703ea8ce",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "30650d81d9baa446dbc8deb784ba53794cafda5b",
+    "96e379ff8bc6907d044c62c1381b8e5a793b6a7a"
+  ],
+  "src/google/protobuf/unittest_extension_set.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "43b1365566792456935456c2d71052d6e2d2ab60"
+  ],
+  "src/google/protobuf/descriptor.proto": [
+    "66da1b74396d65bf2908ba1fcd94e1855208dce5",
+    "a2a051112fc9db0250d7acfb19283c7d1339319f",
+    "613aada100d2ef2389663fb8e36066b75b5eca8f",
+    "4fd39a82367b490c15719563463e67af82399702",
+    "4a770c13d411b4f99293a925b71fd24551bb5d29",
+    "f24f033a2d19b4151f40a48c2f42286e6a71d828",
+    "308aaf47686229b7c6f5f9534e254910cebd28c2",
+    "fad454c7846e0ffe33e656254fccf59cb39a2ee3",
+    "e8a6ee6bffac5787d2bfb1862f57e121c0378067",
+    "9d7236b421634afcecc24b6fd63da0ff5b506394",
+    "2d0f79e2e661263d0559307dbc5223a96631009e",
+    "5a68dddcf9564f92815296099f07f7dfe8713908",
+    "bf306b3bea5b3d11af56c77ac8f85c2feae88c52",
+    "433ca3e6a1252725894f941581814d282c7ad575",
+    "e237f72bc4a10d8694de62580c27780fdefe13c5",
+    "44c409d211900f153a4bbafbaca474401ddec4e9",
+    "6b9a81a0429276e24195064d8733117a25a87148",
+    "e5502c746ef62b3d76f589545803cfb46a5082ea",
+    "77f62de93e2e84d6aab0364629919779970fb9f1",
+    "da651cd3c286d0f2206f13947d96422370fa5ccc",
+    "8d4d778b21b27447e0d8d8f0ffe9fc6c4a32dce2",
+    "2f6982e6448034c15ba232dc3103754bf4bb80a7",
+    "4295b956053a15dfd0e508df2e8e4c3386631b91",
+    "b09b3e46fe2a111d412251f6d043649334e9cbee",
+    "15c733eef7ef8fb87c0d34382116a64f0f734ea8",
+    "49fdc9d1cd1c8194d552b5f04be83ab62b27ef06",
+    "fedd34df47ad442e1cc41b1a828955f384a0c9e2",
+    "57a0ff8c92fb5758f0d2c51ab8e676cef4e28bda",
+    "f441ce89edd2b8ab4e6414cfed0cdb8ef62249bd",
+    "679c1c9342ed5b87f50ae70c64b8a41265bce2b8",
+    "40ad3fac603ba3c96e52a1266cd785a7adb8e3e4",
+    "c8f619501f2695e78d609766f186e8ad5f925e24",
+    "f99c0bd47ea2732745188f3b3c263d205cfe8774",
+    "17963df4c2fb080c4d18c95dc1ccace263928421",
+    "ec76af2b0e8dee5e65522d8ff898be02c3e32ad3",
+    "92157c8db588d682a413a027d33ac5bfb014cb6a",
+    "137e5984aff3e7cbc26ce4bf5923ae438cd6ecef",
+    "6df7f0bbef9643f4fdf5c340a49988298044824d",
+    "512f19d406f093138e07b045bc89ccbf093728fd",
+    "f74de36fb55573ff38ca2529ccb2f0b1c6c1584e",
+    "5b340ded2b17242e9b5649cc6bde2a26b99f502c",
+    "6f528b7bad32a791918d68131e69e42123ce9c87",
+    "1c07062f5a7d76eb3152ce9905578389c077bc4c",
+    "153028d7f3029e066bb2287012e14417ca83d55c",
+    "65419eef0d99446070dcff1e10f951383ceb42fe",
+    "81068e8e8cf00f25559112a562661064d59bfa87",
+    "6f3db03eb7b2fa31e4987fa9ec60199458824a4d",
+    "ad5ba75bf9dcde6c679a925a53b73223bbedcc77",
+    "d0e89691662cbcfd07ede219ca80fe4613d7d0bd",
+    "ba9647030d2df40ee0c1fdce4719a0a9c116cf13",
+    "60ec7bfb5c3ae4b9adee0f90010b4e0f55ad1298",
+    "52b571f2c3053b3b3ee228b462694f44fae10056",
+    "2ace6c7570b743215ac1afbfb1d8cb60fcfc40f1",
+    "96c601d8b470307a99c1ac1fbf56a66dbfd0aac2",
+    "4f9e41767a819abf8108bb29e4910fbc0f37dc6e",
+    "64bcdfffe8369606a2f5026ac9bbc6ae649c7692",
+    "45469f2edd065db3ae4aab987b4deabab6139977",
+    "88b5b19c99e49aa6597b8a4168a27f906f48e8df",
+    "7dbe742e6c4bea916c54713e31811412d2076351",
+    "469f0277b8f01da754e612c532016ec954d9b59e",
+    "b8e7192a731a8ece54b11f2caf87c32209559525",
+    "41287bd5d5373e91277b849e93c7ae2a0238b5c3",
+    "1028bde1ddf32f91b37e35c217cc8fd235d21844",
+    "145900f06c732974af996a28a3e2c211ae104888",
+    "2456753603ee2ae3250dd3f03c226d0e63320d33",
+    "d480470dfc005a41e7bdc56f863cee86ca0380ba",
+    "0c121398936f813060c533aaf38e670cc6bb94c2",
+    "9e8435ac40054899f24536584844130ea222bbe8",
+    "1c23a17f091a0dd7ad44ddc4b0509d39773578e8",
+    "5a5683781003c399a00d2ed210d4a5102ca65696",
+    "90ff32c564b4deddd7d6924517b448236d2ed8ca",
+    "9a56bc65589e74b44b40b74bf2912f113286c94b",
+    "0517b71b259b206b4b2e036a62e6f24d6ad45084",
+    "9238c4843a1a25c588f11da5101c858f6ae6f7a8",
+    "6b87d6f44594a7f993ba9532ab6040bfa7fe2965",
+    "23f148138654a564b5690f6a5453aab480a6a049",
+    "63e94a4e3390a0fbf193b2be25993e9c50ec2610",
+    "02df2a7dad911f597ed55d3d22f29ec625e3eb21",
+    "f2358cf60be8b0330ee2933899441df237c7d9ef",
+    "3740e6fa682ed017b1a477d7a8574324539bf0a2",
+    "a29e0e3f449487f776b54b2afc78ac2e60bf4fca",
+    "1ba1d73e0dcac7c583902c3a757607989515b0bc",
+    "b7fe12e3670c68dc30517c418bee9dc2e2e6915e",
+    "ab4585a6956675ce14a1cba5d321fde980bbf12b",
+    "84c2e1e5027ccce38cf7d79136471410d7d0fe93",
+    "4008d229aa7505775486d6a86705efd2800599b3",
+    "96307d28f69662eb04edcaeb9d1d1ed25e692d88",
+    "dfab275eca9481b5de31122db6fc91b31db3382a",
+    "74ad62759e0a9b5a21094f3fb9bb4ebfaa0d1ab8",
+    "b99994d994e399174fe688a5efbcb6d91f36952a",
+    "044c766fd4777713fef2d1a9a095e4308d770c68",
+    "88339fa7f87e5e8fe29eef3ff4df02c7d841317d",
+    "a1c886834425abb64a966231dd2c9dd84fb289b3",
+    "51b02255990b9e45340e97174cc474076203e9ad",
+    "d0f91c863ae0fbb75b41460c8bbb786ade197a0f",
+    "d8c2501b43c1b56e3efa74048a18f8ce06ba07fe",
+    "b61dd9d9a229c5a82788fdeefa344aa65affae09",
+    "1a7a7fca804afa1cf67f8be5e71092898ba40334",
+    "13fd045dbb2b4dacea32be162a41d5a4b0d1802f",
+    "3af881c7e2db0553207876acbdb91c6e77974e44",
+    "09354db1434859a31a3c81abebcc4018d42f2715",
+    "9e745f771b2a0cde271b8283753c19014124ac95",
+    "6f325805c0bc956f927b0e2dbfb4dd8133b4ed69",
+    "d36c0c538a545fac5d9db6ba65c525246d4efa95",
+    "6b27c1f981a9a93918e4039f236ead27165a8e91",
+    "7f3e23707122f31ebfa58b7280bd56cbe77cb44e",
+    "bb77cbf05a3453b6e96829558c679a47d075912f",
+    "f813bd9f8f79c44600fe0da4aba788f35e287027",
+    "5a76e633ea9b5adb215e93fdc11e1c0c08b3fc74",
+    "e62d1f13f26306b0294dade74aed76b5836d6c8d",
+    "cc8ca5b6a5478b40546d4206392eb1471454460d",
+    "9086d9643903c608ab015b0b7d903547a4e7b6f3",
+    "d64a2d9941c36a7bc2a7959ea10ab8363192ac14",
+    "3b3c8abb9635eb3ea078a821a99c9ef29d66dff7",
+    "5221dcbe479ed765d8103ed7601c69b6d8d6ca4f",
+    "8d8177c75701014dfe27fec4cdd2b1647aefcb67",
+    "46e8ff63cb67a6520711da5317aaaef04d0414d0",
+    "75a18a39ca52fefb63e0821997e088c499d2c879",
+    "eee38b0c018b3279f77d03dff796f440f40d3516",
+    "9fd0f1526fab9ee9b7e9d021185bc3507048a6d2",
+    "801e92007fd6eac3fa5b4c386ba54089393680c7",
+    "9c888fa3a284d329560348325ceb7f88e565ce3c",
+    "e2acd854250b449a3fdeef2ad52402c4c5d78259",
+    "66463d7e4b8598598866cc5668e6f0a566f31c17",
+    "e38294a62d7f37c0661273a9a26fda16d557423f",
+    "5db217305f37a79eeccd70f000088a06ec82fcec",
+    "41113108303afbc1458c1c82b267cc17703ea8ce",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "30650d81d9baa446dbc8deb784ba53794cafda5b",
+    "8e190d498c9e402c787e70cde4afc7124393bea6",
+    "83a5991d12ecabc3388c99d121892a488ea8ee97",
+    "b36420addb9e1453bd60b2379a4ecf106283b7c3",
+    "b6555b1da0cf3b00fcfd139f4465861268a44ed2",
+    "abcde243fe613246aa3d7c0bec21569c0639c95d",
+    "2c2f76c50f7122f2c3f4adbde021ad4f110cd066",
+    "b52cf04b3c4237bc8d2eee865d5a8f981a30d6bd",
+    "685ae36ca2dbb455b440997f75cca3e88085a23f",
+    "885b612f74f133678bf82808c589331e4c59dad9",
+    "99aa0f9e8f1a88def7bdebf1385678559cda0707",
+    "f157a5651c79a7a36e242af216a5d5b383ba8af2",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "4de8f55113007fdc8e34107950e605fc0209d465",
+    "b55a20fa2c669b181f47ea9219b8e74d1263da19",
+    "7a6de0008a48507c65a01a8279e542c2e5dd982f",
+    "33165fe0d5c265c92f2a67fc2b437b567c24e294",
+    "fccb146e3fe437b0df1e9c50d4b8e1080ddb4bd9",
+    "80b1d62bfcea65c59e2160da71dad84b1bd19cef",
+    "d37d46dfbcedadeb439ad0367f8afcf8867dca43",
+    "2d6daa72ab5832bf4cab38df0d911f32df547021",
+    "26bd9eee6ee6d116e1cc0dedeb660cd69d7aac45",
+    "24bf56fb3a2fab42d355b15de11782c3144b9e80",
+    "779f61c6a3ce02a119e28e802f229e61b69b9046",
+    "40ee551715c3a784ea6132dbf604b0e665ca2def"
+  ],
+  "rust/release_crates/protobuf_example/proto/proto_example/foo.proto": [
+    "30c86425ec9df9f286683039f672c3286478e625",
+    "ffcbaab65e8daa85985b8b22a912ff9c9e08070c"
+  ],
+  "src/google/protobuf/unittest_arena.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "c3b72b99b4ce587b487674e33660494dc56b9432",
+    "6ed738305bc0770832148109057cf22a6d9ee98a",
+    "f157a5651c79a7a36e242af216a5d5b383ba8af2",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e"
+  ],
+  "csharp/protos/unittest_import_proto3.proto": [
+    "f4f73699b075c908674f9a13ea99668f18a56acd",
+    "943bd5a7d8a8a32a4e6b98fd17b0284c389ee308",
+    "91ff83c024be36e2f2728c30cd7eedcec9220d1a",
+    "aa77eab622fe0ccc6cf7ec8a3fce1005dd759562"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/multiple_files_test.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "e19c2606b3d02123cd7f26ec0e38597f90145e9c",
+    "66540237ca212401ec1e279224b8db40f52e4ab9",
+    "711e4b4d6c2beab175e415eec3883e5df416c543",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "upb/test/proto3_test.proto": [
+    "e6ea44c9119b0f5976ea7b335395753833fc382d",
+    "501ececd39fed69f0c50c2c87f04ce75932dde72"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/outer_class_name_test3.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "0894e07536af88065d462cdc9d8e807c0723ef4d",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "src/google/protobuf/compiler/ruby/ruby_generated_pkg_explicit_legacy.proto": [
+    "c593476ac74c3c8194a6d655dc0429325cadf9ab",
+    "465653e9e460b7831e986f698f11029364b890a8",
+    "ae85b457d2f00daf57fa3deb538627cc16e0c0d7",
+    "bb211e851ec2158e479784bd68784784bf6594dc",
+    "9638dcc340a83996e88b4e6f4f372572bb33d19c"
+  ],
+  "editions/codegen_tests/proto3_implicit.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "hpb_generator/tests/no_package_enum_user.proto": [
+    "735621f7d720fcacc0a05114f407c3817411f296",
+    "24de58860f3150ea77e088d0e538d60ab1f85b9d",
+    "a453cffaed99e993c6d3033b05787c88534a6a96",
+    "5f366b3b7d583f349cb9c6746cd5d74ae96ac869",
+    "096b139192b3fa95a7a626b273ec1a80845f7c87",
+    "968087eb61e18394a1e2e3e6bd3ab6eaf8ecb36e"
+  ],
+  "src/google/protobuf/unittest_string_view.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "bd70a7cc7bbbc6ce039e998d3778351e22d10bd4",
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "4a039d89dd41582dccc557241e352724f6afcfb4",
+    "2fc70228791df4f182eb9d33ef993a317940a953"
+  ],
+  "src/google/protobuf/unittest_string_type.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "dfbe98781c5ac2c427aa4406705f8201c7364fcf"
+  ],
+  "src/google/protobuf/late_loaded_option_user.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "77ee83b8da7d94bf5df6ca796f3ac66265879996"
+  ],
+  "python/google/protobuf/internal/self_recursive.proto": [
+    "17838beda2943d08b8a9d4df5b68f5f04f26d901",
+    "a6fa5799ff0153e4f0f6f1d8263d6b492ac129e0",
+    "3784ba195954ef899f361761e692c9c80deffb9f"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/test_check_utf8.proto": [
+    "5131935d7ab445fedfbb886991d4947294230fd7",
+    "41f91ea411ebf62288ddbd3b7cfa87e9c4d54467",
+    "c99cf4bbfaf71f735cd0dea7d6fc0b2c1a589ed2",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "src/google/protobuf/compiler/ruby/ruby_generated_pkg_explicit.proto": [
+    "c593476ac74c3c8194a6d655dc0429325cadf9ab",
+    "465653e9e460b7831e986f698f11029364b890a8",
+    "ae85b457d2f00daf57fa3deb538627cc16e0c0d7",
+    "bb211e851ec2158e479784bd68784784bf6594dc",
+    "9638dcc340a83996e88b4e6f4f372572bb33d19c"
+  ],
+  "src/google/protobuf/compiler/java/message_serialization_unittest.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "7bbc0b653610b2a18ac95e13c1838c81fe6253a8",
+    "90e1b49f0f838a3bedb0d485a7f323e468730eb7",
+    "4af5a837a4eba0e13dcc31e882df7dd821a5430e",
+    "c003a02b5982b84c0872fa6c5519826e61862dab",
+    "897b2cebb40b9f053b36ae8b3e9ec434d66b6504",
+    "aebdd0885ff2b7ebf62bfff09df49be021c748d1"
+  ],
+  "src/google/protobuf/compiler/ruby/ruby_generated_code_proto2_import.proto": [
+    "c593476ac74c3c8194a6d655dc0429325cadf9ab",
+    "465653e9e460b7831e986f698f11029364b890a8",
+    "740c4b082dcaabec0c70f8433dc4d022973268c8"
+  ],
+  "csharp/protos/old_extensions1.proto": [
+    "f4f73699b075c908674f9a13ea99668f18a56acd",
+    "943bd5a7d8a8a32a4e6b98fd17b0284c389ee308",
+    "7581fd5ea62ddbc3777523ffe681b9b1975917cc"
+  ],
+  "csharp/protos/unittest_issue6936_a.proto": [
+    "f4f73699b075c908674f9a13ea99668f18a56acd",
+    "fb1d87794998ea8f0ab0248420748df8491b695c",
+    "1792a3265bcf6c862043b14d245736b2ee43515b",
+    "367fd2773282a3007eecda3374056db2539b8076"
+  ],
+  "rust/test/import_public_grandparent.proto": [
+    "c1d174f7d2cb42bdae0f6c60ddce40d3e9ecbd0f"
+  ],
+  "src/google/protobuf/map_proto2_unittest.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "dc4b09e13879d06618c6a66096e0c6819ff28d28",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "d36c0c538a545fac5d9db6ba65c525246d4efa95",
+    "5a76e633ea9b5adb215e93fdc11e1c0c08b3fc74",
+    "9086d9643903c608ab015b0b7d903547a4e7b6f3",
+    "46e8ff63cb67a6520711da5317aaaef04d0414d0",
+    "eee38b0c018b3279f77d03dff796f440f40d3516",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "f157a5651c79a7a36e242af216a5d5b383ba8af2"
+  ],
+  "editions/codegen_tests/edition2023_symbol_visibility_use.proto": [
+    "f0b58e658914ec1f82af754b73b30b506734642b"
+  ],
+  "java/core/src/main/resources/google/protobuf/java_features.proto": [
+    "41f91ea411ebf62288ddbd3b7cfa87e9c4d54467",
+    "613aada100d2ef2389663fb8e36066b75b5eca8f",
+    "7df6884d27c76b796159e861a1723da887ba9832",
+    "c8ff7629a56b65399cde3ae3dbd9d8d95a6b4e8b",
+    "8acc702c84275f413e34321360c11d634f83e627",
+    "18903c4a4c441ad5238230d1e9afa89a3683eb77",
+    "e49ce62d1e3965c5fd376c7fad0bb85cbe19477a",
+    "bd7078debcd40823ed29a0ab197435c82b248043",
+    "433ca3e6a1252725894f941581814d282c7ad575",
+    "77f62de93e2e84d6aab0364629919779970fb9f1",
+    "274bc7f26ff9da996714cf5cd011a7edaf6ce34c"
+  ],
+  "java/kotlin/src/test/proto/com/google/protobuf/evil_names_proto2.proto": [
+    "39a1c6a46e6921577cab24440fb16e7a1e903f63",
+    "c24e7529eb7a709285a5e61d8d05a347576de7c6",
+    "e9c9970eb4ac488d9fb94e8dea6945d3881c405d",
+    "9188b39fb7e09df87bd2fed31fb756de70ff510f",
+    "9a1ef54b47aecc70b819f8da6604027a8f51c8e8",
+    "cc696d4babf8c4faf59984c596033701ed479ef6",
+    "094d18944ed565dc4459230e0554d0720fbbdfd9",
+    "380e352b0bddd31d08250295ef6c24347ae47b54",
+    "726241fca1880e912322fa28fbe6193ae81ce588"
+  ],
+  "editions/codegen_tests/edition2023_java_proto1_no_multiple_files.proto": [
+    "6de35c6d2fc78ad76e383fb51724f9b8aa20def2"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/nested_builders_test.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "0894e07536af88065d462cdc9d8e807c0723ef4d",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "benchmarks/descriptor_sv.proto": [
+    "adff00baecb5ca8bde38f6527e19718a27707e20",
+    "501ececd39fed69f0c50c2c87f04ce75932dde72"
+  ],
+  "rust/test/package_import.proto": [
+    "1eab5a0237b28b8242801912877ebb513eafbb17",
+    "177092cd8cc0daae89ddddebbe0bccdb8ce7f38b",
+    "3ced818640df9b30efd25faf34084d3339806766"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/proto2_text_format_performance_test.proto": [
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "91c1e7c0587993e18d0b1f3edeb3aada0411f19d"
+  ],
+  "go/google/protobuf/go_features.proto": [
+    "71e600c2ed4034ff218a06d3bbf73c4dcb1bfb0f",
+    "239662140c28ea1041b6fbfafc4fcbacf254361d",
+    "2887da22a1284a8f033efe67e02eb5f0fde4923f"
+  ],
+  "hpb_generator/tests/naming_conflict.proto": [
+    "75e8d668b085b162a939b64f0997cf6495fbdf6c",
+    "a453cffaed99e993c6d3033b05787c88534a6a96",
+    "5f366b3b7d583f349cb9c6746cd5d74ae96ac869",
+    "968087eb61e18394a1e2e3e6bd3ab6eaf8ecb36e"
+  ],
+  "python/google/protobuf/pyext/python.proto": [
+    "b42ca260d1de391febf63cb5ebcb546a5a3f15f4",
+    "13fd045dbb2b4dacea32be162a41d5a4b0d1802f",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "bde4a3254a7de58911941b0fbf38e9dd992de973"
+  ],
+  "editions/codegen_tests/proto3_packed.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "src/google/protobuf/map_lite_unittest.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "ab4585a6956675ce14a1cba5d321fde980bbf12b",
+    "6ed738305bc0770832148109057cf22a6d9ee98a",
+    "3808d091f86e079c8f3437f5cd66bd2c507cef8a",
+    "eee38b0c018b3279f77d03dff796f440f40d3516",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "885b612f74f133678bf82808c589331e4c59dad9",
+    "f157a5651c79a7a36e242af216a5d5b383ba8af2"
+  ],
+  "src/google/protobuf/unittest_delimited.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "2880938514448392782143ab99298d68898052bd",
+    "bcdc4d42dfc64f40b2206e5dc85e39a0ce8878d8"
+  ],
+  "objectivec/Tests/unittest_objc_startup.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "d846b0b059b4d867536b98aa29475a387aa09114"
+  ],
+  "php/tests/proto/test_reserved_enum_upper.proto": [
+    "53944b59834d8783792904f006445f90b835e9e6",
+    "8984184e5464bbe3cd8046c90f4e1559145aab4b",
+    "eb27c201f121b02c990c3665edce5171a8c70192",
+    "ce57b5bab64f6ca18dbbebca2d501be4a59121e7",
+    "bade043986a4514ee1877a06ae03d29e081b27c9",
+    "f46a01d0c13295eec279b9a17021b38d85b41205",
+    "e5d000cbb7bcf8fadddfbdb544070e31ce36fa26"
+  ],
+  "rust/test/shared/utf8/no_features_proto2.proto": [
+    "1a7ea70730c1f835393c5b516e76ba84ba96a588"
+  ],
+  "editions/proto/editions_transform_proto2.proto": [
+    "c4ce58a893fdb402c94f77ff2b9447065353a278",
+    "cb86ccd7a1606d10b842ca40def21af0b9cd2e02",
+    "ccadeac6ee527b8eef8d42a686ee5c732c44ebce",
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "rust/test/import_public_non_primary_src2.proto": [
+    "c1d174f7d2cb42bdae0f6c60ddce40d3e9ecbd0f"
+  ],
+  "upb/util/def_to_proto_regular_import_test.proto": [
+    "501ececd39fed69f0c50c2c87f04ce75932dde72"
+  ],
+  "src/google/protobuf/util/json_format_proto3.proto": [
+    "e25e267dea8762e077b4ee76eb247c3e272bb64c",
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "da8bcc83553a77b20890f77bc7456e326671e2e2",
+    "86abf35ef5ee5b1004ec11bebb36d84c2ef6645e",
+    "ba57a4e71500231c5834ea322f4ce1b8b530fac4",
+    "256e65087db92f2c45dfc070818654d4cc37df6a",
+    "32bea52ee660abeb6a2891e3dce979a909cbd6ea",
+    "c7b299188859bde453add7d41d6bdf90c4fa0cef",
+    "6cf86ac37a77a7e94634b2d085737d97186befb5",
+    "02df2a7dad911f597ed55d3d22f29ec625e3eb21",
+    "dfab275eca9481b5de31122db6fc91b31db3382a",
+    "4f02f056b5cea99052bfdfb6698afe47a3cf2964",
+    "2f864fdfdf18318ef24b02141733adb356508370",
+    "6bbe197e9c1b6fc38cbdc45e3bf83fa7ced792a3",
+    "773d8c3329d1a28732d9f9c4b21c02e302052e4f",
+    "7f3e23707122f31ebfa58b7280bd56cbe77cb44e",
+    "d64a2d9941c36a7bc2a7959ea10ab8363192ac14",
+    "e841bac4fcf47f809e089a70d5f84ac37b3883df",
+    "46e8ff63cb67a6520711da5317aaaef04d0414d0",
+    "e96ff30120a3834f7d1e31e43e591bf7cfbd731f"
+  ],
+  "editions/codegen_tests/proto2_utf8_disabled.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "src/google/protobuf/unittest_legacy_features.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "65c65c2d04b293225db150029d005056a9f078b8"
+  ],
+  "rust/test/rust_proto_library_unit_test/child.proto": [
+    "106de22416f2d61b0e944d28084e6588e788cd45",
+    "4f20efbb785dcf33a35a7ae6d32009f06f005d4d",
+    "083830d84904192dd8b72bbb5e1d9ee7c3c5469b",
+    "26af540a7ac4caba41d98395b88ea375e8a66f79"
+  ],
+  "src/google/protobuf/unittest_invalid_features.proto": [
+    "65419eef0d99446070dcff1e10f951383ceb42fe",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "6f3db03eb7b2fa31e4987fa9ec60199458824a4d",
+    "13df571922eeef56c327a90648ed3dca2510065a",
+    "15863ffc9aff9d31e9f25a7f11a2d499b0170bc3",
+    "4f9e41767a819abf8108bb29e4910fbc0f37dc6e"
+  ],
+  "src/google/protobuf/unittest_lazy_dependencies.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "c3b72b99b4ce587b487674e33660494dc56b9432",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "d36c0c538a545fac5d9db6ba65c525246d4efa95"
+  ],
+  "editions/codegen_tests/edition2023_go_api_flag.proto": [
+    "ecbb6ba8748344911d306df499bc849368aab67a"
+  ],
+  "src/google/protobuf/unittest_lite_edition_2024.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "e3fa6aac29f72e27f9db73db26fb71f24509ab7c"
+  ],
+  "objectivec/Tests/unittest_preserve_unknown_enum.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "cf4eeae6fd5d4faa59c3e86d302bbd2e76907ff2",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "3e0d399c3e6de7048e2a3e860cff795cd23a9e2b"
+  ],
+  "src/google/protobuf/unittest_drop_unknown_fields.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "c3b72b99b4ce587b487674e33660494dc56b9432",
+    "c4e3ccca9d91eb94c8072261a18209e68bdab0fa",
+    "1b9e96218ecb9d1f92b4428573c3f13b489e5052",
+    "a29e0e3f449487f776b54b2afc78ac2e60bf4fca",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "5db217305f37a79eeccd70f000088a06ec82fcec",
+    "41113108303afbc1458c1c82b267cc17703ea8ce",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "30650d81d9baa446dbc8deb784ba53794cafda5b",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e"
+  ],
+  "src/google/protobuf/unittest_enormous_descriptor.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "d0f91c863ae0fbb75b41460c8bbb786ade197a0f",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "fccb146e3fe437b0df1e9c50d4b8e1080ddb4bd9",
+    "68996fc874300337ec7349f50d0b1cbb3a6f1bec"
+  ],
+  "src/google/protobuf/unittest_lite_imports_nonlite.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "92a7e778e7394386f413cec28d67a07630f784b1",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "80b1d62bfcea65c59e2160da71dad84b1bd19cef"
+  ],
+  "src/google/protobuf/internal_metadata_locator_test.proto": [
+    "b791d9e37f27b57f8f53d11d1edd448d4d49d71e"
+  ],
+  "src/google/protobuf/unittest_preserve_unknown_enum.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "c3b72b99b4ce587b487674e33660494dc56b9432",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "c4e3ccca9d91eb94c8072261a18209e68bdab0fa",
+    "1b9e96218ecb9d1f92b4428573c3f13b489e5052",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "5db217305f37a79eeccd70f000088a06ec82fcec",
+    "41113108303afbc1458c1c82b267cc17703ea8ce",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "30650d81d9baa446dbc8deb784ba53794cafda5b",
+    "885b612f74f133678bf82808c589331e4c59dad9",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e"
+  ],
+  "src/google/protobuf/unittest_custom_options_unlinked.proto": [
+    "0beafd8e6264b2fda4f7b48e02c2854f07692ef7"
+  ],
+  "python/google/protobuf/internal/descriptor_pool_test1.proto": [
+    "e4cbc79ab45e28909185f94a4095176174f46c8b",
+    "c05b320d9c18173bfce36c4bef22f9953d340ff9",
+    "9ef8f5cffc4b2ca6a687ae6b66d9de23095bc3ae",
+    "1f58f1d7b83ec333ab6076bf2e76797dd8de3e45",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "bde4a3254a7de58911941b0fbf38e9dd992de973"
+  ],
+  "editions/golden/editions_transform_proto3_utf8_disabled.proto": [
+    "c4ce58a893fdb402c94f77ff2b9447065353a278",
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "src/google/protobuf/unittest_lazy_dependencies_custom_option.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "c3b72b99b4ce587b487674e33660494dc56b9432",
+    "911339b4afea6b4984b4a099f603046fe0c28b3b",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "d36c0c538a545fac5d9db6ba65c525246d4efa95"
+  ],
+  "examples/examples_with_hyphen/empty.proto": [
+    "a4be867133971b21f0fa4a7523733dd1b62db4c1"
+  ],
+  "src/google/protobuf/unittest_import.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "23f148138654a564b5690f6a5453aab480a6a049",
+    "46e8ff63cb67a6520711da5317aaaef04d0414d0",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "f157a5651c79a7a36e242af216a5d5b383ba8af2",
+    "643d09ac7dcbf3b014a8a0465ebc4405ac8388b7",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "c76807211af6ae86368bcd7651ca707ee7f12f86",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "b55a20fa2c669b181f47ea9219b8e74d1263da19",
+    "24bf56fb3a2fab42d355b15de11782c3144b9e80",
+    "40ee551715c3a784ea6132dbf604b0e665ca2def"
+  ],
+  "editions/codegen_tests/edition2023_java_mutable_multiple_files.proto": [
+    "6de35c6d2fc78ad76e383fb51724f9b8aa20def2"
+  ],
+  "rust/release_crates/protobuf_example/proto/proto_example/bar/bar.proto": [
+    "ffcbaab65e8daa85985b8b22a912ff9c9e08070c"
+  ],
+  "java/kotlin/src/test/proto/com/google/protobuf/evil_names_proto3.proto": [
+    "39a1c6a46e6921577cab24440fb16e7a1e903f63",
+    "c24e7529eb7a709285a5e61d8d05a347576de7c6",
+    "e9c9970eb4ac488d9fb94e8dea6945d3881c405d",
+    "9188b39fb7e09df87bd2fed31fb756de70ff510f",
+    "cc696d4babf8c4faf59984c596033701ed479ef6",
+    "094d18944ed565dc4459230e0554d0720fbbdfd9",
+    "380e352b0bddd31d08250295ef6c24347ae47b54",
+    "726241fca1880e912322fa28fbe6193ae81ce588"
+  ],
+  "python/google/protobuf/internal/import_test_package/import_public.proto": [
+    "106de22416f2d61b0e944d28084e6588e788cd45",
+    "b0f9799a7cf45a8e6a39decbfa5df1e9a3f5fa03"
+  ],
+  "java/util/src/test/proto/com/google/protobuf/util/json_test_proto2.proto": [
+    "d111589bc05f0c11d9d2b0e230bc3217f24feb40",
+    "44ec9d9e86ebdd410a4b613682fb57506d6a113b",
+    "58baeb4c3b664f8918d24cef5151083d9da9767c"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/outer_class_name_test.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "0894e07536af88065d462cdc9d8e807c0723ef4d",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "rust/test/enums.proto": [
+    "cb6b460cc9b19aab76e324ba98e6843c6fc57a87",
+    "b4bf6b22e50bda1d3c41ee4cc7bb4d777e5af872",
+    "0ce51da37730aa5c5bac85b1aa5cdc773589c90b"
+  ],
+  "ruby/tests/stress.proto": [
+    "bb38ba55753a27a78abd8cc1d5211eb8950dabfe",
+    "5cfc9e775d76acb37e5b554e53dff336a89d000f"
+  ],
+  "upb/test/test_cpp.proto": [
+    "501ececd39fed69f0c50c2c87f04ce75932dde72"
+  ],
+  "rust/test/package.proto": [
+    "dbaa526b075dd0d73a1fe51945d0b4d2c4b1d3b1",
+    "1eab5a0237b28b8242801912877ebb513eafbb17",
+    "177092cd8cc0daae89ddddebbe0bccdb8ce7f38b",
+    "3ced818640df9b30efd25faf34084d3339806766"
+  ],
+  "editions/codegen_tests/edition2023_java_proto1_outer_classname_future.proto": [
+    "6de35c6d2fc78ad76e383fb51724f9b8aa20def2"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/large_open_aliasing_enum.proto": [
+    "76b51ff594c8df23abb55246a1060e9f2ba712b1",
+    "57338e8c6df24817f4d0fbaa30eb51f45751d59b"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/non_nested_extension_lite.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "5e0812d4b1f110fa6c1e33c91c9965a10989c41f",
+    "0894e07536af88065d462cdc9d8e807c0723ef4d",
+    "acd5b05e9f1ec2153574807463af0612267b6067",
+    "6bbe197e9c1b6fc38cbdc45e3bf83fa7ced792a3",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "php/tests/proto/test.proto": [
+    "6d84da5e2d42a8c83373c0bc6d7ed0ca6f78aade",
+    "743c675c4f2c6265e43067d8544c6e2c31024353",
+    "67995fb4e9ccd43195993dddc051a018fd888086",
+    "f4d0f7c85eb5347b5296d44ae2ad3ba2e27e0050",
+    "d5079ed7db6da57bd8552d65dbfe6df7c902dc52",
+    "ad5a2153592a44dc1f7d12b3ddddf5e18829b297",
+    "601f6963eb203fb732dc95afc8898f707f4a9148",
+    "2dec82e1e05141e9b14972880ce15976a2477719",
+    "a32c2d030674ad5913cbc6ac3f65f6bce2f688c2",
+    "4b145b1c7f836a904b1c8f29bca74bf791c3744f",
+    "d750fbf648256c7c631f51ffdbf67d7c18b0114e",
+    "1069565a68654fa016cb454c87eca8372b3b8d3f",
+    "8faa778add7cc1a2bbb1139c633280753902830d",
+    "6032746882ea48ff6d983df8cb77e2ebf399bf0c",
+    "dd5190980b8a9205eaf292f0cd947c3657daaeb1",
+    "49b44bff2b6257a119f9c6a342d6151c736586b8",
+    "c78dbd7c895b8c80cd2f2401d73acf890edf82c6",
+    "6f325805c0bc956f927b0e2dbfb4dd8133b4ed69",
+    "282fb9e68ec101b7b7616a45279427944afc3e6b",
+    "a6189acd18b00611c1dc7042299ad75486f08a1a",
+    "4c57e8475f78ccac80407f03c2d23d30014785f9",
+    "b97cd573e405dd511b09a9fae124427a29741395",
+    "7be088202bad3a89498db2e9b19afda9f3929430",
+    "6b27c1f981a9a93918e4039f236ead27165a8e91",
+    "dd8d5f57d7068080283c2c03af01d806efbe6cf4",
+    "bcbaabe53a8d661f5a473d2a157a4278ad8bf579",
+    "7f3e23707122f31ebfa58b7280bd56cbe77cb44e",
+    "46ae90dc5e145b12fffa7e053a908a9f3e066286"
+  ],
+  "csharp/protos/unittest.proto": [
+    "34a04c1fd51f799f94f8cd5c6eec0124e43761af",
+    "f4f73699b075c908674f9a13ea99668f18a56acd",
+    "b359e5020a68ce84faec5952100ae482e9eb0b1c",
+    "3f4af6661ab60894093dd351a012f3e0e4dded34",
+    "943bd5a7d8a8a32a4e6b98fd17b0284c389ee308",
+    "a104dffcb6b1958a424f5fa6f9e6bdc0ab9b6f9e",
+    "8b7fb7d0f4fdcc4ad1d6b917b592226c5dd9f4ce",
+    "8a57ec847b0213791dd586ab3c554e1e49513825"
+  ],
+  "rust/test/import_public.proto": [
+    "dbaa526b075dd0d73a1fe51945d0b4d2c4b1d3b1",
+    "c1d174f7d2cb42bdae0f6c60ddce40d3e9ecbd0f"
+  ],
+  "src/google/protobuf/type.proto": [
+    "eee195ed3bf452f1345a63cde655a354c6ccf509",
+    "4a2f566ff0293b456f18de0f55ada46dc1491e1a",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "dfab275eca9481b5de31122db6fc91b31db3382a",
+    "176f7db11d8242b36a3ea6abb1cc436fca5bf75d",
+    "7f3e23707122f31ebfa58b7280bd56cbe77cb44e",
+    "5a76e633ea9b5adb215e93fdc11e1c0c08b3fc74",
+    "cc8ca5b6a5478b40546d4206392eb1471454460d",
+    "e841bac4fcf47f809e089a70d5f84ac37b3883df",
+    "c3bc155aceda36ecb01cde2367a3b427f2d7ce40",
+    "b0f661181d10bddc08e380992590a1cdd92be92b",
+    "739d13d5d1f93e8bf8770081d1500372758fffa1",
+    "30650d81d9baa446dbc8deb784ba53794cafda5b",
+    "ca9d1a053a8590caa1a1f81491b0381f052fa734"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/generator_names_outer_classname.proto": [
+    "7a7f276dcee4abf6c758f396b0a2989d41ed9742"
+  ],
+  "ruby/tests/generated_code.proto": [
+    "2d0862131c9bf465bc8ccdb4fc2ddf3eee75f847",
+    "93c703e816ccb9f926f9d1d94216d8172554cfb4",
+    "dda7ab0363c4255aed5eae7aa84a4a7816f29bab",
+    "0e7b58956684c7c2fc228eff9173ea2ae50de911",
+    "6d92233e726bb8ab8154229b7c9df74473eb06a1",
+    "5db217305f37a79eeccd70f000088a06ec82fcec",
+    "3f3820d8f8b5c0b67aadc25ad5a2e728b6a3fe79"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/generator_names_conflicting_enum.proto": [
+    "7a7f276dcee4abf6c758f396b0a2989d41ed9742"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/generator_names_pre2024_defaults.proto": [
+    "7a7f276dcee4abf6c758f396b0a2989d41ed9742"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/generator_names_generic_services.proto": [
+    "7a7f276dcee4abf6c758f396b0a2989d41ed9742"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/generator_names_nest_in_file_class.proto": [
+    "7a7f276dcee4abf6c758f396b0a2989d41ed9742"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/generator_names_conflicting_service.proto": [
+    "7a7f276dcee4abf6c758f396b0a2989d41ed9742"
+  ],
+  "rust/test/rust_proto_library_unit_test/parent.proto": [
+    "106de22416f2d61b0e944d28084e6588e788cd45",
+    "4f20efbb785dcf33a35a7ae6d32009f06f005d4d",
+    "083830d84904192dd8b72bbb5e1d9ee7c3c5469b",
+    "26af540a7ac4caba41d98395b88ea375e8a66f79"
+  ],
+  "rust/test/rust_proto_library_unit_test/parent2.proto": [
+    "88d991d3109feb9cd70184d9b60b62e1c2b065d0"
+  ],
+  "rust/test/rust_proto_library_unit_test/grandparent2.proto": [
+    "648c20d60225f0fc551c28c6c57e997f6fd76fd9"
+  ],
+  "rust/test/rust_proto_library_unit_test/grandparent1.proto": [
+    "648c20d60225f0fc551c28c6c57e997f6fd76fd9"
+  ],
+  "src/google/protobuf/struct.proto": [
+    "3c71dd852623352957d5b94a167199074d0c75f5",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "e5c570bb572bebe706d0389f2ea734a3e1a7d821",
+    "dfab275eca9481b5de31122db6fc91b31db3382a",
+    "176f7db11d8242b36a3ea6abb1cc436fca5bf75d",
+    "cc8ca5b6a5478b40546d4206392eb1471454460d",
+    "3b3c8abb9635eb3ea078a821a99c9ef29d66dff7",
+    "e841bac4fcf47f809e089a70d5f84ac37b3883df",
+    "c3bc155aceda36ecb01cde2367a3b427f2d7ce40",
+    "b0f661181d10bddc08e380992590a1cdd92be92b",
+    "739d13d5d1f93e8bf8770081d1500372758fffa1",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "41113108303afbc1458c1c82b267cc17703ea8ce",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "30650d81d9baa446dbc8deb784ba53794cafda5b",
+    "ca9d1a053a8590caa1a1f81491b0381f052fa734",
+    "96e379ff8bc6907d044c62c1381b8e5a793b6a7a"
+  ],
+  "src/google/protobuf/late_loaded_option.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "77ee83b8da7d94bf5df6ca796f3ac66265879996"
+  ],
+  "src/google/protobuf/compiler/plugin.proto": [
+    "dfa6bba22d8f37726672530854f68822f58e618b",
+    "cba41100fb1e998660ef4fb12aeef2871a15427c",
+    "31b6348f23c7c93f15342c6e6a87e796f4b71439",
+    "2176a145ba210c286177032037e736bf97158f7d",
+    "80df4b29e0abb70b702fe159d3cf00852998a6d0",
+    "7399913b182ab0f8ac05f83c759d3bc7922e2a0f",
+    "23f148138654a564b5690f6a5453aab480a6a049",
+    "934b3b0871cf31c230610a678ab5fdaf924b6877",
+    "95e6c5b4746dd7474d540ce4fb375e3f79a086f8",
+    "dfab275eca9481b5de31122db6fc91b31db3382a",
+    "b99994d994e399174fe688a5efbcb6d91f36952a",
+    "2f864fdfdf18318ef24b02141733adb356508370",
+    "09354db1434859a31a3c81abebcc4018d42f2715",
+    "d36c0c538a545fac5d9db6ba65c525246d4efa95",
+    "e62e30c3097fde684ddd7b34b35e19255bffafd8",
+    "ced8f73ffc89880af353b2e0d8b5dd0c5f75267d",
+    "885b612f74f133678bf82808c589331e4c59dad9",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "2273ee403b567da66493eff500d6896d52c087d5",
+    "33165fe0d5c265c92f2a67fc2b437b567c24e294",
+    "7b7a80eae4f46cca5d3a2781b4412ef769856cdb",
+    "5f12164f54a12500d2d8276937b7ed4fec408b99",
+    "7f4938b24482cd2ec81c0a36c7e9f86d726d1939",
+    "5e744ff9612da1add0dd0f893242703246c00d0c"
+  ],
+  "src/google/protobuf/unittest_lite.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "9e8b30c2135944d9d3a6e53b70e534581e2dbe2b",
+    "cc8b3483a5584b3301e3d43d17eb59704857ffaa",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "34a04c1fd51f799f94f8cd5c6eec0124e43761af",
+    "81068e8e8cf00f25559112a562661064d59bfa87",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "b359e5020a68ce84faec5952100ae482e9eb0b1c",
+    "0549e521889341305efb6cc59cacbb5b13d16dc7",
+    "fa82155c653776304bf6d03c33bea744db1b5eff",
+    "9e09343a49e9e75be576b31ed7402bf8502b080c",
+    "ab4585a6956675ce14a1cba5d321fde980bbf12b",
+    "9df42757f97da9f748a464deeda96427a8f7ade0",
+    "95e6c5b4746dd7474d540ce4fb375e3f79a086f8",
+    "6b5fb807c00603ff3fbb392d2a002fac2444d5c5",
+    "b99994d994e399174fe688a5efbcb6d91f36952a",
+    "58d4420e2dd8a3cd354fff9db0052881c25369ce",
+    "1d4e9593745c1cbff916cb5ab9c0c87d07369fcb",
+    "0400cca3236de1ca303af38bf81eab332d042b7c",
+    "09354db1434859a31a3c81abebcc4018d42f2715",
+    "5a76e633ea9b5adb215e93fdc11e1c0c08b3fc74",
+    "f4f9aec52f5b4c46ff32fb9527229da081a14e11",
+    "3b3c8abb9635eb3ea078a821a99c9ef29d66dff7",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "4de8f55113007fdc8e34107950e605fc0209d465",
+    "b55a20fa2c669b181f47ea9219b8e74d1263da19",
+    "80b1d62bfcea65c59e2160da71dad84b1bd19cef"
+  ],
+  "csharp/protos/map_unittest_proto3.proto": [
+    "f4f73699b075c908674f9a13ea99668f18a56acd",
+    "943bd5a7d8a8a32a4e6b98fd17b0284c389ee308",
+    "91ff83c024be36e2f2728c30cd7eedcec9220d1a",
+    "aa77eab622fe0ccc6cf7ec8a3fce1005dd759562"
+  ],
+  "editions/golden/simple_proto2_import.proto": [
+    "cb86ccd7a1606d10b842ca40def21af0b9cd2e02",
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "src/google/protobuf/unittest.proto": [
+    "db7317baee15e92316ef8482d6901dc55cd3b5e8",
+    "460ee2b43ccd9f1b7e62d7a80a000c10b7644015",
+    "c201e576aa1a74dcb4a2f851496e83a7d933e0e7",
+    "d45dcac4f8b52c971b7d30098c4feda014814cbe",
+    "40885c0a85eae178cca25ff50911516d17748d6b",
+    "39e531fad4675ed4c7be197db37d06e0f1d8c9c8",
+    "131643608516ea3cce9d12c6c97f1d9f32a60758",
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ec58a34824cf920e459f706e7ac2f34418b5e5e4",
+    "f05e51c08dcac9672f6c89864c4eefed2c5813a1",
+    "d9a542b884e30c80449b61faa0c4610dbf2ae650",
+    "100d54bc6b6a2786f2ddafed24c91c07e12c23a7",
+    "d4cc9126fe175736090b83ada7c6bcec61111bc8",
+    "2ac862f36c0e159986ecb1ca67d71bf5f047f8e9",
+    "9e8b30c2135944d9d3a6e53b70e534581e2dbe2b",
+    "4c923285a32ebcb53ce2ba03144e50d4dbedaf7b",
+    "23aada230b2478c7a07fe7612489eb8e79b9c379",
+    "a626dd332f177e110afd3eef71728e5951d8f3a0",
+    "78c6349d757c3b28075bbfc8bafa39ec04eb4ed9",
+    "cd002c06b66f182c8eae26e3e442ce440c197ed8",
+    "69698c123a43f73acb9bc25582f9e967513fba5d",
+    "bb68eb22dde9fbefc0413b7c3f836b03d062df4c",
+    "c99cf4bbfaf71f735cd0dea7d6fc0b2c1a589ed2",
+    "b3e7a0077418cd9cb9b820c0197c3b8edb7007dd",
+    "2693af92b36425902e09b2311ed2915104af2e43",
+    "34a04c1fd51f799f94f8cd5c6eec0124e43761af",
+    "c875ee9f01a430681b50e03741ad4acabb156a79",
+    "e33e0d2ba569c8a7d6d74b5a8b39d804ec2a0169",
+    "73b7f06faf147f5aa2bc7817eef24a732df651d3",
+    "81068e8e8cf00f25559112a562661064d59bfa87",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "b359e5020a68ce84faec5952100ae482e9eb0b1c",
+    "b3b1a60f41c1871e7a287e3150e9bedf94e8b832",
+    "c6810f15059d550ca8d28c127a884904f8c9746b",
+    "c3edc9036dcdb7f229767fc7dd9b1bcc466ee6df",
+    "6809f6c386d01eaea703518a537f95bfd1e909ab",
+    "c8c7ad39a0070113231c2368a72971408f3c2a79",
+    "a6d895988dee9586b1689259f4412d1714ea1e53",
+    "b55b834d5a7ea019bd04544f3d675ab0fc742210",
+    "281f00e5cd8bc0e2b313404301e55e8c00a443b2",
+    "0549e521889341305efb6cc59cacbb5b13d16dc7",
+    "6ecb5d097e8d9bfafeb5ec8d251827f0d444f2ce",
+    "714f97502662ae75ed64f8456b43d5536740b022",
+    "de4ce2e2de502e98c6ce64f3f7552f51703b1cd6",
+    "8f5e43261531ceffb7f93b46bf134b75a55a28bb",
+    "df455a33fd61629fd87f8faa17e22ab42bd16ea1",
+    "092e4472802847e2bcc4d8dbb8d5e124244e3329",
+    "9238c4843a1a25c588f11da5101c858f6ae6f7a8",
+    "a99e7088c710276941ebb6e2c0f2b67692d898b0",
+    "09a08d1f7532c28562d9db4e0d063d00c0ca2dd9",
+    "2221a0111dfc20776f7bcae012527048473abb93",
+    "6e75fa152eb63e8f6dfd396d8f40829caa703302",
+    "6b5d25c3aaa7e15f02cf59755ae0776bd8b951f5",
+    "91c1e7c0587993e18d0b1f3edeb3aada0411f19d",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "23f148138654a564b5690f6a5453aab480a6a049",
+    "e99b2819ee6a38395ad083e5c27306cab8607009",
+    "465653e9e460b7831e986f698f11029364b890a8",
+    "c7b299188859bde453add7d41d6bdf90c4fa0cef",
+    "aebdd0885ff2b7ebf62bfff09df49be021c748d1",
+    "b2aca61f4dff165d0e6c320a5e582fe26989c95f",
+    "152f97d8c17be9e41171a9cba9b8aaf048585e7b",
+    "628a7e6fa4389b6564b2649a45077aaea73e7341",
+    "f744bddb632888d8003bbdf848b797502f6c778a",
+    "9e09343a49e9e75be576b31ed7402bf8502b080c",
+    "a29e0e3f449487f776b54b2afc78ac2e60bf4fca",
+    "76398dab31e7e14c4f98a26612a6f09dec2f8106",
+    "ab4585a6956675ce14a1cba5d321fde980bbf12b",
+    "562fc946c748d0ddb451ad1ce48570685f23a4f1",
+    "380e352b0bddd31d08250295ef6c24347ae47b54",
+    "b7285b6c695b22e49896cbc14d6e5a1252489d69",
+    "96307d28f69662eb04edcaeb9d1d1ed25e692d88",
+    "a104dffcb6b1958a424f5fa6f9e6bdc0ab9b6f9e",
+    "763c3588740b97e8e80b1b1a1a2dc4f417647133",
+    "d8c2501b43c1b56e3efa74048a18f8ce06ba07fe",
+    "0400cca3236de1ca303af38bf81eab332d042b7c",
+    "22e1cfd84ac2e7a6e0ee1101d75673c13a801c03",
+    "09354db1434859a31a3c81abebcc4018d42f2715",
+    "d36c0c538a545fac5d9db6ba65c525246d4efa95",
+    "baceff7c9cb1c00fc13fc7ee73dbef234b6c3dd1",
+    "5a76e633ea9b5adb215e93fdc11e1c0c08b3fc74",
+    "cc8ca5b6a5478b40546d4206392eb1471454460d",
+    "d64a2d9941c36a7bc2a7959ea10ab8363192ac14",
+    "3b3c8abb9635eb3ea078a821a99c9ef29d66dff7",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "5db217305f37a79eeccd70f000088a06ec82fcec",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "f157a5651c79a7a36e242af216a5d5b383ba8af2",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "4de8f55113007fdc8e34107950e605fc0209d465",
+    "cb77c4c381ea36e1de8ee947b564424c573fa279",
+    "b55a20fa2c669b181f47ea9219b8e74d1263da19",
+    "5c20ca1fccbf0b4d19f5823517fde2869101f921",
+    "33165fe0d5c265c92f2a67fc2b437b567c24e294",
+    "fccb146e3fe437b0df1e9c50d4b8e1080ddb4bd9",
+    "d2fd0638c309113ccae3731a58e30419f522269a",
+    "d37d46dfbcedadeb439ad0367f8afcf8867dca43",
+    "2d6daa72ab5832bf4cab38df0d911f32df547021",
+    "26bd9eee6ee6d116e1cc0dedeb660cd69d7aac45",
+    "24bf56fb3a2fab42d355b15de11782c3144b9e80",
+    "40ee551715c3a784ea6132dbf604b0e665ca2def"
+  ],
+  "src/google/protobuf/unittest_proto3_bad_macros.proto": [
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "9c479e85996375ecbceba7f536afe035ed63e790"
+  ],
+  "src/google/protobuf/unittest_import_public_lite.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "b55a20fa2c669b181f47ea9219b8e74d1263da19"
+  ],
+  "src/google/protobuf/unittest_proto3_arena.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "9e8b30c2135944d9d3a6e53b70e534581e2dbe2b",
+    "b3e7a0077418cd9cb9b820c0197c3b8edb7007dd",
+    "34a04c1fd51f799f94f8cd5c6eec0124e43761af",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "7971ec76297d09db39e19019b0cfa53b1f5eed58",
+    "9e09343a49e9e75be576b31ed7402bf8502b080c",
+    "ce560630bf6dd9fd6f2ccafe8922f81661b7e6d0",
+    "a104dffcb6b1958a424f5fa6f9e6bdc0ab9b6f9e",
+    "763c3588740b97e8e80b1b1a1a2dc4f417647133",
+    "13fd045dbb2b4dacea32be162a41d5a4b0d1802f",
+    "d36c0c538a545fac5d9db6ba65c525246d4efa95",
+    "5db217305f37a79eeccd70f000088a06ec82fcec",
+    "ada65567852b96fdb4d070c0c3f86ca7b77824f9",
+    "f157a5651c79a7a36e242af216a5d5b383ba8af2",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e"
+  ],
+  "src/google/protobuf/unittest_optimize_for.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "4de8f55113007fdc8e34107950e605fc0209d465",
+    "26bd9eee6ee6d116e1cc0dedeb660cd69d7aac45",
+    "24bf56fb3a2fab42d355b15de11782c3144b9e80",
+    "40ee551715c3a784ea6132dbf604b0e665ca2def"
+  ],
+  "rust/test/no_package_other.proto": [
+    "1f472f1db3bb2111aae87781d87720d6fd6ac57a",
+    "1eab5a0237b28b8242801912877ebb513eafbb17",
+    "177092cd8cc0daae89ddddebbe0bccdb8ce7f38b",
+    "3ced818640df9b30efd25faf34084d3339806766"
+  ],
+  "upb/test/test.proto": [
+    "e6d86699587231ee18ef315a7bcfe15d0b5377d2",
+    "501ececd39fed69f0c50c2c87f04ce75932dde72"
+  ],
+  "src/google/protobuf/compiler/ruby/ruby_generated_code_proto2.proto": [
+    "c593476ac74c3c8194a6d655dc0429325cadf9ab",
+    "465653e9e460b7831e986f698f11029364b890a8",
+    "740c4b082dcaabec0c70f8433dc4d022973268c8",
+    "d0535cc09e6eac1bddddd51c20b5738c0e841765"
+  ],
+  "src/google/protobuf/compiler/ruby/ruby_generated_code.proto": [
+    "c593476ac74c3c8194a6d655dc0429325cadf9ab",
+    "465653e9e460b7831e986f698f11029364b890a8",
+    "740c4b082dcaabec0c70f8433dc4d022973268c8",
+    "a9332e201d246c0f6076a6821893b141967a056b"
+  ],
+  "src/google/protobuf/unittest_well_known_types.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "4ec5b2a1a29ff477d63ab146745c9d225c170dc8",
+    "296ae4e6632404be1c1f6dcbaba911d75927fbc3",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "b1ea15f7a5480fe946165b0257de4981edca1c82",
+    "8a0312b20156aa4df092cb6b3c665ef48cb6fa54",
+    "b2ac868493742327b2ebbcacd97947126f8841f7",
+    "1aacb4fbbfefb0ea6188426f5fdec5b628d1d6b4",
+    "33c92803d51098fad122246c9876caf9a8b55c92"
+  ],
+  "src/google/protobuf/unittest_import_option.proto": [
+    "0beafd8e6264b2fda4f7b48e02c2854f07692ef7"
+  ],
+  "ruby/tests/basic_test.proto": [
+    "bca8fb6117cf24785edb238d96bffe2c3a6d7164",
+    "5cfc9e775d76acb37e5b554e53dff336a89d000f",
+    "42f8b7782ed539d56d0f0e13da4e85603553e828",
+    "ae1f2b7e1b329aba1d204e6d3ddc61a88bc35dd9",
+    "2d0862131c9bf465bc8ccdb4fc2ddf3eee75f847",
+    "aceff710f4caef3269308a6c50ab075f3879176d",
+    "740c4b082dcaabec0c70f8433dc4d022973268c8",
+    "6d8b05bfd47db6d217ec4a7c9f4795e69fa900f4",
+    "9abf6e2ab0d8847059edfc1720e6697c7282f527",
+    "6b759688a1656e93da5776d94d018c85339c7b07",
+    "e8c67e14acceb93b048048d7823391df1f79c43c",
+    "8393d4833f6437a08ec8195f7c4cae347f7311a7",
+    "bd253f0130564704888136b14f638a69acc00d20",
+    "997bd354d55de6a8462ac3db0b002aa73b240cff",
+    "e4bbca1fc5fabfe86477ff6cf840e00619531698",
+    "d2daa389869e7f6f199e2dae776b3007df13bb42",
+    "a6e3ac0db12fa8d3013e2302283470d9a0e323e0",
+    "7f14ea9f48f21ce3c1528da56a3f101492324f45",
+    "d0535cc09e6eac1bddddd51c20b5738c0e841765"
+  ],
+  "python/google/protobuf/internal/more_extensions_dynamic.proto": [
+    "9ef8f5cffc4b2ca6a687ae6b66d9de23095bc3ae",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "09354db1434859a31a3c81abebcc4018d42f2715",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "b55a20fa2c669b181f47ea9219b8e74d1263da19"
+  ],
+  "python/google/protobuf/internal/more_messages.proto": [
+    "8476dbacb35dfb4b149256581467603cb005708c",
+    "1aedb97602b084b51c903c6c82b89e39b6d5078a",
+    "e17821cac1f84989ab280cd92063ba86c4e6770b",
+    "b690e729eb86d9f505d1c14692100bfc39809603",
+    "41af1d53a2d82ee17d6a3ac8a81ea2a93040ad82",
+    "81068e8e8cf00f25559112a562661064d59bfa87",
+    "9ef8f5cffc4b2ca6a687ae6b66d9de23095bc3ae",
+    "579f4ab70dc5c37f075a0b3f186fe80dcdf8165d",
+    "e5c570bb572bebe706d0389f2ea734a3e1a7d821",
+    "176f7db11d8242b36a3ea6abb1cc436fca5bf75d",
+    "d8c2501b43c1b56e3efa74048a18f8ce06ba07fe",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "24bf56fb3a2fab42d355b15de11782c3144b9e80",
+    "40ee551715c3a784ea6132dbf604b0e665ca2def"
+  ],
+  "src/google/protobuf/unittest_import_public.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "b55a20fa2c669b181f47ea9219b8e74d1263da19"
+  ],
+  "csharp/protos/unittest_custom_options_proto3.proto": [
+    "f4f73699b075c908674f9a13ea99668f18a56acd",
+    "fb1d87794998ea8f0ab0248420748df8491b695c",
+    "a104dffcb6b1958a424f5fa6f9e6bdc0ab9b6f9e",
+    "ccb76fff445862ac11bf7980818d587030f1c7d9",
+    "047575f20cbdee8fb2f88d78a317ffe6133b93e6"
+  ],
+  "src/google/protobuf/unittest_proto3_optional.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "fb1d87794998ea8f0ab0248420748df8491b695c",
+    "9df42757f97da9f748a464deeda96427a8f7ade0",
+    "6ba52411d08233c2d7cc8f56cfbe426195768315",
+    "2d80a70048b414a113a096aad9ca843eda12d974",
+    "b7742c51fdfa2f31f6a5f341f6d0b0df586b4ef1",
+    "c6493970296fa5c5b4a81a37248a328579fe9662",
+    "b99994d994e399174fe688a5efbcb6d91f36952a"
+  ],
+  "src/google/protobuf/unittest_lazy_dependencies_enum.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "c3b72b99b4ce587b487674e33660494dc56b9432",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "d36c0c538a545fac5d9db6ba65c525246d4efa95"
+  ],
+  "python/google/protobuf/internal/message_set_extensions.proto": [
+    "3781f45f390935001a7f1be6c20171f6fba0f56c",
+    "9ef8f5cffc4b2ca6a687ae6b66d9de23095bc3ae",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "e841bac4fcf47f809e089a70d5f84ac37b3883df",
+    "b0f661181d10bddc08e380992590a1cdd92be92b"
+  ],
+  "src/google/protobuf/source_context.proto": [
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "dfab275eca9481b5de31122db6fc91b31db3382a",
+    "5a76e633ea9b5adb215e93fdc11e1c0c08b3fc74",
+    "cc8ca5b6a5478b40546d4206392eb1471454460d",
+    "d64a2d9941c36a7bc2a7959ea10ab8363192ac14",
+    "e841bac4fcf47f809e089a70d5f84ac37b3883df",
+    "c3bc155aceda36ecb01cde2367a3b427f2d7ce40",
+    "b0f661181d10bddc08e380992590a1cdd92be92b",
+    "739d13d5d1f93e8bf8770081d1500372758fffa1",
+    "30650d81d9baa446dbc8deb784ba53794cafda5b",
+    "ca9d1a053a8590caa1a1f81491b0381f052fa734"
+  ],
+  "src/google/protobuf/only_one_enum_test.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "4ec5b2a1a29ff477d63ab146745c9d225c170dc8",
+    "083bbd4fcdc463f16487906870ebce6df3ae03ef"
+  ],
+  "php/tests/proto/empty/echo.proto": [
+    "6737954661ed26105dd87a4c78fe3f333c978961"
+  ],
+  "rust/test/no_package_import.proto": [
+    "1f472f1db3bb2111aae87781d87720d6fd6ac57a",
+    "1eab5a0237b28b8242801912877ebb513eafbb17",
+    "177092cd8cc0daae89ddddebbe0bccdb8ce7f38b",
+    "3ced818640df9b30efd25faf34084d3339806766"
+  ],
+  "editions/codegen_tests/edition2023_import.proto": [
+    "470522c57c254c857a537b1bf4b4d9c3031404a0"
+  ],
+  "php/tests/proto_previous/test_previously_unreserved_message.proto": [
+    "7ed2c262e26746b85104e318b534e04325967653"
+  ],
+  "rust/test/fields_with_imported_types.proto": [
+    "738ffe2a6e9333010f8235e7daf9c087e5e06c91",
+    "dbaa526b075dd0d73a1fe51945d0b4d2c4b1d3b1",
+    "90015d31450ea052b35f1e907569fcf12c762eec"
+  ],
+  "objectivec/Tests/unittest_extension_chain_a.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "46d1145ec85233e8d751ac038b66e44676fbd3d4",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "28bc3baca186e61469a7794e2ca6afbf1fd2d51e",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "3e0d399c3e6de7048e2a3e860cff795cd23a9e2b",
+    "13a41246dd9aa6c6a84d436307b933fd4a6ec4a8"
+  ],
+  "objectivec/Tests/unittest_mset.proto": [
+    "e67102d73de0e41c03294317c03299327c2894ed",
+    "6ace5550c8605948a44e7d4b8a512fc5600c609d",
+    "8b96aa1e4c2ce44f35d33e71a95d59cb8f22f98d",
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "28bc3baca186e61469a7794e2ca6afbf1fd2d51e",
+    "cf4eeae6fd5d4faa59c3e86d302bbd2e76907ff2",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "3e0d399c3e6de7048e2a3e860cff795cd23a9e2b"
+  ],
+  "rust/test/shared/utf8/no_features_proto3.proto": [
+    "1a7ea70730c1f835393c5b516e76ba84ba96a588"
+  ],
+  "python/google/protobuf/internal/well_known_types_test.proto": [
+    "5f6c0139a744965f6061e52820285c6d23cf7092",
+    "1aedb97602b084b51c903c6c82b89e39b6d5078a"
+  ],
+  "python/google/protobuf/internal/import_test_package/outer.proto": [
+    "106de22416f2d61b0e944d28084e6588e788cd45",
+    "b0f9799a7cf45a8e6a39decbfa5df1e9a3f5fa03",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/field_name_clashes.proto": [
+    "5a09cfd57713d3b1cda6e800601b5dde59beb295"
+  ],
+  "php/tests/proto/test_reserved_enum_lower.proto": [
+    "53944b59834d8783792904f006445f90b835e9e6",
+    "8984184e5464bbe3cd8046c90f4e1559145aab4b",
+    "eb27c201f121b02c990c3665edce5171a8c70192",
+    "ce57b5bab64f6ca18dbbebca2d501be4a59121e7",
+    "d995c1c18228d5b3361b33259d026726b3e2e5f9",
+    "bade043986a4514ee1877a06ae03d29e081b27c9",
+    "f46a01d0c13295eec279b9a17021b38d85b41205",
+    "e5d000cbb7bcf8fadddfbdb544070e31ce36fa26"
+  ],
+  "python/google/protobuf/internal/import_test_package/inner.proto": [
+    "106de22416f2d61b0e944d28084e6588e788cd45",
+    "b0f9799a7cf45a8e6a39decbfa5df1e9a3f5fa03",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e"
+  ],
+  "ruby/tests/generated_code_proto2.proto": [
+    "2d0862131c9bf465bc8ccdb4fc2ddf3eee75f847",
+    "d0535cc09e6eac1bddddd51c20b5738c0e841765"
+  ],
+  "src/google/protobuf/any_test.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "5c028d6cf42e426d47f5baa6ea3f0f5c86b97beb",
+    "5db217305f37a79eeccd70f000088a06ec82fcec"
+  ],
+  "rust/test/import_public_non_primary_src1.proto": [
+    "c1d174f7d2cb42bdae0f6c60ddce40d3e9ecbd0f"
+  ],
+  "ruby/tests/test_import.proto": [
+    "6d92233e726bb8ab8154229b7c9df74473eb06a1"
+  ],
+  "objectivec/Tests/unittest_extension_chain_f.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "46d1145ec85233e8d751ac038b66e44676fbd3d4",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "28bc3baca186e61469a7794e2ca6afbf1fd2d51e",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "a104dffcb6b1958a424f5fa6f9e6bdc0ab9b6f9e",
+    "13a41246dd9aa6c6a84d436307b933fd4a6ec4a8"
+  ],
+  "python/google/protobuf/internal/factory_test2.proto": [
+    "9ef8f5cffc4b2ca6a687ae6b66d9de23095bc3ae",
+    "9e12e81bc294c92a14dd2b7ef872d86056971bee",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "09354db1434859a31a3c81abebcc4018d42f2715",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "bde4a3254a7de58911941b0fbf38e9dd992de973",
+    "b55a20fa2c669b181f47ea9219b8e74d1263da19"
+  ],
+  "editions/codegen_tests/proto2_unpacked.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "editions/codegen_tests/proto2_proto3_enum.proto": [
+    "cb86ccd7a1606d10b842ca40def21af0b9cd2e02",
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/lazy_fields_lite.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "34a04c1fd51f799f94f8cd5c6eec0124e43761af",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "6bbe197e9c1b6fc38cbdc45e3bf83fa7ced792a3",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "editions/codegen_tests/proto2_optional.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "editions/codegen_tests/edition2023_java_multiple_files.proto": [
+    "6de35c6d2fc78ad76e383fb51724f9b8aa20def2"
+  ],
+  "upb/util/required_fields_test.proto": [
+    "501ececd39fed69f0c50c2c87f04ce75932dde72"
+  ],
+  "hpb_generator/tests/child_model.proto": [
+    "735621f7d720fcacc0a05114f407c3817411f296",
+    "24de58860f3150ea77e088d0e538d60ab1f85b9d",
+    "a453cffaed99e993c6d3033b05787c88534a6a96",
+    "5f366b3b7d583f349cb9c6746cd5d74ae96ac869",
+    "096b139192b3fa95a7a626b273ec1a80845f7c87",
+    "968087eb61e18394a1e2e3e6bd3ab6eaf8ecb36e"
+  ],
+  "editions/codegen_tests/edition2023_naming_style.proto": [
+    "f0b58e658914ec1f82af754b73b30b506734642b"
+  ],
+  "editions/codegen_tests/edition2023_string_type_view_default.proto": [
+    "82f2663b8f6661ec5e7e8c7685ac4e8c315e9f8a"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/any_test.proto": [
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "711e4b4d6c2beab175e415eec3883e5df416c543",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "src/google/protobuf/compiler/cpp/test_large_enum_value.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "035cd90e2f83f1f1920fc3d549656db982b5b9b2",
+    "40db3dabf0fe72b572e89c1e176318b04d3e2408",
+    "b7610f129df84d7f823f64d5dce9bfa1578cf49e",
+    "5db217305f37a79eeccd70f000088a06ec82fcec",
+    "53bee665f8406c966443f67bd8ee4f433cec9497",
+    "9d31c227a3ab0260c3e6ebc7e1a555f47582dab4"
+  ],
+  "upb/message/test.proto": [
+    "24e7df9d491c9c3da336071a8077c94c1f1713c0",
+    "c63fd563095adae535732b9464f4ab99f31c1bb4",
+    "7b6a845ab762cae1034228fdb56a3f18ce18a584",
+    "f92ad8f1c96b69f472ecabd6622dc3b86fd9a8a6",
+    "501ececd39fed69f0c50c2c87f04ce75932dde72"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/test_custom_options.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "711e4b4d6c2beab175e415eec3883e5df416c543",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "csharp/compatibility_tests/v3.0.0/protos/csharp/protos/unittest_issues.proto": [
+    "638a86028514b47b89cf1fd080a07fe3c3a11763",
+    "1792a3265bcf6c862043b14d245736b2ee43515b",
+    "e479410564727d8954e0704254f4345f97e3d844",
+    "afe98de32a130e0033c9b10fa470bb2ff858ed8d",
+    "9f09d1804a1cdf477db8249c746e362235fbd945"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/proto3_text_format_performance_test.proto": [
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "91c1e7c0587993e18d0b1f3edeb3aada0411f19d"
+  ],
+  "csharp/compatibility_tests/v3.0.0/protos/src/google/protobuf/unittest_import_proto3.proto": [
+    "296ae4e6632404be1c1f6dcbaba911d75927fbc3",
+    "9f09d1804a1cdf477db8249c746e362235fbd945"
+  ],
+  "csharp/compatibility_tests/v3.0.0/protos/src/google/protobuf/unittest_well_known_types.proto": [
+    "296ae4e6632404be1c1f6dcbaba911d75927fbc3",
+    "1792a3265bcf6c862043b14d245736b2ee43515b",
+    "9f09d1804a1cdf477db8249c746e362235fbd945"
+  ],
+  "benchmarks/descriptor.proto": [
+    "501ececd39fed69f0c50c2c87f04ce75932dde72"
+  ],
+  "src/google/protobuf/unittest_redaction.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "1f487953bfafc717fecf7f7e01ca141f09b861c3"
+  ],
+  "src/google/protobuf/unittest_proto3.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "448e326200a69afd83ae86e44dcddb612f007763",
+    "b3e7a0077418cd9cb9b820c0197c3b8edb7007dd",
+    "34a04c1fd51f799f94f8cd5c6eec0124e43761af",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "9e09343a49e9e75be576b31ed7402bf8502b080c",
+    "ab4585a6956675ce14a1cba5d321fde980bbf12b",
+    "a104dffcb6b1958a424f5fa6f9e6bdc0ab9b6f9e",
+    "58d4420e2dd8a3cd354fff9db0052881c25369ce",
+    "6bbe197e9c1b6fc38cbdc45e3bf83fa7ced792a3",
+    "09354db1434859a31a3c81abebcc4018d42f2715",
+    "606cb7ed2c55d5bda8aad2c88e5b0af09230fb3b",
+    "e38294a62d7f37c0661273a9a26fda16d557423f"
+  ],
+  "csharp/protos/old_extensions2.proto": [
+    "f4f73699b075c908674f9a13ea99668f18a56acd",
+    "7581fd5ea62ddbc3777523ffe681b9b1975917cc"
+  ],
+  "src/google/protobuf/unittest_mset_wire_format.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "0549e521889341305efb6cc59cacbb5b13d16dc7",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "b0f661181d10bddc08e380992590a1cdd92be92b"
+  ],
+  "editions/golden/editions_transform_noop.proto": [
+    "2078a86aff44aec5e9af89963d5f1e7dc1e8c37a"
+  ],
+  "src/google/protobuf/unittest_delimited_import.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "bcdc4d42dfc64f40b2206e5dc85e39a0ce8878d8"
+  ],
+  "csharp/protos/unittest_import_public.proto": [
+    "f4f73699b075c908674f9a13ea99668f18a56acd",
+    "8a57ec847b0213791dd586ab3c554e1e49513825"
+  ],
+  "editions/golden/editions_transform_proto2.proto": [
+    "c4ce58a893fdb402c94f77ff2b9447065353a278",
+    "cb86ccd7a1606d10b842ca40def21af0b9cd2e02",
+    "3f8544e706ae560333893b5facdf97a006e24664",
+    "303a376f7f5246686a6df0cbc82a17ff810c1725",
+    "ccadeac6ee527b8eef8d42a686ee5c732c44ebce",
+    "c99cf4bbfaf71f735cd0dea7d6fc0b2c1a589ed2",
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "editions/proto/editions_transform_proto3.proto": [
+    "ccadeac6ee527b8eef8d42a686ee5c732c44ebce",
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "src/google/protobuf/unittest_import_lite.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "b55a20fa2c669b181f47ea9219b8e74d1263da19",
+    "80b1d62bfcea65c59e2160da71dad84b1bd19cef"
+  ],
+  "src/google/protobuf/unittest_retention.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "5f64444e7b19421c25ae12d3c69acbab3a70a1bb",
+    "1325913afd65b39c268e5c4101d6b82f32957ae9",
+    "8f882e7f3d0535760c46f8cdde9f40006e33e02a"
+  ],
+  "editions/golden/simple_proto3.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "php/tests/proto/test_wrapper_type_setters.proto": [
+    "815ff7e1fb2d417d5aebcbf5fc46e626b18dc834",
+    "9a8ef05a34dab7583b6f253daca294d6b1bfb187",
+    "3bf05b88eaf938526f7daee85ab6fb1efb0e809c",
+    "6a51c03823448a9229c50795ae0d984ac0fe4fbd"
+  ],
+  "editions/golden/editions_transform_proto3.proto": [
+    "c4ce58a893fdb402c94f77ff2b9447065353a278",
+    "ccadeac6ee527b8eef8d42a686ee5c732c44ebce",
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "editions/golden/editions_transform_proto2_utf8_disabled.proto": [
+    "c4ce58a893fdb402c94f77ff2b9447065353a278",
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "editions/golden/test_messages_proto2_editions.proto": [
+    "ea659628643924980dff43c585dad941de46d4fa",
+    "fce32cf4585eb3aec2030b1f86ad8c7a840f809e",
+    "c4ce58a893fdb402c94f77ff2b9447065353a278",
+    "01cccd392c2f4f8ca116e2d92e721d619c60ace1",
+    "094855345093ab8d30bc2d3208681738b0bb3cc5",
+    "3f8544e706ae560333893b5facdf97a006e24664",
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "ruby/tests/test_ruby_package.proto": [
+    "ae85b457d2f00daf57fa3deb538627cc16e0c0d7",
+    "bb211e851ec2158e479784bd68784784bf6594dc",
+    "9638dcc340a83996e88b4e6f4f372572bb33d19c",
+    "9ccc3e536c4d83a79f82843894793fb850e6d4e4"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/field_presence_test.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "3e0f82e57f815a2b3d169d380dd30c40667984fd",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "0894e07536af88065d462cdc9d8e807c0723ef4d",
+    "cc8ca5b6a5478b40546d4206392eb1471454460d",
+    "d64a2d9941c36a7bc2a7959ea10ab8363192ac14",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "src/google/protobuf/unittest_proto3_arena_lite.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "4ec5b2a1a29ff477d63ab146745c9d225c170dc8",
+    "34a04c1fd51f799f94f8cd5c6eec0124e43761af",
+    "296ae4e6632404be1c1f6dcbaba911d75927fbc3",
+    "b99994d994e399174fe688a5efbcb6d91f36952a",
+    "a104dffcb6b1958a424f5fa6f9e6bdc0ab9b6f9e",
+    "baf52bd79e80b019370a1bfda70e46ff6a692e2b"
+  ],
+  "rust/test/edition2023.proto": [
+    "61a2df3129e37a3d3fa6626065e2cf93dfcd929f",
+    "43f92cb916888c0bcf8bcdc804a63b710cd71f87"
+  ],
+  "csharp/protos/unittest_proto3.proto": [
+    "f4f73699b075c908674f9a13ea99668f18a56acd",
+    "943bd5a7d8a8a32a4e6b98fd17b0284c389ee308",
+    "a104dffcb6b1958a424f5fa6f9e6bdc0ab9b6f9e",
+    "e479410564727d8954e0704254f4345f97e3d844",
+    "1711999078ca1d435de3958bf963e95a742e972f",
+    "bfd254e14f60f77f68f4de8524cd8984191206d5",
+    "91ff83c024be36e2f2728c30cd7eedcec9220d1a",
+    "aa77eab622fe0ccc6cf7ec8a3fce1005dd759562"
+  ],
+  "rust/test/shared/utf8/feature_verify.proto": [
+    "1a7ea70730c1f835393c5b516e76ba84ba96a588"
+  ],
+  "php/tests/proto/test_prefix.proto": [
+    "6737954661ed26105dd87a4c78fe3f333c978961",
+    "4c57e8475f78ccac80407f03c2d23d30014785f9",
+    "6b27c1f981a9a93918e4039f236ead27165a8e91"
+  ],
+  "src/google/protobuf/unittest_preserve_unknown_enum2.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "c3b72b99b4ce587b487674e33660494dc56b9432",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "885b612f74f133678bf82808c589331e4c59dad9"
+  ],
+  "php/tests/proto/test_reserved_message_lower.proto": [
+    "53944b59834d8783792904f006445f90b835e9e6",
+    "8984184e5464bbe3cd8046c90f4e1559145aab4b",
+    "eb27c201f121b02c990c3665edce5171a8c70192",
+    "ce57b5bab64f6ca18dbbebca2d501be4a59121e7",
+    "bade043986a4514ee1877a06ae03d29e081b27c9",
+    "e5d000cbb7bcf8fadddfbdb544070e31ce36fa26"
+  ],
+  "src/google/protobuf/unittest_custom_options.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "3c03e9351c57081d0dffae120ed37497017f105c",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "a29e0e3f449487f776b54b2afc78ac2e60bf4fca",
+    "624d29d83306f3ce2c7e092dd44a891e04215e67",
+    "de371235c9f50eadad7a3562572b79a9422cd754",
+    "b99994d994e399174fe688a5efbcb6d91f36952a",
+    "a104dffcb6b1958a424f5fa6f9e6bdc0ab9b6f9e",
+    "d64a2d9941c36a7bc2a7959ea10ab8363192ac14",
+    "e841bac4fcf47f809e089a70d5f84ac37b3883df",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "4de8f55113007fdc8e34107950e605fc0209d465",
+    "b55a20fa2c669b181f47ea9219b8e74d1263da19",
+    "33165fe0d5c265c92f2a67fc2b437b567c24e294",
+    "80b1d62bfcea65c59e2160da71dad84b1bd19cef",
+    "1ea526879c523a7d5a50478734adbab93b018e0d",
+    "0b3023fa6561f3b5abe43ac9e20d0ede43a56737"
+  ],
+  "editions/codegen_tests/proto3_enum.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "src/google/protobuf/map_proto3_unittest.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "2b45018be4f2eca6a8cad7d76afcde54ea3f088a",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "c3b72b99b4ce587b487674e33660494dc56b9432",
+    "dc4b09e13879d06618c6a66096e0c6819ff28d28"
+  ],
+  "src/google/protobuf/util/message_differencer_unittest.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "594a71f48515715d37a797252e0dd2d97e635826",
+    "1d2293144e598ee7e43d36968987ff4b56c939ad",
+    "a00125024e9231d76746bd394fef8876f5cc15e2",
+    "76b4b4b331e7e4088a9ca215ba57e42f8d2edd73",
+    "2f864fdfdf18318ef24b02141733adb356508370",
+    "e96ff30120a3834f7d1e31e43e591bf7cfbd731f"
+  ],
+  "rust/test/bad_names.proto": [
+    "871c434eae85b316f98c24e2870afe2bccc641e7",
+    "d2d667a300b31c0eb4d8c3b873f05597e9f0faf3",
+    "55875598f734797804da23c499ba79ca242ef59d"
+  ],
+  "rust/test/srcsless_library_test_child.proto": [
+    "a86b65d69155b9d0c14cce421cb810a614e5d88f"
+  ],
+  "editions/codegen_tests/proto2_multiline_comments.proto": [
+    "c2394d936ac556f8178121bcc1293762c01ff75c",
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "java/kotlin/src/test/proto/com/google/protobuf/multiple_files_proto3.proto": [
+    "673a892bd9fe226612c04464976958ca50704377",
+    "9188b39fb7e09df87bd2fed31fb756de70ff510f",
+    "380e352b0bddd31d08250295ef6c24347ae47b54",
+    "726241fca1880e912322fa28fbe6193ae81ce588"
+  ],
+  "rust/test/unittest.proto": [
+    "3a403676864bab04cba4151addeee95bb5c6b02a"
+  ],
+  "upb/message/utf8_test_proto2.proto": [
+    "d4dfb9c4a67e24afa0465735a84a381d0833211d"
+  ],
+  "rust/test/cpp/debug.proto": [
+    "03687b798b463dad0a6cdb3bc4cb840b968d00ed"
+  ],
+  "objectivec/Tests/any_test.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "cf4eeae6fd5d4faa59c3e86d302bbd2e76907ff2",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "3e0d399c3e6de7048e2a3e860cff795cd23a9e2b"
+  ],
+  "java/util/src/test/proto/com/google/protobuf/util/json_test.proto": [
+    "d111589bc05f0c11d9d2b0e230bc3217f24feb40",
+    "44ec9d9e86ebdd410a4b613682fb57506d6a113b",
+    "58baeb4c3b664f8918d24cef5151083d9da9767c",
+    "7853a5e3018d07d8ab86cf901d8d711e18fff472",
+    "711e4b4d6c2beab175e415eec3883e5df416c543",
+    "624a40a387e1b2da4c6bbde44ad3d0a5efb9879b",
+    "33cc25f36c6d13ac90fc5ff903e25f04b0676d4e",
+    "5a76e633ea9b5adb215e93fdc11e1c0c08b3fc74",
+    "cc8ca5b6a5478b40546d4206392eb1471454460d",
+    "d64a2d9941c36a7bc2a7959ea10ab8363192ac14",
+    "3b3c8abb9635eb3ea078a821a99c9ef29d66dff7",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "upb/util/def_to_proto_public_import_test.proto": [
+    "501ececd39fed69f0c50c2c87f04ce75932dde72"
+  ],
+  "objectivec/Tests/unittest_extension_chain_c.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "46d1145ec85233e8d751ac038b66e44676fbd3d4",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "28bc3baca186e61469a7794e2ca6afbf1fd2d51e",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "3e0d399c3e6de7048e2a3e860cff795cd23a9e2b",
+    "13a41246dd9aa6c6a84d436307b933fd4a6ec4a8"
+  ],
+  "editions/codegen_tests/edition2023_go_api_flag_nested.proto": [
+    "ecbb6ba8748344911d306df499bc849368aab67a"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/deprecated_file.proto": [
+    "81068e8e8cf00f25559112a562661064d59bfa87",
+    "638a86028514b47b89cf1fd080a07fe3c3a11763",
+    "a08b03d4c00a5793b88b494f672513f6ad46a681"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/lite_equals_and_hash.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "1cb534f3c0f8eab21d97ed8a5c58040918943ada",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "0894e07536af88065d462cdc9d8e807c0723ef4d",
+    "6bbe197e9c1b6fc38cbdc45e3bf83fa7ced792a3",
+    "d36c0c538a545fac5d9db6ba65c525246d4efa95",
+    "cf14183bcd5485b4a71541599ddce0b35eb71352",
+    "3b3c8abb9635eb3ea078a821a99c9ef29d66dff7",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "ruby/tests/basic_test_features.proto": [
+    "bca8fb6117cf24785edb238d96bffe2c3a6d7164"
+  ],
+  "editions/codegen_tests/proto3_utf8_strict.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "objectivec/Tests/map_unittest.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "28bc3baca186e61469a7794e2ca6afbf1fd2d51e",
+    "cf4eeae6fd5d4faa59c3e86d302bbd2e76907ff2",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "3e0d399c3e6de7048e2a3e860cff795cd23a9e2b"
+  ],
+  "editions/codegen_tests/proto2_utf8_lite.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "rust/test/rust_proto_library_unit_test/some_proto.proto": [
+    "106de22416f2d61b0e944d28084e6588e788cd45",
+    "083830d84904192dd8b72bbb5e1d9ee7c3c5469b",
+    "3dc546daff7ac1311602e2864b6409a9c879eebc"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/test_bad_identifiers.proto": [
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "81068e8e8cf00f25559112a562661064d59bfa87",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "f60f478f45143b74158380528cb757509d627592",
+    "dc4aad931ecbda47a328482fc474d2cadaa78462",
+    "1ba1d73e0dcac7c583902c3a757607989515b0bc",
+    "42e806fbf2631b39a2c7ba914e3f6d00b14dead4",
+    "3be46483ba11605ec9d29ae439a16c4fc6bf02c3",
+    "ab4585a6956675ce14a1cba5d321fde980bbf12b",
+    "66540237ca212401ec1e279224b8db40f52e4ab9",
+    "711e4b4d6c2beab175e415eec3883e5df416c543",
+    "09354db1434859a31a3c81abebcc4018d42f2715",
+    "cc8ca5b6a5478b40546d4206392eb1471454460d",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "src/google/protobuf/util/python/testdata/test_messages.proto": [
+    "8cde3bd5757be90414fd24493134683489ca1b35"
+  ],
+  "objectivec/Tests/unittest_cycle.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "46d1145ec85233e8d751ac038b66e44676fbd3d4",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "13a41246dd9aa6c6a84d436307b933fd4a6ec4a8",
+    "30650d81d9baa446dbc8deb784ba53794cafda5b"
+  ],
+  "hpb_generator/tests/legacy-name.proto": [
+    "24de58860f3150ea77e088d0e538d60ab1f85b9d",
+    "a453cffaed99e993c6d3033b05787c88534a6a96",
+    "5f366b3b7d583f349cb9c6746cd5d74ae96ac869",
+    "968087eb61e18394a1e2e3e6bd3ab6eaf8ecb36e"
+  ],
+  "src/google/protobuf/test_messages_proto3.proto": [
+    "ea659628643924980dff43c585dad941de46d4fa",
+    "6670b6c4a60f0606d0025050533c41f2159dcabc",
+    "f494a9e9758e462483486ca180763f4c2e7bef3c",
+    "a29e0e3f449487f776b54b2afc78ac2e60bf4fca",
+    "562fc946c748d0ddb451ad1ce48570685f23a4f1",
+    "dfab275eca9481b5de31122db6fc91b31db3382a",
+    "503a2116aaaa7c3b4d342e0639ae76028028f4ff",
+    "b99994d994e399174fe688a5efbcb6d91f36952a",
+    "04a11fc91668884d1793bff2a0f72ee6ce4f5edd",
+    "58d4420e2dd8a3cd354fff9db0052881c25369ce",
+    "4f02f056b5cea99052bfdfb6698afe47a3cf2964",
+    "0c4b607e98349bea40e6d1a22843b5a82118f312",
+    "4b145b1c7f836a904b1c8f29bca74bf791c3744f",
+    "3d46d8dfe43150244a6c52ebfb0ea6ce29756aa2",
+    "23adfeb00327fbdccacc99806acb1a9a073bd8e0",
+    "21800ff84ff0b68833e321e02c3c50f83047fd92",
+    "3adb054bbfa83530ca5a5fd54a856755fd72af83",
+    "f1ce60e7b45c16affa4c8a92a9a129755c5fcfd5"
+  ],
+  "editions/codegen_tests/proto2_utf8_verify.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "objectivec/Tests/unittest_extension_chain_d.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "46d1145ec85233e8d751ac038b66e44676fbd3d4",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "28bc3baca186e61469a7794e2ca6afbf1fd2d51e",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "3e0d399c3e6de7048e2a3e860cff795cd23a9e2b",
+    "13a41246dd9aa6c6a84d436307b933fd4a6ec4a8"
+  ],
+  "editions/codegen_tests/edition2023_string_type.proto": [
+    "82f2663b8f6661ec5e7e8c7685ac4e8c315e9f8a"
+  ],
+  "python/google/protobuf/internal/packed_field_test.proto": [
+    "9ef8f5cffc4b2ca6a687ae6b66d9de23095bc3ae",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "eee38b0c018b3279f77d03dff796f440f40d3516",
+    "b0f661181d10bddc08e380992590a1cdd92be92b"
+  ],
+  "python/google/protobuf/internal/descriptor_pool_test2.proto": [
+    "9ef8f5cffc4b2ca6a687ae6b66d9de23095bc3ae",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "cf14183bcd5485b4a71541599ddce0b35eb71352",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "bde4a3254a7de58911941b0fbf38e9dd992de973"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/wrappers_test.proto": [
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "c6493970296fa5c5b4a81a37248a328579fe9662",
+    "711e4b4d6c2beab175e415eec3883e5df416c543",
+    "176f7db11d8242b36a3ea6abb1cc436fca5bf75d"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/non_nested_extension.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "5e0812d4b1f110fa6c1e33c91c9965a10989c41f",
+    "0894e07536af88065d462cdc9d8e807c0723ef4d",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/dynamic_message_test.proto": [
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "349738dde50ec75940e9866d6c82a93f9c880f92",
+    "b7fe12e3670c68dc30517c418bee9dc2e2e6915e",
+    "ab4585a6956675ce14a1cba5d321fde980bbf12b"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/generator_names_conflicting_message.proto": [
+    "7a7f276dcee4abf6c758f396b0a2989d41ed9742"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/generator_names_multiple_files_proto3.proto": [
+    "7a7f276dcee4abf6c758f396b0a2989d41ed9742"
+  ],
+  "objectivec/Tests/unittest_objc_options.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "43b872145787f08e1110b49003daa21150397152",
+    "ef3a7250021a687071d8113dbec8bf2f67e317ee"
+  ],
+  "editions/codegen_tests/edition2023_go_api_level.proto": [
+    "ecbb6ba8748344911d306df499bc849368aab67a"
+  ],
+  "csharp/protos/unittest_issues.proto": [
+    "f4f73699b075c908674f9a13ea99668f18a56acd",
+    "4326e0f852a3cf47c30bf99db66c3e3e77658dfb",
+    "1792a3265bcf6c862043b14d245736b2ee43515b",
+    "5036705c8d1c35e3e4b13b0d8633a3d228683581",
+    "d9394ecdb165470a3316480d0dd219dbfa932e7d",
+    "e2f845b2f19bd78ce1c69453452ae5645895e4fc",
+    "d4ec70fdd3380e7113e9e3c23cef2bea50dbf2e7",
+    "2c1a46101bf49349f2725c2eaa264afab405fb0d",
+    "0dd5fffba3600cc96b011319cf566dd501152f41",
+    "e479410564727d8954e0704254f4345f97e3d844",
+    "afe98de32a130e0033c9b10fa470bb2ff858ed8d",
+    "91ff83c024be36e2f2728c30cd7eedcec9220d1a",
+    "cbe250591fca9d2e776776be065a72c5550a5556",
+    "6f8dd2115b3ed07819a48dfa78b15770dfa2c450",
+    "0d32ab37fa94134427478d6776108e7cdb3e5e15",
+    "0f370b468b2fc11f49a7e6a4b9cb862a91719d79"
+  ],
+  "src/google/protobuf/cpp_features.proto": [
+    "6a3b9aa9be4005cf9a6ccf5ca118d6fc51e4f107",
+    "e49ce62d1e3965c5fd376c7fad0bb85cbe19477a",
+    "e3fa6aac29f72e27f9db73db26fb71f24509ab7c",
+    "433ca3e6a1252725894f941581814d282c7ad575",
+    "77f62de93e2e84d6aab0364629919779970fb9f1",
+    "2a28082df37c509f972ea2082f768384ec37776f",
+    "5b340ded2b17242e9b5649cc6bde2a26b99f502c",
+    "caa462715c750ea5aa48aa80683691ee3dd0ea97",
+    "65419eef0d99446070dcff1e10f951383ceb42fe",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "6f3db03eb7b2fa31e4987fa9ec60199458824a4d",
+    "d0e89691662cbcfd07ede219ca80fe4613d7d0bd",
+    "c7119e6d56ea8e29f32ce5eb84fca82799095239",
+    "4f9e41767a819abf8108bb29e4910fbc0f37dc6e"
+  ],
+  "src/google/protobuf/unittest_mset.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "02248cbe38d1b585d1f2bee623d3d83c99dfbc4d",
+    "3774ee0acbb5383f00284abf3541d7768d285452",
+    "f138d5de2535eb7dd7c8d0ad5eb16d128ab221fd",
+    "3740e6fa682ed017b1a477d7a8574324539bf0a2",
+    "ab4585a6956675ce14a1cba5d321fde980bbf12b",
+    "d8c2501b43c1b56e3efa74048a18f8ce06ba07fe",
+    "eee38b0c018b3279f77d03dff796f440f40d3516",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "f157a5651c79a7a36e242af216a5d5b383ba8af2",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "4de8f55113007fdc8e34107950e605fc0209d465",
+    "24bf56fb3a2fab42d355b15de11782c3144b9e80",
+    "40ee551715c3a784ea6132dbf604b0e665ca2def"
+  ],
+  "src/google/protobuf/sample_messages_edition.proto": [
+    "862dc86a9eedcfa40a8a7a539e1fc55e7529a805",
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "7da29c6a138c90bc37b6559ce908d1c2a67edfaf",
+    "2fc70228791df4f182eb9d33ef993a317940a953",
+    "a2cdf5977885c40124f62862cf8a264883acf16a"
+  ],
+  "src/google/protobuf/unittest_no_field_presence.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ecae71a49a8b8630c3f93227e09d82881a0816fb",
+    "27ee74e6c6f55759eab3dcb7f8bbdce9891bd433",
+    "06a520cdb78be66f506b88a8adba2763f2301dc0",
+    "34a04c1fd51f799f94f8cd5c6eec0124e43761af",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "c3b72b99b4ce587b487674e33660494dc56b9432",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "5db217305f37a79eeccd70f000088a06ec82fcec",
+    "998b5ba20d4bacb25c90f2afaddac3900a06d61b",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e"
+  ],
+  "editions/proto/editions_transform_proto2_utf8_disabled.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "python/google/protobuf/internal/self_recursive_from_py.proto": [
+    "3784ba195954ef899f361761e692c9c80deffb9f"
+  ],
+  "editions/codegen_tests/proto2_group.proto": [
+    "643b0a625f36faed26ccca3e92a57b6b74d7e91b",
+    "a39c17bec4d348a5eb869a0f51652d52a2a14595",
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "src/google/protobuf/compiler/cpp/test_bad_identifiers_proto2.proto": [
+    "800f28208074f1d21dd518e7777416990b1b91c2",
+    "c8f2994bc4def4bd46a41009c4f2a3e7b2bd0caa",
+    "f724df9baf8941dceea8b413e47a1e6a5f26364a"
+  ],
+  "upb/util/def_to_proto_editions_test.proto": [
+    "7662fdd8edc529c326c1978b4dcb1cc0682aeaad"
+  ],
+  "rust/test/parent.proto": [
+    "177092cd8cc0daae89ddddebbe0bccdb8ce7f38b",
+    "4f20efbb785dcf33a35a7ae6d32009f06f005d4d",
+    "a1ba8d238a356491272c928b76a78a9b1142c98b",
+    "083830d84904192dd8b72bbb5e1d9ee7c3c5469b",
+    "26af540a7ac4caba41d98395b88ea375e8a66f79"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/proto3_message_lite.proto": [
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "c6493970296fa5c5b4a81a37248a328579fe9662",
+    "711e4b4d6c2beab175e415eec3883e5df416c543",
+    "176f7db11d8242b36a3ea6abb1cc436fca5bf75d"
+  ],
+  "rust/test/unittest_import.proto": [
+    "3a403676864bab04cba4151addeee95bb5c6b02a"
+  ],
+  "csharp/compatibility_tests/v3.0.0/protos/src/google/protobuf/unittest_proto3.proto": [
+    "296ae4e6632404be1c1f6dcbaba911d75927fbc3",
+    "a104dffcb6b1958a424f5fa6f9e6bdc0ab9b6f9e",
+    "9f09d1804a1cdf477db8249c746e362235fbd945"
+  ],
+  "compatibility/smoke/proto3_gencode_test.proto": [
+    "9a9d8d2f476dc3e369c4ab3a9fdea9d590fd1075",
+    "1449d4760bed71e6ec532742277ae6ec584bf4d4",
+    "16e5e1c14bd37c8f04bd15aa3678d3a3967aaa09",
+    "1bdd5752ced85f39637714e0de131804c5f0e5ff"
+  ],
+  "php/tests/proto/test_include.proto": [
+    "60b80c697677e3fa59237eb8d72c97399771f050",
+    "6737954661ed26105dd87a4c78fe3f333c978961",
+    "46ae90dc5e145b12fffa7e053a908a9f3e066286"
+  ],
+  "rust/test/import_public2.proto": [
+    "dbaa526b075dd0d73a1fe51945d0b4d2c4b1d3b1",
+    "c1d174f7d2cb42bdae0f6c60ddce40d3e9ecbd0f"
+  ],
+  "objectivec/Tests/map_proto2_unittest.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "28bc3baca186e61469a7794e2ca6afbf1fd2d51e",
+    "cf4eeae6fd5d4faa59c3e86d302bbd2e76907ff2",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "3e0d399c3e6de7048e2a3e860cff795cd23a9e2b"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/generator_names_conflicting_nested_enum.proto": [
+    "7a7f276dcee4abf6c758f396b0a2989d41ed9742"
+  ],
+  "hpb_generator/tests/basic_test_editions.proto": [
+    "5c9551457f433d1d01a89beba2b260d12c517cf0",
+    "968087eb61e18394a1e2e3e6bd3ab6eaf8ecb36e"
+  ],
+  "editions/codegen_tests/proto3_optional.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "editions/codegen_tests/proto3_unpacked.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "java/kotlin/src/test/proto/com/google/protobuf/example_extensible_message.proto": [
+    "9188b39fb7e09df87bd2fed31fb756de70ff510f",
+    "094d18944ed565dc4459230e0554d0720fbbdfd9",
+    "726241fca1880e912322fa28fbe6193ae81ce588"
+  ],
+  "php/tests/proto/test_reserved_message_upper.proto": [
+    "53944b59834d8783792904f006445f90b835e9e6",
+    "8984184e5464bbe3cd8046c90f4e1559145aab4b",
+    "eb27c201f121b02c990c3665edce5171a8c70192",
+    "ce57b5bab64f6ca18dbbebca2d501be4a59121e7",
+    "bade043986a4514ee1877a06ae03d29e081b27c9",
+    "e5d000cbb7bcf8fadddfbdb544070e31ce36fa26"
+  ],
+  "rust/test/unittest_proto3.proto": [
+    "3a403676864bab04cba4151addeee95bb5c6b02a"
+  ],
+  "ruby/tests/repeated_field_test.proto": [
+    "5cfc9e775d76acb37e5b554e53dff336a89d000f"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/map_test.proto": [
+    "939338d2259a1456124af49ee1cb44e7e87af469",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "9e09343a49e9e75be576b31ed7402bf8502b080c",
+    "0894e07536af88065d462cdc9d8e807c0723ef4d",
+    "cc8ca5b6a5478b40546d4206392eb1471454460d",
+    "d64a2d9941c36a7bc2a7959ea10ab8363192ac14",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "ruby/tests/test_import_proto2.proto": [
+    "d0535cc09e6eac1bddddd51c20b5738c0e841765"
+  ],
+  "python/google/protobuf/internal/file_options_test.proto": [
+    "9ef8f5cffc4b2ca6a687ae6b66d9de23095bc3ae",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "d64a2d9941c36a7bc2a7959ea10ab8363192ac14"
+  ],
+  "ruby/tests/multi_level_nesting_test.proto": [
+    "48234f5f012582843bb476ee3afef36cda94cb66"
+  ],
+  "editions/codegen_tests/proto3_import.proto": [
+    "cb86ccd7a1606d10b842ca40def21af0b9cd2e02",
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "objectivec/Tests/unittest_import_public.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "cf4eeae6fd5d4faa59c3e86d302bbd2e76907ff2",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "3e0d399c3e6de7048e2a3e860cff795cd23a9e2b"
+  ],
+  "objectivec/Tests/unittest_extension_chain_e.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "46d1145ec85233e8d751ac038b66e44676fbd3d4",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "28bc3baca186e61469a7794e2ca6afbf1fd2d51e",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "3e0d399c3e6de7048e2a3e860cff795cd23a9e2b",
+    "13a41246dd9aa6c6a84d436307b933fd4a6ec4a8"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/packed_field_test.proto": [
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "c6493970296fa5c5b4a81a37248a328579fe9662",
+    "176f7db11d8242b36a3ea6abb1cc436fca5bf75d"
+  ],
+  "hpb_generator/tests/no_package.proto": [
+    "a453cffaed99e993c6d3033b05787c88534a6a96",
+    "968087eb61e18394a1e2e3e6bd3ab6eaf8ecb36e"
+  ],
+  "rust/test/unittest_proto3_optional.proto": [
+    "3a403676864bab04cba4151addeee95bb5c6b02a"
+  ],
+  "rust/test/package_disabiguation1.proto": [
+    "c1d174f7d2cb42bdae0f6c60ddce40d3e9ecbd0f"
+  ],
+  "editions/codegen_tests/edition2023_ctype.proto": [
+    "82f2663b8f6661ec5e7e8c7685ac4e8c315e9f8a"
+  ],
+  "objectivec/Tests/unittest_deprecated_file.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "46d1145ec85233e8d751ac038b66e44676fbd3d4",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "dad775b79895df5167cfbc2c78549b8417af1c01"
+  ],
+  "python/google/protobuf/internal/test_proto2.proto": [
+    "fa858b82d2eea36ce5cb370f1ae30ce2e82c022e",
+    "25c6d34d4ef6e19e490790b015764847f172a1a5"
+  ],
+  "php/tests/proto/test_reserved_enum_value_lower.proto": [
+    "53944b59834d8783792904f006445f90b835e9e6",
+    "8984184e5464bbe3cd8046c90f4e1559145aab4b",
+    "eb27c201f121b02c990c3665edce5171a8c70192",
+    "ce57b5bab64f6ca18dbbebca2d501be4a59121e7",
+    "bade043986a4514ee1877a06ae03d29e081b27c9",
+    "f46a01d0c13295eec279b9a17021b38d85b41205"
+  ],
+  "csharp/compatibility_tests/v3.0.0/protos/src/google/protobuf/map_unittest_proto3.proto": [
+    "296ae4e6632404be1c1f6dcbaba911d75927fbc3",
+    "9f09d1804a1cdf477db8249c746e362235fbd945"
+  ],
+  "hpb_generator/tests/set_alias.proto": [
+    "a453cffaed99e993c6d3033b05787c88534a6a96",
+    "377b5e4863b0d3948211f518050e7bdab40c4c4e",
+    "09ac8ca24887692e83e88e578a93f9289fc501f0",
+    "36075eafaeb502e769b2e38c467d4a917952a903",
+    "4645ab71e7805542c3a434f4aa6168aa58a494c4",
+    "d9c814b7796fa886e4714c563b7875851c3a7f07",
+    "1db4fdc2364ada358867d890e9e2b38d1cc197d9"
+  ],
+  "php/tests/proto/test_special_characters.proto": [
+    "f929439ccd19872d71f56050e6ba7af3cd7c753c"
+  ],
+  "upb/message/utf8_test.proto": [
+    "239662140c28ea1041b6fbfafc4fcbacf254361d",
+    "8422e9795f867dffe3abf2737123d6e07f409cee",
+    "d4dfb9c4a67e24afa0465735a84a381d0833211d",
+    "0fab773c1dc272f5383ce6724c9040937fb1a925",
+    "501ececd39fed69f0c50c2c87f04ce75932dde72"
+  ],
+  "editions/codegen_tests/edition2023_go_oss_go_api_default.proto": [
+    "ecbb6ba8748344911d306df499bc849368aab67a"
+  ],
+  "editions/codegen_tests/edition2023_java_dual_multiple_files.proto": [
+    "6de35c6d2fc78ad76e383fb51724f9b8aa20def2"
+  ],
+  "src/google/protobuf/compiler/cpp/tools/analyze_profile_proto_test.proto": [
+    "1934daf26ee1bc8518649ce51f13e54213b48efe",
+    "aa612739aba01fad33728ed5eb0b1bb4bc74b228"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/map_initialization_order_test.proto": [
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "a104dffcb6b1958a424f5fa6f9e6bdc0ab9b6f9e",
+    "0894e07536af88065d462cdc9d8e807c0723ef4d",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "rust/test/nested.proto": [
+    "457ed9b44ff8d6c639c33bbf3c01cace0d2b2018",
+    "ab8b762941e7f97f008654bffa713c8bd167bc64",
+    "20933b2b22781c9cbd013ef460448a093550e579",
+    "1eab5a0237b28b8242801912877ebb513eafbb17",
+    "a74c3bbaa4964851890041e616dd85f4427a2c32",
+    "e3432c283d5473a89474628523b8f21b914719f4",
+    "b3cfff347806b99bd383e1bd7c00aec786fd8194",
+    "af75cb31f42a56753ffda2d4dcb758c8ab18d44f",
+    "80a4df3306334e7122ea529d70698535ed8e02b6"
+  ],
+  "editions/codegen_tests/proto2_required.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "upb/json/test.proto": [
+    "0fab773c1dc272f5383ce6724c9040937fb1a925",
+    "41af1d53a2d82ee17d6a3ac8a81ea2a93040ad82",
+    "501ececd39fed69f0c50c2c87f04ce75932dde72"
+  ],
+  "rust/test/no_package.proto": [
+    "dbaa526b075dd0d73a1fe51945d0b4d2c4b1d3b1",
+    "1f472f1db3bb2111aae87781d87720d6fd6ac57a",
+    "1eab5a0237b28b8242801912877ebb513eafbb17",
+    "177092cd8cc0daae89ddddebbe0bccdb8ce7f38b",
+    "3ced818640df9b30efd25faf34084d3339806766",
+    "4f20efbb785dcf33a35a7ae6d32009f06f005d4d",
+    "a1ba8d238a356491272c928b76a78a9b1142c98b"
+  ],
+  "hpb_generator/tests/test_model.proto": [
+    "735621f7d720fcacc0a05114f407c3817411f296",
+    "7ae9d8c39b2e7d20c308cb4f2fe2143f0d076d1b",
+    "a453cffaed99e993c6d3033b05787c88534a6a96",
+    "5f366b3b7d583f349cb9c6746cd5d74ae96ac869",
+    "096b139192b3fa95a7a626b273ec1a80845f7c87",
+    "968087eb61e18394a1e2e3e6bd3ab6eaf8ecb36e"
+  ],
+  "editions/codegen_tests/proto2_enum.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "objectivec/Tests/unittest_extension_chain_g.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "46d1145ec85233e8d751ac038b66e44676fbd3d4",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "28bc3baca186e61469a7794e2ca6afbf1fd2d51e",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "13a41246dd9aa6c6a84d436307b933fd4a6ec4a8"
+  ],
+  "conformance/test_protos/test_messages_edition2023.proto": [
+    "8beb9705e495c57d55f6547c523d5817336ac35f",
+    "dffec0c7d66a6b67aa090338df2c78993fb63d6d",
+    "0a2e6625e2d43296a39f5a992503b402a6da8211",
+    "8ab39ed6f824d8915eefde0a74a7715213d9cbbf"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/proto3_message.proto": [
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "c6493970296fa5c5b4a81a37248a328579fe9662",
+    "711e4b4d6c2beab175e415eec3883e5df416c543",
+    "176f7db11d8242b36a3ea6abb1cc436fca5bf75d"
+  ],
+  "editions/codegen_tests/edition2023_java_proto1_multiple_files.proto": [
+    "6de35c6d2fc78ad76e383fb51724f9b8aa20def2"
+  ],
+  "src/google/protobuf/api.proto": [
+    "9ec241ea04f455fe9d941d71447c24da4d9ed412",
+    "eee195ed3bf452f1345a63cde655a354c6ccf509",
+    "d96b30d150728ababdbbdd401a3b427b6f342934",
+    "08a4de6f65130f67429c7509dcda0e847720d9c3",
+    "b81c127e94d953aa9be5c9f00a1ad323552bae0e",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "23f148138654a564b5690f6a5453aab480a6a049",
+    "32a94ce35311a493d3310256c610196304a875f9",
+    "e2cc2de304f8bc33b91ab18fa0b7cef8aaf26c8b",
+    "dfab275eca9481b5de31122db6fc91b31db3382a",
+    "09354db1434859a31a3c81abebcc4018d42f2715",
+    "5a76e633ea9b5adb215e93fdc11e1c0c08b3fc74",
+    "cc8ca5b6a5478b40546d4206392eb1471454460d",
+    "e841bac4fcf47f809e089a70d5f84ac37b3883df",
+    "c3bc155aceda36ecb01cde2367a3b427f2d7ce40",
+    "b0f661181d10bddc08e380992590a1cdd92be92b",
+    "739d13d5d1f93e8bf8770081d1500372758fffa1",
+    "30650d81d9baa446dbc8deb784ba53794cafda5b",
+    "ca9d1a053a8590caa1a1f81491b0381f052fa734"
+  ],
+  "src/google/protobuf/unittest_features.proto": [
+    "fee15f80c7a476933158c35ce3d059342cc38220",
+    "0b6e768f07c4cde376783b964022ec7e1ff3e772",
+    "f3c0c5995c01550bdcc5278996c72323cb3af992",
+    "e237f72bc4a10d8694de62580c27780fdefe13c5",
+    "71f990682ea3fe9f0d4c5dee5c130380efe8b3a8",
+    "b8ec9588c5434290e22866529a84762bf3d0af29",
+    "b3b4497d61cabf1d0d37b10178f93c570ec67ac6",
+    "0e167e796fcdaea0a761cdddbc21f59c925a75cf",
+    "3813b6622f6490b969c16e1b1ba7dcbd8f4e3209",
+    "5b340ded2b17242e9b5649cc6bde2a26b99f502c",
+    "65419eef0d99446070dcff1e10f951383ceb42fe",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "13df571922eeef56c327a90648ed3dca2510065a",
+    "f083ebf21f56783fd838c006880f8e16e05d1f1e",
+    "e897bcf3ff8004b7446bbe43a1fc28f9a92a11d4",
+    "2e63e051f4b3f675f82b3e116f73e67280e97658",
+    "4f9e41767a819abf8108bb29e4910fbc0f37dc6e"
+  ],
+  "editions/proto/editions_transform_proto3_utf8_disabled.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "src/google/protobuf/unittest_proto3_lite.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "4ec5b2a1a29ff477d63ab146745c9d225c170dc8",
+    "34a04c1fd51f799f94f8cd5c6eec0124e43761af",
+    "296ae4e6632404be1c1f6dcbaba911d75927fbc3",
+    "b99994d994e399174fe688a5efbcb6d91f36952a",
+    "a104dffcb6b1958a424f5fa6f9e6bdc0ab9b6f9e",
+    "baf52bd79e80b019370a1bfda70e46ff6a692e2b"
+  ],
+  "editions/golden/editions_transform_proto2_lite.proto": [
+    "c4ce58a893fdb402c94f77ff2b9447065353a278",
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "python/google/protobuf/internal/missing_enum_values.proto": [
+    "9ef8f5cffc4b2ca6a687ae6b66d9de23095bc3ae",
+    "9e12e81bc294c92a14dd2b7ef872d86056971bee",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "23f148138654a564b5690f6a5453aab480a6a049",
+    "ab4585a6956675ce14a1cba5d321fde980bbf12b",
+    "624a40a387e1b2da4c6bbde44ad3d0a5efb9879b",
+    "46e8ff63cb67a6520711da5317aaaef04d0414d0",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "bde4a3254a7de58911941b0fbf38e9dd992de973"
+  ],
+  "src/google/protobuf/util/message_differencer_unittest_proto3.proto": [
+    "cc140a1ed4c4eef6d547107729ecaa334a9e259a",
+    "b1370701fde443ee73b5e7cf321d1d27a2d1d19c",
+    "8c2416311f7b2c5410e620197baacf9d82b86ebd",
+    "1d2293144e598ee7e43d36968987ff4b56c939ad",
+    "748f57f2b67c56e050b660ffbafb9f3a5795c28a"
+  ],
+  "src/google/protobuf/compiler/ruby/ruby_generated_pkg_implicit.proto": [
+    "c593476ac74c3c8194a6d655dc0429325cadf9ab",
+    "465653e9e460b7831e986f698f11029364b890a8",
+    "ae85b457d2f00daf57fa3deb538627cc16e0c0d7",
+    "bb211e851ec2158e479784bd68784784bf6594dc",
+    "9638dcc340a83996e88b4e6f4f372572bb33d19c"
+  ],
+  "csharp/protos/unittest_issue6936_b.proto": [
+    "f4f73699b075c908674f9a13ea99668f18a56acd",
+    "943bd5a7d8a8a32a4e6b98fd17b0284c389ee308",
+    "1792a3265bcf6c862043b14d245736b2ee43515b",
+    "367fd2773282a3007eecda3374056db2539b8076"
+  ],
+  "csharp/protos/unittest_selfreferential_options.proto": [
+    "f4f73699b075c908674f9a13ea99668f18a56acd",
+    "fb1d87794998ea8f0ab0248420748df8491b695c",
+    "661c0c4eb806290dc3778da4b5f8be83a0e50449"
+  ],
+  "src/google/protobuf/empty.proto": [
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "a336ba034664f0848e3acc0cf2af9fc5110e3766",
+    "dfab275eca9481b5de31122db6fc91b31db3382a",
+    "cc8ca5b6a5478b40546d4206392eb1471454460d",
+    "3b3c8abb9635eb3ea078a821a99c9ef29d66dff7",
+    "e841bac4fcf47f809e089a70d5f84ac37b3883df",
+    "c3bc155aceda36ecb01cde2367a3b427f2d7ce40",
+    "b0f661181d10bddc08e380992590a1cdd92be92b",
+    "739d13d5d1f93e8bf8770081d1500372758fffa1",
+    "30650d81d9baa446dbc8deb784ba53794cafda5b",
+    "ca9d1a053a8590caa1a1f81491b0381f052fa734"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/map_for_proto2_lite_test.proto": [
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "e99b2819ee6a38395ad083e5c27306cab8607009",
+    "2ce17c08a25b97dc38b0da59099f00e0ce7adec2",
+    "c3e751aac6b4e1b51915c6b1dddd323f00a5b473",
+    "d85c9944c55fb38f4eae149979a0f680ea125ecb",
+    "0894e07536af88065d462cdc9d8e807c0723ef4d",
+    "cc8ca5b6a5478b40546d4206392eb1471454460d",
+    "d64a2d9941c36a7bc2a7959ea10ab8363192ac14",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "editions/codegen_tests/proto2_inline_comments.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "php/tests/proto/test_reserved_enum_value_upper.proto": [
+    "53944b59834d8783792904f006445f90b835e9e6",
+    "8984184e5464bbe3cd8046c90f4e1559145aab4b",
+    "eb27c201f121b02c990c3665edce5171a8c70192",
+    "ce57b5bab64f6ca18dbbebca2d501be4a59121e7",
+    "2126123b53ad92b6a41451057cbe91c93a558bf2",
+    "f46a01d0c13295eec279b9a17021b38d85b41205"
+  ],
+  "objectivec/Tests/unittest_objc.proto": [
+    "e4cbc79ab45e28909185f94a4095176174f46c8b",
+    "af794965f9e8eef398f26fe4a47cd06c26cb018a",
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "46d1145ec85233e8d751ac038b66e44676fbd3d4",
+    "bc4cbf9a05c58390ff4797cfa804f8daad378d70",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "28bc3baca186e61469a7794e2ca6afbf1fd2d51e",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "3e0d399c3e6de7048e2a3e860cff795cd23a9e2b",
+    "d529720e2f11ff76b9094fd537888b7bfe448a58",
+    "1484b580560397ac544660be7a2e8bf81ab56199",
+    "be83b29bdd17630e4028c44b51354b2c112cabd1",
+    "afe98de32a130e0033c9b10fa470bb2ff858ed8d",
+    "156161dfcde38b72c55ead02cacff7087c93a4d8",
+    "237f321e338b50503eb38728afa6ad29bea6076a",
+    "7da023b892ccd7135b6c9762d7618ccf414a4cd7",
+    "30646288ad60fff7a3ce9c864a9bf481e6c4045a",
+    "18b6a321b5fd8f53e1029c436c2ad5dd2d3122df",
+    "1bf4b38f29d6cc3f24ad1e0b6c3339420bd719be",
+    "1dcc329427fd103a0abd96ab787270f5d0a31861",
+    "30650d81d9baa446dbc8deb784ba53794cafda5b"
+  ],
+  "rust/test/cpp/interop/interop_test.proto": [
+    "6ae5db635efa575ea4af7190b758febedaadb10d"
+  ],
+  "editions/codegen_tests/proto2_import.proto": [
+    "cb86ccd7a1606d10b842ca40def21af0b9cd2e02",
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "php/tests/proto/test_empty_php_namespace.proto": [
+    "6737954661ed26105dd87a4c78fe3f333c978961",
+    "3d9e99b7e0d792abe76c56cfae641370017bfdd6",
+    "6f325805c0bc956f927b0e2dbfb4dd8133b4ed69"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/generator_names_multiple_files_proto2.proto": [
+    "7a7f276dcee4abf6c758f396b0a2989d41ed9742"
+  ],
+  "rust/test/package_other.proto": [
+    "bdd833f8fc507baf7bcaf3bef48de98dcd4b258c",
+    "1eab5a0237b28b8242801912877ebb513eafbb17",
+    "177092cd8cc0daae89ddddebbe0bccdb8ce7f38b",
+    "3ced818640df9b30efd25faf34084d3339806766"
+  ],
+  "php/tests/proto/test_import_descriptor_proto.proto": [
+    "ac70b7cfb743dfb522aeaf00232998623c1d2be9",
+    "4523c9c233dbb61d03996a5bbe25d1b5aea51f7f"
+  ],
+  "upb/util/required_fields_editions_test.proto": [
+    "cf3a6f5868222d31021e3835e5e7890a847f3d01"
+  ],
+  "objectivec/Tests/unittest_runtime_proto3.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "46d1145ec85233e8d751ac038b66e44676fbd3d4",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "7b6016e343741df37a7811efc239d5b1cda10575",
+    "58cd4a47e823645414348acbd8f963f7e713b2fa",
+    "50a765ba03ddf311a4facc78104903e3ba5b3e8b",
+    "1dcc329427fd103a0abd96ab787270f5d0a31861",
+    "30650d81d9baa446dbc8deb784ba53794cafda5b"
+  ],
+  "rust/test/child.proto": [
+    "177092cd8cc0daae89ddddebbe0bccdb8ce7f38b",
+    "4f20efbb785dcf33a35a7ae6d32009f06f005d4d",
+    "a1ba8d238a356491272c928b76a78a9b1142c98b",
+    "083830d84904192dd8b72bbb5e1d9ee7c3c5469b",
+    "7802b934428a8a27b06bfb179955029ac27feee7",
+    "26af540a7ac4caba41d98395b88ea375e8a66f79"
+  ],
+  "rust/test/package_other_different.proto": [
+    "1eab5a0237b28b8242801912877ebb513eafbb17",
+    "177092cd8cc0daae89ddddebbe0bccdb8ce7f38b",
+    "3ced818640df9b30efd25faf34084d3339806766"
+  ],
+  "upb/test/empty.proto": [
+    "501ececd39fed69f0c50c2c87f04ce75932dde72"
+  ],
+  "editions/codegen_tests/edition2023_java_no_multiple_files.proto": [
+    "6de35c6d2fc78ad76e383fb51724f9b8aa20def2"
+  ],
+  "ruby/tests/basic_test_proto2.proto": [
+    "bca8fb6117cf24785edb238d96bffe2c3a6d7164",
+    "5cfc9e775d76acb37e5b554e53dff336a89d000f",
+    "42f8b7782ed539d56d0f0e13da4e85603553e828",
+    "2d0862131c9bf465bc8ccdb4fc2ddf3eee75f847",
+    "e8c67e14acceb93b048048d7823391df1f79c43c",
+    "bd253f0130564704888136b14f638a69acc00d20",
+    "e4bbca1fc5fabfe86477ff6cf840e00619531698",
+    "d2daa389869e7f6f199e2dae776b3007df13bb42",
+    "a6e3ac0db12fa8d3013e2302283470d9a0e323e0",
+    "7f14ea9f48f21ce3c1528da56a3f101492324f45",
+    "d0535cc09e6eac1bddddd51c20b5738c0e841765"
+  ],
+  "ruby/tests/service_test.proto": [
+    "2082ee8bb5a7966d7e921c848778eb0dec431d56"
+  ],
+  "objectivec/Tests/unittest_runtime_proto2.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "46d1145ec85233e8d751ac038b66e44676fbd3d4",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "58cd4a47e823645414348acbd8f963f7e713b2fa",
+    "1dcc329427fd103a0abd96ab787270f5d0a31861",
+    "30650d81d9baa446dbc8deb784ba53794cafda5b"
+  ],
+  "php/tests/proto/test_no_namespace.proto": [
+    "6737954661ed26105dd87a4c78fe3f333c978961",
+    "3d9e99b7e0d792abe76c56cfae641370017bfdd6",
+    "3c0855e94ac4cf6c3c2e899ac88acf4fa56e9770",
+    "b97cd573e405dd511b09a9fae124427a29741395",
+    "7be088202bad3a89498db2e9b19afda9f3929430",
+    "7f3e23707122f31ebfa58b7280bd56cbe77cb44e",
+    "46ae90dc5e145b12fffa7e053a908a9f3e066286"
+  ],
+  "ruby/tests/utf8.proto": [
+    "b07e4b1eeb2f530ce4a2a980aa1f01289b8325ff"
+  ],
+  "php/tests/proto/test_descriptors.proto": [
+    "763f08c6209e61585cf135988f6056f2091fd530",
+    "c15a3269f9dea81db5a45b527cd8699f11b03f0b"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/proto2_message_lite.proto": [
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "23f148138654a564b5690f6a5453aab480a6a049",
+    "c6493970296fa5c5b4a81a37248a328579fe9662",
+    "711e4b4d6c2beab175e415eec3883e5df416c543",
+    "176f7db11d8242b36a3ea6abb1cc436fca5bf75d"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/large_open_enum.proto": [
+    "65c3246de52dd6bd58bf695651a6c0eb3eeb6ec0",
+    "3354a3c7ed6362010a00523ed11af258e8ef1049",
+    "5131935d7ab445fedfbb886991d4947294230fd7",
+    "7df6884d27c76b796159e861a1723da887ba9832"
+  ],
+  "hpb_generator/tests/test_extension.proto": [
+    "73a75ff992d068c5af2bf07280f998c4f466865f",
+    "735621f7d720fcacc0a05114f407c3817411f296",
+    "f587cf5663520187bd8d3ab55c51bf6d4154da1b",
+    "cac05fe0d1fe26c54a2444c8d954f72c37387506",
+    "758b1fb871ce5f8075cc96ef278b60ef75e4711a",
+    "a453cffaed99e993c6d3033b05787c88534a6a96",
+    "4f6f2dd87347975e75feac5fe128bbf65a88da32",
+    "5f366b3b7d583f349cb9c6746cd5d74ae96ac869",
+    "096b139192b3fa95a7a626b273ec1a80845f7c87",
+    "968087eb61e18394a1e2e3e6bd3ab6eaf8ecb36e"
+  ],
+  "editions/codegen_tests/edition2023_symbol_visibility.proto": [
+    "f0b58e658914ec1f82af754b73b30b506734642b"
+  ],
+  "python/google/protobuf/internal/factory_test1.proto": [
+    "b1c4c65658c9f116ad804610c191371f92b9e318",
+    "9ef8f5cffc4b2ca6a687ae6b66d9de23095bc3ae",
+    "a00125024e9231d76746bd394fef8876f5cc15e2",
+    "6bbe197e9c1b6fc38cbdc45e3bf83fa7ced792a3",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "bde4a3254a7de58911941b0fbf38e9dd992de973",
+    "b55a20fa2c669b181f47ea9219b8e74d1263da19"
+  ],
+  "lua/test.proto": [
+    "26dcf400faa57c34eeb70b9155484bebf9d7340c",
+    "501ececd39fed69f0c50c2c87f04ce75932dde72"
+  ],
+  "rust/test/map_unittest.proto": [
+    "3a403676864bab04cba4151addeee95bb5c6b02a"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/generator_names_edition2024_defaults.proto": [
+    "7a7f276dcee4abf6c758f396b0a2989d41ed9742"
+  ],
+  "objectivec/Tests/unittest_import.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "28bc3baca186e61469a7794e2ca6afbf1fd2d51e",
+    "cf4eeae6fd5d4faa59c3e86d302bbd2e76907ff2",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "3e0d399c3e6de7048e2a3e860cff795cd23a9e2b"
+  ],
+  "editions/codegen_tests/edition2023_java_outer_classname_future.proto": [
+    "6de35c6d2fc78ad76e383fb51724f9b8aa20def2"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/nested_extension_lite.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "176f7db11d8242b36a3ea6abb1cc436fca5bf75d",
+    "5e0812d4b1f110fa6c1e33c91c9965a10989c41f",
+    "acd5b05e9f1ec2153574807463af0612267b6067",
+    "6bbe197e9c1b6fc38cbdc45e3bf83fa7ced792a3",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "upb/test/editions_test.proto": [
+    "cf3a6f5868222d31021e3835e5e7890a847f3d01"
+  ],
+  "hpb_generator/tests/test_enum.proto": [
+    "8c51540cb5b8a6856161d1831c5560d3c0618bd9",
+    "a453cffaed99e993c6d3033b05787c88534a6a96",
+    "5f366b3b7d583f349cb9c6746cd5d74ae96ac869",
+    "968087eb61e18394a1e2e3e6bd3ab6eaf8ecb36e"
+  ],
+  "objectivec/Tests/unittest.proto": [
+    "c99cf4bbfaf71f735cd0dea7d6fc0b2c1a589ed2",
+    "34a04c1fd51f799f94f8cd5c6eec0124e43761af",
+    "81068e8e8cf00f25559112a562661064d59bfa87",
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "b359e5020a68ce84faec5952100ae482e9eb0b1c",
+    "0549e521889341305efb6cc59cacbb5b13d16dc7",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "28bc3baca186e61469a7794e2ca6afbf1fd2d51e",
+    "cf4eeae6fd5d4faa59c3e86d302bbd2e76907ff2",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "3e0d399c3e6de7048e2a3e860cff795cd23a9e2b"
+  ],
+  "editions/codegen_tests/proto2_packed.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "editions/proto/test_editions_default_features.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "python/google/protobuf/internal/test_proto3_optional.proto": [
+    "25c6d34d4ef6e19e490790b015764847f172a1a5",
+    "9ef8f5cffc4b2ca6a687ae6b66d9de23095bc3ae",
+    "6b5fb807c00603ff3fbb392d2a002fac2444d5c5",
+    "b7742c51fdfa2f31f6a5f341f6d0b0df586b4ef1"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/map_lite_test.proto": [
+    "939338d2259a1456124af49ee1cb44e7e87af469",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "9e09343a49e9e75be576b31ed7402bf8502b080c",
+    "c81b4202d1ea7054d9722c93271bbccc7df5df01",
+    "0894e07536af88065d462cdc9d8e807c0723ef4d",
+    "acd5b05e9f1ec2153574807463af0612267b6067",
+    "6bbe197e9c1b6fc38cbdc45e3bf83fa7ced792a3",
+    "ec57f511c1b0b2d2fcc412fd15f4ee091ed6de67"
+  ],
+  "editions/codegen_tests/edition2023_go_google3_go_api_default.proto": [
+    "ecbb6ba8748344911d306df499bc849368aab67a"
+  ],
+  "upb/util/def_to_proto_weak_import_test.proto": [
+    "501ececd39fed69f0c50c2c87f04ce75932dde72"
+  ],
+  "src/google/protobuf/test_messages_proto2.proto": [
+    "ea659628643924980dff43c585dad941de46d4fa",
+    "fce32cf4585eb3aec2030b1f86ad8c7a840f809e",
+    "01cccd392c2f4f8ca116e2d92e721d619c60ace1",
+    "094855345093ab8d30bc2d3208681738b0bb3cc5",
+    "19c4a7d647a53ff4114012283bed85d7901540e6",
+    "b8976d68d6855800c25c2068553ef1fa518bbe35",
+    "f494a9e9758e462483486ca180763f4c2e7bef3c",
+    "91d77ae291d1f381ba09eff0b6b8f659d1170311",
+    "32bea52ee660abeb6a2891e3dce979a909cbd6ea",
+    "f1a939fb69504ff4e1fe386978165faa37fb2979",
+    "0aa7108962fd169ce8ffe1fdcd00599026c48ba0",
+    "ab4585a6956675ce14a1cba5d321fde980bbf12b",
+    "3afc8283099dd1747260e088cdf27240a010161e",
+    "562fc946c748d0ddb451ad1ce48570685f23a4f1",
+    "503a2116aaaa7c3b4d342e0639ae76028028f4ff",
+    "b99994d994e399174fe688a5efbcb6d91f36952a",
+    "04a11fc91668884d1793bff2a0f72ee6ce4f5edd",
+    "58d4420e2dd8a3cd354fff9db0052881c25369ce",
+    "4f02f056b5cea99052bfdfb6698afe47a3cf2964",
+    "0c4b607e98349bea40e6d1a22843b5a82118f312",
+    "2f864fdfdf18318ef24b02141733adb356508370",
+    "13fd045dbb2b4dacea32be162a41d5a4b0d1802f",
+    "3adb054bbfa83530ca5a5fd54a856755fd72af83",
+    "a7d5be6a910caabc4b26d73bc5c369dbc638c4c3",
+    "364502102afe62bc0a9068032a177d1827aa4774",
+    "2ad74e1606728564cc777aa4917d7e2299317eda",
+    "58a3c74df04af9ed7d531e3f247677a4661a98b6"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/proto2_message.proto": [
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "23f148138654a564b5690f6a5453aab480a6a049",
+    "c6493970296fa5c5b4a81a37248a328579fe9662",
+    "711e4b4d6c2beab175e415eec3883e5df416c543",
+    "176f7db11d8242b36a3ea6abb1cc436fca5bf75d"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/test_check_utf8_size.proto": [
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/outer_class_name_test2.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "0894e07536af88065d462cdc9d8e807c0723ef4d",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "rust/test/cpp/optimize_for_lite.proto": [
+    "f810cc5b668d78cb982f44b34f188160d55c27d6"
+  ],
+  "ruby/tests/test_ruby_package_proto2.proto": [
+    "ae85b457d2f00daf57fa3deb538627cc16e0c0d7",
+    "bb211e851ec2158e479784bd68784784bf6594dc",
+    "9638dcc340a83996e88b4e6f4f372572bb33d19c",
+    "d0535cc09e6eac1bddddd51c20b5738c0e841765"
+  ],
+  "editions/codegen_tests/edition2023_java_outer_classname.proto": [
+    "6de35c6d2fc78ad76e383fb51724f9b8aa20def2"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/proto2_unknown_enum_values.proto": [
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "d0f91c863ae0fbb75b41460c8bbb786ade197a0f"
+  ],
+  "src/google/protobuf/compiler/cpp/test_bad_identifiers_editions.proto": [
+    "460ee2b43ccd9f1b7e62d7a80a000c10b7644015",
+    "c8f2994bc4def4bd46a41009c4f2a3e7b2bd0caa",
+    "f724df9baf8941dceea8b413e47a1e6a5f26364a"
+  ],
+  "csharp/compatibility_tests/v3.0.0/protos/src/google/protobuf/unittest_import_public_proto3.proto": [
+    "296ae4e6632404be1c1f6dcbaba911d75927fbc3",
+    "9f09d1804a1cdf477db8249c746e362235fbd945"
+  ],
+  "upb/util/def_to_proto_wweak_import_test.proto": [
+    "501ececd39fed69f0c50c2c87f04ce75932dde72"
+  ],
+  "src/google/protobuf/any.proto": [
+    "a281c139961be79bbc34d5167ed740ba722c8973",
+    "b81c127e94d953aa9be5c9f00a1ad323552bae0e",
+    "60b71498d70a5645324385269c518b95c8c2feb0",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "23f148138654a564b5690f6a5453aab480a6a049",
+    "65852d6e9cdb3d6e1120ef6af044968cbbaff733",
+    "25755efc4f4a4e9d6efb34a100df0a4860dca695",
+    "dfab275eca9481b5de31122db6fc91b31db3382a",
+    "4e929031b08a8352c4a03bb99cc2b8b066114725",
+    "b3367aee14843037a73d84b4602f4454f1d30fec",
+    "d61aede89cf188367766b971f59cf57d7835d8e8",
+    "92a7e778e7394386f413cec28d67a07630f784b1",
+    "09354db1434859a31a3c81abebcc4018d42f2715",
+    "cc8ca5b6a5478b40546d4206392eb1471454460d",
+    "d64a2d9941c36a7bc2a7959ea10ab8363192ac14",
+    "cf14183bcd5485b4a71541599ddce0b35eb71352",
+    "3b3c8abb9635eb3ea078a821a99c9ef29d66dff7",
+    "e841bac4fcf47f809e089a70d5f84ac37b3883df",
+    "c3bc155aceda36ecb01cde2367a3b427f2d7ce40",
+    "b0f661181d10bddc08e380992590a1cdd92be92b",
+    "739d13d5d1f93e8bf8770081d1500372758fffa1",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "41113108303afbc1458c1c82b267cc17703ea8ce",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "30650d81d9baa446dbc8deb784ba53794cafda5b",
+    "ca9d1a053a8590caa1a1f81491b0381f052fa734",
+    "96e379ff8bc6907d044c62c1381b8e5a793b6a7a"
+  ],
+  "editions/proto/editions_transform_noop.proto": [
+    "2078a86aff44aec5e9af89963d5f1e7dc1e8c37a"
+  ],
+  "editions/golden/simple_proto2.proto": [
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "csharp/protos/unittest_import_public_proto3.proto": [
+    "f4f73699b075c908674f9a13ea99668f18a56acd",
+    "91ff83c024be36e2f2728c30cd7eedcec9220d1a",
+    "aa77eab622fe0ccc6cf7ec8a3fce1005dd759562"
+  ],
+  "python/google/protobuf/internal/more_extensions.proto": [
+    "9ef8f5cffc4b2ca6a687ae6b66d9de23095bc3ae",
+    "562fc946c748d0ddb451ad1ce48570685f23a4f1",
+    "176f7db11d8242b36a3ea6abb1cc436fca5bf75d",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "24bf56fb3a2fab42d355b15de11782c3144b9e80",
+    "40ee551715c3a784ea6132dbf604b0e665ca2def"
+  ],
+  "src/google/protobuf/util/json_format.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "86abf35ef5ee5b1004ec11bebb36d84c2ef6645e",
+    "256e65087db92f2c45dfc070818654d4cc37df6a",
+    "f51923041d46f204b78855c3c1544abf2e116d34",
+    "23f148138654a564b5690f6a5453aab480a6a049",
+    "32bea52ee660abeb6a2891e3dce979a909cbd6ea",
+    "343f7785728a9e4776fe06ab8048a53c79f11f7d",
+    "09cab821a96c52b7b3482bd993177a33098012a8",
+    "2f864fdfdf18318ef24b02141733adb356508370",
+    "d0f91c863ae0fbb75b41460c8bbb786ade197a0f",
+    "d8c2501b43c1b56e3efa74048a18f8ce06ba07fe",
+    "0894e07536af88065d462cdc9d8e807c0723ef4d",
+    "6bbe197e9c1b6fc38cbdc45e3bf83fa7ced792a3"
+  ],
+  "src/google/protobuf/edition_unittest.proto": [
+    "370758725de5ffec29a5a8a7377e7c974464ef29",
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "2ac862f36c0e159986ecb1ca67d71bf5f047f8e9",
+    "9e8b30c2135944d9d3a6e53b70e534581e2dbe2b",
+    "c99cf4bbfaf71f735cd0dea7d6fc0b2c1a589ed2",
+    "64027623d61a02be28b85f813d7e3d9967f81105",
+    "0c715b5e9edcc1fd57561b2a782566cb1e973b88"
+  ],
+  "src/google/protobuf/unittest_empty.proto": [
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "d37d46dfbcedadeb439ad0367f8afcf8867dca43"
+  ],
+  "csharp/protos/unittest_issue6936_c.proto": [
+    "f4f73699b075c908674f9a13ea99668f18a56acd",
+    "943bd5a7d8a8a32a4e6b98fd17b0284c389ee308",
+    "1792a3265bcf6c862043b14d245736b2ee43515b",
+    "367fd2773282a3007eecda3374056db2539b8076"
+  ],
+  "python/google/protobuf/internal/no_package.proto": [
+    "9ef8f5cffc4b2ca6a687ae6b66d9de23095bc3ae",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "6bbe197e9c1b6fc38cbdc45e3bf83fa7ced792a3",
+    "3fa5dadb61f3068d6eeab0a6e75b1d8831ab00dd",
+    "0400cca3236de1ca303af38bf81eab332d042b7c"
+  ],
+  "src/google/protobuf/unittest_embed_optimize_for.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "24bf56fb3a2fab42d355b15de11782c3144b9e80",
+    "40ee551715c3a784ea6132dbf604b0e665ca2def"
+  ],
+  "src/google/protobuf/wrappers.proto": [
+    "7cf5ccf32386ee5d0bbed4b54f2fbdb4b8843f7c",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "dfab275eca9481b5de31122db6fc91b31db3382a",
+    "d61aede89cf188367766b971f59cf57d7835d8e8",
+    "6b6e155ff9c1f68e8745f711b07bfd8fc15756b7",
+    "cc8ca5b6a5478b40546d4206392eb1471454460d",
+    "3b3c8abb9635eb3ea078a821a99c9ef29d66dff7",
+    "e841bac4fcf47f809e089a70d5f84ac37b3883df",
+    "c3bc155aceda36ecb01cde2367a3b427f2d7ce40",
+    "b0f661181d10bddc08e380992590a1cdd92be92b",
+    "739d13d5d1f93e8bf8770081d1500372758fffa1",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "41113108303afbc1458c1c82b267cc17703ea8ce",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "30650d81d9baa446dbc8deb784ba53794cafda5b",
+    "96e379ff8bc6907d044c62c1381b8e5a793b6a7a"
+  ],
+  "src/google/protobuf/timestamp.proto": [
+    "bf553f483226b91c2abfbde93d69537ce3b48b39",
+    "b81c127e94d953aa9be5c9f00a1ad323552bae0e",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "23f148138654a564b5690f6a5453aab480a6a049",
+    "95e6c5b4746dd7474d540ce4fb375e3f79a086f8",
+    "dfab275eca9481b5de31122db6fc91b31db3382a",
+    "176f7db11d8242b36a3ea6abb1cc436fca5bf75d",
+    "0894e07536af88065d462cdc9d8e807c0723ef4d",
+    "5f2fcc3f6c5eba06ed667103820244a2f6c06043",
+    "d61aede89cf188367766b971f59cf57d7835d8e8",
+    "8489612dadd3775ffbba029a583b6f00e91d0547",
+    "92a7e778e7394386f413cec28d67a07630f784b1",
+    "05b56d01c1590bd93e2668c1f37856e6f9eb9c63",
+    "d36c0c538a545fac5d9db6ba65c525246d4efa95",
+    "cc8ca5b6a5478b40546d4206392eb1471454460d",
+    "3b3c8abb9635eb3ea078a821a99c9ef29d66dff7",
+    "e841bac4fcf47f809e089a70d5f84ac37b3883df",
+    "c3bc155aceda36ecb01cde2367a3b427f2d7ce40",
+    "b0f661181d10bddc08e380992590a1cdd92be92b",
+    "739d13d5d1f93e8bf8770081d1500372758fffa1",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "41113108303afbc1458c1c82b267cc17703ea8ce",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "30650d81d9baa446dbc8deb784ba53794cafda5b",
+    "ca9d1a053a8590caa1a1f81491b0381f052fa734",
+    "96e379ff8bc6907d044c62c1381b8e5a793b6a7a"
+  ],
+  "src/google/protobuf/map_unittest.proto": [
+    "3956f753fcc6a2d96423ee1701252911ec2eed96",
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "5842cc9c3db83bf3e32db9ac628aa5134c0bb1de",
+    "2b45018be4f2eca6a8cad7d76afcde54ea3f088a",
+    "ccb1173553e48a02ffc364061eb4e53e3748abfa",
+    "407aa2d9319f5db12964540810b446fecc22d419",
+    "23f148138654a564b5690f6a5453aab480a6a049",
+    "6ed738305bc0770832148109057cf22a6d9ee98a",
+    "09354db1434859a31a3c81abebcc4018d42f2715",
+    "3808d091f86e079c8f3437f5cd66bd2c507cef8a",
+    "d9ab86cdbf87915319020241de65b821be068db7",
+    "eee38b0c018b3279f77d03dff796f440f40d3516",
+    "fb77cc9d9f066a8ce4f12e8d5f76188d48101444",
+    "5db217305f37a79eeccd70f000088a06ec82fcec",
+    "7879f82ddceb76c2b6710e240a91f0eabf494c33",
+    "885b612f74f133678bf82808c589331e4c59dad9",
+    "6ae3bde73dd9090712e22986afe866229e61d305",
+    "f157a5651c79a7a36e242af216a5d5b383ba8af2"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/generator_names_conflicting_nested_message.proto": [
+    "7a7f276dcee4abf6c758f396b0a2989d41ed9742"
+  ],
+  "rust/test/srcsless_library_test_parent.proto": [
+    "a86b65d69155b9d0c14cce421cb810a614e5d88f"
+  ],
+  "rust/test/dots_in_package.proto": [
+    "177092cd8cc0daae89ddddebbe0bccdb8ce7f38b",
+    "4f20efbb785dcf33a35a7ae6d32009f06f005d4d",
+    "a1ba8d238a356491272c928b76a78a9b1142c98b"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/cached_field_size_test.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "c6493970296fa5c5b4a81a37248a328579fe9662",
+    "711e4b4d6c2beab175e415eec3883e5df416c543",
+    "176f7db11d8242b36a3ea6abb1cc436fca5bf75d"
+  ],
+  "upb/util/def_to_proto_test.proto": [
+    "501ececd39fed69f0c50c2c87f04ce75932dde72"
+  ],
+  "rust/test/imported_types.proto": [
+    "90015d31450ea052b35f1e907569fcf12c762eec"
+  ],
+  "ruby/tests/generated_code_editions.proto": [
+    "bca8fb6117cf24785edb238d96bffe2c3a6d7164"
+  ],
+  "php/tests/proto/test_php_namespace.proto": [
+    "c752a43e1ee48d6f40d3ac564b864e58a4623843",
+    "6737954661ed26105dd87a4c78fe3f333c978961",
+    "3d9e99b7e0d792abe76c56cfae641370017bfdd6",
+    "6f325805c0bc956f927b0e2dbfb4dd8133b4ed69"
+  ],
+  "upb/test/test_import_empty_srcs.proto": [
+    "501ececd39fed69f0c50c2c87f04ce75932dde72"
+  ],
+  "rust/test/import_public_primary_src.proto": [
+    "dbaa526b075dd0d73a1fe51945d0b4d2c4b1d3b1",
+    "c1d174f7d2cb42bdae0f6c60ddce40d3e9ecbd0f"
+  ],
+  "objectivec/Tests/unittest_extension_chain_b.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "46d1145ec85233e8d751ac038b66e44676fbd3d4",
+    "5cf61b7e478729e884b81a05798e4fad5c18a39d",
+    "28bc3baca186e61469a7794e2ca6afbf1fd2d51e",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "3e0d399c3e6de7048e2a3e860cff795cd23a9e2b",
+    "13a41246dd9aa6c6a84d436307b933fd4a6ec4a8"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/map_for_proto2_test.proto": [
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "0894e07536af88065d462cdc9d8e807c0723ef4d",
+    "cc8ca5b6a5478b40546d4206392eb1471454460d",
+    "d64a2d9941c36a7bc2a7959ea10ab8363192ac14",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "rust/test/package_disabiguation2.proto": [
+    "dbaa526b075dd0d73a1fe51945d0b4d2c4b1d3b1",
+    "c1d174f7d2cb42bdae0f6c60ddce40d3e9ecbd0f"
+  ],
+  "editions/golden/test_messages_proto3_editions.proto": [
+    "ea659628643924980dff43c585dad941de46d4fa",
+    "6670b6c4a60f0606d0025050533c41f2159dcabc",
+    "c4ce58a893fdb402c94f77ff2b9447065353a278",
+    "3f8544e706ae560333893b5facdf97a006e24664",
+    "ea81024ddf764cba2b39c3581cefe294f9a41391"
+  ],
+  "editions/codegen_tests/edition2023_import_feature.proto": [
+    "470522c57c254c857a537b1bf4b4d9c3031404a0"
+  ],
+  "python/google/protobuf/internal/test_bad_identifiers.proto": [
+    "9ef8f5cffc4b2ca6a687ae6b66d9de23095bc3ae",
+    "2f864fdfdf18318ef24b02141733adb356508370",
+    "f157a5651c79a7a36e242af216a5d5b383ba8af2",
+    "6ef984af4b0c63c1c33127a12dcfc8e6359f0c9e",
+    "e428862450679aaccd3675d1092f9f5253b7bd43",
+    "b55a20fa2c669b181f47ea9219b8e74d1263da19"
+  ],
+  "java/core/src/test/proto/com/google/protobuf/nested_extension.proto": [
+    "0d42a969e33ae910457e3ccfdcaf38739b2efe30",
+    "500c953d105d0447479be259a5fb0b6f7124e978",
+    "40d69fd51fc5786a24dc44f2c1a9eab31d53e80c",
+    "176f7db11d8242b36a3ea6abb1cc436fca5bf75d",
+    "5e0812d4b1f110fa6c1e33c91c9965a10989c41f",
+    "49efe9d7db877022e76375df2d4daadab98619b6"
+  ],
+  "objectivec/Tests/unittest_deprecated.proto": [
+    "200c9589c4f34f47e27958721ff911006c3acb36",
+    "46d1145ec85233e8d751ac038b66e44676fbd3d4",
+    "bc9880ba088832e2fe487a7388f98e83977a330d",
+    "dad775b79895df5167cfbc2c78549b8417af1c01"
+  ],
+  "python/google/protobuf/internal/import_test_package/import_public_nested.proto": [
+    "106de22416f2d61b0e944d28084e6588e788cd45",
+    "b0f9799a7cf45a8e6a39decbfa5df1e9a3f5fa03"
+  ]
+}

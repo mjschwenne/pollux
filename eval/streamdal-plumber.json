@@ -1,0 +1,76 @@
+{
+  "test-assets/protos/info.proto": [
+    "8867af529ced5b1a548ee30ed5b84338d2c2694a",
+    "fb078dfa34c95c279a7b4cd3e283a2c212ab9f62"
+  ],
+  "test-assets/protobuf-any/test.proto": [
+    "b1aa6d226b0a4faa6e515ab4942221b299f27e77"
+  ],
+  "test-assets/protos/status.proto": [
+    "8867af529ced5b1a548ee30ed5b84338d2c2694a",
+    "fb078dfa34c95c279a7b4cd3e283a2c212ab9f62"
+  ],
+  "test-assets/protos/records/kafka.proto": [
+    "8867af529ced5b1a548ee30ed5b84338d2c2694a",
+    "fb078dfa34c95c279a7b4cd3e283a2c212ab9f62"
+  ],
+  "test-assets/protos/schema.proto": [
+    "8867af529ced5b1a548ee30ed5b84338d2c2694a",
+    "fb078dfa34c95c279a7b4cd3e283a2c212ab9f62"
+  ],
+  "test-assets/protos/records/http.proto": [
+    "8867af529ced5b1a548ee30ed5b84338d2c2694a",
+    "fb078dfa34c95c279a7b4cd3e283a2c212ab9f62"
+  ],
+  "test-assets/protos/team.proto": [
+    "8867af529ced5b1a548ee30ed5b84338d2c2694a",
+    "fb078dfa34c95c279a7b4cd3e283a2c212ab9f62"
+  ],
+  "test-assets/protos/collect.proto": [
+    "8867af529ced5b1a548ee30ed5b84338d2c2694a",
+    "fb078dfa34c95c279a7b4cd3e283a2c212ab9f62"
+  ],
+  "test-assets/protos/records/generic.proto": [
+    "8867af529ced5b1a548ee30ed5b84338d2c2694a",
+    "fb078dfa34c95c279a7b4cd3e283a2c212ab9f62"
+  ],
+  "test-assets/protos/destinations/http.proto": [
+    "8867af529ced5b1a548ee30ed5b84338d2c2694a",
+    "fb078dfa34c95c279a7b4cd3e283a2c212ab9f62"
+  ],
+  "test-assets/protos/filter.proto": [
+    "8867af529ced5b1a548ee30ed5b84338d2c2694a",
+    "fb078dfa34c95c279a7b4cd3e283a2c212ab9f62"
+  ],
+  "test-assets/protos/replay.proto": [
+    "8867af529ced5b1a548ee30ed5b84338d2c2694a",
+    "fb078dfa34c95c279a7b4cd3e283a2c212ab9f62"
+  ],
+  "test-assets/protos/message.proto": [
+    "8867af529ced5b1a548ee30ed5b84338d2c2694a",
+    "fb078dfa34c95c279a7b4cd3e283a2c212ab9f62"
+  ],
+  "test-assets/shallow-envelope/envelope.proto": [
+    "b1aa6d226b0a4faa6e515ab4942221b299f27e77",
+    "55c759f0ffa4ccea43a0b889dfb1505aa53cba43"
+  ],
+  "test-assets/protobuf-any/message.proto": [
+    "b1aa6d226b0a4faa6e515ab4942221b299f27e77"
+  ],
+  "test-assets/protos/outbound.proto": [
+    "8867af529ced5b1a548ee30ed5b84338d2c2694a",
+    "fb078dfa34c95c279a7b4cd3e283a2c212ab9f62"
+  ],
+  "test-assets/protos/manifest.proto": [
+    "8867af529ced5b1a548ee30ed5b84338d2c2694a",
+    "fb078dfa34c95c279a7b4cd3e283a2c212ab9f62"
+  ],
+  "test-assets/shallow-envelope/payload.proto": [
+    "b1aa6d226b0a4faa6e515ab4942221b299f27e77",
+    "55c759f0ffa4ccea43a0b889dfb1505aa53cba43"
+  ],
+  "test-assets/protos/user.proto": [
+    "8867af529ced5b1a548ee30ed5b84338d2c2694a",
+    "fb078dfa34c95c279a7b4cd3e283a2c212ab9f62"
+  ]
+}

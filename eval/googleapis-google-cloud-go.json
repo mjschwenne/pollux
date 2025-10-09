@@ -1,0 +1,106 @@
+{
+  "pubsub/loadtest/pb/loadtest.proto": [
+    "c188071ae59186a582f403175120ea6cfa089074"
+  ],
+  "rpcreplay/proto/intstore/intstore.proto": [
+    "c188071ae59186a582f403175120ea6cfa089074",
+    "396dac4827f1dcc7ee2e012cf3ebebb51b845014",
+    "acf86e75172482554fbc1b299ecec676e20a326f",
+    "683a8b9aed92eedb37657c553db20e5321e08160"
+  ],
+  "rpcreplay/proto/rpcreplay/rpcreplay.proto": [
+    "c188071ae59186a582f403175120ea6cfa089074",
+    "acf86e75172482554fbc1b299ecec676e20a326f",
+    "683a8b9aed92eedb37657c553db20e5321e08160"
+  ],
+  "datastore/internal/gaepb/datastore_ae_v3.proto": [
+    "8875511ca0c640d1260248f51c7b88e55136cdc6"
+  ],
+  "pubsub/internal/benchwrapper/proto/pubsub.proto": [
+    "c188071ae59186a582f403175120ea6cfa089074",
+    "af76a9359ef98ad65b3d040b827891bdf15eb807"
+  ],
+  "spanner/internal/benchwrapper/proto/spanner.proto": [
+    "69f5fb99057ef585215340448bf3619ba4b71fa5",
+    "0b8cc444bbce669684dc191eab8b4fef6a18268e"
+  ],
+  "vertexai/internal/sentencepiece/internal/model/sentencepiece_model.proto": [
+    "bf9595ee7c77d913db0506a29ccf455f8eb6e98b"
+  ],
+  "pubsub/v2/internal/benchwrapper/proto/pubsub.proto": [
+    "c798f62f908140686b8e2a365cccf9608fb5ab95"
+  ],
+  "spanner/testdata/protos/singer.proto": [
+    "d410907f3e52bcc64bd92e0a341777c1277a6418",
+    "fd4cfc2ad3af0b5e84c769703061d3de6ebe152f",
+    "215e0c8125ea05246c834984bde1ca698c7dde4c",
+    "3ffbbbe50225684f4211c6dbe3ca25acb3d02b8e"
+  ],
+  "storage/internal/test/conformance/test.proto": [
+    "4d7b78e3c83ab9fd38b86e6ee990b0abe04e292a",
+    "74b6ad4c0a0c030c57b7f6af5ec74b40cc0050e8",
+    "44bc953a426874e7c4cc49c91af0903b83f90477",
+    "e44449b6b71536e41c165d84eb8a9253154c0ba8",
+    "48b0dc991ecc81ccbb0f232bb1561951dcc7829b",
+    "2f857649c55302802e95b96119dd05032a61c87a"
+  ],
+  "firestore/internal/conformance/tests.proto": [
+    "c188071ae59186a582f403175120ea6cfa089074",
+    "2ad2dd5ca78fd0147f421ca1e7164a308631912d"
+  ],
+  "bigtable/testdata/proto_schema_bundle.proto": [
+    "688eb13ea98a2a041513b06d47dddfbfc29a9117"
+  ],
+  "bigtable/testdata/updated_proto_schema_bundle.proto": [
+    "688eb13ea98a2a041513b06d47dddfbfc29a9117"
+  ],
+  "bigtable/internal/conformance/tests.proto": [
+    "2b5a2b55eb996a65c1483bc81f77406b60e91752",
+    "4cc52f16b5149af56807ab443e1eefcac4e8dd75"
+  ],
+  "auth/grpctransport/testdata/echo.proto": [
+    "69a83470bdcc7ed10c6c36d1abc3b7cfdb8a0ee5"
+  ],
+  "pubsub/v2/testdata/schema/us-states.proto": [
+    "c798f62f908140686b8e2a365cccf9608fb5ab95"
+  ],
+  "pubsub/testdata/schema/us-states.proto": [
+    "dcee3c5887c71b5e82c9d963077d2307905f6dce"
+  ],
+  "bigquery/storage/managedwriter/testdata/testing.proto": [
+    "978d4a1e47cbd8d4bf567b616381a2f12fac4cab",
+    "d6ee40c73b2649ad28c281460980205fd804f53a",
+    "dfa8e22edf560211ae2a2ebf1f9a23b86887c7be",
+    "c7f54d81baa34ce0f31bbe0af1cb03c2598e5e74",
+    "c54aa74f7a0574cbbe3f65dc90b96cf5a0b1aa88"
+  ],
+  "bigquery/storage/managedwriter/testdata/messages_proto3.proto": [
+    "29846003d4bebb1a07ac11cac462ae65cb0bc59c",
+    "a45508272a730e0ad81021695d2d8564e7c81631"
+  ],
+  "bigquery/storage/managedwriter/testdata/messages_proto2.proto": [
+    "faccb68deeb18ad51875042242a1141285448bbb",
+    "52cf48edff487352c2755de86e2ea069b1b29617",
+    "014b314b2db70147a26120a1d54a6bc7142d5665",
+    "a45508272a730e0ad81021695d2d8564e7c81631"
+  ],
+  "bigquery/storage/managedwriter/testdata/validation_proto2.proto": [
+    "97337e9940b186bf2b3ee4d0398d2f02c35799f0",
+    "19692735b0fbafa176d0315bda923528e1eedf6d",
+    "75d28731f18af2d301bffabf38b2dd3786f0fea8",
+    "ae5858d8ef8e7f78d072a9e40bde67a65b4e9c84"
+  ],
+  "bigquery/storage/managedwriter/testdata/validation_proto3.proto": [
+    "75d28731f18af2d301bffabf38b2dd3786f0fea8",
+    "ae5858d8ef8e7f78d072a9e40bde67a65b4e9c84"
+  ],
+  "internal/librariangen/testdata/generate/source/google/api/annotations.proto": [
+    "52e84cc9a11077eb3c50a0b5fc9aa26361d63b47"
+  ],
+  "internal/librariangen/testdata/generate/source/google/cloud/workflows/v1/workflows.proto": [
+    "52e84cc9a11077eb3c50a0b5fc9aa26361d63b47"
+  ],
+  "internal/librariangen/testdata/generate/source/google/cloud/secretmanager/v1beta2/secretmanager.proto": [
+    "4a95e48d0678c830a4f0b5ac2b53d31301deacb5"
+  ]
+}
