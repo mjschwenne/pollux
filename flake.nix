@@ -21,13 +21,13 @@
         pkgs = import nixpkgs {
           inherit system;
         };
-        varint_conversion = pkgs.callPackage ./varint_conversion {};
+        pollux-go = pkgs.callPackage ./pollux-go {};
         rocq-build = pkgs.callPackage ./nix/pollux-rocq {
           perennial = perennial.packages.${system}.default;
         };
       in {
         packages = {
-          inherit varint_conversion rocq-build;
+          inherit pollux-go rocq-build;
           default = rocq-build;
         };
         devShells.default = with pkgs;
@@ -48,7 +48,8 @@
 
                 # Go deps
                 go
-                varint_conversion
+                gopls
+                pollux-go
 
                 # Misc utilities
                 just
