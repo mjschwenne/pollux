@@ -68,6 +68,7 @@
                     scipy
                     pandas
                     pandas-stubs
+                    polars
                     altair
                     vl-convert-python
                     requests

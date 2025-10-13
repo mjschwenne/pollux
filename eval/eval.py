@@ -1,16 +1,17 @@
+from polars.functions.lazy import n_unique
 import requests
-import json
 import time
 import argparse
 from rich.progress import Progress
 from rich.pretty import pprint
 import altair as alt
-import pandas as pd
+import polars as pl
 import numpy as np
 
 import os
 import tempfile
 import subprocess
+import json
 
 
 def locate_pollux() -> str:
@@ -64,20 +65,21 @@ def paginated_github_query(
     return all_items
 
 
-def get_proto_history_json(
+def get_proto_history_parquet(
     owner: str, repo: str, github_token: str, output_filename: str
 ) -> None:
     """
     Fetches the commit history for all .proto files in a GitHub repository
-    using the GitHub API and saves the result as a JSON file.
+    using the GitHub API and saves the result as a Parquet file.
 
     Limited to 1000 proto files due to GitHub Search API constraints.
-    Use get_proto_history_json_local() for larger repositories.
+    Use get_proto_history_parquet_local() for larger repositories.
 
     Args:
         owner: GitHub repository owner.
         repo: GitHub repository name.
         github_token: GitHub personal access token for authentication.
+        output_filename: Path to save the parquet file.
     """
     # Step 1: Search for .proto files using pagination
     search_url = (
@@ -92,8 +94,8 @@ def get_proto_history_json(
     nproto = len(proto_files)
     print(f"Found {nproto} proto files in {owner}/{repo}")
 
-    # Initialize JSON output
-    json_output: dict[str, list[str]] = {}
+    # Initialize data for DataFrame
+    data_rows = []
 
     # Step 2: Fetch commit history for each .proto file
     with Progress() as progress:
@@ -105,19 +107,28 @@ def get_proto_history_json(
             )
             results = paginated_github_query(commits_url, headers)
             commit_hashes = [commits["sha"] for page in results for commits in page]
-            json_output[file] = commit_hashes
+
+            data_rows.append(
+                {
+                    "repository": f"{owner}/{repo}",
+                    "proto_file": file,
+                    "commits": commit_hashes,
+                    "commit_count": len(commit_hashes),
+                }
+            )
 
             progress.update(task, advance=1)
             time.sleep(1)  # Avoid rate limiting
 
-    # Step 3: Save JSON output
-    with open(output_filename, "w") as f:
-        json.dump(json_output, f, indent=2)
-        _ = f.write("\n")
+    # Step 3: Create DataFrame and save as Parquet
+    df = pl.DataFrame(data_rows)
+    df.write_parquet(output_filename)
     print(f"\n\nSaved commit history to {output_filename}")
 
 
-def get_proto_history_json_local(owner: str, repo: str, output_filename: str) -> None:
+def get_proto_history_parquet_local(
+    owner: str, repo: str, output_filename: str
+) -> None:
     """
     Clones a repository locally to extract commit history for all .proto files.
     This bypasses GitHub API limits for large repositories.
@@ -125,6 +136,7 @@ def get_proto_history_json_local(owner: str, repo: str, output_filename: str) ->
     Args:
         owner: GitHub repository owner.
         repo: GitHub repository name.
+        output_filename: Path to save the parquet file.
     """
     # Create temporary directory
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -166,8 +178,8 @@ def get_proto_history_json_local(owner: str, repo: str, output_filename: str) ->
             nproto = len(proto_files)
             print(f"Found {nproto} proto files in {owner}/{repo}")
 
-            # Initialize JSON output
-            json_output: dict[str, list[str]] = {}
+            # Initialize data for DataFrame
+            data_rows = []
 
             # Get commit history for each .proto file
             with Progress() as progress:
@@ -189,18 +201,48 @@ def get_proto_history_json_local(owner: str, repo: str, output_filename: str) ->
                             for h in result.stdout.strip().split("\n")
                             if h.strip()
                         ]
-                        # Get stats file
-                        stats_json = subprocess.run(
-                            [pollux_bin, "stats", file],
-                            capture_output=True,
-                            text=True,
-                            check=True,
-                        )
-                        stats = json.loads(stats_json.stdout)
-                        json_output[file] = {"commits": commit_hashes, **stats[file]}
+
+                        # Initialize row data
+                        row_data = {
+                            "repository": f"{owner}/{repo}",
+                            "proto_file": file,
+                            "commits": commit_hashes,
+                            "commit_count": len(commit_hashes),
+                        }
+
+                        # Get stats file if pollux is available
+                        if pollux_bin:
+                            try:
+                                stats_json = subprocess.run(
+                                    [pollux_bin, "stats", file],
+                                    capture_output=True,
+                                    text=True,
+                                    check=True,
+                                )
+                                stats = json.loads(stats_json.stdout)
+                                if file in stats:
+                                    # Add pollux stats to row data
+                                    row_data.update(stats[file])
+                            except (
+                                subprocess.CalledProcessError,
+                                json.JSONDecodeError,
+                                KeyError,
+                            ):
+                                # If pollux stats fail, continue without them
+                                pass
+
+                        data_rows.append(row_data)
+
                     except subprocess.CalledProcessError:
-                        # If git log fails for a file, set empty list
-                        json_output[file] = []
+                        # If git log fails for a file, add empty entry
+                        data_rows.append(
+                            {
+                                "repository": f"{owner}/{repo}",
+                                "proto_file": file,
+                                "commits": [],
+                                "commit_count": 0,
+                            }
+                        )
 
                     progress.update(task, advance=1)
 
@@ -208,101 +250,40 @@ def get_proto_history_json_local(owner: str, repo: str, output_filename: str) ->
             # Return to original directory
             os.chdir(original_cwd)
 
-        # Save JSON output
-        with open(output_filename, "w") as f:
-            json.dump(json_output, f, indent=2)
-            _ = f.write("\n")
+        # Create DataFrame and save as Parquet
+        df = pl.DataFrame(data_rows)
+        df.write_parquet(output_filename)
         print(f"\n\nSaved commit history to {output_filename}")
 
 
-def plot_commit_histogram(
-    json_files: list[str], output_file: str | None = None
-) -> alt.Chart | alt.LayerChart:
+def load_parquet_data(parquet_files: list[str]) -> pl.DataFrame:
     """
-    Creates a histogram showing the distribution of commits per proto file.
+    Loads and combines data from multiple parquet files.
 
     Args:
-        json_files: List of paths to JSON files output by get_proto_history_json
-        output_file: Optional path to save the plot. Format determined by file extension (.png, .html, etc.)
+        parquet_files: List of paths to parquet files.
 
     Returns:
-        Altair Chart or LayerChart object
+        Combined polars DataFrame
     """
-    all_commit_counts = []
-    all_data = []
+    if len(parquet_files) == 1:
+        return pl.read_parquet(parquet_files[0])
+    else:
+        # Read and combine multiple files, handling schema differences
+        dfs = [pl.read_parquet(file) for file in parquet_files]
 
-    # Load and combine data from all JSON files
-    for json_file in json_files:
-        with open(json_file, "r") as f:
-            data = json.load(f)
+        # Find common columns across all DataFrames
+        common_cols = set(dfs[0].columns)
+        for df in dfs[1:]:
+            common_cols &= set(df.columns)
 
-        # Extract repository name from filename
-        repo_name = os.path.basename(json_file).replace(".json", "")
+        # Select only common columns from each DataFrame
+        aligned_dfs = [df.select(sorted(common_cols)) for df in dfs]
 
-        # Count commits per file and store with repository info
-        for proto_file, commits in data.items():
-            commit_count = len(commits)
-            all_commit_counts.append(commit_count)
-            all_data.append(
-                {
-                    "proto_file": proto_file,
-                    "commit_count": commit_count,
-                    "repository": repo_name,
-                }
-            )
+        return pl.concat(aligned_dfs)
 
-    # Calculate statistics
-    mean_commits = np.mean(all_commit_counts)
-    total_files = len(all_commit_counts)
-    total_repos = len(json_files)
 
-    # Create DataFrame for Altair
-    df = pd.DataFrame(all_data)
-
-    # Create base chart
-    base = alt.Chart(df)
-
-    # Create histogram with explicit integer bins
-    min_commits = min(all_commit_counts)
-    max_commits = max(all_commit_counts)
-
-    histogram = (
-        base.mark_bar(opacity=0.7, color="steelblue")
-        .encode(
-            alt.X(
-                "commit_count:Q",
-                bin=alt.Bin(extent=[min_commits - 0.5, max_commits + 0.5], step=1),
-                title="Number of Commits per Proto File",
-                axis=alt.Axis(tickMinStep=1, format=".0f"),
-            ),
-            alt.Y("count()", title="Number of Proto Files"),
-            tooltip=["count()", "commit_count:Q"],
-        )
-        .properties(
-            width=600,
-            height=400,
-            title=f"Combined Distribution of Commits per Proto File\n{total_files} files from {total_repos} repositories (Mean: {mean_commits:.2f})",
-        )
-    )
-
-    # Create vertical line for mean with legend
-    mean_line = (
-        alt.Chart(pd.DataFrame({"mean": [mean_commits], "legend": ["Mean"]}))
-        .mark_rule(color="red", strokeWidth=2, strokeDash=[5, 5])
-        .encode(
-            x=alt.X("mean:Q", axis=alt.Axis(tickMinStep=1)),
-            color=alt.Color(
-                "legend:N",
-                scale=alt.Scale(range=["red"]),
-                legend=alt.Legend(title="Statistics"),
-            ),
-        )
-    )
-
-    # Combine histogram and mean line
-    chart = histogram + mean_line
-
-    # Save or display
+def save_plot(chart: alt.Chart | alt.LayerChart, output_file: str | None = None):
     if output_file:
         # Determine format from file extension
         if output_file.endswith(".png"):
@@ -319,14 +300,345 @@ def plot_commit_histogram(
             chart.save(output_file)
             print(f"Plot saved to {output_file}")
     else:
-        chart.show()
+        # If no output file specified, save as default HTML file
+        # This avoids the IPython dependency issue with chart.show()
+        output_file = "plot.html"
+        chart.save(output_file)
+        print(f"No output file specified, saved plot to {output_file}")
+
+
+def plot_commit_histogram(
+    df: pl.DataFrame, output_file: str | None = None
+) -> alt.Chart | alt.LayerChart:
+    """
+    Creates a histogram showing the distribution of commits per proto file.
+
+    Args:
+        parquet_files: List of paths to parquet files.
+        output_file: Optional path to save the plot. Format determined by file extension (.png, .html, etc.)
+
+    Returns:
+        Altair Chart or LayerChart object
+    """
+    # Calculate statistics
+    mean_commits = df["commit_count"].mean()
+    total_files = len(df)
+    total_repos = df["repository"].n_unique()
+
+    # Create base chart - use the dataframe directly
+    base = alt.Chart(df)
+
+    histogram = (
+        base.mark_bar(color="steelblue")
+        .encode(
+            alt.X(
+                "commit_count:Q",
+                bin=alt.Bin(maxbins=20, minstep=1),
+                title="Number of Commits per Proto File",
+                axis=alt.Axis(tickMinStep=1, format=".0f"),
+            ),
+            alt.Y("count()", title="Number of Proto Files"),
+            tooltip=["count()", "commit_count:Q"],
+        )
+        .properties(
+            width=600,
+            height=400,
+            title=[
+                f"Distribution of Commits per Proto File",
+                f"{total_files} files from {total_repos} repositories (Mean: {mean_commits:.2f})",
+            ],
+        )
+    )
+
+    # Create vertical line for mean with legend
+    mean_df = pl.DataFrame({"mean": [mean_commits], "legend": ["Mean"]})
+    mean_line = (
+        alt.Chart(mean_df)
+        .mark_rule(color="red", strokeWidth=2, strokeDash=[5, 5])
+        .encode(
+            x=alt.X("mean:Q", axis=alt.Axis(tickMinStep=1)),
+            color=alt.Color(
+                "legend:N",
+                scale=alt.Scale(range=["red"]),
+                legend=alt.Legend(title="Statistics"),
+            ),
+        )
+    )
+
+    # Combine histogram and mean line
+    chart = histogram + mean_line
+
+    # Save or display
+    save_plot(chart, output_file)
+
+    return chart
+
+
+def plot_histogram(
+    df: pl.DataFrame, attr: str, attr_name: str, output_file: str | None = None
+) -> alt.Chart | alt.LayerChart:
+    """
+    Creates a histogram showing the distribution the given dataframe attribute.
+
+    Args:
+        df: Loaded data frame
+        attr: The column name in df to plot
+        output_file: Optional path to save the plot. Format determined by file extension (.png, .html, etc.)
+
+    Returns:
+        Altair Chart or LayerChart object
+    """
+
+    if attr not in df.columns:
+        raise ValueError(
+            f"'{attr}' columns not found in data. Make sure to use --local flag when fetching to get full stats."
+        )
+
+    mean = df[attr].mean()
+
+    base = alt.Chart(df)
+    alt_attr = f"{attr}:Q"
+
+    histogram = (
+        base.mark_bar(color="steelblue")
+        .encode(
+            alt.X(
+                alt_attr,
+                bin=alt.Bin(maxbins=20, minstep=1),
+                title=f"Number of {attr_name} per Proto File",
+                axis=alt.Axis(tickMinStep=1, format=".0f"),
+            ),
+            alt.Y("count()", title="Number of Proto Files"),
+            tooltip=["count()", alt_attr],
+        )
+        .properties(
+            width=600,
+            height=400,
+            title=[
+                f"Distribution of {attr_name} per Proto File",
+                f"{len(df)} files from {df['repository'].n_unique()} repositories (Mean: {mean:.2f})",
+            ],
+        )
+    )
+
+    mean_df = pl.DataFrame({"mean": [mean], "legend": ["Mean"]})
+    mean_line = (
+        alt.Chart(mean_df)
+        .mark_rule(color="red", strokeWidth=2, strokeDash=[5, 5])
+        .encode(
+            x=alt.X("mean:Q", axis=alt.Axis(tickMinStep=1)),
+            color=alt.Color(
+                "legend:N",
+                scale=alt.Scale(range=["red"]),
+                legend=alt.Legend(title="Statistics"),
+            ),
+        )
+    )
+
+    # Combine histogram and mean line
+    chart = histogram + mean_line
+
+    # Save or display
+    save_plot(chart, output_file)
+
+    return chart
+
+
+def plot_proto_type_breakdown(
+    df: pl.DataFrame, output_file: str | None = None
+) -> alt.Chart:
+    """
+    Creates a mosaic plot showing the breakdown of protobuf types (messages, enums, services) by repository.
+
+    Args:
+        df: Polars DataFrame containing protobuf data with columns: repository, message_count_total, enum_count_total, service_count_total
+        output_file: Optional path to save the plot. Format determined by file extension (.png, .html, etc.)
+
+    Returns:
+        Altair Chart object
+    """
+    # Required columns
+    required_cols = [
+        "repository",
+        "message_count_total",
+        "enum_count_total",
+        "service_count_total",
+    ]
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        raise ValueError(f"Missing required columns: {missing_cols}")
+
+    # Aggregate data by repository
+    repo_agg = df.group_by("repository").agg(
+        [
+            pl.col("message_count_total").sum().alias("Messages"),
+            pl.col("enum_count_total").sum().alias("Enums"),
+            pl.col("service_count_total").sum().alias("Services"),
+        ]
+    )
+
+    # Calculate totals for each repository
+    repo_agg = repo_agg.with_columns(
+        (pl.col("Messages") + pl.col("Enums") + pl.col("Services")).alias("total")
+    )
+
+    # Filter out repositories with no protobuf elements
+    repo_agg = repo_agg.filter(pl.col("total") > 0)
+
+    # Sort by total count descending for better visualization
+    repo_agg = repo_agg.sort("total", descending=True)
+
+    # Limit to top 20 repositories if there are too many for readability
+    if len(repo_agg) > 20:
+        repo_agg = repo_agg.head(20)
+        print(
+            f"Note: Showing top 20 repositories out of {len(repo_agg)} total repositories"
+        )
+
+    # Create separate records for each type
+    messages_df = repo_agg.select(
+        [
+            pl.col("repository"),
+            pl.lit("Messages").alias("type"),
+            pl.col("Messages").alias("count"),
+            pl.col("total"),
+        ]
+    )
+
+    enums_df = repo_agg.select(
+        [
+            pl.col("repository"),
+            pl.lit("Enums").alias("type"),
+            pl.col("Enums").alias("count"),
+            pl.col("total"),
+        ]
+    )
+
+    services_df = repo_agg.select(
+        [
+            pl.col("repository"),
+            pl.lit("Services").alias("type"),
+            pl.col("Services").alias("count"),
+            pl.col("total"),
+        ]
+    )
+
+    # Combine all type records
+    plot_df = pl.concat([messages_df, enums_df, services_df])
+
+    # Calculate percentages and positions for mosaic plot
+    plot_df = plot_df.with_columns(
+        (pl.col("count") / pl.col("total") * 100).alias("percentage")
+    )
+
+    # Calculate cumulative percentages for positioning
+    plot_df_sorted = plot_df.sort(["repository", "type"])
+
+    # Create position data for each segment
+    position_data = []
+    for repo in repo_agg["repository"]:
+        repo_data = plot_df.filter(pl.col("repository") == repo)
+        cumsum = 0
+        for row in repo_data.iter_rows(named=True):
+            y_start = cumsum
+            y_end = cumsum + row["percentage"]
+            position_data.append(
+                {
+                    "repository": repo,
+                    "type": row["type"],
+                    "count": row["count"],
+                    "percentage": row["percentage"],
+                    "y_start": y_start,
+                    "y_end": y_end,
+                    "y_mid": (y_start + y_end + 2) / 2,
+                    "total": row["total"],
+                    "label": [row["type"], str(row["count"])],
+                }
+            )
+            cumsum += row["percentage"]
+
+    mosaic_df = pl.DataFrame(position_data)
+
+    # Create base mosaic chart with rectangles
+    selection = alt.selection_point()
+    base_chart = (
+        alt.Chart(mosaic_df)
+        .add_params(selection)
+        .mark_rect(stroke="white", strokeWidth=2)
+        .encode(
+            x=alt.X(
+                "repository:N",
+                title="Repository",
+                sort=alt.Sort(field="total", order="descending"),
+                axis=alt.Axis(labelAngle=-45, labelLimit=200),
+            ),
+            y=alt.Y(
+                "y_start:Q",
+                scale=alt.Scale(domain=[0, 100]),
+                title="Percentage of Protobuf Elements",
+            ),
+            y2=alt.Y2("y_end:Q"),
+            color=alt.Color(
+                "type:N",
+                title="Element Type",
+                scale=alt.Scale(
+                    domain=["Messages", "Enums", "Services"],
+                    range=["#1f77b4", "#ff7f0e", "#2ca02c"],
+                ),
+            ),
+            tooltip=[
+                alt.Tooltip("repository:N", title="Repository"),
+                alt.Tooltip("type:N", title="Type"),
+                alt.Tooltip("count:Q", title="Count"),
+                alt.Tooltip("percentage:Q", title="Percentage", format=".1f"),
+                alt.Tooltip("total:Q", title="Total Elements"),
+            ],
+        )
+    )
+
+    # Add text labels for each cell
+    text_chart = (
+        alt.Chart(mosaic_df)
+        .mark_text(
+            align="center",
+            baseline="middle",
+            fontSize=10,
+            fontWeight="bold",
+            color="white",
+        )
+        .encode(
+            x=alt.X("repository:N", sort=alt.Sort(field="total", order="descending")),
+            y=alt.Y("y_mid:Q", scale=alt.Scale(domain=[0, 100])),
+            text=alt.condition(
+                alt.datum.percentage > 4,  # Only show labels if segment is large enough
+                alt.Text("label:N"),
+                alt.value(""),
+            ),
+        )
+    )
+
+    # Combine charts
+    chart = (
+        (base_chart + text_chart)
+        .properties(
+            width=max(600, min(1200, len(repo_agg) * 80)),
+            height=500,
+            title=[
+                "Protobuf Top LeveBreakdown by Repository",
+                f'Showing {len(repo_agg)} repositories with {plot_df["total"].sum() // 3} total elements',
+            ],
+        )
+        .resolve_scale(color="independent")
+    )
+
+    save_plot(chart, output_file)
 
     return chart
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Fetch commit history for .proto files in a GitHub repository or visualize existing data",
+        description="Run evalutation tasks for the Pollux project.",
         epilog="""
 Examples:
   # Fetch using GitHub API (fast, limited to 1000 files)
@@ -339,10 +651,10 @@ Examples:
   python eval.py compare mjschwenne grackle
 
   # Create visualizations from single file
-  python eval.py visualize data.json --type histogram --output plot.png
+  python eval.py visualize data.parquet --type commits --output plot.png
 
   # Create combined visualizations from multiple files
-  python eval.py visualize --type histogram mjschwenne-grackle.json googleapis-googleapis.json --output combined-histogram.png
+  python eval.py visualize --type commits mjschwenne-grackle.parquet googleapis-googleapis.parquet --output combined-histogram.png
 
 Note: GitHub API method requires GITHUB_TOKEN environment variable.
       Local method requires git but no token.
@@ -366,7 +678,7 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
     )
     _ = fetch_parser.add_argument(
         "--output",
-        help="Path to output the JSON summary. Defaults to <owner>-<repo>.json",
+        help="Path to output the Parquet file. Defaults to <owner>-<repo>.parquet",
     )
 
     # Subparser for comparing methods
@@ -378,18 +690,27 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
 
     # Subparser for visualization
     viz_parser = subparsers.add_parser(
-        "visualize", help="Create visualizations from JSON data"
+        "visualize", help="Create visualizations from Parquet data"
     )
     _ = viz_parser.add_argument(
-        "json_files",
+        "parquet_files",
         nargs="+",
-        help="Path(s) to JSON file(s) created by get_proto_history_json",
+        help="Path(s) to Parquet file(s) created by fetch command",
     )
     _ = viz_parser.add_argument(
         "--type",
-        choices=["histogram"],
-        default="histogram",
-        help="Type of plot to create (default: histogram)",
+        choices=[
+            "commits",
+            "messages",
+            "fields",
+            "enums",
+            "enum_vals",
+            "services",
+            "methods",
+            "breakdown",
+        ],
+        default="commits",
+        help="Type of plot to create (default: commits)",
     )
     _ = viz_parser.add_argument(
         "--output",
@@ -406,18 +727,18 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
 
     if args.command == "fetch":
         if args.output is None:
-            args.output = f"{args.owner}-{args.repo}.json"
+            args.output = f"{args.owner}-{args.repo}.parquet"
         if args.local:
             # Use local cloning method - no API limits
             print("Using local cloning method (no API limits, requires git)")
-            get_proto_history_json_local(args.owner, args.repo, args.output)
+            get_proto_history_parquet_local(args.owner, args.repo, args.output)
         else:
             # Use GitHub API method - limited to 1000 results
             print("Using GitHub API method (limited to 1000 proto files)")
             token = os.getenv("GITHUB_TOKEN")
             if token is None:
                 raise ValueError("GITHUB_TOKEN environment variable is not set")
-            get_proto_history_json(args.owner, args.repo, token, args.output)
+            get_proto_history_parquet(args.owner, args.repo, token, args.output)
 
     elif args.command == "compare":
         token = os.getenv("GITHUB_TOKEN")
@@ -431,61 +752,72 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
 
     elif args.command == "visualize":
         # Load and analyze data if verbose mode is requested
+        df = load_parquet_data(args.parquet_files)
+
         if args.verbose:
             print("Creating visualizations from proto commit history...")
-            print(f"Using data from: {', '.join(args.json_files)}")
+            print(f"Using data from: {', '.join(args.parquet_files)}")
 
-            # Load and examine all data files
-            all_commit_counts = []
-            all_file_commit_pairs = []
-            total_files = 0
-            total_commits = 0
+            # Calculate statistics
+            total_files = len(df)
+            total_repos = df["repository"].n_unique()
+            total_commits = df["commit_count"].sum()
+            mean_commits = df["commit_count"].mean()
+            min_commits = df["commit_count"].min()
+            max_commits = df["commit_count"].max()
+            std_commits = df["commit_count"].std()
 
-            for json_file in args.json_files:
-                with open(json_file, "r") as f:
-                    data = json.load(f)
-
-                repo_name = os.path.basename(json_file).replace(".json", "")
-                commit_counts = [len(commits) for commits in data.values()]
-                all_commit_counts.extend(commit_counts)
-
-                # Track per-repository stats
-                repo_total_files = len(data)
-                repo_total_commits = sum(commit_counts)
-                total_files += repo_total_files
-                total_commits += repo_total_commits
-
-                print(f"\n{repo_name} Summary:")
-                print(f"  Proto files: {repo_total_files}")
-                print(f"  Total commits: {repo_total_commits}")
-                print(f"  Average commits per file: {np.mean(commit_counts):.2f}")
-
-                # Collect file-commit pairs for global ranking
-                for file, commits in data.items():
-                    all_file_commit_pairs.append((f"{repo_name}:{file}", len(commits)))
-
-            # Print combined statistics
             print(f"\nCombined Data Summary:")
-            print(f"  Total repositories: {len(args.json_files)}")
+            print(f"  Total repositories: {total_repos}")
             print(f"  Total proto files: {total_files}")
             print(f"  Total commits: {total_commits}")
-            print(f"  Average commits per file: {np.mean(all_commit_counts):.2f}")
-            print(f"  Min commits per file: {min(all_commit_counts)}")
-            print(f"  Max commits per file: {max(all_commit_counts)}")
-            print(f"  Standard deviation: {np.std(all_commit_counts):.2f}")
+            print(f"  Average commits per file: {mean_commits:.2f}")
+            print(f"  Min commits per file: {min_commits}")
+            print(f"  Max commits per file: {max_commits}")
+            print(f"  Standard deviation: {std_commits:.2f}")
 
-            # Show top files across all repositories
-            all_file_commit_pairs.sort(key=lambda x: x[1], reverse=True)
-            print(f"\nTop files by commit count (across all repositories):")
-            for i, (file, count) in enumerate(all_file_commit_pairs[:5]):
-                print(f"  {i+1}. {file}: {count} commits")
+            # Show top files by commit count
+            top_files = df.sort("commit_count", descending=True).head(5)
+            print(f"\nTop files by commit count:")
+            for i, row in enumerate(top_files.iter_rows(named=True)):
+                print(
+                    f"  {i+1}. {row['repository']}:{row['proto_file']}: {row['commit_count']} commits"
+                )
             print()
 
         # Create the requested visualization
-        if args.type == "histogram":
+        if args.type == "commits":
             if args.verbose:
-                print("Creating combined histogram plot...")
-            plot_commit_histogram(args.json_files, args.output)
+                print("Creating commit histogram plot...")
+            plot_commit_histogram(df, args.output)
+        elif args.type == "messages":
+            if args.verbose:
+                print("Creating message histogram plot...")
+            plot_histogram(df, "message_count_total", "Messages", args.output)
+        elif args.type == "fields":
+            if args.verbose:
+                print("Creating files histogram plot...")
+            plot_histogram(df, "field_count_total", "Fields", args.output)
+        elif args.type == "enums":
+            if args.verbose:
+                print("Creating enums histogram plot...")
+            plot_histogram(df, "enum_count_total", "Enums", args.output)
+        elif args.type == "enum_vals":
+            if args.verbose:
+                print("Creating enum values histogram plot...")
+            plot_histogram(df, "enum_count_value", "Enum Values", args.output)
+        elif args.type == "services":
+            if args.verbose:
+                print("Creating services histogram plot...")
+            plot_histogram(df, "service_count_total", "Services", args.output)
+        elif args.type == "methods":
+            if args.verbose:
+                print("Creating methods histogram plot...")
+            plot_histogram(df, "method_count_total", "Methods", args.output)
+        elif args.type == "breakdown":
+            if args.verbose:
+                print("Creating protobuf type breakdown mosaic plot...")
+            plot_proto_type_breakdown(df, args.output)
 
         if args.verbose:
             print("\nVisualization complete!")
@@ -510,29 +842,25 @@ def compare_methods(owner: str, repo: str, github_token: str) -> bool:
     print(f"Comparing methods for {owner}/{repo}")
 
     # Save original files with temporary names
-    api_file = f"{owner}-{repo}-api.json"
-    local_file = f"{owner}-{repo}-local.json"
+    api_file = f"{owner}-{repo}-api.parquet"
+    local_file = f"{owner}-{repo}-local.parquet"
 
     try:
         # Get results from GitHub API
         print("Fetching via GitHub API...")
-        get_proto_history_json(owner, repo, github_token, api_file)
-        os.rename(f"{owner}-{repo}.json", api_file)
+        get_proto_history_parquet(owner, repo, github_token, api_file)
 
         # Get results from local cloning
         print("Fetching via local cloning...")
-        get_proto_history_json_local(owner, repo, local_file)
-        os.rename(f"{owner}-{repo}.json", local_file)
+        get_proto_history_parquet_local(owner, repo, local_file)
 
         # Load both results
-        with open(api_file, "r") as f:
-            api_data = json.load(f)
-        with open(local_file, "r") as f:
-            local_data = json.load(f)
+        api_df = pl.read_parquet(api_file)
+        local_df = pl.read_parquet(local_file)
 
         # Compare results
-        api_files = set(api_data.keys())
-        local_files = set(local_data.keys())
+        api_files = set(api_df["proto_file"].to_list())
+        local_files = set(local_df["proto_file"].to_list())
 
         print(f"API method found: {len(api_files)} files")
         print(f"Local method found: {len(local_files)} files")
@@ -547,8 +875,10 @@ def compare_methods(owner: str, repo: str, github_token: str) -> bool:
 
         inconsistent_files = []
         for file in common_files:
-            api_commits = set(api_data[file])
-            local_commits = set(local_data[file])
+            api_commits = set(api_df.filter(pl.col("proto_file") == file)["commits"][0])
+            local_commits = set(
+                local_df.filter(pl.col("proto_file") == file)["commits"][0]
+            )
             if api_commits != local_commits:
                 inconsistent_files.append(file)
                 print(f"Inconsistent commits for {file}:")

@@ -25,19 +25,19 @@ python eval.py fetch googleapis google-cloud-go
 python eval.py fetch googleapis google-cloud-go --local
 
 # Create histogram visualization from single repository
-python eval.py visualize data.json --type histogram --output single-repo.png
+python eval.py visualize data.parquet --type commits --output single-repo.png
 
 # Create combined histogram from multiple repositories
-python eval.py visualize --type histogram mjschwenne-grackle.json googleapis-googleapis.json --output combined-histogram.png
+python eval.py visualize --type commits mjschwenne-grackle.parquet googleapis-googleapis.parquet --output combined-histogram.png
 
-# Create KDE visualization from multiple repositories with verbose stats
-python eval.py visualize file1.json file2.json file3.json --type kde --verbose --output multi-repo-kde.html
+# Create message histogram visualization from multiple repositories with verbose stats
+python eval.py visualize file1.parquet file2.parquet file3.parquet --type messages --verbose --output multi-repo-messages.html
 
 # Analyze all repositories at once using glob pattern
-python eval.py visualize *.json --type histogram --verbose --output all-repos-analysis.html
+python eval.py visualize *.parquet --type commits --verbose --output all-repos-analysis.html
 
 # Get detailed statistics about combined datasets
-python eval.py visualize googleapis-googleapis.json samchon-typia.json --verbose
+python eval.py visualize googleapis-googleapis.parquet samchon-typia.parquet --verbose
 #+end_src
 
 *** Fetch Methods
@@ -60,10 +60,11 @@ python eval.py visualize googleapis-googleapis.json samchon-typia.json --verbose
 - Usage: =python eval.py compare owner repo=
 
 *** Visualization
-- Create histograms of commit distributions
-- Multi-repository analysis: combine data from multiple JSON files
-- Single repo: =python eval.py visualize data.json --type histogram --output plot.png=
-- Multi repo: =python eval.py visualize repo1.json repo2.json --type histogram --output combined.html=
+- Create histograms of commit distributions and message counts
+- Multi-repository analysis: combine data from multiple Parquet files
+- Single repo: =python eval.py visualize data.parquet --type commits --output plot.png=
+- Multi repo: =python eval.py visualize repo1.parquet repo2.parquet --type commits --output combined.html=
+- Message analysis: =python eval.py visualize data.parquet --type messages --output messages.png= (requires --local fetch)
 
 * Repos
 
@@ -74,7 +75,7 @@ protobuf language implementations.
 
 - [X] [[https://github.com/googleapis/googleapis][googleapis/googleapis]]
 - [X] [[https://github.com/googleapis/google-cloud-go][googleapis/google-cloud-go]]
-- [X] [[https://github.com/colinmarc/hdfs][colinmarc/hdfs]] 
+- [X] [[https://github.com/colinmarc/hdfs][colinmarc/hdfs]]
 - [X] [[https://github.com/etcd-io/etcd][etcd-io/etcd]]
 - [X] [[https://github.com/protocolbuffers/protobuf/tree/3a7ef796c8ec2328edf54851ada2b5ab7b6ddce0/rust/test][protocolbuffers/protobuf/rust]]
 - [X] [[https://github.com/protocolbuffers/protobuf-go/tree/master/internal/testprotos][protocolbuffers/protobuf-go]]
@@ -86,9 +87,9 @@ protobuf language implementations.
 - [X] [[https://github.com/twitchtv/twirp][twitchtv/twirp]]
 - [X] [[https://github.com/asynkron/protoactor-go][asynkron/protoactor-go]]
 - [X] [[https://github.com/samchon/typia][samchon/typia]]
-- [ ] [[https://github.com/uber/prototool][uber/prototool]]
+- [X] [[https://github.com/uber/prototool][uber/prototool]]
 - [X] [[https://github.com/streamdal/plumber][streamdal/plumber]]
-- [ ] [[https://github.com/google/rejoiner][google/rejoiner]]
+- [X] [[https://github.com/google/rejoiner][google/rejoiner]]
 
 Not GitHub:
 
