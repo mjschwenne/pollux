@@ -227,14 +227,16 @@ def get_proto_history_parquet_local(
                                 subprocess.CalledProcessError,
                                 json.JSONDecodeError,
                                 KeyError,
-                            ):
+                            ) as e:
                                 # If pollux stats fail, continue without them
+                                print(e)
                                 pass
 
                         data_rows.append(row_data)
 
-                    except subprocess.CalledProcessError:
+                    except subprocess.CalledProcessError as e:
                         # If git log fails for a file, add empty entry
+                        print(e)
                         data_rows.append(
                             {
                                 "repository": f"{owner}/{repo}",
@@ -636,6 +638,128 @@ def plot_proto_type_breakdown(
     return chart
 
 
+def plot_field_type_distribution(
+    df: pl.DataFrame, output_file: str | None = None
+) -> alt.Chart:
+    """
+    Creates a bar chart showing the distribution of field types across all proto files.
+    Groups varint types (int64, int32, uint64, uint32, sint32, sint64) into a single "varints" category.
+
+    Args:
+        df: Polars DataFrame containing protobuf data with field_count_* columns
+        output_file: Optional path to save the plot. Format determined by file extension (.png, .html, etc.)
+
+    Returns:
+        Altair Chart object
+    """
+    # Define field type columns to include (excluding total, implicit, optional, repeated)
+    field_type_columns = [
+        "field_count_double",
+        "field_count_float",
+        "field_count_int64",
+        "field_count_uint64",
+        "field_count_int32",
+        "field_count_fixed64",
+        "field_count_fixed32",
+        "field_count_bool",
+        "field_count_string",
+        "field_count_message",
+        "field_count_bytes",
+        "field_count_uint32",
+        "field_count_enum",
+        "field_count_sfixed64",
+        "field_count_sfixed32",
+        "field_count_sint64",
+        "field_count_sint32",
+        "field_count_oneof",
+    ]
+
+    # Check that required columns exist
+    missing_cols = [col for col in field_type_columns if col not in df.columns]
+    if missing_cols:
+        raise ValueError(
+            f"Missing required columns: {missing_cols}. Make sure to use --local flag when fetching to get full stats."
+        )
+
+    # Varint types to group together
+    varint_columns = [
+        "field_count_int64",
+        "field_count_int32",
+        "field_count_uint64",
+        "field_count_uint32",
+        "field_count_sint32",
+        "field_count_sint64",
+    ]
+
+    # Calculate total counts for each field type across all files
+    field_totals = {}
+
+    # Sum varint types together
+    varint_total = sum(df[col].sum() for col in varint_columns)
+    field_totals["varints"] = varint_total
+
+    # Sum other field types individually
+    for col in field_type_columns:
+        if col not in varint_columns:
+            # Extract the type name from column name (e.g., "field_count_double" -> "double")
+            type_name = col.replace("field_count_", "")
+            field_totals[type_name] = df[col].sum()
+
+    # Create DataFrame for plotting
+    plot_data = pl.DataFrame({
+        "field_type": list(field_totals.keys()),
+        "count": list(field_totals.values())
+    })
+
+    # Filter out types with zero counts
+    plot_data = plot_data.filter(pl.col("count") > 0)
+
+    # Sort by count descending
+    plot_data = plot_data.sort("count", descending=True)
+
+    # Calculate total fields and percentages
+    total_fields = plot_data["count"].sum()
+    plot_data = plot_data.with_columns(
+        (pl.col("count") / total_fields * 100).alias("percentage")
+    )
+
+    # Create bar chart
+    chart = (
+        alt.Chart(plot_data)
+        .mark_bar(color="steelblue")
+        .encode(
+            x=alt.X(
+                "field_type:N",
+                title="Field Type",
+                sort="-y",
+                axis=alt.Axis(labelAngle=-45, labelLimit=150),
+            ),
+            y=alt.Y(
+                "count:Q",
+                title="Total Count Across All Proto Files",
+            ),
+            tooltip=[
+                alt.Tooltip("field_type:N", title="Field Type"),
+                alt.Tooltip("count:Q", title="Count", format=","),
+                alt.Tooltip("percentage:Q", title="Percentage", format=".2f"),
+            ],
+        )
+        .properties(
+            width=600,
+            height=400,
+            title=[
+                "Distribution of Protobuf Field Types",
+                f"{total_fields:,} fields across {len(df)} files from {df['repository'].n_unique()} repositories",
+                "(varint types grouped together)",
+            ],
+        )
+    )
+
+    save_plot(chart, output_file)
+
+    return chart
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Run evalutation tasks for the Pollux project.",
@@ -708,6 +832,7 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
             "services",
             "methods",
             "breakdown",
+            "field_types",
         ],
         default="commits",
         help="Type of plot to create (default: commits)",
@@ -818,6 +943,10 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
             if args.verbose:
                 print("Creating protobuf type breakdown mosaic plot...")
             plot_proto_type_breakdown(df, args.output)
+        elif args.type == "field_types":
+            if args.verbose:
+                print("Creating field type distribution bar chart...")
+            plot_field_type_distribution(df, args.output)
 
         if args.verbose:
             print("\nVisualization complete!")
