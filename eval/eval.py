@@ -1,17 +1,31 @@
-from polars.functions.lazy import n_unique
 import requests
 import time
 import argparse
 from rich.progress import Progress
-from rich.pretty import pprint
 import altair as alt
 import polars as pl
-import numpy as np
 
 import os
 import tempfile
 import subprocess
 import json
+
+REPOS = [
+    ("googleapis", "googleapis"),
+    ("googleapis", "google-cloud-go"),
+    ("colinmarc", "hdfs"),
+    ("protocolbuffers", "protobuf"),
+    ("google", "protobuf.dart"),
+    ("bufbuild", "buf"),
+    ("go-kratos", "kratos"),
+    ("cloudwego", "kitex"),
+    ("twitchtv", "twirp"),
+    ("asynkron", "protoactor-go"),
+    ("samchon", "typia"),
+    ("uber", "prototool"),
+    ("streamdal", "plumber"),
+    ("google", "rejoiner"),
+]
 
 
 def locate_pollux() -> str:
@@ -393,7 +407,7 @@ def plot_histogram(
 
     if attr not in df.columns:
         raise ValueError(
-            f"'{attr}' columns not found in data. Make sure to use --local flag when fetching to get full stats."
+            f"'{attr}' columns not found in data. Exclude the --api flag when fetching to get full stats."
         )
 
     mean = df[attr].mean()
@@ -678,7 +692,7 @@ def plot_field_type_distribution(
     missing_cols = [col for col in field_type_columns if col not in df.columns]
     if missing_cols:
         raise ValueError(
-            f"Missing required columns: {missing_cols}. Make sure to use --local flag when fetching to get full stats."
+            f"Missing required columns: {missing_cols}. Exclude the --api flag when fetching to get full stats."
         )
 
     # Varint types to group together
@@ -706,10 +720,9 @@ def plot_field_type_distribution(
             field_totals[type_name] = df[col].sum()
 
     # Create DataFrame for plotting
-    plot_data = pl.DataFrame({
-        "field_type": list(field_totals.keys()),
-        "count": list(field_totals.values())
-    })
+    plot_data = pl.DataFrame(
+        {"field_type": list(field_totals.keys()), "count": list(field_totals.values())}
+    )
 
     # Filter out types with zero counts
     plot_data = plot_data.filter(pl.col("count") > 0)
@@ -766,10 +779,10 @@ def main():
         epilog="""
 Examples:
   # Fetch using GitHub API (fast, limited to 1000 files)
-  python eval.py fetch googleapis google-cloud-go
+  python eval.py fetch --api googleapis google-cloud-go
 
   # Fetch using local cloning (no limits, slower)
-  python eval.py fetch googleapis googleapis --local
+  python eval.py fetch googleapis googleapis
 
   # Compare both methods
   python eval.py compare mjschwenne grackle
@@ -793,16 +806,22 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
     _ = fetch_parser = subparsers.add_parser(
         "fetch", help="Fetch commit history from GitHub"
     )
-    _ = fetch_parser.add_argument("owner", help="GitHub repository owner/username")
-    _ = fetch_parser.add_argument("repo", help="GitHub repository name")
+    ty = fetch_parser.add_mutually_exclusive_group(required=True)
+    _ = ty.add_argument("--all", action="store_true")
+    _ = ty.add_argument("--repo", nargs=2)
     _ = fetch_parser.add_argument(
-        "--local",
+        "--api",
         action="store_true",
-        help="Clone repository locally to bypass API limits. Use this for large repos with >1000 proto files or extensive commit histories. Requires git but no GitHub token.",
+        help="Perform a limited analysis using the GitHub REST API. Doesn't download anything, but does require GITHUB_TOKEN env var to be set.",
+    )
+    _ = fetch_parser.add_argument(
+        "--cache",
+        nargs=1,
+        help="Add repos to the cache (if needed), then generate stats",
     )
     _ = fetch_parser.add_argument(
         "--output",
-        help="Path to output the Parquet file. Defaults to <owner>-<repo>.parquet",
+        help="Path to output the Parquet file in. Each repo will be output as <owner>-<repo>.parquet",
     )
 
     # Subparser for comparing methods
@@ -851,19 +870,26 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
     args = parser.parse_args()
 
     if args.command == "fetch":
-        if args.output is None:
-            args.output = f"{args.owner}-{args.repo}.parquet"
-        if args.local:
-            # Use local cloning method - no API limits
-            print("Using local cloning method (no API limits, requires git)")
-            get_proto_history_parquet_local(args.owner, args.repo, args.output)
+        print(f"{args=}")
+        if args.all:
+            print("Fetch all repos")
+            fetch_repos = REPOS
         else:
-            # Use GitHub API method - limited to 1000 results
-            print("Using GitHub API method (limited to 1000 proto files)")
-            token = os.getenv("GITHUB_TOKEN")
-            if token is None:
-                raise ValueError("GITHUB_TOKEN environment variable is not set")
-            get_proto_history_parquet(args.owner, args.repo, token, args.output)
+            fetch_repos = [(args.repo[0], args.repo[1])]
+        for r in fetch_repos:
+            if args.output is None:
+                args.output = f"{r[0]}-{r[1]}.parquet"
+            if args.api:
+                # Use GitHub API method - limited to 1000 results
+                print("Using GitHub API method (limited to 1000 proto files)")
+                token = os.getenv("GITHUB_TOKEN")
+                if token is None:
+                    raise ValueError("GITHUB_TOKEN environment variable is not set")
+                get_proto_history_parquet(r[0], r[1], token, args.output)
+            else:
+                # Use local cloning method - no API limits
+                print("Using local cloning method (no API limits, requires git)")
+                get_proto_history_parquet_local(r[0], r[1], args.output)
 
     elif args.command == "compare":
         token = os.getenv("GITHUB_TOKEN")
