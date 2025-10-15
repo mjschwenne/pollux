@@ -141,7 +141,7 @@ def get_proto_history_parquet(
 
 
 def get_proto_history_parquet_local(
-    owner: str, repo: str, output_filename: str
+    owner: str, repo: str, output_filename: str, cache_dir: str | None = None
 ) -> None:
     """
     Clones a repository locally to extract commit history for all .proto files.
@@ -151,32 +151,93 @@ def get_proto_history_parquet_local(
         owner: GitHub repository owner.
         repo: GitHub repository name.
         output_filename: Path to save the parquet file.
+        cache_dir: Optional cache directory path. If provided, repos are cached as <owner>-<repo>.
+                   If None, uses temporary directory.
     """
-    # Create temporary directory
-    with tempfile.TemporaryDirectory() as temp_dir:
-        repo_url = f"https://github.com/{owner}/{repo}.git"
-        repo_path = os.path.join(temp_dir, repo)
+    repo_url = f"https://github.com/{owner}/{repo}.git"
+    repo_name = f"{owner}-{repo}"
 
-        print(f"Cloning {repo_url}...")
-        try:
-            _ = subprocess.run(
-                ["git", "clone", repo_url, repo_path],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-        except subprocess.CalledProcessError as e:
-            print(f"Error cloning repository: {e}")
-            return
+    # Determine if we should use cache or temporary directory
+    if cache_dir:
+        # Use cache directory
+        os.makedirs(cache_dir, exist_ok=True)
+        repo_path = os.path.join(cache_dir, repo_name)
 
-        pollux_bin = locate_pollux()
+        if os.path.exists(repo_path):
+            print(f"Using cached repository at {repo_path}")
+            # Update the repository to ensure it's current
+            try:
+                print(f"Updating cached repository...")
+                _ = subprocess.run(
+                    ["git", "-C", repo_path, "fetch", "--all"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                _ = subprocess.run(
+                    ["git", "-C", repo_path, "reset", "--hard", "origin/HEAD"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"Error updating cached repository: {e}")
+                print(f"Will try to use cached version as-is")
+        else:
+            print(f"Cloning {repo_url} to cache...")
+            try:
+                _ = subprocess.run(
+                    ["git", "clone", repo_url, repo_path],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"Error cloning repository: {e}")
+                return
 
-        # Change to repo directory
-        original_cwd = os.getcwd()
-        os.chdir(repo_path)
+        # Process the cached repository
+        _process_repo_for_stats(owner, repo, repo_path, output_filename)
+    else:
+        # Use temporary directory (original behavior)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_path = os.path.join(temp_dir, repo)
 
-        try:
-            # Find all .proto files
+            print(f"Cloning {repo_url}...")
+            try:
+                _ = subprocess.run(
+                    ["git", "clone", repo_url, repo_path],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"Error cloning repository: {e}")
+                return
+
+            _process_repo_for_stats(owner, repo, repo_path, output_filename)
+
+
+def _process_repo_for_stats(
+    owner: str, repo: str, repo_path: str, output_filename: str
+) -> None:
+    """
+    Helper function to process a git repository and extract proto file statistics.
+
+    Args:
+        owner: GitHub repository owner.
+        repo: GitHub repository name.
+        repo_path: Path to the cloned repository.
+        output_filename: Path to save the parquet file.
+    """
+    pollux_bin = locate_pollux()
+
+    # Change to repo directory
+    original_cwd = os.getcwd()
+    os.chdir(repo_path)
+
+    try:
+        # Find all .proto files
             print("Finding .proto files...")
             result = subprocess.run(
                 ["find", ".", "-name", "*.proto", "-type", "f"],
@@ -262,14 +323,14 @@ def get_proto_history_parquet_local(
 
                     progress.update(task, advance=1)
 
-        finally:
-            # Return to original directory
-            os.chdir(original_cwd)
+    finally:
+        # Return to original directory
+        os.chdir(original_cwd)
 
-        # Create DataFrame and save as Parquet
-        df = pl.DataFrame(data_rows)
-        df.write_parquet(output_filename)
-        print(f"\n\nSaved commit history to {output_filename}")
+    # Create DataFrame and save as Parquet
+    df = pl.DataFrame(data_rows)
+    df.write_parquet(output_filename)
+    print(f"\n\nSaved commit history to {output_filename}")
 
 
 def load_parquet_data(parquet_files: list[str]) -> pl.DataFrame:
@@ -807,8 +868,8 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
         "fetch", help="Fetch commit history from GitHub"
     )
     ty = fetch_parser.add_mutually_exclusive_group(required=True)
-    _ = ty.add_argument("--all", action="store_true")
-    _ = ty.add_argument("--repo", nargs=2)
+    _ = ty.add_argument("--all", action="store_true", help="Fetch data from all repositories")
+    _ = ty.add_argument("--repo", nargs=2, help="Fetch data from a specific repository")
     _ = fetch_parser.add_argument(
         "--api",
         action="store_true",
@@ -816,8 +877,8 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
     )
     _ = fetch_parser.add_argument(
         "--cache",
-        nargs=1,
-        help="Add repos to the cache (if needed), then generate stats",
+        type=str,
+        help="Cache directory path. Repos will be cached as <owner>-<repo>. If not provided, uses temporary directory.",
     )
     _ = fetch_parser.add_argument(
         "--output",
@@ -876,20 +937,29 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
             fetch_repos = REPOS
         else:
             fetch_repos = [(args.repo[0], args.repo[1])]
+
+        cache_dir = args.cache if hasattr(args, 'cache') else None
+
         for r in fetch_repos:
             if args.output is None:
-                args.output = f"{r[0]}-{r[1]}.parquet"
+                output_file = f"{r[0]}-{r[1]}.parquet"
+            else:
+                output_file = os.path.join(args.output, f"{r[0]}-{r[1]}.parquet")
+
             if args.api:
                 # Use GitHub API method - limited to 1000 results
                 print("Using GitHub API method (limited to 1000 proto files)")
                 token = os.getenv("GITHUB_TOKEN")
                 if token is None:
                     raise ValueError("GITHUB_TOKEN environment variable is not set")
-                get_proto_history_parquet(r[0], r[1], token, args.output)
+                get_proto_history_parquet(r[0], r[1], token, output_file)
             else:
                 # Use local cloning method - no API limits
-                print("Using local cloning method (no API limits, requires git)")
-                get_proto_history_parquet_local(r[0], r[1], args.output)
+                if cache_dir:
+                    print(f"Using local cloning method with cache directory: {cache_dir}")
+                else:
+                    print("Using local cloning method (no API limits, requires git)")
+                get_proto_history_parquet_local(r[0], r[1], output_file, cache_dir)
 
     elif args.command == "compare":
         token = os.getenv("GITHUB_TOKEN")
