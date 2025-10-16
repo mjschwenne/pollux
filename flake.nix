@@ -75,6 +75,10 @@
                     rich
                   ]))
 
+                # nushell is great for command line polars queries
+                nushell
+                nushellPlugins.polars
+
                 # nix helpers
                 nix-update
               ]

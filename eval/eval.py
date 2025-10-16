@@ -6,6 +6,7 @@ import altair as alt
 import polars as pl
 
 import os
+import sys
 import tempfile
 import subprocess
 import json
@@ -15,6 +16,7 @@ REPOS = [
     ("googleapis", "google-cloud-go"),
     ("colinmarc", "hdfs"),
     ("protocolbuffers", "protobuf"),
+    ("protocolbuffers", "protobuf-go"),
     ("google", "protobuf.dart"),
     ("bufbuild", "buf"),
     ("go-kratos", "kratos"),
@@ -141,7 +143,11 @@ def get_proto_history_parquet(
 
 
 def get_proto_history_parquet_local(
-    owner: str, repo: str, output_filename: str, cache_dir: str | None = None
+    owner: str,
+    repo: str,
+    output_filename: str,
+    cache_dir: str | None = None,
+    error_log: str | None = None,
 ) -> None:
     """
     Clones a repository locally to extract commit history for all .proto files.
@@ -153,6 +159,7 @@ def get_proto_history_parquet_local(
         output_filename: Path to save the parquet file.
         cache_dir: Optional cache directory path. If provided, repos are cached as <owner>-<repo>.
                    If None, uses temporary directory.
+        error_log: Optional path to log errors to disk.
     """
     repo_url = f"https://github.com/{owner}/{repo}.git"
     repo_name = f"{owner}-{repo}"
@@ -197,7 +204,7 @@ def get_proto_history_parquet_local(
                 return
 
         # Process the cached repository
-        _process_repo_for_stats(owner, repo, repo_path, output_filename)
+        _process_repo_for_stats(owner, repo, repo_path, output_filename, error_log)
     else:
         # Use temporary directory (original behavior)
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -215,11 +222,15 @@ def get_proto_history_parquet_local(
                 print(f"Error cloning repository: {e}")
                 return
 
-            _process_repo_for_stats(owner, repo, repo_path, output_filename)
+            _process_repo_for_stats(owner, repo, repo_path, output_filename, error_log)
 
 
 def _process_repo_for_stats(
-    owner: str, repo: str, repo_path: str, output_filename: str
+    owner: str,
+    repo: str,
+    repo_path: str,
+    output_filename: str,
+    error_log: str | None = None,
 ) -> None:
     """
     Helper function to process a git repository and extract proto file statistics.
@@ -229,99 +240,154 @@ def _process_repo_for_stats(
         repo: GitHub repository name.
         repo_path: Path to the cloned repository.
         output_filename: Path to save the parquet file.
+        error_log: Optional path to log errors to disk.
     """
     pollux_bin = locate_pollux()
 
     # Change to repo directory
     original_cwd = os.getcwd()
+
+    # Convert error_log to absolute path before changing directories
+    if error_log:
+        error_log = os.path.abspath(error_log)
+
     os.chdir(repo_path)
 
     try:
         # Find all .proto files
-            print("Finding .proto files...")
-            result = subprocess.run(
-                ["find", ".", "-name", "*.proto", "-type", "f"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            proto_files = [
-                f.strip().lstrip("./")
-                for f in result.stdout.strip().split("\n")
-                if f.strip()
-            ]
-            nproto = len(proto_files)
-            print(f"Found {nproto} proto files in {owner}/{repo}")
+        print("Finding .proto files...")
+        result = subprocess.run(
+            ["find", ".", "-name", "*.proto", "-type", "f"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        proto_files = [
+            f.strip().lstrip("./")
+            for f in result.stdout.strip().split("\n")
+            if f.strip()
+        ]
+        nproto = len(proto_files)
+        print(f"Found {nproto} proto files in {owner}/{repo}")
 
-            # Initialize data for DataFrame
-            data_rows = []
+        # Initialize data for DataFrame
+        data_rows = []
 
-            # Get commit history for each .proto file
-            with Progress() as progress:
-                task = progress.add_task(
-                    "[green]Processing proto files...", total=nproto
-                )
+        # Open error log file once if specified
+        error_log_file = None
+        if error_log:
+            try:
+                error_log_file = open(error_log, "a")
+            except IOError as log_err:
+                print(f"Failed to open error log file: {log_err}", file=sys.stderr)
+                error_log_file = None
 
-                for file in proto_files:
-                    try:
-                        # Get commit hashes for this file
-                        result = subprocess.run(
-                            ["git", "log", "--format=%H", "--", file],
-                            capture_output=True,
-                            text=True,
-                            check=True,
-                        )
-                        commit_hashes = [
-                            h.strip()
-                            for h in result.stdout.strip().split("\n")
-                            if h.strip()
-                        ]
+        # Get commit history for each .proto file
+        with Progress() as progress:
+            task = progress.add_task("[green]Processing proto files...", total=nproto)
 
-                        # Initialize row data
-                        row_data = {
+            for file in proto_files:
+                try:
+                    # Get commit hashes for this file
+                    result = subprocess.run(
+                        ["git", "log", "--format=%H", "--", file],
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    )
+                    commit_hashes = [
+                        h.strip()
+                        for h in result.stdout.strip().split("\n")
+                        if h.strip()
+                    ]
+
+                    # Initialize row data
+                    row_data = {
+                        "repository": f"{owner}/{repo}",
+                        "proto_file": file,
+                        "commits": commit_hashes,
+                        "commit_count": len(commit_hashes),
+                    }
+
+                    # Get stats file if pollux is available
+                    if pollux_bin:
+                        try:
+                            stats_json = subprocess.run(
+                                [pollux_bin, "stats", file],
+                                capture_output=True,
+                                text=True,
+                                check=True,
+                            )
+                            stats = json.loads(stats_json.stdout)
+                            if file in stats:
+                                # Add pollux stats to row data
+                                row_data.update(stats[file])
+                        except subprocess.CalledProcessError as e:
+                            # Capture and report stderr from pollux
+                            # Print to stderr with repo context
+                            print(
+                                f"[{owner}/{repo}] Error in file: {file}",
+                                file=sys.stderr,
+                            )
+                            if e.stderr:
+                                print(e.stderr, file=sys.stderr)
+                            else:
+                                print(
+                                    f"Command '{' '.join(e.cmd)}' returned non-zero exit status {e.returncode}",
+                                    file=sys.stderr,
+                                )
+
+                            # Log to file if error_log is specified
+                            if error_log_file:
+                                try:
+                                    error_log_file.write(f"[{owner}/{repo}] ")
+                                    if e.stderr:
+                                        error_log_file.write(e.stderr)
+                                        if not e.stderr.endswith("\n"):
+                                            error_log_file.write("\n")
+                                    else:
+                                        error_log_file.write(
+                                            f"Command '{' '.join(e.cmd)}' returned non-zero exit status {e.returncode}\n"
+                                        )
+                                    error_log_file.flush()
+                                except IOError as log_err:
+                                    print(
+                                        f"Failed to write to error log: {log_err}",
+                                        file=sys.stderr,
+                                    )
+                        except (json.JSONDecodeError, KeyError) as e:
+                            # If JSON parsing fails, continue without stats
+                            error_msg = f"[{owner}/{repo}] Error parsing pollux stats output for {file}: {e}"
+                            print(error_msg, file=sys.stderr)
+                            if error_log_file:
+                                try:
+                                    error_log_file.write(f"{error_msg}\n")
+                                    error_log_file.flush()
+                                except IOError:
+                                    pass
+
+                    data_rows.append(row_data)
+
+                except subprocess.CalledProcessError as e:
+                    # If git log fails for a file, add empty entry
+                    print(e)
+                    data_rows.append(
+                        {
                             "repository": f"{owner}/{repo}",
                             "proto_file": file,
-                            "commits": commit_hashes,
-                            "commit_count": len(commit_hashes),
+                            "commits": [],
+                            "commit_count": 0,
                         }
+                    )
 
-                        # Get stats file if pollux is available
-                        if pollux_bin:
-                            try:
-                                stats_json = subprocess.run(
-                                    [pollux_bin, "stats", file],
-                                    capture_output=True,
-                                    text=True,
-                                    check=True,
-                                )
-                                stats = json.loads(stats_json.stdout)
-                                if file in stats:
-                                    # Add pollux stats to row data
-                                    row_data.update(stats[file])
-                            except (
-                                subprocess.CalledProcessError,
-                                json.JSONDecodeError,
-                                KeyError,
-                            ) as e:
-                                # If pollux stats fail, continue without them
-                                print(e)
-                                pass
+                progress.update(task, advance=1)
 
-                        data_rows.append(row_data)
-
-                    except subprocess.CalledProcessError as e:
-                        # If git log fails for a file, add empty entry
-                        print(e)
-                        data_rows.append(
-                            {
-                                "repository": f"{owner}/{repo}",
-                                "proto_file": file,
-                                "commits": [],
-                                "commit_count": 0,
-                            }
-                        )
-
-                    progress.update(task, advance=1)
+        # Close error log file if it was opened
+        if error_log_file:
+            try:
+                error_log_file.close()
+            except IOError:
+                pass
 
     finally:
         # Return to original directory
@@ -329,6 +395,20 @@ def _process_repo_for_stats(
 
     # Create DataFrame and save as Parquet
     df = pl.DataFrame(data_rows)
+
+    # Add "useful" column: files with more than one commit and at least some fields or enum vals defined
+    df = df.with_columns(
+        useful=pl.when(
+            pl.col("commits").list.len().gt(pl.lit(1))
+            & (
+                pl.col("field_count_total").gt(pl.lit(0))
+                | pl.col("enum_count_total").gt(pl.lit(0))
+            )
+        )
+        .then(pl.lit(True))
+        .otherwise(pl.lit(False))
+    )
+
     df.write_parquet(output_filename)
     print(f"\n\nSaved commit history to {output_filename}")
 
@@ -388,10 +468,12 @@ def plot_commit_histogram(
     df: pl.DataFrame, output_file: str | None = None
 ) -> alt.Chart | alt.LayerChart:
     """
-    Creates a histogram showing the distribution of commits per proto file.
+    Creates a stacked histogram showing the distribution of commits per proto file,
+    grouped by usefulness. Useful files are shown at the bottom, with not useful files
+    stacked on top in red.
 
     Args:
-        parquet_files: List of paths to parquet files.
+        df: Polars DataFrame with commit_count and useful columns.
         output_file: Optional path to save the plot. Format determined by file extension (.png, .html, etc.)
 
     Returns:
@@ -401,21 +483,94 @@ def plot_commit_histogram(
     mean_commits = df["commit_count"].mean()
     total_files = len(df)
     total_repos = df["repository"].n_unique()
+    useful_count = df.filter(pl.col("useful") == True).shape[0]
+    not_useful_count = df.filter(pl.col("useful") == False).shape[0]
 
-    # Create base chart - use the dataframe directly
-    base = alt.Chart(df)
+    # Add a label column for better display
+    df_with_label = df.with_columns(
+        pl.when(pl.col("useful"))
+        .then(pl.lit("Useful"))
+        .otherwise(pl.lit("Not Useful"))
+        .alias("usefulness_label")
+    )
 
+    # Pre-aggregate data to avoid rendering artifacts
+    # Bin the data manually and count by usefulness
+    min_val = df["commit_count"].min()
+    max_val = df["commit_count"].max()
+    bin_width = max(1, (max_val - min_val) / 20)
+
+    aggregated_df = (
+        df_with_label.with_columns(
+            (
+                ((pl.col("commit_count") - min_val) / bin_width).floor().cast(pl.Int64)
+            ).alias("bin_index")
+        )
+        .group_by(["bin_index", "usefulness_label"])
+        .agg(pl.len().alias("count"))
+        .with_columns(
+            ((pl.col("bin_index") * bin_width) + min_val).alias("bin_start"),
+            (((pl.col("bin_index") + 1) * bin_width) + min_val).alias("bin_end"),
+        )
+        .sort(["bin_start", "usefulness_label"])
+    )
+
+    # Calculate cumulative positions for stacking
+    # Filter out null bin indices to avoid comparison warnings
+    aggregated_df = aggregated_df.filter(pl.col("bin_index").is_not_null())
+    stacked_df = []
+    for bin_idx in aggregated_df["bin_index"].unique().sort():
+        bin_data = aggregated_df.filter(pl.col("bin_index") == bin_idx).sort(
+            "usefulness_label", descending=True
+        )
+        cumsum = 0
+        for row in bin_data.iter_rows(named=True):
+            y_start = cumsum
+            y_end = cumsum + row["count"]
+            stacked_df.append(
+                {
+                    "bin_start": row["bin_start"],
+                    "bin_end": row["bin_end"],
+                    "usefulness_label": row["usefulness_label"],
+                    "count": row["count"],
+                    "y_start": y_start,
+                    "y_end": y_end,
+                }
+            )
+            cumsum = y_end
+
+    aggregated_df = pl.DataFrame(stacked_df)
+
+    # Create stacked bar chart from pre-aggregated data
     histogram = (
-        base.mark_bar(color="steelblue")
+        alt.Chart(aggregated_df)
+        .mark_rect()
         .encode(
             alt.X(
-                "commit_count:Q",
-                bin=alt.Bin(maxbins=20, minstep=1),
+                "bin_start:Q",
                 title="Number of Commits per Proto File",
                 axis=alt.Axis(tickMinStep=1, format=".0f"),
+                scale=alt.Scale(domain=[min_val, max_val]),
             ),
-            alt.Y("count()", title="Number of Proto Files"),
-            tooltip=["count()", "commit_count:Q"],
+            alt.X2("bin_end:Q"),
+            alt.Y(
+                "y_start:Q", title="Number of Proto Files", axis=alt.Axis(grid=False)
+            ),
+            alt.Y2("y_end:Q"),
+            alt.Color(
+                "usefulness_label:N",
+                title="File Type",
+                scale=alt.Scale(
+                    domain=["Useful", "Not Useful"], range=["steelblue", "red"]
+                ),
+                sort=["Useful", "Not Useful"],
+            ),
+            order=alt.Order("usefulness_label:N", sort="descending"),
+            tooltip=[
+                alt.Tooltip("usefulness_label:N", title="Type"),
+                alt.Tooltip("count:Q", title="Count"),
+                alt.Tooltip("bin_start:Q", title="Commits (bin start)"),
+            ],
         )
         .properties(
             width=600,
@@ -423,27 +578,28 @@ def plot_commit_histogram(
             title=[
                 f"Distribution of Commits per Proto File",
                 f"{total_files} files from {total_repos} repositories (Mean: {mean_commits:.2f})",
+                f"Useful: {useful_count}, Not Useful: {not_useful_count}",
             ],
         )
     )
 
-    # Create vertical line for mean with legend
+    # Create vertical line for mean
     mean_df = pl.DataFrame({"mean": [mean_commits], "legend": ["Mean"]})
     mean_line = (
         alt.Chart(mean_df)
-        .mark_rule(color="red", strokeWidth=2, strokeDash=[5, 5])
+        .mark_rule(color="orange", strokeWidth=2, strokeDash=[5, 5])
         .encode(
             x=alt.X("mean:Q", axis=alt.Axis(tickMinStep=1)),
             color=alt.Color(
                 "legend:N",
-                scale=alt.Scale(range=["red"]),
+                scale=alt.Scale(range=["orange"]),
                 legend=alt.Legend(title="Statistics"),
             ),
         )
     )
 
-    # Combine histogram and mean line
-    chart = histogram + mean_line
+    # Combine histogram and mean line with independent color scales
+    chart = (histogram + mean_line).resolve_scale(color="independent")
 
     # Save or display
     save_plot(chart, output_file)
@@ -455,11 +611,14 @@ def plot_histogram(
     df: pl.DataFrame, attr: str, attr_name: str, output_file: str | None = None
 ) -> alt.Chart | alt.LayerChart:
     """
-    Creates a histogram showing the distribution the given dataframe attribute.
+    Creates a stacked histogram showing the distribution the given dataframe attribute,
+    grouped by usefulness. Useful files are shown at the bottom, with not useful files
+    stacked on top in red.
 
     Args:
         df: Loaded data frame
         attr: The column name in df to plot
+        attr_name: Human-readable name for the attribute
         output_file: Optional path to save the plot. Format determined by file extension (.png, .html, etc.)
 
     Returns:
@@ -472,21 +631,94 @@ def plot_histogram(
         )
 
     mean = df[attr].mean()
+    useful_count = df.filter(pl.col("useful") == True).shape[0]
+    not_useful_count = df.filter(pl.col("useful") == False).shape[0]
 
-    base = alt.Chart(df)
-    alt_attr = f"{attr}:Q"
+    # Add a label column for better display
+    df_with_label = df.with_columns(
+        pl.when(pl.col("useful"))
+        .then(pl.lit("Useful"))
+        .otherwise(pl.lit("Not Useful"))
+        .alias("usefulness_label")
+    )
+
+    # Pre-aggregate data to avoid rendering artifacts
+    # Bin the data manually and count by usefulness
+    min_val = df[attr].min()
+    max_val = df[attr].max()
+    attr_range = max_val - min_val
+    bin_width = max(1, attr_range / 20) if attr_range > 0 else 1
+
+    aggregated_df = (
+        df_with_label.with_columns(
+            (((pl.col(attr) - min_val) / bin_width).floor().cast(pl.Int64)).alias(
+                "bin_index"
+            )
+        )
+        .group_by(["bin_index", "usefulness_label"])
+        .agg(pl.len().alias("count"))
+        .with_columns(
+            ((pl.col("bin_index") * bin_width) + min_val).alias("bin_start"),
+            (((pl.col("bin_index") + 1) * bin_width) + min_val).alias("bin_end"),
+        )
+        .sort(["bin_start", "usefulness_label"])
+    )
+
+    # Calculate cumulative positions for stacking
+    # Filter out null bin indices to avoid comparison warnings
+    aggregated_df = aggregated_df.filter(pl.col("bin_index").is_not_null())
+    stacked_df = []
+    for bin_idx in aggregated_df["bin_index"].unique().sort():
+        bin_data = aggregated_df.filter(pl.col("bin_index") == bin_idx).sort(
+            "usefulness_label", descending=True
+        )
+        cumsum = 0
+        for row in bin_data.iter_rows(named=True):
+            y_start = cumsum
+            y_end = cumsum + row["count"]
+            stacked_df.append(
+                {
+                    "bin_start": row["bin_start"],
+                    "bin_end": row["bin_end"],
+                    "usefulness_label": row["usefulness_label"],
+                    "count": row["count"],
+                    "y_start": y_start,
+                    "y_end": y_end,
+                }
+            )
+            cumsum = y_end
+
+    aggregated_df = pl.DataFrame(stacked_df)
 
     histogram = (
-        base.mark_bar(color="steelblue")
+        alt.Chart(aggregated_df)
+        .mark_rect()
         .encode(
             alt.X(
-                alt_attr,
-                bin=alt.Bin(maxbins=20, minstep=1),
+                "bin_start:Q",
                 title=f"Number of {attr_name} per Proto File",
                 axis=alt.Axis(tickMinStep=1, format=".0f"),
+                scale=alt.Scale(domain=[min_val, max_val]),
             ),
-            alt.Y("count()", title="Number of Proto Files"),
-            tooltip=["count()", alt_attr],
+            alt.X2("bin_end:Q"),
+            alt.Y(
+                "y_start:Q", title="Number of Proto Files", axis=alt.Axis(grid=False)
+            ),
+            alt.Y2("y_end:Q"),
+            alt.Color(
+                "usefulness_label:N",
+                title="File Type",
+                scale=alt.Scale(
+                    domain=["Useful", "Not Useful"], range=["steelblue", "red"]
+                ),
+                sort=["Useful", "Not Useful"],
+            ),
+            order=alt.Order("usefulness_label:N", sort="descending"),
+            tooltip=[
+                alt.Tooltip("usefulness_label:N", title="Type"),
+                alt.Tooltip("count:Q", title="Count"),
+                alt.Tooltip("bin_start:Q", title=f"{attr_name} (bin start)"),
+            ],
         )
         .properties(
             width=600,
@@ -494,6 +726,7 @@ def plot_histogram(
             title=[
                 f"Distribution of {attr_name} per Proto File",
                 f"{len(df)} files from {df['repository'].n_unique()} repositories (Mean: {mean:.2f})",
+                f"Useful: {useful_count}, Not Useful: {not_useful_count}",
             ],
         )
     )
@@ -501,19 +734,19 @@ def plot_histogram(
     mean_df = pl.DataFrame({"mean": [mean], "legend": ["Mean"]})
     mean_line = (
         alt.Chart(mean_df)
-        .mark_rule(color="red", strokeWidth=2, strokeDash=[5, 5])
+        .mark_rule(color="orange", strokeWidth=2, strokeDash=[5, 5])
         .encode(
             x=alt.X("mean:Q", axis=alt.Axis(tickMinStep=1)),
             color=alt.Color(
                 "legend:N",
-                scale=alt.Scale(range=["red"]),
+                scale=alt.Scale(range=["orange"]),
                 legend=alt.Legend(title="Statistics"),
             ),
         )
     )
 
-    # Combine histogram and mean line
-    chart = histogram + mean_line
+    # Combine histogram and mean line with independent color scales
+    chart = (histogram + mean_line).resolve_scale(color="independent")
 
     # Save or display
     save_plot(chart, output_file)
@@ -523,7 +756,7 @@ def plot_histogram(
 
 def plot_proto_type_breakdown(
     df: pl.DataFrame, output_file: str | None = None
-) -> alt.Chart:
+) -> alt.LayerChart:
     """
     Creates a mosaic plot showing the breakdown of protobuf types (messages, enums, services) by repository.
 
@@ -868,7 +1101,9 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
         "fetch", help="Fetch commit history from GitHub"
     )
     ty = fetch_parser.add_mutually_exclusive_group(required=True)
-    _ = ty.add_argument("--all", action="store_true", help="Fetch data from all repositories")
+    _ = ty.add_argument(
+        "--all", action="store_true", help="Fetch data from all repositories"
+    )
     _ = ty.add_argument("--repo", nargs=2, help="Fetch data from a specific repository")
     _ = fetch_parser.add_argument(
         "--api",
@@ -883,6 +1118,11 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
     _ = fetch_parser.add_argument(
         "--output",
         help="Path to output the Parquet file in. Each repo will be output as <owner>-<repo>.parquet",
+    )
+    _ = fetch_parser.add_argument(
+        "--error-log",
+        type=str,
+        help="Path to log errors to disk. Errors will be appended to this file with repository context.",
     )
 
     # Subparser for comparing methods
@@ -931,14 +1171,14 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
     args = parser.parse_args()
 
     if args.command == "fetch":
-        print(f"{args=}")
         if args.all:
             print("Fetch all repos")
             fetch_repos = REPOS
         else:
             fetch_repos = [(args.repo[0], args.repo[1])]
 
-        cache_dir = args.cache if hasattr(args, 'cache') else None
+        cache_dir = args.cache if hasattr(args, "cache") else None
+        error_log = args.error_log if hasattr(args, "error_log") else None
 
         for r in fetch_repos:
             if args.output is None:
@@ -956,10 +1196,14 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
             else:
                 # Use local cloning method - no API limits
                 if cache_dir:
-                    print(f"Using local cloning method with cache directory: {cache_dir}")
+                    print(
+                        f"Using local cloning method with cache directory: {cache_dir}"
+                    )
                 else:
                     print("Using local cloning method (no API limits, requires git)")
-                get_proto_history_parquet_local(r[0], r[1], output_file, cache_dir)
+                get_proto_history_parquet_local(
+                    r[0], r[1], output_file, cache_dir, error_log
+                )
 
     elif args.command == "compare":
         token = os.getenv("GITHUB_TOKEN")
