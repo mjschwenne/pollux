@@ -1,31 +1,16 @@
 package pollux
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"iter"
 	"log"
 	"strings"
 
-	"github.com/bufbuild/protocompile"
-	"github.com/bufbuild/protocompile/linker"
 	"github.com/bufbuild/protocompile/walk"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/types/descriptorpb"
-)
 
-func MsgIter(file protoreflect.FileDescriptor) iter.Seq[protoreflect.MessageDescriptor] {
-	return func(yield func(protoreflect.MessageDescriptor) bool) {
-		for i := range file.Messages().Len() {
-			if !yield(file.Messages().Get(i)) {
-				return
-			}
-		}
-	}
-}
+	"github.com/mjschwenne/pollux/internal/desclib"
+)
 
 type Stats struct {
 	MsgC          uint64 `json:"message_count_total"`
@@ -68,113 +53,101 @@ type Stats struct {
 	Me_SStreamC  uint64 `json:"method_count_server_streaming"`
 }
 
-func stats_walker(s *Stats) func(n protoreflect.FullName, m proto.Message) error {
-	return func(n protoreflect.FullName, m proto.Message) error {
-		switch t := m.(type) {
-		case *descriptorpb.DescriptorProto:
+func stats_walker(s *Stats) func(d protoreflect.Descriptor) error {
+	return func(d protoreflect.Descriptor) error {
+		switch t := d.(type) {
+		case protoreflect.MessageDescriptor:
 			s.MsgC += 1
-			s.M_NestedEnumC += uint64(len(t.EnumType))
-			s.M_NestedMsgC += uint64(len(t.NestedType))
-			if len(t.GetReservedRange()) > 0 {
-				s.M_ReservedRC += 1
-			}
-			if len(t.GetReservedName()) > 0 {
+			s.M_NestedEnumC += uint64(t.Enums().Len())
+			s.M_NestedMsgC += uint64(t.Messages().Len())
+			if t.ReservedNames().Len() > 0 {
 				s.M_ReservedNC += 1
 			}
-		case *descriptorpb.FieldDescriptorProto:
+			if t.ReservedRanges().Len() > 0 {
+				s.M_ReservedRC += 1
+			}
+		case protoreflect.FieldDescriptor:
 			s.FieldC += 1
-			// All implicit fields show up with the OPTIONAL label, but have the
-			// Proto3Optional field set to nil
-			if t.GetLabel() == descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL &&
-				t.Proto3Optional == nil {
-				s.F_ImpC += 1
-			} else if t.GetLabel() == descriptorpb.FieldDescriptorProto_LABEL_REPEATED {
+			if t.HasOptionalKeyword() {
+				s.F_OptC += 1
+			} else if t.Cardinality() == protoreflect.Repeated {
 				s.F_RepC += 1
 			} else {
-				// Everything else should be explicitly marked as optional
-				s.F_OptC += 1
+				s.F_ImpC += 1
 			}
-			switch t.GetType() {
-			case descriptorpb.FieldDescriptorProto_TYPE_DOUBLE:
+			switch t.Kind() {
+			case protoreflect.DoubleKind:
 				s.F_DoubleC += 1
-			case descriptorpb.FieldDescriptorProto_TYPE_FLOAT:
+			case protoreflect.FloatKind:
 				s.F_FloatC += 1
-			case descriptorpb.FieldDescriptorProto_TYPE_INT64:
+			case protoreflect.Int64Kind:
 				s.F_Int64C += 1
-			case descriptorpb.FieldDescriptorProto_TYPE_UINT64:
+			case protoreflect.Uint64Kind:
 				s.F_Uint64C += 1
-			case descriptorpb.FieldDescriptorProto_TYPE_INT32:
+			case protoreflect.Int32Kind:
 				s.F_Int32C += 1
-			case descriptorpb.FieldDescriptorProto_TYPE_FIXED32:
+			case protoreflect.Fixed32Kind:
 				s.F_Fixed32C += 1
-			case descriptorpb.FieldDescriptorProto_TYPE_FIXED64:
+			case protoreflect.Fixed64Kind:
 				s.F_Fixed64C += 1
-			case descriptorpb.FieldDescriptorProto_TYPE_BOOL:
+			case protoreflect.BoolKind:
 				s.F_BoolC += 1
-			case descriptorpb.FieldDescriptorProto_TYPE_STRING:
+			case protoreflect.StringKind:
 				s.F_StringC += 1
-			case descriptorpb.FieldDescriptorProto_TYPE_BYTES:
+			case protoreflect.BytesKind:
 				s.F_BytesC += 1
-			case descriptorpb.FieldDescriptorProto_TYPE_MESSAGE:
+			case protoreflect.MessageKind:
 				s.F_MessageC += 1
-			case descriptorpb.FieldDescriptorProto_TYPE_UINT32:
+			case protoreflect.Uint32Kind:
 				s.F_Uint32C += 1
-			case descriptorpb.FieldDescriptorProto_TYPE_ENUM:
+			case protoreflect.EnumKind:
 				s.F_EnumC += 1
-			case descriptorpb.FieldDescriptorProto_TYPE_SFIXED64:
+			case protoreflect.Sfixed64Kind:
 				s.F_Sfixed64C += 1
-			case descriptorpb.FieldDescriptorProto_TYPE_SFIXED32:
+			case protoreflect.Sfixed32Kind:
 				s.F_Sfixed32C += 1
-			case descriptorpb.FieldDescriptorProto_TYPE_SINT64:
+			case protoreflect.Sint64Kind:
 				s.F_Sint64C += 1
-			case descriptorpb.FieldDescriptorProto_TYPE_SINT32:
+			case protoreflect.Sint32Kind:
 				s.F_Sint32C += 1
 			}
-		case *descriptorpb.EnumDescriptorProto:
+		case protoreflect.EnumDescriptor:
 			s.EnumC += 1
 			// Even if there are multiple reserved ranges,
 			// just count this as "an enum which uses reserved fields"
-			if len(t.GetReservedRange()) > 0 {
+			if t.ReservedRanges().Len() > 0 {
 				s.E_ReservedRC += 1
 			}
-			if len(t.GetReservedName()) > 0 {
+			if t.ReservedNames().Len() > 0 {
 				s.E_ReservedNC += 1
 			}
-		case *descriptorpb.EnumValueDescriptorProto:
+		case protoreflect.EnumValueDescriptor:
 			s.E_EnumC += 1
-		case *descriptorpb.OneofDescriptorProto:
-			// Oneof fields with this prefix are *probably* implicit oneofs
-			if !strings.HasPrefix(t.GetName(), "_optional_") {
+		case protoreflect.OneofDescriptor:
+			// Oneof fields with this prefix are *probably* implicit onesof..
+			if !strings.HasPrefix(string(t.Name()), "_optional_") {
 				s.FieldC += 1
 				s.F_OneofC += 1
 			}
-		case *descriptorpb.ServiceDescriptorProto:
+		case protoreflect.ServiceDescriptor:
 			s.ServiceC += 1
-		case *descriptorpb.MethodDescriptorProto:
+		case protoreflect.MethodDescriptor:
 			s.MethodC += 1
-			if t.GetClientStreaming() {
+			if t.IsStreamingClient() {
 				s.Me_CStreamC += 1
 			}
-			if t.GetServerStreaming() {
+			if t.IsStreamingServer() {
 				s.Me_SStreamC += 1
 			}
 		default:
-			fmt.Printf("Unknown Descriptor Type: %T -> %+v\n\n", m, m)
+			fmt.Printf("Unknown Descriptor Type: %T -> %+v\n\n", t, t)
 		}
 		return nil
 	}
 }
 
-func compile_protos(files []string) (linker.Files, error) {
-	ctx := context.Background()
-	compiler := protocompile.Compiler{
-		Resolver: protocompile.WithStandardImports(&protocompile.SourceResolver{}),
-	}
-	return compiler.Compile(ctx, files...)
-}
-
 func ComputeStats(files []string) []byte {
-	proto_descs, err := compile_protos(files)
+	proto_descs, err := desclib.CompileProtos(files)
 	if err != nil {
 		log.Fatalf("Error compiling protobuf files: %v\n", err)
 	}
@@ -183,7 +156,7 @@ func ComputeStats(files []string) []byte {
 
 	for _, fd := range proto_descs {
 		s := Stats{}
-		walk.DescriptorProtos(protodesc.ToFileDescriptorProto(fd), stats_walker(&s))
+		walk.Descriptors(fd, stats_walker(&s))
 		stats[fd.Path()] = s
 	}
 

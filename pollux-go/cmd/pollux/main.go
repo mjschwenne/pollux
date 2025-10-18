@@ -8,6 +8,7 @@ import (
 	"regexp"
 
 	"github.com/mjschwenne/pollux"
+	"github.com/mjschwenne/pollux/internal/desclib"
 	"github.com/spf13/cobra"
 )
 
@@ -102,7 +103,6 @@ fields. In particular:
   since this seems more artifical than the map pattern.`,
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		// print, _ := cmd.Flags().GetBool("print")
 		fmt.Println(string(pollux.ComputeStats(args)))
 	},
 }
@@ -110,6 +110,26 @@ fields. In particular:
 func init() {
 	rootCmd.AddCommand(statsCmd)
 	statsCmd.PersistentFlags().BoolP("help", "h", false, "Show help message")
+}
+
+var checkCmd = &cobra.Command{
+	Use:   "check old_proto_file new_proto_file",
+	Short: "Checks compatibility between a protobuf file and its updated version",
+	Args:  cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		as, _ := desclib.CompileProtos([]string{args[0]})
+		a := as[0]
+		bs, _ := desclib.CompileProtos([]string{args[1]})
+		b := bs[0]
+		desclib.PrintFileDesc(a)
+		fmt.Println(pollux.Eq(a, b))
+		pollux.Test(args[0], args[1])
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(checkCmd)
+	checkCmd.PersistentFlags().BoolP("strict", "s", false, "Compare for exact equality")
 }
 
 func main() {

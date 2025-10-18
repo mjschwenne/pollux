@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+enum TestEnum {
+  TEST_UNSPEC = 0;
+  TEST_VAL_1 = 1;
+  TEST_VAL_2 = 2;
+}
+
+message TestMsg {
+  int64 f1 = 1;
+  int32 f2 = 2;
+  string f3 = 3;
+}
