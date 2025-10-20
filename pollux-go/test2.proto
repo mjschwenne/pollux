@@ -11,6 +11,19 @@ enum EnumExample {
   ENUM_VALUE_2 = 2;
 }
 
+message Outer {
+  enum NestedEnum {
+    reserved 2, 3;
+    reserved "NESTED_ENUM_VALUE_2";
+    NESTED_ENUM_UNSPECIFIED = 0;
+    NESTED_ENUM_VALUE_1 = 1;
+  }
+}
+
+message recurse1 {
+  recurse1 field = 1;
+}
+
 message SimpleMessage {
   double double_example = 1;
   float float_example = 2;
@@ -54,15 +67,6 @@ message SimpleMessage {
 
   reserved 26, 27;
   reserved "reserved_field";
-}
-
-message Outer {
-  enum NestedEnum {
-    reserved 2, 3;
-    reserved "NESTED_ENUM_VALUE_2";
-    NESTED_ENUM_UNSPECIFIED = 0;
-    NESTED_ENUM_VALUE_1 = 1;
-  }
 }
 
 service ExampleService {

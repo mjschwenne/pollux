@@ -121,7 +121,6 @@ var checkCmd = &cobra.Command{
 		a := as[0]
 		bs, _ := desclib.CompileProtos([]string{args[1]})
 		b := bs[0]
-		desclib.PrintFileDesc(a)
 		fmt.Println(desclib.FileDescEq(a, b))
 	},
 }

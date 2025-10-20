@@ -20,6 +20,10 @@ message Outer {
   }
 }
 
+message recurse1 {
+  recurse1 field = 1;
+}
+
 message SimpleMessage {
   double double_example = 1;
   float float_example = 2;

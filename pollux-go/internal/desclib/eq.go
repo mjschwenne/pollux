@@ -64,7 +64,10 @@ func MessageDescEq(a protoreflect.MessageDescriptor, b protoreflect.MessageDescr
 		return false
 	}
 
-	return match_eq(a, b, FieldIter, FieldDescEq)
+	return match_eq(a, b, FieldIter, FieldDescEq) &&
+		match_eq(a, b, NestedEnumIter, EnumDescEq) &&
+		// INFO: How does this work on recursive descriptors?
+		match_eq(a, b, NestedMsgIter, MessageDescEq)
 }
 
 func EnumValueDescEq(a protoreflect.EnumValueDescriptor, b protoreflect.EnumValueDescriptor) (result bool) {

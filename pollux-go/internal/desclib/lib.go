@@ -39,7 +39,27 @@ func MsgIter(file protoreflect.FileDescriptor) iter.Seq[protoreflect.MessageDesc
 	}
 }
 
+func NestedMsgIter(file protoreflect.MessageDescriptor) iter.Seq[protoreflect.MessageDescriptor] {
+	return func(yield func(protoreflect.MessageDescriptor) bool) {
+		for i := range file.Messages().Len() {
+			if !yield(file.Messages().Get(i)) {
+				return
+			}
+		}
+	}
+}
+
 func EnumIter(file protoreflect.FileDescriptor) iter.Seq[protoreflect.EnumDescriptor] {
+	return func(yield func(protoreflect.EnumDescriptor) bool) {
+		for i := range file.Enums().Len() {
+			if !yield(file.Enums().Get(i)) {
+				return
+			}
+		}
+	}
+}
+
+func NestedEnumIter(file protoreflect.MessageDescriptor) iter.Seq[protoreflect.EnumDescriptor] {
 	return func(yield func(protoreflect.EnumDescriptor) bool) {
 		for i := range file.Enums().Len() {
 			if !yield(file.Enums().Get(i)) {
