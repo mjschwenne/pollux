@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"iter"
+	"reflect"
 
 	"github.com/bufbuild/protocompile"
 	"github.com/bufbuild/protocompile/linker"
@@ -23,7 +24,7 @@ func CompileProtos(files []string) (linker.Files, error) {
 	return compiler.Compile(ctx, files...)
 }
 
-// Helper function to help with Go's type inference on the map call in CompileProtos
+// Helper function to help with Go's type inference
 func ToDescProto(fd linker.File) *descriptorpb.FileDescriptorProto {
 	return protodesc.ToFileDescriptorProto(fd)
 }
@@ -38,6 +39,16 @@ func MsgIter(file protoreflect.FileDescriptor) iter.Seq[protoreflect.MessageDesc
 	}
 }
 
+func EnumIter(file protoreflect.FileDescriptor) iter.Seq[protoreflect.EnumDescriptor] {
+	return func(yield func(protoreflect.EnumDescriptor) bool) {
+		for i := range file.Enums().Len() {
+			if !yield(file.Enums().Get(i)) {
+				return
+			}
+		}
+	}
+}
+
 func FieldIter(msg protoreflect.MessageDescriptor) iter.Seq[protoreflect.FieldDescriptor] {
 	return func(yield func(protoreflect.FieldDescriptor) bool) {
 		for i := range msg.Fields().Len() {
@@ -46,6 +57,29 @@ func FieldIter(msg protoreflect.MessageDescriptor) iter.Seq[protoreflect.FieldDe
 			}
 		}
 	}
+}
+
+func ValueIter(enum protoreflect.EnumDescriptor) iter.Seq[protoreflect.EnumValueDescriptor] {
+	return func(yield func(protoreflect.EnumValueDescriptor) bool) {
+		for i := range enum.Values().Len() {
+			if !yield(enum.Values().Get(i)) {
+				return
+			}
+		}
+	}
+}
+
+func Search(desc protoreflect.Descriptor, query []protoreflect.Descriptor) *protoreflect.Descriptor {
+	next := query[len(query)-1]
+	switch n := next.(type) {
+	case protoreflect.MessageDescriptor:
+		if p, ok := desc.(protoreflect.MessageDescriptor); ok {
+			reflect.DeepEqual(n, p)
+		} else {
+			return nil
+		}
+	}
+	return nil
 }
 
 type tree struct {

@@ -5,18 +5,21 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"reflect"
 
-	"github.com/bufbuild/protocompile/linker"
-	"github.com/mjschwenne/pollux/internal/desclib"
 	sitter "github.com/smacker/go-tree-sitter"
 	proto "github.com/smacker/go-tree-sitter/protobuf"
-	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-func Eq(a linker.File, b linker.File) bool {
-	return reflect.DeepEqual(desclib.ToDescProto(a),
-		protodesc.ToFileDescriptorProto(b))
+func eq_walker(trace []protoreflect.Descriptor) (func(d protoreflect.Descriptor) error,
+	func(d protoreflect.Descriptor) error) {
+	enter := func(d protoreflect.Descriptor) error {
+		return nil
+	}
+	exit := func(d protoreflect.Descriptor) error {
+		return nil
+	}
+	return enter, exit
 }
 
 func Test(a string, b string) {

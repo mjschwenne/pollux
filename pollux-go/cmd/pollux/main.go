@@ -122,8 +122,7 @@ var checkCmd = &cobra.Command{
 		bs, _ := desclib.CompileProtos([]string{args[1]})
 		b := bs[0]
 		desclib.PrintFileDesc(a)
-		fmt.Println(pollux.Eq(a, b))
-		pollux.Test(args[0], args[1])
+		fmt.Println(desclib.FileDescEq(a, b))
 	},
 }
 
