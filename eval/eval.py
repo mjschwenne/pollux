@@ -1,7 +1,9 @@
+from encodings import search_function
 import requests
 import time
 import argparse
 from rich.progress import Progress
+from rich.pretty import pprint
 import altair as alt
 import polars as pl
 
@@ -11,7 +13,7 @@ import tempfile
 import subprocess
 import json
 
-REPOS = [
+PROTO_REPOS = [
     ("googleapis", "googleapis"),
     ("googleapis", "google-cloud-go"),
     ("colinmarc", "hdfs"),
@@ -79,6 +81,53 @@ def paginated_github_query(
         all_items.append(items)
 
     return all_items
+
+def search_popular_go_repositories(github_token : str):
+    headers = {
+        "Authorization": f"token {github_token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    search_url = (
+        "https://api.github.com/search/repositories?q=language:go&sort=stars&order=desc"
+    )
+
+    repos = paginated_github_query(search_url, headers)
+    repos = [{"owner": repo["owner"]["login"], "name": repo["name"], "stars": repo["stargazers_count"]} for page in repos for repo in page["items"]]
+    return repos
+
+
+def get_json_usage_parquet(
+    owner: str, repo: str, github_token: str, output_filename: str | None = None
+):
+    """
+    Check if a repository contains Go code with JSON struct tags.
+
+    Args:
+        repo_full_name: Repository name in "owner/repo" format
+        token: GitHub personal access token (optional but recommended)
+
+    Returns:
+        List of dictionaries containing file paths where JSON tags were found
+    """
+    # Set up headers
+    headers = {
+        "Authorization": f"token {github_token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+
+    # Build the search query
+    search_url = (
+        f'https://api.github.com/search/code?q=repo:{owner}/{repo}+language:go+json%3A%22'
+    )
+
+    json_go_results = paginated_github_query(search_url, headers)
+    json_go_files = [{"owner": owner, "repo": repo, "file": file["path"]} for page in json_go_results for file in page["items"]]
+
+    if output_filename is not None:
+        df = pl.DataFrame(json_go_files)
+        df.write_parquet(output_filename)
+    else:
+        print(f"{owner}/{repo} : {len(json_go_files)}")
 
 
 def get_proto_history_parquet(
@@ -1102,9 +1151,9 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
     )
     ty = fetch_parser.add_mutually_exclusive_group(required=True)
     _ = ty.add_argument(
-        "--all", action="store_true", help="Fetch data from all repositories"
+        "--all", "-a", action="store_true", help="Fetch data from all repositories"
     )
-    _ = ty.add_argument("--repo", nargs=2, help="Fetch data from a specific repository")
+    _ = ty.add_argument("--repo", "-r", nargs=2, help="Fetch data from a specific repository")
     _ = fetch_parser.add_argument(
         "--api",
         action="store_true",
@@ -1123,6 +1172,14 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
         "--error-log",
         type=str,
         help="Path to log errors to disk. Errors will be appended to this file with repository context.",
+    )
+    _ = fetch_parser.add_argument("--json-usage",
+        action="store_true",
+        help="Analyze if the repo is using JSON tags")
+    _ = fetch_parser.add_argument(
+        "--search-go-repos",
+        action="store_true",
+        help="Search for popular Go repositories"
     )
 
     # Subparser for comparing methods
@@ -1173,7 +1230,7 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
     if args.command == "fetch":
         if args.all:
             print("Fetch all repos")
-            fetch_repos = REPOS
+            fetch_repos = PROTO_REPOS
         else:
             fetch_repos = [(args.repo[0], args.repo[1])]
 
@@ -1193,6 +1250,23 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
                 if token is None:
                     raise ValueError("GITHUB_TOKEN environment variable is not set")
                 get_proto_history_parquet(r[0], r[1], token, output_file)
+            elif args.json_usage:
+                token = os.getenv("GITHUB_TOKEN")
+                if token is None:
+                    raise ValueError("GITHUB_TOKEN environment variable is not set")
+                get_json_usage_parquet(r[0], r[1], token, output_file)
+            elif args.search_go_repos:
+                token = os.getenv("GITHUB_TOKEN")
+                if token is None:
+                    raise ValueError("GITHUB_TOKEN environment variable is not set")
+                repos = search_popular_go_repositories(token)
+                print(f"Found {len(repos)} repositories")
+                for r in repos:
+                    try:
+                        time.sleep(7)  # Sleep to avoid rate limiting of 10 requests per minute
+                        get_json_usage_parquet(r["owner"], r["name"], token, None)
+                    except Exception as e:
+                        print(f"Error processing {r['owner']}/{r['name']}: {e}")
             else:
                 # Use local cloning method - no API limits
                 if cache_dir:
