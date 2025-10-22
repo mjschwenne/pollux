@@ -63,7 +63,7 @@ def get_json_usage_parquet(
         "Accept": "application/vnd.github.v3+json",
     }
 
-    search_url = f'https://api.github.com/search/code?q=repo:{owner}/{repo}+language:go+json%3A%22'
+    search_url = f"https://api.github.com/search/code?q=repo:{owner}/{repo}+language:go+json%3A%22"
 
     json_go_results = paginated_github_query(search_url, headers)
     json_go_files = [
@@ -400,21 +400,29 @@ def handle_fetch_command(args):
         print(f"Found {len(repos)} repositories")
 
         with Progress() as progress:
-            task = progress.add_task("[green]Processing Go repositories...", total=len(repos))
+            task = progress.add_task(
+                "[green]Processing Go repositories...", total=len(repos)
+            )
 
             for r in repos:
                 try:
                     time.sleep(7)  # Sleep to avoid rate limiting
                     if args.output is not None:
-                        output_filename = os.path.join(args.output, f"{r['owner']}-{r['name']}.parquet")
+                        output_filename = os.path.join(
+                            args.output, f"{r['owner']}-{r['name']}.parquet"
+                        )
                     else:
                         output_filename = f"{r['owner']}-{r['name']}.parquet"
 
-                    get_json_usage_parquet(r["owner"], r["name"], token, output_filename)
+                    get_json_usage_parquet(
+                        r["owner"], r["name"], token, output_filename
+                    )
                 except Exception as e:
                     print(f"Error processing {r['owner']}/{r['name']}: {e}")
                 finally:
                     progress.update(task, advance=1)
+
+        return
 
     if args.all:
         print("Fetch all repos")
@@ -444,4 +452,6 @@ def handle_fetch_command(args):
                 print(f"Using local cloning method with cache directory: {cache_dir}")
             else:
                 print("Using local cloning method (no API limits, requires git)")
-            get_proto_history_parquet_local(r[0], r[1], output_file, cache_dir, error_log)
+            get_proto_history_parquet_local(
+                r[0], r[1], output_file, cache_dir, error_log
+            )
