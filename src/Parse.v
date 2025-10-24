@@ -14,7 +14,6 @@ Module Parse.
 
   Include Descriptors.
   Notation "x %% y" := (Z.modulo x y) (at level 35) : Z_scope.
-  Notation "x == y" := (decide (eq x y)) (no associativity, at level 70).
 
   Definition parity (z : Z) : Z :=
     if ((z %% 2) == 0%Z) then 1 else (-1).

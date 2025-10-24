@@ -17,3 +17,5 @@ From Stdlib Require Export Strings.String.
 From coqutil Require Export Word.Interface.
 From stdpp Require Export gmap.
 From stdpp Require Export mapset.
+
+Notation "x == y" := (decide (eq x y)) (no associativity, at level 70).
