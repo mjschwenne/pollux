@@ -2,6 +2,8 @@ From Pollux Require Import Prelude.
 From Pollux.parse Require Import Util.
 From Pollux.parse Require Import Input.
 
+From Equations Require Import Equations.
+
 Module Parsers (InputModule : AbstractInput).
   Import InputModule.
 
@@ -12,6 +14,21 @@ Module Parsers (InputModule : AbstractInput).
   (* Record information about when a parse fails *)
   Inductive FailureData :=
   | mkFailureData (msg : string) (remaining : Input) (next : option FailureData).
+
+  Definition getFailureMsg (data : FailureData) : string :=
+    match data with
+    | mkFailureData msg _ _ => msg
+    end.
+
+  Definition getFailureRemaining (data : FailureData) : Input :=
+    match data with
+    | mkFailureData _ remaining _ => remaining
+    end.
+
+  Definition getFailureNext (data : FailureData) : option FailureData :=
+    match data with
+    | mkFailureData _ _ next => next
+    end.
 
   (* Add more failure data to the end of the current chain of failures *)
   Fixpoint Concat (self other : FailureData) : FailureData :=
@@ -243,6 +260,60 @@ Module Parsers (InputModule : AbstractInput).
               p2
             else
               MapRecoverableError p2 (fun dataRight => Concat data dataRight)
+      end.
+
+  (* Like Or, but takes as many parsers as needed *)
+  Fixpoint OrSeq {R : Type} `{EqDecision Input} (alternatives : list (Parser R)) : Parser R :=
+    match alternatives with
+    | [] => FailWith "no alternatives" Recoverable
+    | alt :: [] => alt
+    | alt :: alts => Or alt (OrSeq alts)
+    end.
+
+  (* If the underlying parser succeeds, return it's result without committing the input.
+     If the underlying parser fails,
+     - with a fatal failure, return it as-is
+     - with a recoverable failure, return it without committing the input *)
+  Definition Lookahead {R : Type} (underlying : Parser R) : Parser R :=
+    fun inp =>
+      match underlying inp with
+      | ParseSuccess r rem => ParseSuccess r inp
+      | ParseFailure Fatal data as p => p
+      | ParseFailure Recoverable data => ParseFailure Recoverable (mkFailureData (getFailureMsg data) inp None)
+      end.
+
+  (* (Opt a) evaluates `a` on the input, and then
+     - If `a` succeeds, return the result unchanged
+     - If `a` fails, and the failure is not fatal, propagate the same failure without consuming input.
+
+     (Opt a) is useful when there are alternatives to parse and `a` parsed partially and we're OK with
+     backtracking to try something else. *)
+  Definition Opt {R : Type} (underlying : Parser R) : Parser R :=
+    fun inp =>
+      match underlying inp with
+      | ParseSuccess r rem as p => p
+      | ParseFailure Fatal data as p => p
+      | ParseFailure Recoverable data => ParseFailure Recoverable (mkFailureData (getFailureMsg data) inp None)
+      end.
+                                         
+  (* If the condition parser fails, returns a non-committing failure.
+     Suitable to use in Or parsers. *)
+  Definition If {L R : Type} (condition : Parser L) (succeed : Parser R) : Parser R :=
+    Bind (Lookahead condition) (fun _ => succeed).
+  
+  (* (Maybe a) evaluates `a` on the input, and then
+     - If `a` succeeds, wraps the result in Some
+     - If `a` fails, and the failure is not fatal and did not consume input, succeeds with None.
+       If the error is fatal or did consume input, fails with the same failure. *)
+  Definition Maybe {R : Type} `{EqDecision Input} (underlying : Parser R) : Parser (option R) :=
+    fun inp =>
+      match underlying inp with
+      | ParseSuccess rr rem => ParseSuccess (Some rr) rem
+      | ParseFailure Fatal data as pr => PropagateFailure pr I
+      | ParseFailure Recoverable data as pr => if negb $ NeedsAlternative pr inp then
+                                                PropagateFailure pr I
+                                              else
+                                                ParseSuccess None inp
       end.
   
 End Parsers.
