@@ -217,6 +217,7 @@ Module Parsers (InputModule : AbstractInput).
       fun inp =>
         right (left inp) inp inp.
 
+    (* A parser combinator that makes it possible to transform the result of a parser in another one. *)
     Definition Map {R U : Type} (underlying : Parser R) (f : R -> U) : Parser U :=
       fun inp =>
         match underlying inp with
@@ -319,7 +320,7 @@ Module Parsers (InputModule : AbstractInput).
                                                   ParseSuccess None inp
         end.
 
-    (* Apply two consecutive parsers consecutively. If both succeed, apply the mapper to the result
+    (* Apply two consecutive parsers consecutively. If both succeed, apply the mapper to the results
      and return it *)
     Definition ConcatMap {L R T : Type} (left : Parser L) (right : Parser R) (mapper : L -> R -> T) : Parser T :=
       fun inp =>
@@ -398,11 +399,11 @@ Module Parsers (InputModule : AbstractInput).
      the obligation context, which I could then solve easily. Unfortunately, this led to the same warnings
      being issued, so for the moment I've reverted to the self-contained version using decide.
      *)
-    Equations? Rep' {A B : Type} (underlying : Parser B) (combine : A -> B -> A) (acc : A)
+    Equations? rep' {A B : Type} (underlying : Parser B) (combine : A -> B -> A) (acc : A)
       (inp : Input) : ParseResult A by wf (Length inp) lt :=
-      Rep' underlying combine acc inp with underlying inp => {
+      rep' underlying combine acc inp with underlying inp => {
         | ParseSuccess ret rem => if decide (Length rem < Length inp) then
-                                   Rep' underlying combine (combine acc ret) rem
+                                   rep' underlying combine (combine acc ret) rem
                                  else
                                    ParseSuccess acc inp
         | ParseFailure lvl data => if NeedsAlternative (ParseFailure lvl data) inp then
@@ -423,9 +424,11 @@ Module Parsers (InputModule : AbstractInput).
      into an accumulator and return the final accumulated result. *)
     Definition Rep {A B : Type} (underlying : Parser B) (combine : A -> B -> A) (acc : A) :
       Parser A :=
-      fun inp => Rep' underlying combine acc inp.
+      fun inp => rep' underlying combine acc inp.
 
     (* Repeats the underlying parser interleaved with a separator. Returns a sequence of results *)
+    (* WARN: Unfortunately, without arrays or sequences with constant time accesses accumulating the list
+       is an O(n^2) operation *)
     Definition RepSep {A B : Type} (underlying : Parser A) (separator : Parser B) :
       Parser (list A) :=
       Bind (Maybe underlying)
@@ -433,7 +436,7 @@ Module Parsers (InputModule : AbstractInput).
            match result with
            | Some ret => Rep (ConcatKeepRight separator underlying)
                           (fun (acc : list A) (a : A) => acc ++ [a])
-                          ([ret])
+                          [ret]
            | None => SucceedWith []
            end).
 
@@ -468,6 +471,68 @@ Module Parsers (InputModule : AbstractInput).
         (fun r =>
            Rep underlying (fun (acc : list R) (r : R) => acc ++ [r]) [r]).
 
+    Definition RecursiveProgressError {R : Type} (name : string) (inp : Input) (remaining : Input) :
+      ParseResult R :=
+      if Length remaining == Length inp then
+        ParseFailure Recoverable (mkFailureData (name ++ " no progress in recursive parser") remaining None)
+      else
+        ParseFailure Fatal (mkFailureData
+                              (name ++ " fixpoint called with an increasing remaining sequence")
+                              remaining None).
+
+    Equations recursive' {R : Type} (underlying : Parser R -> Parser R) (inp : Input) :
+      ParseResult R by wf (Length inp) :=
+      recursive' underlying inp := (underlying callback) inp
+    where callback : (Input -> ParseResult R) :=
+      callback := fun rem => if decide ((Length rem) < (Length inp)) then
+                            recursive' underlying rem
+                          else
+                            RecursiveProgressError "Parser.Recursive" inp rem.
+
+  (* So this function /should/ be defined like this:
+
+    Equations? recursive {R : Type} (underlying : Parser R -> Parser R) (inp : Input) :
+      ParseResult R by wf (Length inp) :=
+      recursive underlying inp := (underlying callback) inp
+    where callback : (Input -> ParseResult R) :=
+      callback rem with inspect (Nat.ltb (Length rem) (Length inp)) := {
+      | true eqn:H => recursive underlying rem
+      | false eqn:H => RecursiveProgressError "Parser.Recursive" inp rem
+      }.
+    Proof.
+      destruct (Nat.ltb_spec (Length rem) (Length inp)) in H.
+      - assumption.
+      - discriminate.
+    Qed.
+
+    But equations chokes on the partial application of callback in the recursive' definition.
+    Instead, we can define the where clause function to be a lambda (no partial application)
+    and use the same decide trick to force it to pick up on the Length rem < Length inp requirement.
+
+    https://github.com/mattam82/Coq-Equations/issues/623
+   *)
+
+    (* Given a function that requires a parser to return a parser, provide the result
+       of this parser to that function itself.
+
+       Careful: This function is not tail-recursive.*)
+    Definition Recursive {R : Type} (underlying : Parser R -> Parser R) : Parser R :=
+      fun inp => recursive' underlying inp.
+      
+  (* Skipped the tail-recursive version of Recursive and RecursiveMap since I'm not sure they're useful
+     and they will be a lot of work.
+
+     If performance on large files becomes an issue, RecursiveNoStack could be a performance improvement.
+
+     The description for RecursiveMap is this:
+
+     "Given a map of name := recursive definitions, provide the result of this parser to the
+      recursive definitions and set 'fun' as the initial parser. Careful: This function is not
+      tail-recursive and will consume stack"
+
+     I'm not actually sure how or why this would be useful.
+   *)
+
   End Parsers.
 End Parsers.
 
@@ -481,5 +546,6 @@ Module test.
             PropagateFailure pr I : @ParseResult bool.
   Compute let pr := ParseSuccess 10 [] in
             Extract pr I.
+
 
 End test.
