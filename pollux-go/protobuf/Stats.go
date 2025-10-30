@@ -1,4 +1,4 @@
-package pollux
+package pollux_proto
 
 import (
 	"encoding/json"
@@ -12,7 +12,7 @@ import (
 	"github.com/mjschwenne/pollux/internal/desclib"
 )
 
-type Stats struct {
+type ProtoStats struct {
 	MsgC          uint64 `json:"message_count_total"`
 	M_NestedEnumC uint64 `json:"message_count_nested_enum"`
 	// Includes the count of maps
@@ -53,7 +53,7 @@ type Stats struct {
 	Me_SStreamC  uint64 `json:"method_count_server_streaming"`
 }
 
-func stats_walker(s *Stats) func(d protoreflect.Descriptor) error {
+func stats_walker(s *ProtoStats) func(d protoreflect.Descriptor) error {
 	return func(d protoreflect.Descriptor) error {
 		switch t := d.(type) {
 		case protoreflect.MessageDescriptor:
@@ -152,10 +152,10 @@ func ComputeStats(files []string) []byte {
 		log.Fatalf("Error compiling protobuf files: %v\n", err)
 	}
 
-	stats := make(map[string]Stats)
+	stats := make(map[string]ProtoStats)
 
 	for _, fd := range proto_descs {
-		s := Stats{}
+		s := ProtoStats{}
 		walk.Descriptors(fd, stats_walker(&s))
 		stats[fd.Path()] = s
 	}

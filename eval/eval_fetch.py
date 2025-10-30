@@ -192,7 +192,9 @@ def get_proto_history_parquet_local(
                 print(f"Error cloning repository: {e}")
                 return
 
-        _process_repo_for_stats(owner, repo, repo_path, output_filename, error_log)
+        _process_proto_repo_for_stats(
+            owner, repo, repo_path, output_filename, error_log
+        )
     else:
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_path = os.path.join(temp_dir, repo)
@@ -209,10 +211,12 @@ def get_proto_history_parquet_local(
                 print(f"Error cloning repository: {e}")
                 return
 
-            _process_repo_for_stats(owner, repo, repo_path, output_filename, error_log)
+            _process_proto_repo_for_stats(
+                owner, repo, repo_path, output_filename, error_log
+            )
 
 
-def _process_repo_for_stats(
+def _process_proto_repo_for_stats(
     owner: str,
     repo: str,
     repo_path: str,
@@ -291,7 +295,7 @@ def _process_repo_for_stats(
                     if pollux_bin:
                         try:
                             stats_json = subprocess.run(
-                                [pollux_bin, "stats", file],
+                                [pollux_bin, "proto", "stats", file],
                                 capture_output=True,
                                 text=True,
                                 check=True,

@@ -1,4 +1,4 @@
-package pollux
+package pollux_proto
 
 import (
 	"context"

@@ -7,8 +7,9 @@ import (
 	"os"
 	"regexp"
 
-	"github.com/mjschwenne/pollux"
 	"github.com/mjschwenne/pollux/internal/desclib"
+	pollux_j "github.com/mjschwenne/pollux/json"
+	pollux_p "github.com/mjschwenne/pollux/protobuf"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +25,20 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("help", "h", false, "Show help message")
 }
 
-var varintCmd = &cobra.Command{
+var protoCmd = &cobra.Command{
+	Use:   "proto",
+	Short: "Access pollux protobuf functionality",
+	Long: `This subcommand accesses all of Pollux's protobuf functionality, including 
+- Varint conversions
+- Generating summary statistics for protobuf files 
+- Checking if two protobuf files are equal`,
+}
+
+func init() {
+	rootCmd.AddCommand(protoCmd)
+}
+
+var protoVarintCmd = &cobra.Command{
 	Use:   "varint",
 	Short: "Performs actual Protobuf varint conversion",
 	Long: `Pollux uses static conversion functions to simulate the effect of casting 
@@ -66,22 +80,22 @@ func varint_conversion() {
 			log.Fatalln("Format specifiers aren't set!")
 		}
 
-		enc, err := pollux.Encode_varint(first_form, txt)
+		enc, err := pollux_p.Encode_varint(first_form, txt)
 		if err != nil {
 			log.Fatalln(err)
 		}
 
-		out, err := pollux.Decode_varint(second_form, enc)
+		out, err := pollux_p.Decode_varint(second_form, enc)
 		fmt.Println(out)
 	}
 }
 
 func init() {
-	rootCmd.AddCommand(varintCmd)
-	varintCmd.PersistentFlags().BoolP("help", "h", false, "Show help message")
+	protoCmd.AddCommand(protoVarintCmd)
+	protoVarintCmd.PersistentFlags().BoolP("help", "h", false, "Show help message")
 }
 
-var statsCmd = &cobra.Command{
+var protoStatsCmd = &cobra.Command{
 	Use:   "stats proto_file [proto_files]",
 	Short: "Outputs summary statistics for the input collection of protobuf files",
 	Long: `Part of the evalution requires understanding the composition of the dataset.
@@ -103,16 +117,16 @@ fields. In particular:
   since this seems more artifical than the map pattern.`,
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(string(pollux.ComputeStats(args)))
+		fmt.Println(string(pollux_p.ComputeStats(args)))
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(statsCmd)
-	statsCmd.PersistentFlags().BoolP("help", "h", false, "Show help message")
+	protoCmd.AddCommand(protoStatsCmd)
+	protoStatsCmd.PersistentFlags().BoolP("help", "h", false, "Show help message")
 }
 
-var checkCmd = &cobra.Command{
+var protoCheckCmd = &cobra.Command{
 	Use:   "check old_proto_file new_proto_file",
 	Short: "Checks compatibility between a protobuf file and its updated version",
 	Args:  cobra.ExactArgs(2),
@@ -126,8 +140,36 @@ var checkCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(checkCmd)
-	checkCmd.PersistentFlags().BoolP("strict", "s", false, "Compare for exact equality")
+	protoCmd.AddCommand(protoCheckCmd)
+	protoCheckCmd.PersistentFlags().BoolP("strict", "s", false, "Compare for exact equality")
+}
+
+var jsonCmd = &cobra.Command{
+	Use:   "json",
+	Short: "Access pollux JSON + Go struct functionality",
+	Long: `This subcommand accesses all of Pollux's functionality for analyzing Go structs
+serialized to JSON via the encoding/json package.`,
+}
+
+func init() {
+	rootCmd.AddCommand(jsonCmd)
+}
+
+var jsonStatsCmd = &cobra.Command{
+	Use:   "stats",
+	Short: "Outputs summary statistics for the input collection of Go file",
+	Long: `Part of the evalution requires understanding the composition of the dataset.
+This subcommand compiles the input protobuf files and outputs a JSON summary of the file 
+contents.`,
+	Args: cobra.MinimumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(string(pollux_j.ComputeStats(args)))
+	},
+}
+
+func init() {
+	jsonCmd.AddCommand(jsonStatsCmd)
+	jsonStatsCmd.PersistentFlags().BoolP("help", "h", false, "Show help message")
 }
 
 func main() {
