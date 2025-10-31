@@ -156,11 +156,29 @@ func init() {
 }
 
 var jsonStatsCmd = &cobra.Command{
-	Use:   "stats",
+	Use:   "stats <packages>",
 	Short: "Outputs summary statistics for the input collection of Go file",
 	Long: `Part of the evalution requires understanding the composition of the dataset.
-This subcommand compiles the input protobuf files and outputs a JSON summary of the file 
-contents.`,
+This subcommand compiles the input go packages, type checks them and outputs a JSON 
+summary of the package contents. Since this uses Go mechanisms to load packages, package 
+names should be provided, not paths to the package (althought these are similar).
+
+Note that this command works at the package level rather then the file levels. This is 
+due to how Go structures the API to the type checker.
+
+Some notes on how the statistics are generated:
+- The statistics do no distinguish between named and anonymous structs, although in 
+  theory this is possible.
+- The Sum of all the field count keys is NOT the total number of fields in all the 
+  JSON structs. Use 'field_count_total' for this purpose.
+- Certain types are counted as "modified" types. This types count as the apporiate 
+  modifed field AND the underlying type. In the case of a map, both the key and value 
+  counts are incremented as well. The modified types are:
+	* Arrays
+	* Slices 
+	* Maps 
+	* Pointers
+	* Channels`,
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(string(pollux_j.ComputeStats(args)))
