@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"go/types"
 	"log"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -88,7 +90,7 @@ func mergeStats(dst, src *JsonStats) {
 
 func ComputeStats(pkgPaths []string) []byte {
 	cfg := &packages.Config{
-		Mode: packages.NeedTypes | packages.NeedTypesInfo,
+		Mode: packages.NeedTypes | packages.NeedTypesInfo | packages.NeedFiles,
 	}
 
 	pkgs, err := packages.Load(cfg, pkgPaths...)
@@ -96,9 +98,14 @@ func ComputeStats(pkgPaths []string) []byte {
 		log.Fatalf("Failed to load package: %v\n", err)
 	}
 
-	stats := make(map[string]JsonStats)
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("Failed to get current working directory: %v\n", err)
+	}
+
+	// maps filenames to stats
+	stats := make(map[string](*JsonStats))
 	for _, pkg := range pkgs {
-		pkg_stats := &JsonStats{}
 		scope := pkg.Types.Scope()
 		for _, name := range scope.Names() {
 			obj := scope.Lookup(name)
@@ -112,15 +119,24 @@ func ComputeStats(pkgPaths []string) []byte {
 				continue
 			}
 
+			// Find filename for struct
+			pos := pkg.Fset.Position(tn.Pos())
+			rdir, err := filepath.Rel(cwd, pos.Filename)
+			if err != nil {
+				log.Fatalf("Failed to resolve relative path: %v\n", err)
+			}
+
 			struct_stats := &JsonStats{}
 			count := structStats(struct_stats, st)
 
 			if count {
-				// fmt.Printf("Struct: %v\n", tn.Name())
-				mergeStats(pkg_stats, struct_stats)
+				if file_stats, ok := stats[rdir]; ok {
+					mergeStats(file_stats, struct_stats)
+				} else {
+					stats[rdir] = struct_stats
+				}
 			}
 		}
-		stats[pkg.ID] = *pkg_stats
 	}
 	stats_as_json, err := json.Marshal(stats)
 	if err != nil {

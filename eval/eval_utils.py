@@ -20,6 +20,36 @@ PROTO_REPOS = [
     ("google", "rejoiner"),
 ]
 
+JSON_REPOS = [
+    # Top 20 from GitHub API search
+    ("elastic", "go-elasticsearch"),
+    ("kubernetes", "autoscaler"),
+    ("eksctl-io", "eksctl"),
+    ("rancher", "rancher"),
+    ("googleapis", "google-api-go-client"),
+    ("kubernetes", "kubernetes"),
+    ("certimate-go", "certimate"),
+    ("smartcontractkit", "chainlink"),
+    ("keybase", "client"),
+    ("gravitational", "teleport"),
+    ("harness", "harness"),
+    ("zitadel", "zitadel"),
+    ("fleetdm", "fleet"),
+    ("hashicorp", "vault"),
+    ("TencentBlueKing", "bk-cmdb"),
+    ("cubefs", "cubefs"),
+    ("ovh", "cds"),
+    ("go-gitea", "gitea"),
+    ("elastic", "beats"),
+    ("OpenListTeam", "OpenList"),
+    # Plus a few I'm interested in
+    ("tailscale", "tailscale"),
+    ("cockroachdb", "cockroach"),
+    ("caddyserver", "caddy"),
+    ("containers", "podman"),
+    ("rclone", "rclone")
+]
+
 
 def locate_pollux() -> str:
     """

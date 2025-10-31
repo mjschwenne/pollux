@@ -77,6 +77,142 @@ def get_json_usage_parquet(
         df.write_parquet(output_filename)
 
 
+def get_json_usage_parquet_local(
+    owner: str,
+    repo: str,
+    output_filename: str,
+    cache_dir: str | None = None,
+) -> None:
+    """
+    Clones a repository locally to extract Go files with JSON struct tags.
+    This bypasses GitHub API limits for large repositories.
+
+    Args:
+        owner: GitHub repository owner.
+        repo: GitHub repository name.
+        output_filename: Path to save the parquet file.
+        cache_dir: Optional cache directory path. If provided, repos are cached as <owner>-<repo>.
+                   If None, uses temporary directory.
+    """
+    repo_url = f"https://github.com/{owner}/{repo}.git"
+    repo_name = f"{owner}-{repo}"
+
+    if cache_dir:
+        os.makedirs(cache_dir, exist_ok=True)
+        repo_path = os.path.join(cache_dir, repo_name)
+
+        if os.path.exists(repo_path):
+            print(f"Using cached repository at {repo_path}")
+            try:
+                print(f"Updating cached repository...")
+                _ = subprocess.run(
+                    ["git", "-C", repo_path, "fetch", "--all"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                _ = subprocess.run(
+                    ["git", "-C", repo_path, "reset", "--hard", "origin/HEAD"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"Error updating cached repository: {e}")
+                print(f"Will try to use cached version as-is")
+        else:
+            print(f"Cloning {repo_url} to cache...")
+            try:
+                _ = subprocess.run(
+                    ["git", "clone", repo_url, repo_path],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"Error cloning repository: {e}")
+                return
+
+        _process_json_repo_for_stats(owner, repo, repo_path, output_filename)
+    else:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_path = os.path.join(temp_dir, repo)
+
+            print(f"Cloning {repo_url}...")
+            try:
+                _ = subprocess.run(
+                    ["git", "clone", repo_url, repo_path],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"Error cloning repository: {e}")
+                return
+
+            _process_json_repo_for_stats(owner, repo, repo_path, output_filename)
+
+
+def _process_json_repo_for_stats(
+    owner: str,
+    repo: str,
+    repo_path: str,
+    output_filename: str,
+) -> None:
+    """
+    Helper function to process a git repository and extract Go files with JSON struct tags.
+
+    Args:
+        owner: GitHub repository owner.
+        repo: GitHub repository name.
+        repo_path: Path to the cloned repository.
+        output_filename: Path to save the parquet file.
+    """
+    original_cwd = os.getcwd()
+    os.chdir(repo_path)
+
+    try:
+        print("Finding Go files with JSON struct tags...")
+        # Use grep to efficiently find .go files containing JSON struct tags
+        # The -l flag returns only filenames, not the matching lines
+        result = subprocess.run(
+            ["find", ".", "-name", "*.go", "-type", "f", "-exec", "grep", "-l", "`json:\"", "{}", "+"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        json_go_files = [
+            f.strip().lstrip("./")
+            for f in result.stdout.strip().split("\n")
+            if f.strip()
+        ]
+
+        njson = len(json_go_files)
+        print(f"Found {njson} Go files with JSON struct tags in {owner}/{repo}")
+
+        # Step 3: Convert files to packages (directories)
+        # Group by directory since package name is the relative path to the directory
+        packages = set()
+        for file in json_go_files:
+            # Get the directory containing the file
+            dir_path = os.path.dirname(file)
+            if dir_path == "":
+                # File is in root directory
+                dir_path = "."
+            # Prefix with "./" as required for Go packages
+            package_path = "./" + dir_path if dir_path != "." else "."
+            packages.add(package_path)
+
+        packages = sorted(list(packages))
+        npackages = len(packages)
+        print(f"Found {npackages} unique Go packages with JSON struct tags")
+
+        # TODO: Process each package for statistics
+
+    finally:
+        os.chdir(original_cwd)
+
+
 def get_proto_history_parquet(
     owner: str, repo: str, github_token: str, output_filename: str
 ) -> None:
@@ -428,6 +564,33 @@ def handle_fetch_command(args):
 
         return
 
+    if args.json_usage:
+        token = os.getenv("GITHUB_TOKEN")
+        if token is None:
+            raise ValueError("GITHUB_TOKEN environment variable is not set")
+
+        if args.all:
+            fetch_repos = JSON_REPOS
+        else:
+            fetch_repos = [(args.repo[0], args.repo[1])]
+
+        with Progress() as progress:
+            task = progress.add_task(
+                "[green]Processing Go repositories...", total=len(repos)
+            )
+            for r in fetch_repos:
+                if args.output is None:
+                    output_file = f"{r[0]}-{r[1]}.parquet"
+                else:
+                    output_file = os.path.join(args.output, f"{r[0]}-{r[1]}.parquet")
+
+                try:
+                    get_json_usage_parquet(r[0], r[1], token, output_file)
+                except Exception as e:
+                    print(f"Error processing {r[0]}/{r[1]}: {e}")
+                finally:
+                    progress.update(task, advance=1)
+
     if args.all:
         print("Fetch all repos")
         fetch_repos = PROTO_REPOS
@@ -446,11 +609,6 @@ def handle_fetch_command(args):
             if token is None:
                 raise ValueError("GITHUB_TOKEN environment variable is not set")
             get_proto_history_parquet(r[0], r[1], token, output_file)
-        elif args.json_usage:
-            token = os.getenv("GITHUB_TOKEN")
-            if token is None:
-                raise ValueError("GITHUB_TOKEN environment variable is not set")
-            get_json_usage_parquet(r[0], r[1], token, output_file)
         else:
             if cache_dir:
                 print(f"Using local cloning method with cache directory: {cache_dir}")
