@@ -10,9 +10,19 @@ import polars as pl
 
 # Handle imports for both script and package usage
 try:
-    from .eval_utils import PROTO_REPOS, JSON_REPOS, locate_pollux, paginated_github_query
+    from .eval_utils import (
+        PROTO_REPOS,
+        JSON_REPOS,
+        locate_pollux,
+        paginated_github_query,
+    )
 except ImportError:
-    from eval_utils import PROTO_REPOS, JSON_REPOS, locate_pollux, paginated_github_query
+    from eval_utils import (
+        PROTO_REPOS,
+        JSON_REPOS,
+        locate_pollux,
+        paginated_github_query,
+    )
 
 
 def search_popular_go_repositories(github_token: str):
@@ -152,7 +162,9 @@ def get_json_usage_parquet_local(
                 print(f"Error cloning repository: {e}")
                 return
 
-            _process_json_repo_for_stats(owner, repo, repo_path, output_filename, error_log)
+            _process_json_repo_for_stats(
+                owner, repo, repo_path, output_filename, error_log
+            )
 
 
 def _process_json_repo_for_stats(
@@ -188,7 +200,20 @@ def _process_json_repo_for_stats(
         # Use grep to efficiently find .go files containing JSON struct tags
         # The -l flag returns only filenames, not the matching lines
         result = subprocess.run(
-            ["find", ".", "-name", "*.go", "-type", "f", "-exec", "grep", "-l", "`json:\"", "{}", "+"],
+            [
+                "find",
+                ".",
+                "-name",
+                "*.go",
+                "-type",
+                "f",
+                "-exec",
+                "grep",
+                "-l",
+                '`json:"',
+                "{}",
+                "+",
+            ],
             capture_output=True,
             text=True,
             check=True,
@@ -254,77 +279,61 @@ def _process_json_repo_for_stats(
                         "commit_count": len(commit_hashes),
                     }
 
-                    data_rows.append(row_data)
+                    stats_json = subprocess.run(
+                        [pollux_bin, "json", "stats", file],
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    )
+                    stats = json.loads(stats_json.stdout)
+
+                    if file in stats:
+                        # Merge the stats dict into the row
+                        row_data.update(stats[file])
+                        # skip false positives
+                        data_rows.append(row_data)
+                    else:
+                        print(f"WARN: Skipping false positive: {file}")
 
                 except subprocess.CalledProcessError as e:
-                    print(e)
-                    data_rows.append(
-                        {
-                            "repository": f"{owner}/{repo}",
-                            "go_file": file,
-                            "commits": [],
-                            "commit_count": 0,
-                        }
-                    )
-
-                progress.update(task, advance=1)
-
-        # Step 5: Use Pollux to get detailed statistics for all packages
-        if pollux_bin and packages:
-            print("Running Pollux to extract JSON struct statistics...")
-            try:
-                # Call pollux with all packages at once for efficiency
-                stats_json = subprocess.run(
-                    [pollux_bin, "json", "stats"] + packages,
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
-                stats = json.loads(stats_json.stdout)
-
-                # Match stats with data_rows by filename and merge
-                for row in data_rows:
-                    file_path = row["go_file"]
-                    if file_path in stats:
-                        # Merge the stats dict into the row
-                        row.update(stats[file_path])
-
-            except subprocess.CalledProcessError as e:
-                print(f"[{owner}/{repo}] Error running pollux json stats", file=sys.stderr)
-                if e.stderr:
-                    print(e.stderr, file=sys.stderr)
-                else:
-                    print(
-                        f"Command '{' '.join(e.cmd)}' returned non-zero exit status {e.returncode}",
-                        file=sys.stderr,
-                    )
-
-                if error_log_file:
-                    try:
-                        error_log_file.write(f"[{owner}/{repo}] ")
-                        if e.stderr:
-                            error_log_file.write(e.stderr)
-                            if not e.stderr.endswith("\n"):
-                                error_log_file.write("\n")
-                        else:
-                            error_log_file.write(
-                                f"Command '{' '.join(e.cmd)}' returned non-zero exit status {e.returncode}\n"
-                            )
-                        error_log_file.flush()
-                    except IOError as log_err:
+                    if e.stderr:
+                        print(e.stderr, file=sys.stderr)
+                    else:
                         print(
-                            f"Failed to write to error log: {log_err}",
+                            f"Command '{' '.join(e.cmd)}' returned non-zero exit status {e.returncode}",
                             file=sys.stderr,
                         )
-            except (json.JSONDecodeError, KeyError) as e:
-                error_msg = f"[{owner}/{repo}] Error parsing pollux stats output: {e}"
-                print(error_msg, file=sys.stderr)
-                if error_log_file:
-                    try:
-                        error_log_file.write(f"{error_msg}\n")
-                        error_log_file.flush()
-                    except IOError:
-                        pass
+
+                    if error_log_file:
+                        try:
+                            error_log_file.write(f"[{owner}/{repo}] ")
+                            if e.stderr:
+                                error_log_file.write(e.stderr)
+                                if not e.stderr.endswith("\n"):
+                                    error_log_file.write("\n")
+                            else:
+                                error_log_file.write(
+                                    f"Command '{' '.join(e.cmd)}' returned non-zero exit status {e.returncode}\n"
+                                )
+                            error_log_file.flush()
+                        except IOError as log_err:
+                            print(
+                                f"Failed to write to error log: {log_err}",
+                                file=sys.stderr,
+                            )
+                except (json.JSONDecodeError, KeyError) as e:
+                    error_msg = (
+                        f"[{owner}/{repo}] Error parsing pollux stats output: {e}"
+                    )
+                    print(error_msg, file=sys.stderr)
+                    if error_log_file:
+                        try:
+                            error_log_file.write(f"{error_msg}\n")
+                            error_log_file.flush()
+                        except IOError:
+                            pass
+
+                progress.update(task, advance=1)
 
         if error_log_file:
             try:
@@ -723,7 +732,9 @@ def handle_fetch_command(args):
                         get_json_usage_parquet(r[0], r[1], token, output_file)
                     else:
                         if cache_dir:
-                            print(f"Using local cloning method with cache directory: {cache_dir}")
+                            print(
+                                f"Using local cloning method with cache directory: {cache_dir}"
+                            )
                         else:
                             print("Using local cloning method to temporary directory.")
                         get_json_usage_parquet_local(r[0], r[1], output_file, cache_dir)
