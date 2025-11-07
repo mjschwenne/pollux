@@ -53,6 +53,7 @@
 
                 # Misc utilities
                 just
+                nushell
                 gnumake
                 xxd
 
