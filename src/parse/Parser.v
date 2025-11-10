@@ -137,41 +137,41 @@ Module Parsers (InputModule : AbstractInput).
     Definition Output := Input.
 
     Inductive SerializeResult :=
-    | SerializeSuccess (out : Output)
-    | SerializeFailure (level : FailureLevel) (data : FailureData).
+    | SerialSuccess (out : Output)
+    | SerialFailure (level : FailureLevel) (data : FailureData).
 
     (** FUNCTIONS ON SERIALIZER RESULTS *)
 
     Definition Out (sr : SerializeResult) : Output := 
       match sr with
-      | SerializeSuccess out
-      | SerializeFailure _ (mkFailureData _ out _) => out
+      | SerialSuccess out
+      | SerialFailure _ (mkFailureData _ out _) => out
       end.
 
     Definition IsSerialFailure (sr : SerializeResult) : bool :=
       match sr with
-      | SerializeFailure _ _ => true
+      | SerialFailure _ _ => true
       | _ => false
       end.
     
     Definition IsSerialFatalFailure (sr : SerializeResult) : bool :=
       match sr with
-      | SerializeFailure Fatal _ => true
+      | SerialFailure Fatal _ => true
       | _ => false
       end.
 
     Definition IsSerialFailureProp (sr : SerializeResult) : Prop :=
       match sr with
-      | SerializeSuccess _ => False
-      | SerializeFailure _ _ => True
+      | SerialSuccess _ => False
+      | SerialFailure _ _ => True
       end.
     
     (* PropagateSerialFailure function not needed since SerializeResults are parameterized. *)
 
     Definition IsSerialSuccessProp (sr : SerializeResult) : Prop :=
       match sr with
-      | SerializeSuccess _ => True
-      | SerializeFailure _ _ => False
+      | SerialSuccess _ => True
+      | SerialFailure _ _ => False
       end.
 
     (**
@@ -191,7 +191,7 @@ Module Parsers (InputModule : AbstractInput).
 
     (** Serializer Definition *)
 
-    Definition Serializer {R : Type} := R -> Output -> SerializeResult. 
+    Definition Serializer {R : Type} {wf : R -> Prop} := R -> SerializeResult. 
     Arguments Serializer R : clear implicits.
 
     (**
@@ -217,40 +217,91 @@ Module Parsers (InputModule : AbstractInput).
         * lia.
     Qed.
 
+    (** TOP LEVEL CORRECTNESS DEFINITION *)
+    Definition ParseOk {R : Type} {wf : R -> Prop} (par : Parser R) (ser : Serializer R wf) :=
+      forall (x : R) (rest : Input), wf x -> par (App (Out $ ser x) rest) = ParseSuccess x rest.
+
     (**
      COMBINATORS
      *)
     (* This parser does not consume any input and returns the given value *)
-    Definition SucceedWith {R : Type} (result : R) : Parser R :=
+    Definition ParseSucceedWith {R : Type} (result : R) : Parser R :=
       (fun inp => ParseSuccess result inp).
 
+    Definition serial_trivial_wf {R : Type} : R -> Prop := fun _ => True.
+
+    Definition SerialSucceedWith {R : Type} : Serializer R serial_trivial_wf :=
+      (fun inp => SerialSuccess Input_default).
+
+    Lemma SucceedCorrect {R : Type} (r : R) :
+      ParseOk (ParseSucceedWith r) SerialSucceedWith.
+    Proof using Type.
+      unfold ParseOk.
+      intros. 
+      unfold ParseSucceedWith.
+      simpl.
+      rewrite App_nil_l.
+    (* Naturally, we can't preserve the value round-tripping though the combinator if nothing is
+       written in to the input. *)
+    Abort.
+
     (* A parser that always succeeds, consumes nothing and returns () *)
-    Definition Epsilon : (Parser unit) := SucceedWith ().
+    Definition ParseEpsilon : (Parser unit) := ParseSucceedWith tt.
+
+    Definition SerialEpsilon : (Serializer unit serial_trivial_wf) := SerialSucceedWith.
+
+    (* While we couldn't do this for any type (see SucceedCorrect above), we CAN do it with unit
+       since we know statically that there is only one member of type unit, (). *)
+    Lemma EpsilonCorrect : ParseOk ParseEpsilon SerialEpsilon.
+    Proof using Type.
+      unfold ParseOk.
+      intros.
+      unfold ParseEpsilon.
+      unfold ParseSucceedWith.
+      simpl.
+      rewrite App_nil_l.
+      destruct x.
+      reflexivity.
+    Qed.
 
     (* A parser that does not consume any input and returns the given failure *)
-    Definition FailWith {R : Type} (message : string) (level : FailureLevel) : Parser R :=
-      (fun inp => ParseFailure level $ mkFailureData message inp None).
+    Definition ParseFailWith {R : Type} (message : string) (level : FailureLevel) : Parser R :=
+      fun inp => ParseFailure level $ mkFailureData message inp None.
+
+    Definition SerialFailWith {R : Type} (message : string) (level : FailureLevel) :
+      Serializer R serial_trivial_wf :=
+        fun inp => SerialFailure level $ mkFailureData message Input_default None.
+
+    (* WARN I don't think a connecting lemma here is possible. *)
 
     (* A parser that always returns the given result *)
     Definition ResultWith {R : Type} (result : ParseResult R) : Parser R :=
-      (fun inp => result).
+      fun inp => result.
+
+    Definition SResultWith {R : Type} (result : SerializeResult) : Serializer R serial_trivial_wf :=
+      fun inp => result.
+
+    (* WARN I don't think a connecting lemma here is possible. *)
 
     (* A parser that fails if the string has not been entirely consumed *)
-    Definition EndOfString : Parser unit :=
-      (fun inp => if Length inp == 0 then
-                 ParseSuccess () inp
-               else
-                 ParseFailure Recoverable
-                   (mkFailureData "expected end of string" inp None)).
+    Definition ParseEndOfInput : Parser unit :=
+      fun inp => if Length inp == 0 then
+                ParseSuccess () inp
+              else
+                ParseFailure Recoverable
+                  (mkFailureData "expected end of input" inp None).
+
+    (* WARN I also don't there is a corresponding serializer combinator here. *)
 
     (* A parser that fails if the left parser fails. If the left parser succeeds, provides its
      result and the remaining sequence to the right parser generator. *)
-    Definition Bind {L R : Type} (left : Parser L) (right : L -> Parser R) : Parser R :=
+    Definition ParseBind {L R : Type} (left : Parser L) (right : L -> Parser R) : Parser R :=
       fun inp =>
         match left inp with
         | ParseSuccess leftResult remaining => right leftResult remaining
         | ParseFailure level data => ParseFailure level data
         end.
+
 
     (* A parser that fails if the left parser fails. If the left parser succeeds, provides its
      result to the right parser generator and returns its result applied to the remaining input *)
@@ -293,13 +344,47 @@ Module Parsers (InputModule : AbstractInput).
 
      If one parser fails, return that parse failure. If both fail, return the left failure
      *)
-    Definition And {L R : Type} (left : Parser L) (right : Parser R) : Parser (L * R) :=
+    Definition ParseAnd {L R : Type} (left : Parser L) (right : Parser R) : Parser (L * R) :=
       fun inp =>
         match left inp, right inp with
         | ParseSuccess l _, ParseSuccess r rr => ParseSuccess (l, r) rr
         | ParseFailure level data, _
         | _, ParseFailure level data => ParseFailure level data
         end.
+
+    Definition And_wf {L R : Type} (wfl : L -> Prop) (wfr : R -> Prop) : (L * R) -> Prop :=
+      fun lr => let (l, r) := lr in wfl l /\ wfr r.
+
+    Definition SerialAnd {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (left : Serializer L wfl) (right : Serializer R wfr) : Serializer (L * R) (And_wf wfl wfr) :=
+      fun inp =>
+        let (l, r) := inp in 
+        match right r, left l with
+        | SerialSuccess r_enc, SerialSuccess l_enc => SerialSuccess (App l_enc r_enc)
+        | SerialFailure level data, _
+        | _, SerialFailure level data => SerialFailure level data
+        end.
+
+    Lemma AndCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (lp : Parser L) (ls : Serializer L wfl)
+      (rp : Parser R) (rs : Serializer R wfr) :
+      ParseOk lp ls -> ParseOk rp rs -> ParseOk (ParseAnd lp rp) (SerialAnd ls rs).
+    Proof.
+      unfold ParseOk.
+      intros Hleft_ok Hright_ok.
+      intros [l r] rest [Hl_wf Hr_wf].
+      unfold SerialAnd.
+      destruct (rs r) eqn:Hright.
+      + destruct (ls l) eqn:Hleft.
+        * unfold ParseAnd. simpl. 
+          rewrite App_assoc.
+          pose proof Hleft_ok l (App out rest) as Hlp.
+          rewrite Hleft in Hlp.
+          simpl in Hlp.
+          apply Hlp in Hl_wf as Hl_ret.
+          rewrite Hl_ret.
+      (* ParseAnd is NOT a sequential combinator, but a choice. I don't know how to write a choice serializer combinator. *)
+      Abort.
 
     Definition Or {R : Type} (left : Parser R) (right : Parser R) : Parser R :=
       fun inp =>
