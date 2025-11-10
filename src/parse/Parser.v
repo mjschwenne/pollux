@@ -14,7 +14,7 @@ Module Parsers (InputModule : AbstractInput).
     | Fatal
     | Recoverable.
 
-    (* Record information about when a parse fails *)
+    (* Record information about when a parse / serialize fails *)
     Inductive FailureData :=
     | mkFailureData (msg : string) (remaining : Input) (next : option FailureData).
 
@@ -42,6 +42,8 @@ Module Parsers (InputModule : AbstractInput).
           | Some next_val => mkFailureData msg remaining (Some (ConcatFailure next_val other))
           end
       end.
+
+    (** I'll use the failure for the serializers too, but interpret "remaining" as "output". *)
     
     Inductive ParseResult {R : Type} :=
     | ParseSuccess (result : R) (remaining : Input)
@@ -94,15 +96,15 @@ Module Parsers (InputModule : AbstractInput).
       - apply ParseFailure; assumption.
     Defined.
 
-    (* Similarly to PropagateFailure, this function only works on a ParseSuccess and lets us unwrap it.
-     Honestly, both of these could be done inline whenever needed, but I like learning more about how
-     to handle these in Rocq. I don't know what extraction would do to these. *)
     Definition IsSuccessProp {R : Type} (pr : ParseResult R) : Prop :=
       match pr with
       | ParseSuccess _ _ => True
       | ParseFailure _ _ => False
       end.
 
+    (* Similarly to PropagateFailure, this function only works on a ParseSuccess and lets us unwrap it.
+     Honestly, both of these could be done inline whenever needed, but I like learning more about how
+     to handle these in Rocq. I don't know what extraction would do to these. *)
     Definition Extract {R : Type} (pr : ParseResult R) (pf : IsSuccessProp pr) : R * Input. 
     Proof.
       destruct pr.
@@ -129,6 +131,49 @@ Module Parsers (InputModule : AbstractInput).
       | _ => false
       end.
 
+    (** SERIALIZER RESULTS *)
+
+    (* Use Output type for serializers *)
+    Definition Output := Input.
+
+    Inductive SerializeResult :=
+    | SerializeSuccess (out : Output)
+    | SerializeFailure (level : FailureLevel) (data : FailureData).
+
+    (** FUNCTIONS ON SERIALIZER RESULTS *)
+
+    Definition Out (sr : SerializeResult) : Output := 
+      match sr with
+      | SerializeSuccess out
+      | SerializeFailure _ (mkFailureData _ out _) => out
+      end.
+
+    Definition IsSerialFailure (sr : SerializeResult) : bool :=
+      match sr with
+      | SerializeFailure _ _ => true
+      | _ => false
+      end.
+    
+    Definition IsSerialFatalFailure (sr : SerializeResult) : bool :=
+      match sr with
+      | SerializeFailure Fatal _ => true
+      | _ => false
+      end.
+
+    Definition IsSerialFailureProp (sr : SerializeResult) : Prop :=
+      match sr with
+      | SerializeSuccess _ => False
+      | SerializeFailure _ _ => True
+      end.
+    
+    (* PropagateSerialFailure function not needed since SerializeResults are parameterized. *)
+
+    Definition IsSerialSuccessProp (sr : SerializeResult) : Prop :=
+      match sr with
+      | SerializeSuccess _ => True
+      | SerializeFailure _ _ => False
+      end.
+
     (**
      Parser Definition
 
@@ -144,6 +189,11 @@ Module Parsers (InputModule : AbstractInput).
     Definition ParserSelector {R : Type} := string -> ParseResult R.
     Arguments ParserSelector R : clear implicits.
 
+    (** Serializer Definition *)
+
+    Definition Serializer {R : Type} := R -> Output -> SerializeResult. 
+    Arguments Serializer R : clear implicits.
+
     (**
      Misc Utilities and Definitions
      *)
@@ -152,7 +202,7 @@ Module Parsers (InputModule : AbstractInput).
 
     Lemma IsRemainingTrans (input remaining1 remaining2 : Input) :
       IsRemaining input remaining1 -> IsRemaining remaining1 remaining2 -> IsRemaining input remaining2.
-    Proof.
+    Proof using Type.
       intros [H1_len H1_drop] [H2_len H2_drop].
       unfold IsRemaining.
       split.
