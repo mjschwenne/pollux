@@ -404,7 +404,7 @@ Module Parsers (InputModule : AbstractInput).
     (* Like Or, but takes as many parsers as needed *)
     Fixpoint OrSeq {R : Type} (alternatives : list (Parser R)) : Parser R :=
       match alternatives with
-      | [] => FailWith "no alternatives" Recoverable
+      | [] => ParseFailWith "no alternatives" Recoverable
       | alt :: [] => alt
       | alt :: alts => Or alt (OrSeq alts)
       end.
@@ -438,7 +438,7 @@ Module Parsers (InputModule : AbstractInput).
     (* If the condition parser fails, returns a non-committing failure.
      Suitable to use in Or parsers. *)
     Definition If {L R : Type} (condition : Parser L) (succeed : Parser R) : Parser R :=
-      Bind (Lookahead condition) (fun _ => succeed).
+      ParseBind (Lookahead condition) (fun _ => succeed).
     
     (* (Maybe a) evaluates `a` on the input, and then
      - If `a` succeeds, wraps the result in Some
@@ -500,7 +500,7 @@ Module Parsers (InputModule : AbstractInput).
     Lemma rep'_memory_len {A : Type} (underlying : Parser A) (inp : Input) :
       forall ret rem,
       rep'_memory underlying inp = (ParseSuccess ret rem, true) -> Length rem < Length inp.
-    Proof.
+    Proof using Type.
       intros ret rem.
       unfold rep'_memory.
       destruct (underlying inp) eqn:Hp.
@@ -566,33 +566,33 @@ Module Parsers (InputModule : AbstractInput).
        is an O(n^2) operation *)
     Definition RepSep {A B : Type} (underlying : Parser A) (separator : Parser B) :
       Parser (list A) :=
-      Bind (Maybe underlying)
+      ParseBind (Maybe underlying)
         (fun (result : option A) =>
            match result with
            | Some ret => Rep (ConcatKeepRight separator underlying)
                           (fun (acc : list A) (a : A) => acc ++ [a])
                           [ret]
-           | None => SucceedWith []
+           | None => ParseSucceedWith []
            end).
 
     (* Repeats the underlying parser, merging intermediate results. Returns the final merged result. *)
     Definition RepMerge {A : Type} (underlying : Parser A) (merger : A -> A -> A) : Parser A :=
-      Bind (Maybe underlying)
+      ParseBind (Maybe underlying)
         (fun (result : option A) =>
            match result with
            | Some ret => Rep underlying merger ret
-           | None => FailWith "No first element in RepMerge" Recoverable
+           | None => ParseFailWith "No first element in RepMerge" Recoverable
            end).
 
     (* Repeats the underlying parser separated by the given separator parser, merging intermediate results.
      Returns the final merged result. *)
     Definition RepSepMerge {A B : Type} (underlying : Parser A) (separator : Parser B)
       (merger : A -> A -> A) : Parser A :=
-      Bind (Maybe underlying)
+      ParseBind (Maybe underlying)
         (fun (result : option A) =>
            match result with
            | Some ret => Rep (ConcatKeepRight separator underlying) merger ret
-           | None => FailWith "No first element in RepSepMerge" Recoverable
+           | None => ParseFailWith "No first element in RepSepMerge" Recoverable
            end).
 
     (* Repeated the underlying parser until the first failure that accepts alternatives, and returns the
@@ -602,7 +602,7 @@ Module Parsers (InputModule : AbstractInput).
 
     (* Like ZeroOrMore but will return a failure if there is not at least one match. *)
     Definition OneOrMore {R : Type} (underlying : Parser R) : Parser (list R) :=
-      Bind underlying
+      ParseBind underlying
         (fun r =>
            Rep underlying (fun (acc : list R) (r : R) => acc ++ [r]) [r]).
 
