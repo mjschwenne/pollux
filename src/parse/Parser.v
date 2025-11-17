@@ -219,11 +219,16 @@ Module Parsers (InputModule : AbstractInput).
 
     (** TOP LEVEL CORRECTNESS DEFINITION *)
     Definition ParseOk {R : Type} {wf : R -> Prop} (par : Parser R) (ser : Serializer R wf) :=
-      forall (x : R) (rest : Input), wf x -> par (App (Out $ ser x) rest) = ParseSuccess x rest.
+      forall (x : R) (enc rest : Input), wf x -> ser x = SerialSuccess enc ->
+                                par (App enc rest) = ParseSuccess x rest.
+
+    Definition ParseOk' {R : Type} {wf : R -> Prop} (par : Parser R) (ser : Serializer R wf) (x : R) :=
+      forall (enc rest : Input), wf x -> ser x = SerialSuccess enc -> par (App enc rest) = ParseSuccess x rest.
 
     (**
      COMBINATORS
      *)
+
     (* This parser does not consume any input and returns the given value *)
     Definition ParseSucceedWith {R : Type} (result : R) : Parser R :=
       (fun inp => ParseSuccess result inp).
@@ -234,16 +239,16 @@ Module Parsers (InputModule : AbstractInput).
       (fun inp => SerialSuccess Input_default).
 
     Lemma SucceedCorrect {R : Type} (r : R) :
-      ParseOk (ParseSucceedWith r) SerialSucceedWith.
+      ParseOk' (ParseSucceedWith r) SerialSucceedWith r.
     Proof using Type.
-      unfold ParseOk.
-      intros. 
+      unfold ParseOk'.
+      intros enc rest wf_ok. 
+      unfold SerialSucceedWith.
+      intros Hser_ok. inversion Hser_ok as [Henc].
       unfold ParseSucceedWith.
-      simpl.
       rewrite App_nil_l.
-    (* Naturally, we can't preserve the value round-tripping though the combinator if nothing is
-       written in to the input. *)
-    Abort.
+      reflexivity.
+    Qed.
 
     (* A parser that always succeeds, consumes nothing and returns () *)
     Definition ParseEpsilon : (Parser unit) := ParseSucceedWith tt.
@@ -255,10 +260,11 @@ Module Parsers (InputModule : AbstractInput).
     Lemma EpsilonCorrect : ParseOk ParseEpsilon SerialEpsilon.
     Proof using Type.
       unfold ParseOk.
-      intros.
+      intros x enc rest Hwf Hser_ok.
+      inversion Hser_ok as [Hdefault].
+      subst.
       unfold ParseEpsilon.
       unfold ParseSucceedWith.
-      simpl.
       rewrite App_nil_l.
       destruct x.
       reflexivity.
@@ -275,10 +281,10 @@ Module Parsers (InputModule : AbstractInput).
     (* WARN I don't think a connecting lemma here is possible. *)
 
     (* A parser that always returns the given result *)
-    Definition ResultWith {R : Type} (result : ParseResult R) : Parser R :=
+    Definition ParseResultWith {R : Type} (result : ParseResult R) : Parser R :=
       fun inp => result.
 
-    Definition SResultWith {R : Type} (result : SerializeResult) : Serializer R serial_trivial_wf :=
+    Definition SerialResultWith {R : Type} (result : SerializeResult) : Serializer R serial_trivial_wf :=
       fun inp => result.
 
     (* WARN I don't think a connecting lemma here is possible. *)
@@ -302,6 +308,45 @@ Module Parsers (InputModule : AbstractInput).
         | ParseFailure level data => ParseFailure level data
         end.
 
+    Definition Bind_wf {L R : Type} (wfl : L -> Prop) (wfr : R -> Prop) (tag : R -> L) : R -> Prop :=
+      fun r => wfl (tag r) /\ wfr r.
+
+    Definition SerialBind {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (tag : R -> L) (left : R -> Serializer L wfl) (right : Serializer R wfr) :
+      Serializer R (Bind_wf wfl wfr tag) := 
+      fun r =>
+        match left r (tag r) with
+        | SerialSuccess l_enc => match right r with
+                                | SerialSuccess r_enc => SerialSuccess (App l_enc r_enc)
+                                | SerialFailure lvl data as f => f
+                                end
+        | SerialFailure lvl data as f => f
+        end.
+
+    Lemma BindCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (lp : Parser L) (ls : R -> Serializer L wfl)
+      (rp : L -> Parser R) (rs : Serializer R wfr) (tag : R -> L) :
+      forall (r : R), ParseOk' lp (ls r) (tag r) -> ParseOk' (rp (tag r)) rs r ->
+                 ParseOk' (ParseBind lp rp) (SerialBind tag ls rs) r.
+    Proof using Type.
+      intros x.
+      unfold ParseOk'.
+      intros Hleft_ok Hright_ok enc rest [wfl_ok wfr_ok].
+      unfold SerialBind. simpl.
+      destruct (ls x (tag x)) as [l_enc|] eqn:Hleft; last discriminate.
+      destruct (rs x) as [r_enc|] eqn:Hright; last discriminate.
+      intro Hser_ok. inversion Hser_ok as [Henc].
+      rewrite App_assoc.
+      unfold ParseBind.
+      pose proof Hleft_ok l_enc (App r_enc rest) as Hlp.
+      apply Hlp in wfl_ok as Hl_ret; last reflexivity.
+      rewrite Hl_ret.
+      pose proof Hright_ok r_enc rest as Hrp.
+      apply Hrp in wfr_ok as Hr_ret; last reflexivity.
+      assumption.
+    Qed.
+
+    (* It's important to use ParseOk' so that we can unify the r's across each parser. I think. *)
 
     (* A parser that fails if the left parser fails. If the left parser succeeds, provides its
      result to the right parser generator and returns its result applied to the remaining input *)
@@ -351,40 +396,6 @@ Module Parsers (InputModule : AbstractInput).
         | ParseFailure level data, _
         | _, ParseFailure level data => ParseFailure level data
         end.
-
-    Definition And_wf {L R : Type} (wfl : L -> Prop) (wfr : R -> Prop) : (L * R) -> Prop :=
-      fun lr => let (l, r) := lr in wfl l /\ wfr r.
-
-    Definition SerialAnd {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-      (left : Serializer L wfl) (right : Serializer R wfr) : Serializer (L * R) (And_wf wfl wfr) :=
-      fun inp =>
-        let (l, r) := inp in 
-        match right r, left l with
-        | SerialSuccess r_enc, SerialSuccess l_enc => SerialSuccess (App l_enc r_enc)
-        | SerialFailure level data, _
-        | _, SerialFailure level data => SerialFailure level data
-        end.
-
-    Lemma AndCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-      (lp : Parser L) (ls : Serializer L wfl)
-      (rp : Parser R) (rs : Serializer R wfr) :
-      ParseOk lp ls -> ParseOk rp rs -> ParseOk (ParseAnd lp rp) (SerialAnd ls rs).
-    Proof.
-      unfold ParseOk.
-      intros Hleft_ok Hright_ok.
-      intros [l r] rest [Hl_wf Hr_wf].
-      unfold SerialAnd.
-      destruct (rs r) eqn:Hright.
-      + destruct (ls l) eqn:Hleft.
-        * unfold ParseAnd. simpl. 
-          rewrite App_assoc.
-          pose proof Hleft_ok l (App out rest) as Hlp.
-          rewrite Hleft in Hlp.
-          simpl in Hlp.
-          apply Hlp in Hl_wf as Hl_ret.
-          rewrite Hl_ret.
-      (* ParseAnd is NOT a sequential combinator, but a choice. I don't know how to write a choice serializer combinator. *)
-      Abort.
 
     Definition Or {R : Type} (left : Parser R) (right : Parser R) : Parser R :=
       fun inp =>
@@ -468,7 +479,7 @@ Module Parsers (InputModule : AbstractInput).
         end.
 
     (* Apply two parser consecutively. If both succeed, return the pair of both results *)
-    Definition Concat {L R : Type} (left : Parser L) (right : Parser R) : Parser (L * R) :=
+    Definition ParseConcat {L R : Type} (left : Parser L) (right : Parser R) : Parser (L * R) :=
       fun inp =>
         match left inp with
         | ParseSuccess ll lrem => match right lrem with
@@ -477,6 +488,46 @@ Module Parsers (InputModule : AbstractInput).
                                  end
         | ParseFailure lvl data as p => PropagateFailure p I
         end.
+
+    Definition Concat_wf {L R : Type} (wfl : L -> Prop) (wfr : R -> Prop) : (L * R) -> Prop :=
+      fun lr => let (l, r) := lr in wfl l /\ wfr r.
+
+    Definition SerialConcat {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (left : Serializer L wfl) (right : Serializer R wfr) : Serializer (L * R) (Concat_wf wfl wfr) :=
+      fun inp =>
+        let (l, r) := inp in 
+        match left l, right r with
+        | SerialSuccess l_enc, SerialSuccess r_enc => SerialSuccess (App l_enc r_enc)
+        | SerialFailure level data, _
+        | _, SerialFailure level data => SerialFailure level data
+        end.
+
+    Lemma ConcatCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (lp : Parser L) (ls : Serializer L wfl)
+      (rp : Parser R) (rs : Serializer R wfr) :
+      ParseOk lp ls -> ParseOk rp rs -> ParseOk (ParseConcat lp rp) (SerialConcat ls rs).
+    Proof using Type.
+      unfold ParseOk.
+      intros Hleft_ok Hright_ok.
+      intros [l r] enc rest [Hl_wf Hr_wf].
+      unfold SerialConcat.
+      destruct (ls l) as [l_enc|] eqn:Hleft; last discriminate.
+      destruct (rs r) as [r_enc|] eqn:Hright; last discriminate.
+      intros Hser_ok. inversion Hser_ok as [Henc].
+      unfold ParseConcat. simpl. 
+      rewrite App_assoc.
+      pose proof Hleft_ok l l_enc (App r_enc rest) as Hlp.
+      rewrite Hleft in Hlp.
+      simpl in Hlp.
+      apply Hlp in Hl_wf as Hl_ret; last reflexivity.
+      rewrite Hl_ret.
+      pose proof Hright_ok r r_enc rest as Hrp.
+      rewrite Hright in Hrp.
+      simpl in Hrp.
+      apply Hrp in Hr_wf as Hr_ret; last reflexivity.
+      rewrite Hr_ret.
+      reflexivity.
+    Qed.
 
     (* Return only the result of the right parser if the two parsers match *)
     Definition ConcatKeepRight {L R : Type} (left : Parser L) (right : Parser R) : Parser R :=
