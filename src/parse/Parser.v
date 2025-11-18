@@ -191,7 +191,7 @@ Module Parsers (InputModule : AbstractInput).
 
     (** Serializer Definition *)
 
-    Definition Serializer {R : Type} {wf : R -> Prop} := R -> SerializeResult. 
+    Definition Serializer {R : Type} {wf : R -> Output -> Prop} := R -> SerializeResult. 
     Arguments Serializer R : clear implicits.
 
     (**
@@ -218,16 +218,19 @@ Module Parsers (InputModule : AbstractInput).
     Qed.
 
     (** TOP LEVEL CORRECTNESS DEFINITION *)
-    Definition ParseOk {R : Type} {wf : R -> Prop} (par : Parser R) (ser : Serializer R wf) :=
-      forall (x : R) (enc rest : Input), wf x -> ser x = SerialSuccess enc ->
-                                par (App enc rest) = ParseSuccess x rest.
+    Definition ParseOk''' {R : Type} {wf : R -> Output -> Prop}
+      (par : Parser R) (ser : Serializer R wf) (x : R) (enc rest : Input) :=
+      wf x enc -> ser x = SerialSuccess enc -> par (App enc rest) = ParseSuccess x rest.
 
-    Definition ParseOk' {R : Type} {wf : R -> Prop} (par : Parser R) (ser : Serializer R wf) (x : R) :=
-      forall (enc rest : Input), wf x -> ser x = SerialSuccess enc -> par (App enc rest) = ParseSuccess x rest.
-
-    Definition ParseOk'' {R : Type} {wf : R -> Prop}
+    Definition ParseOk'' {R : Type} {wf : R -> Output -> Prop}
       (par : Parser R) (ser : Serializer R wf) (x : R) (enc : Input) :=
-      forall (rest : Input), wf x -> ser x = SerialSuccess enc -> par (App enc rest) = ParseSuccess x rest.
+      forall (rest : Input), ParseOk''' par ser x enc rest.
+
+    Definition ParseOk' {R : Type} {wf : R -> Output -> Prop} (par : Parser R) (ser : Serializer R wf) (x : R) :=
+      forall (enc : Input), ParseOk'' par ser x enc.
+
+    Definition ParseOk {R : Type} {wf : R -> Output -> Prop} (par : Parser R) (ser : Serializer R wf) :=
+      forall (x : R), ParseOk' par ser x.
 
     (**
      COMBINATORS
@@ -237,7 +240,7 @@ Module Parsers (InputModule : AbstractInput).
     Definition ParseSucceedWith {R : Type} (result : R) : Parser R :=
       (fun inp => ParseSuccess result inp).
 
-    Definition serial_trivial_wf {R : Type} : R -> Prop := fun _ => True.
+    Definition serial_trivial_wf {R : Type} : R -> Output -> Prop := fun _ _ => True.
 
     Definition SerialSucceedWith {R : Type} : Serializer R serial_trivial_wf :=
       (fun inp => SerialSuccess Input_default).
@@ -245,7 +248,6 @@ Module Parsers (InputModule : AbstractInput).
     Lemma SucceedCorrect {R : Type} (r : R) :
       ParseOk' (ParseSucceedWith r) SerialSucceedWith r.
     Proof using Type.
-      unfold ParseOk'.
       intros enc rest wf_ok. 
       unfold SerialSucceedWith.
       intros Hser_ok. inversion Hser_ok as [Henc].
@@ -263,7 +265,6 @@ Module Parsers (InputModule : AbstractInput).
        since we know statically that there is only one member of type unit, (). *)
     Lemma EpsilonCorrect : ParseOk ParseEpsilon SerialEpsilon.
     Proof using Type.
-      unfold ParseOk.
       intros x enc rest Hwf Hser_ok.
       inversion Hser_ok as [Hdefault].
       subst.
@@ -312,12 +313,15 @@ Module Parsers (InputModule : AbstractInput).
         | ParseFailure level data => ParseFailure level data
         end.
 
-    Definition Bind_wf {L R : Type} (wfl : L -> Prop) (wfr : R -> Prop) (tag : R -> L) : R -> Prop :=
-      fun r => wfl (tag r) /\ wfr r.
+    Definition Bind_wf {L R : Type} {wfl : L -> Output -> Prop} {wfr : R -> Output -> Prop}
+      (tag : R -> L) (left : R -> Serializer L wfl) (right : Serializer R wfr) : R -> Output -> Prop :=
+      fun r enc => forall l_enc r_enc,
+        left r (tag r) = SerialSuccess l_enc -> right r = SerialSuccess r_enc ->
+        wfl (tag r) l_enc /\ wfr r r_enc /\ enc = (App l_enc r_enc).
 
-    Definition SerialBind {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+    Definition SerialBind {L R : Type} {wfl : L -> Output -> Prop} {wfr : R -> Output -> Prop}
       (tag : R -> L) (left : R -> Serializer L wfl) (right : Serializer R wfr) :
-      Serializer R (Bind_wf wfl wfr tag) := 
+      Serializer R (Bind_wf tag left right) := 
       fun r =>
         match left r (tag r) with
         | SerialSuccess l_enc => match right r with
@@ -327,32 +331,50 @@ Module Parsers (InputModule : AbstractInput).
         | SerialFailure lvl data as f => f
         end.
 
-    Lemma BindCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+    Lemma BindCorrect {L R : Type} {wfl : L -> Output -> Prop} {wfr : R -> Output -> Prop}
       (lp : Parser L) (ls : R -> Serializer L wfl)
       (rp : L -> Parser R) (rs : Serializer R wfr) (tag : R -> L) :
-      forall (r : R), ParseOk lp (ls r) -> ParseOk (rp (tag r)) rs ->
-                 ParseOk' (ParseBind lp rp) (SerialBind tag ls rs) r.
+      forall r, ParseOk lp (ls r) -> ParseOk (rp (tag r)) rs ->
+      ParseOk' (ParseBind lp rp) (SerialBind tag ls rs) r.
     Proof using Type.
-      intros x.
-      unfold ParseOk.
-      unfold ParseOk'.
-      intros Hleft_ok Hright_ok enc rest [wfl_ok wfr_ok].
+      intros x Hleft_ok Hright_ok enc rest wf_ok.
       unfold SerialBind.
       destruct (ls x (tag x)) as [l_enc|] eqn:Hleft; last discriminate.
       destruct (rs x) as [r_enc|] eqn:Hright; last discriminate.
       intro Hser_ok. inversion Hser_ok as [Henc].
       rewrite App_assoc.
       unfold ParseBind.
-      pose proof Hleft_ok (tag x) l_enc (App r_enc rest) as Hlp.
-      apply Hlp in wfl_ok as Hl_ret; last apply Hleft.
+      pose proof (wf_ok l_enc r_enc Hleft Hright) as (wfl_ok & wfr_ok & _).
+      pose proof Hleft_ok (tag x) l_enc (App r_enc rest) wfl_ok Hleft as Hl_ret.
       rewrite Hl_ret.
-      pose proof Hright_ok x r_enc rest as Hrp.
-      apply Hrp in wfr_ok as Hr_ret; last apply Hright.
+      pose proof Hright_ok x r_enc rest wfr_ok Hright as Hr_ret.
       assumption.
     Qed.
 
-    (* A parser that fails if the left parser fails. If the left parser succeeds, provides its
-     result to the right parser generator and returns its result applied to the remaining input *)
+    (* Lemma BindCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop} *)
+    (*   (lp : Parser L) (ls : R -> Serializer L wfl) *)
+    (*   (rp : L -> Parser R) (rs : Serializer R wfr) (tag : R -> L) : *)
+    (*   forall (r : R), ParseOk lp (ls r) -> ParseOk (rp (tag r)) rs -> *)
+    (*              ParseOk' (ParseBind lp rp) (SerialBind tag ls rs) r. *)
+    (* Proof using Type. *)
+    (*   intros x Hleft_ok Hright_ok enc rest [wfl_ok wfr_ok]. *)
+    (*   unfold SerialBind. *)
+    (*   destruct (ls x (tag x)) as [l_enc|] eqn:Hleft; last discriminate. *)
+    (*   destruct (rs x) as [r_enc|] eqn:Hright; last discriminate. *)
+    (*   intro Hser_ok. inversion Hser_ok as [Henc]. *)
+    (*   rewrite App_assoc. *)
+    (*   unfold ParseBind. *)
+    (*   pose proof Hleft_ok (tag x) l_enc (App r_enc rest) as Hlp. *)
+    (*   apply Hlp in wfl_ok as Hl_tmp. apply Hl_tmp in Hleft as Hl_ret. *)
+    (*   rewrite Hl_ret. *)
+    (*   pose proof Hright_ok x r_enc rest as Hrp. *)
+    (*   apply Hrp in wfr_ok as Hr_tmp. apply Hr_tmp in Hright as Hr_ret. *)
+    (*   assumption. *)
+    (* Qed. *)
+
+    (* A parser that fails if the left parser fails. If the left parser
+     succeeds, provides its result to the right parser generator and returns its
+     result applied to the remaining input *)
     Definition ParseBindSucceeds {L R : Type} (left : Parser L) (right : L -> Input -> Parser R) : Parser R :=
       fun inp =>
         match left inp with
@@ -360,9 +382,19 @@ Module Parsers (InputModule : AbstractInput).
         | ParseFailure level data => ParseFailure level data
         end.
 
-    Definition SerialBindSucceeds {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}  
+    Definition BindSucceeds_wf {L R : Type} {wfl : L -> Output -> Prop} {wfr : R -> Output -> Prop}
+      (tag : R -> L) (left : R -> Output -> Serializer L wfl) (right : Serializer R wfr) : R -> Output -> Prop :=
+      fun r enc => forall l_enc r_enc,
+        left r r_enc (tag r) = SerialSuccess l_enc -> right r = SerialSuccess r_enc ->
+        wfl (tag r) l_enc /\ wfr r r_enc /\ enc = (App l_enc r_enc).
+
+    (* This is tricky since technically ParseBindSucceeds isn't limited to only
+    inspecting the encoding of the right serializer (could use things like the
+    lookahead parser) so the correctness theorem will have to ensure that both
+    get the same encoding. *)
+    Definition SerialBindSucceeds {L R : Type} {wfl : L -> Output -> Prop} {wfr : R -> Output -> Prop}  
       (tag : R -> L) (left : R -> Output -> Serializer L wfl) (right : Serializer R wfr) :
-      Serializer R (Bind_wf wfl wfr tag) := 
+      Serializer R (BindSucceeds_wf tag left right) := 
       fun r =>
         match right r with
         | SerialSuccess r_enc => match left r r_enc (tag r) with
@@ -372,19 +404,64 @@ Module Parsers (InputModule : AbstractInput).
         | SerialFailure lvl data as f => f
         end.
 
-    Lemma BindSucceedsCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+    Lemma BindSucceedsCorrect {L R : Type} {wfl : L -> Output -> Prop} {wfr : R -> Output -> Prop}
       (lp : Parser L) (ls : R -> Output -> Serializer L wfl)
       (rp : L -> Input -> Parser R) (rs : Serializer R wfr) (tag : R -> L) :
-      forall (r : R) (enc : Input), ParseOk'' (rp (tag r) enc) rs r enc -> ParseOk'' lp (ls r enc) (tag r) enc ->
-                 ParseOk'' (ParseBindSucceeds lp rp) (SerialBindSucceeds tag ls rs) r enc.
+      forall (r : R) (rest : Input),
+      ParseOk' (rp (tag r) (App (Out $ rs r) rest)) rs r -> ParseOk' lp (ls r (Out $ rs r)) (tag r) ->
+      ParseOk (ParseBindSucceeds lp rp) (SerialBindSucceeds tag ls rs).
     Proof using Type.
-    Abort.
+      intros x rest Hright_ok Hleft_ok [wfl_ok wfr_ok].
+      unfold SerialBindSucceeds.
+      destruct (rs x) as [r_enc|] eqn:Hright; last discriminate.
+      destruct (ls x r_enc (tag x)) as [l_enc|] eqn:Hleft; last discriminate.
+      intros Hser_ok. inversion Hser_ok as [Henc].
+      simpl. rewrite App_assoc.
+      unfold ParseBindSucceeds.
+      pose proof Hleft_ok l_enc (App r_enc rest) as Hlp.
+      pose proof wfl_ok as wfl_ok'.
+      apply Hlp in wfl_ok' as _, Hleft as Hl_ret; last assumption.
+      rewrite Hl_ret.
+      pose proof Hright_ok r_enc rest as Hrp.
+      pose proof wfr_ok as wfr_ok'.
+      apply Hrp in wfr_ok as _, Hright as Hr_ret; last assumption.
+      assumption.
+    Qed.
 
     (* Given a left parser and a parser generator based on the output of the left parser,
      returns the result of the right parser applied on the original input. *)
-    Definition BindResult {L R : Type} (left : Parser L) (right : ParseResult L -> Input -> Parser R) : Parser R :=
+    Definition ParseBindResult {L R : Type} (left : Parser L) (right : ParseResult L -> Input -> Parser R) :
+      Parser R :=
       fun inp =>
         right (left inp) inp inp.
+
+    Definition SerialBindResult {L R : Type} {wfl : L -> Output -> Prop} {wfr : R -> Output -> Prop}
+      (tag : R -> L) (left : SerializeResult -> Output -> Serializer L wfl) (right : Serializer R wfr) :
+      Serializer R (Bind_wf wfl wfr tag) :=
+      fun r =>
+        let r_ret := right r in
+        left r_ret (Out r_ret) (tag r).
+
+    Lemma BindResultCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (lp : Parser L) (ls : SerializeResult -> Output -> Serializer L wfl)
+      (rp : ParseResult L -> Input -> Parser R) (rs : Serializer R wfr) (tag : R -> L) :
+      forall (r : R) (l_enc rest : Input),
+      ParseOk' (rp (lp (App l_enc (Out $ rs r))) (App l_enc (Out $ rs r))) rs r -> ParseOk' lp (ls (rs r) (Out $ rs r)) (tag r) ->
+      ParseOk''' (ParseBindResult lp rp) (SerialBindResult tag ls rs) r (App l_enc (Out $ rs r)) rest.
+    Proof using Type.
+      intros x l_enc Hright_ok Hleft_ok enc rest [wfl_ok wfr_ok].
+      unfold SerialBindResult.
+      destruct (rs x) as [r_enc'|] eqn:Hright.
+      - simpl. destruct (ls (SerialSuccess r_enc') r_enc' (tag x)) as [l_enc'|] eqn:Hleft;
+          last discriminate.
+        intro Hser_ok. inversion Hser_ok as [Henc]. subst.
+        unfold ParseBindResult. 
+        pose proof Hleft_ok enc rest as Hlp. simpl in Hlp.
+        pose proof wfl_ok as wfl_ok'.
+        apply Hlp in wfl_ok' as _, Hleft as Hl_ret; last assumption.
+        pose proof Hright_ok enc rest as Hrp. simpl in Hrp.
+        unfold ParseOk'', ParseOk''' in Hrp.
+        unfold ParseOk', ParseOk'', ParseOk''' in Hright_ok.
 
     (* A parser combinator that makes it possible to transform the result of a parser in another one. *)
     Definition Map {R U : Type} (underlying : Parser R) (f : R -> U) : Parser U :=
