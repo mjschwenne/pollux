@@ -426,7 +426,7 @@ Module Parsers (InputModule : AbstractInput).
       R -> Output -> Prop :=
       fun r enc => forall l_enc r_ret,
         r_ret = right r -> left r_ret (Out r_ret) (tag r) = SerialSuccess l_enc ->
-        wfl (tag r) l_enc.
+        wfl (tag r) l_enc /\ wfr r.
 
     Definition SerialBindResult {L R : Type} {wfl : L -> Output -> Prop} {wfr : R -> Output -> Prop}
       (tag : R -> L) (left : SerializeResult -> Output -> Serializer L wfl) (right : Serializer R wfr) :
@@ -453,6 +453,24 @@ Module Parsers (InputModule : AbstractInput).
       BindResultLeftOk lp ls rs tag -> BindResultRightOk rp rs lp tag ->
       ParseOk (ParseBindResult lp rp) (SerialBindResult tag ls rs).
     Proof using Type.
+      intros Hleft_ok Hright_ok x enc rest wf_ok.
+      unfold SerialBindResult.
+      destruct (rs x) as [r_enc|] eqn:Hright.
+      - simpl. symmetry in Hright.
+        intro Hls. unfold BindResult_wf in wf_ok.
+        pose proof wf_ok enc (SerialSuccess r_enc) as Hleft_wf.
+        pose proof Hright as Hright'.
+        apply Hleft_wf in Hright' as _, Hls as wfl_ok; try done.
+        pose proof Hleft_ok x enc rest as Hlp. 
+        rewrite <- Hright in Hlp. simpl in Hlp.
+        pose proof wfl_ok as wfl_ok'.
+        apply Hlp in wfl_ok' as _, Hls as Hl_ret; try assumption.
+        unfold ParseBindResult.
+        rewrite Hl_ret.
+
+        unfold BindResultRightOk, ParseOk', ParseOk'', ParseOk''' in Hright_ok.
+        pose proof Hright_ok x enc r_enc rest as Hr.
+
     Abort.
 
     (* A parser combinator that makes it possible to transform the result of a parser in another one. *)
