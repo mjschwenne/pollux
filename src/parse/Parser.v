@@ -715,6 +715,17 @@ Module Parsers (InputModule : AbstractInput).
       Parser A :=
       fun inp => rep' underlying combine acc inp.
 
+    (* Repeats the underlying parser N times, combining results into an accumulator and returning the
+       final accumulated result. *)
+    Fixpoint RepN {A B : Type} (underlying : Parser B) (combine : A -> B -> A) (n : nat) (acc : A) : Parser A :=
+      fun inp => match n with
+              | O => ParseSuccess acc inp
+              | S m => match underlying inp with
+                      | ParseSuccess b rem => RepN underlying combine m (combine acc b) rem
+                      | ParseFailure lvl data => ParseFailure lvl data
+                      end
+              end.
+
     (* Repeats the underlying parser interleaved with a separator. Returns a sequence of results *)
     (* WARN: Unfortunately, without arrays or sequences with constant time accesses accumulating the list
        is an O(n^2) operation *)
@@ -729,6 +740,20 @@ Module Parsers (InputModule : AbstractInput).
            | None => ParseSucceedWith []
            end).
 
+    (* Repeats the underlying parser interleaved with a separator exactly N time.
+       Returns a sequence of results *)
+    (* WARN: Unfortunately, without arrays or sequences with constant time accesses accumulating the list
+       is an O(n^2) operation *)
+    Definition RepSepN {A B : Type} (underlying : Parser A) (separator : Parser B) (n : nat) : Parser (list A) :=
+      ParseBind (Maybe underlying)
+        (fun (result : option A) =>
+           match result with
+           | Some ret => RepN (ConcatKeepRight separator underlying)
+                          (fun (acc : list A) (a : A) => acc ++ [a])
+                          (pred n) [ret]
+           | None => ParseSucceedWith []
+        end).
+
     (* Repeats the underlying parser, merging intermediate results. Returns the final merged result. *)
     Definition RepMerge {A : Type} (underlying : Parser A) (merger : A -> A -> A) : Parser A :=
       ParseBind (Maybe underlying)
@@ -736,6 +761,16 @@ Module Parsers (InputModule : AbstractInput).
            match result with
            | Some ret => Rep underlying merger ret
            | None => ParseFailWith "No first element in RepMerge" Recoverable
+           end).
+
+    (* Repeats the underlying parser, merging intermediate results exactly N time.
+       Returns the final merged result. *)
+    Definition RepMergeN {A : Type} (underlying : Parser A) (merger : A -> A -> A) (n : nat) : Parser A :=
+      ParseBind (Maybe underlying)
+        (fun (result : option A) =>
+           match result with
+           | Some ret => RepN underlying merger (pred n) ret
+           | None => ParseFailWith "No first element in RepMergeN" Recoverable
            end).
 
     (* Repeats the underlying parser separated by the given separator parser, merging intermediate results.
@@ -749,6 +784,17 @@ Module Parsers (InputModule : AbstractInput).
            | None => ParseFailWith "No first element in RepSepMerge" Recoverable
            end).
 
+    (* Repeats the underlying parser separated by the given separator parser, merging intermediate results,
+       exactly N times. Returns the final merged result. *)
+    Definition RepSepMergeN {A B : Type} (underlying : Parser A) (separator : Parser B)
+      (merger : A -> A -> A) (n : nat) : Parser A :=
+      ParseBind (Maybe underlying)
+        (fun (result : option A) =>
+           match result with
+           | Some ret => RepN (ConcatKeepRight separator underlying) merger (pred n) ret
+           | None => ParseFailWith "No first element in RepSepMergeN" Recoverable
+           end).
+
     (* Repeated the underlying parser until the first failure that accepts alternatives, and returns the
        underlying sequence. *)
     Definition ZeroOrMore {R : Type} (underlying : Parser R) : Parser (list R) :=
@@ -759,6 +805,9 @@ Module Parsers (InputModule : AbstractInput).
       ParseBind underlying
         (fun r =>
            Rep underlying (fun (acc : list R) (r : R) => acc ++ [r]) [r]).
+
+    Definition SeqN {R : Type} (underlying : Parser R) (n : nat) : Parser (list R) :=
+      RepN underlying (fun (acc : list R) (r : R) => acc ++ [r]) n [].
 
     Definition RecursiveProgressError {R : Type} (name : string) (inp : Input) (remaining : Input) :
       ParseResult R :=
