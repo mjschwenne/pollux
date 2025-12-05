@@ -181,18 +181,15 @@ Module Parsers (InputModule : AbstractInput).
      *)
 
     (* A parser is a total function from a position to a parse result *)
-    Definition Parser {R : Type} := Input -> ParseResult R.
-    Arguments Parser R : clear implicits.
+    Definition Parser R : Type := Input -> ParseResult R.
 
     (* A parser selector is a function that, given a name that exists,
      returns a parser associated to this name *)
-    Definition ParserSelector {R : Type} := string -> ParseResult R.
-    Arguments ParserSelector R : clear implicits.
+    Definition ParserSelector R : Type := string -> ParseResult R.
 
     (** Serializer Definition *)
 
-    Definition Serializer {R : Type} {wf : R -> Prop} := R -> SerializeResult. 
-    Arguments Serializer R : clear implicits.
+    Definition Serializer (R : Type) (wf : R -> Prop) := R -> SerializeResult. 
 
     (**
      Misc Utilities and Definitions
@@ -317,9 +314,9 @@ Module Parsers (InputModule : AbstractInput).
       (tag : R -> L) (left : R -> Serializer L wfl) (right : Serializer R wfr) : R -> Prop :=
       fun r => wfl (tag r) /\ wfr r.
 
-    Definition SerialBind {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-      (tag : R -> L) (left : R -> Serializer L wfl) (right : Serializer R wfr) :
-      Serializer R (Bind_wf tag left right) := 
+    Definition SerialBind {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop} 
+      (tag : R -> L) (left : forall r, Serializer L (fun l => l = tag r /\ wfl l)) (right : Serializer R wfr) :
+      Serializer R (@Bind_wf L R wfl wfr tag left right) := 
       fun r =>
         match left r (tag r) with
         | SerialSuccess l_enc => match right r with
@@ -438,7 +435,7 @@ Module Parsers (InputModule : AbstractInput).
       (rp : ParseResult L -> Input -> Parser R) (rs : Serializer R wfr)
       (lp : Parser L) (tag : R -> L) : Prop :=
       forall (r : R) (l_enc r_enc rest: Input),
-      let enc := (App l_enc rest) in
+      let enc := (App (App l_enc r_enc) rest) in
       ParseOk''' (rp (lp enc) enc) rs r r_enc rest.
 
     Lemma BindResultCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
@@ -447,6 +444,7 @@ Module Parsers (InputModule : AbstractInput).
       BindResultLeftOk lp ls rs tag -> BindResultRightOk rp rs lp tag ->
       ParseOk (ParseBindResult lp rp) (SerialBindResult tag ls rs).
     Proof using Type.
+      unfold ParseOk, ParseOk', ParseOk'', ParseOk'''.
       intros Hleft_ok Hright_ok x enc rest wf_ok.
       unfold SerialBindResult.
       destruct (rs x) as [r_enc|] eqn:Hright.
@@ -466,8 +464,15 @@ Module Parsers (InputModule : AbstractInput).
         pose proof wfr_ok as wfr_ok'.
         symmetry in Hright'.
         apply Hr in wfr_ok' as _, Hright' as Hr_ret; try assumption.
-        rewrite Hl_ret in Hr_ret.
+        (* rewrite Hl_ret in Hr_ret. *)
     Abort.
+
+    (* Limit the underlying parser to only access the first N tokens in the input. *)
+    Definition ParseLimit {R : Type} (underlying : Parser R) (n : nat) : Parser R :=
+      fun inp => match underlying (Slice inp 0 n) with
+              | ParseSuccess r rem => ParseSuccess r (App rem (Drop inp n))
+              | ParseFailure lvl data as f => f
+              end.
 
     (* A parser combinator that makes it possible to transform the result of a parser in another one. *)
     Definition Map {R U : Type} (underlying : Parser R) (f : R -> U) : Parser U :=
