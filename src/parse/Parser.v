@@ -814,6 +814,30 @@ Module Parsers (InputModule : AbstractInput).
     Definition SeqN {R : Type} (underlying : Parser R) (n : nat) : Parser (list R) :=
       RepN underlying (fun (acc : list R) (r : R) => acc ++ [r]) n [].
 
+    Class Repeatable (A : Type) (B : Type) := {
+        next : A -> A;
+        measure : A -> nat;
+        get : A -> option B;
+        term : forall (a1 a2 : A), next a1 = a2 -> measure a2 < measure a1
+      }.
+
+    Program Fixpoint sep_rep' {A B : Type} `{Repeatable A B} {wfb : B -> Prop}
+      (underlying : Serializer B wfb) (acc : Output) (a : A)
+      {measure (measure a) lt}: SerializeResult :=
+        match get a with
+        | Some b => match underlying b with
+                   | SerialSuccess enc => sep_rep' underlying (App enc acc) (next a)
+                   | SerialFailure lvl data as f => f
+                   end
+        | None => SerialSuccess acc
+        end.
+    Next Obligation. apply term. reflexivity. Qed.
+    Next Obligation. apply measure_wf. apply Wf_nat.lt_wf. Qed.
+
+    Definition SerialRep {A B : Type} `{Repeatable A B} {wfb : B -> Prop}
+      (underlying : Serializer B wfb) : Serializer A serial_trivial_wf :=
+      fun a => sep_rep' underlying Input_default a.
+
     Definition RecursiveProgressError {R : Type} (name : string) (inp : Input) (remaining : Input) :
       ParseResult R :=
       if Length remaining == Length inp then

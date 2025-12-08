@@ -362,6 +362,11 @@ Module SimplParser.
     Definition SerialByte : Serializer byte serial_trivial_wf :=
       fun b => SerialSuccess [b].
 
+    Definition Z__next (z : Z) : Z :=
+      (z ≫ 8)%Z.
+      
+    Definition Z__measure (z : Z) := ((1 + Z.log2 z) / 8 )%Z.
+
     Definition TagDesc (d : Desc) : Z :=
       match d with
       | D_BASE _ _ => 0%Z
