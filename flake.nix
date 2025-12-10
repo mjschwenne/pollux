@@ -2,12 +2,9 @@
   description = "A Flake for Pollux development in Rocq";
 
   inputs = {
-    nixpkgs.url = "github:/NixOS/nixpkgs/8913c168d1c56dc49a7718685968f38752171c3b";
+    nixpkgs.url = "github:/NixOS/nixpkgs/f61125a668a320878494449750330ca58b78c557";
     flake-utils.url = "github:numtide/flake-utils";
-    perennial = {
-      # The github fecther doesn't support submodules for some reason...
-      url = "git+https://github.com/mit-pdos/perennial.git";
-    };
+    perennial.url = "github:mit-pdos/perennial";
   };
 
   outputs = {
@@ -25,6 +22,7 @@
         rocq-build = pkgs.callPackage ./nix/pollux-rocq {
           perennial = perennial.packages.${system}.default;
         };
+        inherit (perennial.packages.${system}) perennialPkgs;
       in {
         packages = {
           inherit pollux-go rocq-build;
@@ -34,11 +32,7 @@
           mkShell {
             buildInputs =
               [
-                # Rocq Deps
-                rocq-core
-                rocqPackages.stdlib
                 coqPackages.equations # And now we can interop these?
-                perennial.packages.${system}.default
 
                 # Protobuf Deps
                 protobuf
@@ -83,27 +77,19 @@
                 # nix helpers
                 nix-update
               ]
-              # OCaml Deps
-              ++ (with pkgs.ocaml-ng.ocamlPackages_4_14; [
-                base64
-                batteries
-                dune_3
-                merlin
-                findlib
-                ocaml
-                ocamlbuild
-                pprint
-                ppx_deriving_yojson
-                ppx_expect
-                ptime
-                qcheck-core
-                stdint
-                stdio
-                utop
-                zarith
+              ++ (with perennialPkgs; [
+                rocq-runtime
+                rocq-stdlib
+                coq-coqutil
+                coq-record-update
+                rocq-stdpp
+                rocq-iris
+                iris-named-props
+                perennial.packages.${system}.default
               ]);
 
             shellHook = ''
+              export ROCQPATH=$COQPATH
               unset COQPATH
               export GITHUB_TOKEN=$(cat ../gh_pat.txt)
             '';
