@@ -15,7 +15,6 @@
       flake = false;
     };
   };
-
   outputs = {
     nixpkgs,
     flake-utils,
