@@ -77,7 +77,7 @@ Module SimplParser.
 
     Definition test_desc1 : Desc := D_BASE "f1" D_INT.
     Compute Denote test_desc1.
-    Definition test_val1 : Denote test_desc1 := ("f1"%string, 1%Z).
+    Definition test_val1 : Denote test_desc1 := ("f1"%string, 32%Z).
 
     Definition test_desc2 : Desc := D_NEST (D_BASE "f1" D_INT) (D_BASE "f2" D_BOOL).
     Compute Denote test_desc2.
@@ -86,15 +86,15 @@ Module SimplParser.
     Definition test_desc3 : Desc := D_NEST (D_BASE "f1" D_INT)
                                       (D_NEST (D_BASE "f2" D_INT) (D_BASE "f3" D_BOOL)).
     Compute Denote test_desc3.
-    Definition test_val3 : Denote test_desc3 := ("f1"%string, 1%Z, ("f2"%string, 2%Z, ("f3"%string, true))).
+    Definition test_val3 : Denote test_desc3 := ("f1"%string, 32%Z, ("f2"%string, 64%Z, ("f3"%string, false))).
 
     Definition test_desc4 : Desc := D_NEST (D_NEST (D_BASE "f1" D_INT) (D_BASE "f2" D_BOOL))
                                       (D_NEST (D_BASE "f3" D_INT) (D_BASE "f4" D_BOOL)).
     Compute Denote test_desc4.
-    Definition test_val4 : Denote test_desc4 := ("f1"%string, 1%Z, ("f2"%string, true),
-                                                   ("f3"%string, 2%Z, ("f4"%string, false))).
-    Definition test_val4' : Denote test_desc4 := (("f1"%string, 1%Z, ("f2"%string, true)),
-                                                    ("f3"%string, 2%Z, ("f4"%string, false))).
+    Definition test_val4 : Denote test_desc4 := ("f1"%string, 2%Z, ("f2"%string, false),
+                                                   ("f3"%string, 4%Z, ("f4"%string, true))).
+    Definition test_val4' : Denote test_desc4 := (("f1"%string, 2%Z, ("f2"%string, false)),
+                                                    ("f3"%string, 4%Z, ("f4"%string, true))).
 
     Fixpoint DescMem (d : Desc) (s : string) : Type :=
       match d with
@@ -317,7 +317,7 @@ Module SimplParser.
     Definition test_enc2 := to_enc [1; 9; 0; 0; 1; 0; 0; 0; 0; 1; 1].
     Compute ParseDesc test_desc2 test_enc2.
 
-    Definition test_enc3 := to_enc [1; 18; 0; 0; 32; 0; 0; 0; 1; 9; 0; 0; 64; 0; 0; 0; 0; 1; 0].
+    Definition test_enc3 := to_enc [1; 17; 0; 0; 32; 0; 0; 0; 1; 9; 0; 0; 64; 0; 0; 0; 0; 1; 0].
     Compute ParseDesc test_desc3 test_enc3.
     Compute ParseDesc test_desc3 test_enc2.
 
@@ -364,14 +364,86 @@ Module SimplParser.
 
     Definition Z__next (z : Z) : Z :=
       (z ≫ 8)%Z.
-      
-    Definition Z__measure (z : Z) := ((1 + Z.log2 z) / 8 )%Z.
+
+    (* Create an n-byte little-endian list of z.
+       If z doesn't fit into n bytes, the first n bytes are returned.
+       If z fits into less than n bytes, the list is padded with zeros.
+     *)
+    Fixpoint Z_to_list (z : Z) (n : nat) : list byte :=
+      match n with
+      | O => []
+      | S n' => W8 z :: Z_to_list (Z__next z) n'
+      end.
+
+    Compute Z_to_list 16777215%Z 4.
+
+    Definition SerialZN (n : nat) : Serializer Z serial_trivial_wf :=
+      fun z => SerialRep SerialByte (Z_to_list z n).
+
+    Definition SerialZ4 := SerialZN 4.
+
+    Compute SerialZ4 16777215%Z.
+
+    Definition SerialBool : Serializer bool serial_trivial_wf :=
+      fun b => if b then
+              SerialByte (W8 1)
+            else
+              SerialByte (W8 0).
+
+    Compute SerialBool true.
+    Compute SerialBool false.
 
     Definition TagDesc (d : Desc) : Z :=
       match d with
       | D_BASE _ _ => 0%Z
       | D_NEST _ _ => 1%Z
       end.
+
+    Definition TagField (f : FieldDesc) : byte :=
+      match f with
+      | D_INT => W8 0
+      | D_BOOL => W8 1
+      end.
+
+    Definition SerialFieldTag : Serializer FieldDesc serial_trivial_wf :=
+      fun f => SerialByte (TagField f).
+
+    Definition SerialTags : Serializer Desc serial_trivial_wf :=
+      fun d => match d with
+            | D_BASE _ fd => SerialConcat SerialByte SerialFieldTag (W8 0, fd)
+            | D_NEST _ _ => SerialByte (W8 1)
+            end.
+
+    Definition SerialMsgLen : Serializer nat (fun n => n < 256) :=
+      fun n =>
+        SerialByte (W8 $ Z.of_nat n).
+
+    Fixpoint SerialBody (d : Desc) : Serializer (Denote d) serial_trivial_wf :=
+      match d as d' return Serializer (Denote d') serial_trivial_wf with
+      | D_BASE n D_INT as d'' => fun v => SerialConcat SerialTags SerialZ4 (d'', (snd v))
+      | D_BASE n D_BOOL as d'' => fun v => SerialConcat SerialTags SerialBool (d'', (snd v))
+      | D_NEST d1 d2 as d'' => fun v => SerialConcat SerialTags
+                                      (SerialLen SerialMsgLen $
+                                         SerialConcat (SerialBody d1) (SerialBody d2)) (d'', v)
+      end.
+
+    Definition enc_eq {d : Desc} (v : Denote d) (e : Output) : bool :=
+      match SerialBody d v with
+      | SerialSuccess enc => if decide (enc = e) then true else false
+      | SerialFailure _ _ => false
+      end.
+
+    Compute SerialBody test_desc1 test_val1.
+    Compute enc_eq test_val1 test_enc1.
+                                    
+    Compute SerialBody test_desc2 test_val2.
+    Compute enc_eq test_val2 test_enc2.
+
+    Compute SerialBody test_desc3 test_val3.
+    Compute enc_eq test_val3 test_enc3.
+
+    Compute SerialBody test_desc4 test_val4.
+    Compute enc_eq test_val4 test_enc4.
 
   End Serializer.
 

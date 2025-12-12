@@ -474,6 +474,16 @@ Module Parsers (InputModule : AbstractInput).
               | ParseFailure lvl data as f => f
               end.
 
+    Definition SerialLen {R : Type} {wfr : R -> Prop} {wfn : nat -> Prop}
+      (len : Serializer nat wfn) (underlying : Serializer R wfr) : Serializer R wfr :=
+      fun r => match underlying r with
+            | SerialSuccess enc => match len (Length enc) with
+                                  | SerialSuccess len_enc => SerialSuccess (App len_enc enc)
+                                  | SerialFailure lvl data as f => f
+                                  end
+            | SerialFailure lvl data as f => f
+            end.
+
     (* A parser combinator that makes it possible to transform the result of a parser in another one. *)
     Definition Map {R U : Type} (underlying : Parser R) (f : R -> U) : Parser U :=
       fun inp =>
@@ -814,28 +824,26 @@ Module Parsers (InputModule : AbstractInput).
     Definition SeqN {R : Type} (underlying : Parser R) (n : nat) : Parser (list R) :=
       RepN underlying (fun (acc : list R) (r : R) => acc ++ [r]) n [].
 
-    Class Repeatable (A : Type) (B : Type) := {
-        next : A -> A;
-        measure : A -> nat;
-        get : A -> option B;
-        term : forall (a1 a2 : A), next a1 = a2 -> measure a2 < measure a1
-      }.
+    Fixpoint SerialRepWf {A : Type} (wfa : A -> Prop) (ls : list A) : Prop :=
+      match ls with
+      | [] => True
+      | a :: [] => wfa a
+      | a :: ls => wfa a /\ SerialRepWf wfa ls
+      end.
 
-    Program Fixpoint sep_rep' {A B : Type} `{Repeatable A B} {wfb : B -> Prop}
-      (underlying : Serializer B wfb) (acc : Output) (a : A)
-      {measure (measure a) lt}: SerializeResult :=
-        match get a with
-        | Some b => match underlying b with
-                   | SerialSuccess enc => sep_rep' underlying (App enc acc) (next a)
-                   | SerialFailure lvl data as f => f
-                   end
-        | None => SerialSuccess acc
+    Fixpoint sep_rep' {A : Type} {wfa : A -> Prop}
+      (underlying : Serializer A wfa) (acc : Output) : Serializer (list A) (SerialRepWf wfa) :=
+      fun ls =>
+        match ls with
+        | [] => SerialSuccess acc
+        | a :: ls' => match underlying a with
+                     | SerialSuccess a_enc => sep_rep' underlying (App acc a_enc) ls'
+                     | SerialFailure lvl data as f => f
+                     end
         end.
-    Next Obligation. apply term. reflexivity. Qed.
-    Next Obligation. apply measure_wf. apply Wf_nat.lt_wf. Qed.
 
-    Definition SerialRep {A B : Type} `{Repeatable A B} {wfb : B -> Prop}
-      (underlying : Serializer B wfb) : Serializer A serial_trivial_wf :=
+    Definition SerialRep {A : Type} {wfa : A -> Prop}
+      (underlying : Serializer A wfa) : Serializer (list A) (SerialRepWf wfa) :=
       fun a => sep_rep' underlying Input_default a.
 
     Definition RecursiveProgressError {R : Type} (name : string) (inp : Input) (remaining : Input) :
