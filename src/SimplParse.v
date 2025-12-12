@@ -418,33 +418,59 @@ Module SimplParser.
       fun n =>
         SerialByte (W8 $ Z.of_nat n).
 
-    Fixpoint SerialBody (d : Desc) : Serializer (Denote d) serial_trivial_wf :=
+    Fixpoint SerialDesc' (d : Desc) : Serializer (Denote d) serial_trivial_wf :=
       match d as d' return Serializer (Denote d') serial_trivial_wf with
       | D_BASE n D_INT as d'' => fun v => SerialConcat SerialTags SerialZ4 (d'', (snd v))
       | D_BASE n D_BOOL as d'' => fun v => SerialConcat SerialTags SerialBool (d'', (snd v))
       | D_NEST d1 d2 as d'' => fun v => SerialConcat SerialTags
                                       (SerialLen SerialMsgLen $
-                                         SerialConcat (SerialBody d1) (SerialBody d2)) (d'', v)
+                                         SerialConcat (SerialDesc' d1) (SerialDesc' d2)) (d'', v)
       end.
 
+    Definition SerialDesc {d : Desc} (v : Denote d) : SerializeResult :=
+      SerialDesc' d v.
+
     Definition enc_eq {d : Desc} (v : Denote d) (e : Output) : bool :=
-      match SerialBody d v with
+      match SerialDesc v with
       | SerialSuccess enc => if decide (enc = e) then true else false
       | SerialFailure _ _ => false
       end.
 
-    Compute SerialBody test_desc1 test_val1.
+    Compute SerialDesc test_val1.
     Compute enc_eq test_val1 test_enc1.
                                     
-    Compute SerialBody test_desc2 test_val2.
+    Compute SerialDesc test_val2.
     Compute enc_eq test_val2 test_enc2.
 
-    Compute SerialBody test_desc3 test_val3.
+    Compute SerialDesc test_val3.
     Compute enc_eq test_val3 test_enc3.
 
-    Compute SerialBody test_desc4 test_val4.
+    Compute SerialDesc test_val4.
     Compute enc_eq test_val4 test_enc4.
 
   End Serializer.
+
+  Theorem SimplParseOk : forall (d : Desc), ParseOk (ParseDesc d) (SerialDesc' d).
+  Proof.
+    intros.
+    unfold ParseOk, ParseOk', ParseOk'', ParseOk'''.
+    intros v enc rest _.
+    induction d.
+    - destruct f eqn:Hf.
+      + simpl. intro HSucc. inversion HSucc as [Henc].
+        unfold ParseBind. simpl. replace (uint.Z $ W8 0) with 0%Z; last reflexivity.
+        unfold ParseBaseDesc, ParseBind. simpl.
+        replace (uint.Z $ W8 0) with 0%Z; last reflexivity.
+        unfold ParseIntField, ParseBind. simpl. 
+        rewrite Z.shiftl_0_r. rewrite Z.add_0_r.
+        unfold Z__next. rewrite ?Z.shiftr_shiftr; try done.
+        rewrite ?Z.add_0_l. rewrite ?Z.add_assoc.
+        replace (8 + 8)%Z with 16%Z; last reflexivity.
+        replace (16 + 8)%Z with 24%Z; last reflexivity.
+  Abort.
+
+  Section Theorems.
+
+  End Theorems.
 
 End SimplParser.
