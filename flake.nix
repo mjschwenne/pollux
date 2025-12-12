@@ -30,12 +30,6 @@
           inherit system;
         };
         pollux-go = pkgs.callPackage ./pollux-go {};
-        inherit (perennial.packages.${system}) perennialPkgs;
-        perennial-pkg = perennial.packages.${system}.default;
-        rocq-build = pkgs.callPackage ./nix/pollux-rocq {
-          perennial = perennial-pkg;
-        };
-        inherit (opam-nix.lib.${system}) queryToScope;
         equations =
           (queryToScope {
               repos = [
@@ -46,6 +40,13 @@
             {
               rocq-equations = "*";
             }).rocq-equations;
+        inherit (perennial.packages.${system}) perennialPkgs;
+        perennial-pkg = perennial.packages.${system}.default;
+        rocq-build = pkgs.callPackage ./nix/pollux-rocq {
+          inherit equations perennialPkgs;
+          perennial = perennial-pkg;
+        };
+        inherit (opam-nix.lib.${system}) queryToScope;
       in {
         packages = {
           inherit pollux-go rocq-build equations;

@@ -1,9 +1,8 @@
 {
   stdenv,
-  rocq-core,
-  rocqPackages,
-  coqPackages,
   perennial,
+  perennialPkgs,
+  equations,
   ...
 }:
 stdenv.mkDerivation {
@@ -12,24 +11,30 @@ stdenv.mkDerivation {
 
   src = ../../.;
 
-  nativeBuildInputs = [
-    rocq-core
+  nativeBuildInputs = with perennialPkgs; [
+    rocq-runtime
+    rocq-stdlib
   ];
-  propagatedBuildInputs = [
-    coqPackages.equations
+  propagatedBuildInputs = with perennialPkgs; [
+    coq-coqutil
+    coq-record-update
+    rocq-stdpp
+    rocq-iris
+    iris-named-props
     perennial
-    rocqPackages.stdlib
+    equations
   ];
 
   enableParallelBuilding = true;
 
   buildPhase = ''
-    export OCAMLPATH=${coqPackages.equations}/lib/ocaml/4.14.2/site-lib/
+    export ROCQPATH=$COQPATH:${equations}/lib/ocaml/5.2.1/site-lib/coq/user-contrib
+    unset COQPATH
     make -j$NIX_BUILD_CORES
   '';
 
   installPhase = ''
-    mkdir -p $out/lib/coq/${rocq-core.rocq-version}/user-contrib
-    cp -r src $out/lib/coq/${rocq-core.rocq-version}/user-contrib/Pollux
+    mkdir -p $out/lib/coq/9.1.0/user-contrib
+    cp -r src $out/lib/coq/9.1.0/user-contrib/Pollux
   '';
 }
