@@ -418,7 +418,19 @@ Module SimplParser.
       fun n =>
         SerialByte (W8 $ Z.of_nat n).
 
-    Fixpoint SerialDesc' (d : Desc) : Serializer (Denote d) serial_trivial_wf :=
+    Fixpoint SerialDescWf (d : Desc) : (Denote d) -> Prop :=
+      match d as d' return (Denote d') -> Prop with
+      | D_BASE n D_INT => fun v => (fst v) = n
+      | D_BASE n D_BOOL => fun v => (fst v) = n
+      | D_NEST d1 d2 => fun v => let (v1, v2) := v in SerialDescWf d1 v1 /\ SerialDescWf d2 v2
+      end.
+
+    Compute SerialDescWf test_desc1 test_val1.
+    Compute SerialDescWf test_desc2 test_val2.
+    Compute SerialDescWf test_desc3 test_val3.
+    Compute SerialDescWf test_desc4 test_val4.
+
+    Fixpoint SerialDesc' (d : Desc) : Serializer (Denote d) (SerialDescWf d) :=
       match d as d' return Serializer (Denote d') serial_trivial_wf with
       | D_BASE n D_INT as d'' => fun v => SerialConcat SerialTags SerialZ4 (d'', (snd v))
       | D_BASE n D_BOOL as d'' => fun v => SerialConcat SerialTags SerialBool (d'', (snd v))
@@ -450,26 +462,61 @@ Module SimplParser.
 
   End Serializer.
 
-  Theorem SimplParseOk : forall (d : Desc), ParseOk (ParseDesc d) (SerialDesc' d).
-  Proof.
-    intros.
-    unfold ParseOk, ParseOk', ParseOk'', ParseOk'''.
-    intros v enc rest _.
-    induction d.
-    - destruct f eqn:Hf.
-      + simpl. intro HSucc. inversion HSucc as [Henc].
-        unfold ParseBind. simpl. replace (uint.Z $ W8 0) with 0%Z; last reflexivity.
-        unfold ParseBaseDesc, ParseBind. simpl.
-        replace (uint.Z $ W8 0) with 0%Z; last reflexivity.
-        unfold ParseIntField, ParseBind. simpl. 
-        rewrite Z.shiftl_0_r. rewrite Z.add_0_r.
-        unfold Z__next. rewrite ?Z.shiftr_shiftr; try done.
-        rewrite ?Z.add_0_l. rewrite ?Z.add_assoc.
-        replace (8 + 8)%Z with 16%Z; last reflexivity.
-        replace (16 + 8)%Z with 24%Z; last reflexivity.
-  Abort.
-
   Section Theorems.
+
+    Theorem SimplParseOk : forall (d : Desc), ParseOk (ParseDesc d) (SerialDesc' d).
+    Proof.
+      intros.
+      unfold ParseOk, ParseOk', ParseOk'', ParseOk'''.
+      induction d.
+      - intros v enc rest wf_ok.
+        destruct f eqn:Hf.
+        + simpl in v. destruct v as (v__n, v__z). simpl.
+          intro HSucc. inversion HSucc as [Henc].
+          unfold ParseBind. simpl. replace (uint.Z $ W8 0) with 0%Z; last reflexivity.
+          unfold ParseBaseDesc, ParseBind. simpl.
+          replace (uint.Z $ W8 0) with 0%Z; last reflexivity.
+          unfold ParseIntField, ParseBind. simpl. 
+          rewrite Z.shiftl_0_r. rewrite Z.add_0_r.
+          unfold Z__next. rewrite ?Z.shiftr_shiftr; try done.
+          rewrite ?Z.add_0_l. rewrite ?Z.add_assoc.
+          replace (8 + 8)%Z with 16%Z; last reflexivity.
+          replace (16 + 8)%Z with 24%Z; last reflexivity.
+          admit.
+        + simpl in v. destruct v as (v__n, v__b). simpl in wf_ok.
+          destruct (v__b); simpl.
+          * intros HSucc. inversion HSucc as [Henc].
+            unfold ParseBind. simpl. replace (uint.Z $ W8 0) with 0%Z; last reflexivity.
+            unfold ParseBaseDesc, ParseBind. simpl.
+            replace (uint.Z $ W8 1) with 1%Z; last reflexivity.
+            unfold ParseBoolField, ParseBind. simpl.
+            replace (uint.Z (W8 1) >? 0) with true; last reflexivity.
+            rewrite wf_ok. reflexivity.
+          * intros HSucc. inversion HSucc as [Henc].
+            unfold ParseBind. simpl. replace (uint.Z $ W8 0) with 0%Z; last reflexivity.
+            unfold ParseBaseDesc, ParseBind. simpl.
+            replace (uint.Z $ W8 1) with 1%Z; last reflexivity.
+            unfold ParseBoolField, ParseBind. simpl.
+            replace (uint.Z (W8 0) >? 0) with false; last reflexivity.
+            rewrite wf_ok. reflexivity.
+      - intros v enc rest wf_ok. simpl in v. destruct v as (v1, v2).
+        simpl in wf_ok. destruct wf_ok as [wf_v1 wf_v2].
+        unfold SerialDesc'. fold SerialDesc'.
+        unfold SerialConcat; simpl.
+        unfold SerialLen.
+        destruct (SerialDesc' d1 v1) as [v1_enc|] eqn:Hv1; last discriminate.
+        destruct (SerialDesc' d2 v2) as [v2_enc|] eqn:Hv2; last discriminate.
+        unfold SerialMsgLen. simpl.
+        intro HSucc. inversion HSucc as [Henc].
+        unfold ParseBind; simpl.
+        replace (uint.Z (W8 1)) with 1%Z; last reflexivity.
+        unfold LenLimit, ParseBind; simpl.
+        unfold ParseLimit.
+        pose proof Slice_correct
+          (App (App v1_enc v2_enc) rest) 0 (uint.nat (W8 (Z.of_nat (Length (App v1_enc v2_enc))))) as Hsl. 
+        unfold View in Hsl.
+        assert (0 ≤ 0 ≤ uint.nat (W8 (Z.of_nat (Length (App v1_enc v2_enc)))) ≤ Length (App (App v1_enc v2_enc) rest)). { (* word. *) admit. }
+    Abort.
 
   End Theorems.
 
