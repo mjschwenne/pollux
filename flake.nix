@@ -28,18 +28,24 @@
       system: let
         pkgs = import nixpkgs {
           inherit system;
+          config.allowUnfreePredicate = pkg: builtins.elem (pkgs.lib.getName pkg) [
+            "antigravity"
+          ];
         };
         pollux-go = pkgs.callPackage ./pollux-go {};
-        equations =
-          (queryToScope {
-              repos = [
-                "${opam-repository}"
-                "${opam-rocq-repo}/released"
-              ];
-            }
-            {
-              rocq-equations = "*";
-            }).rocq-equations;
+        scope =
+          queryToScope {
+            repos = [
+              "${opam-repository}"
+              "${opam-rocq-repo}/released"
+            ];
+          }
+          {
+            rocq-equations = "*";
+            vsrocq-language-server = "*";
+          };
+        equations = scope.rocq-equations;
+        rocq-lsp = scope.vsrocq-language-server;
         inherit (perennial.packages.${system}) perennialPkgs;
         perennial-pkg = perennial.packages.${system}.default;
         rocq-build = pkgs.callPackage ./nix/pollux-rocq {
@@ -72,6 +78,7 @@
                 nushell
                 gnumake
                 xxd
+                antigravity
 
                 # eval utilities
                 gh
@@ -109,6 +116,7 @@
                 iris-named-props
                 perennial-pkg
                 equations
+                rocq-lsp
               ]);
 
             shellHook = ''
