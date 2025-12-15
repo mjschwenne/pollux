@@ -2,6 +2,7 @@
 
 From Pollux Require Import Prelude.
 From Perennial Require Import Helpers.Word.LittleEndian.
+From Perennial Require Import Helpers.Word.Automation.
 From Stdlib Require Import Structures.Equalities.
 
 From Pollux Require Import Descriptors.
@@ -10,6 +11,8 @@ From Equations Require Import Equations.
 
 From Pollux Require Import Parser.
 From Pollux Require Import Input.
+
+(* Open Scope Z_scope. *)
 
 Module SimplParser.
   Module ByteParsers := Parsers(ByteInput).
@@ -377,7 +380,10 @@ Module SimplParser.
 
     Compute Z_to_list 16777215%Z 4.
 
-    Definition SerialZN (n : nat) : Serializer Z serial_trivial_wf :=
+    Definition SerialZ_Wf (z : Z) : Prop :=
+      (0 <= z < 2^32)%Z.
+
+    Definition SerialZN (n : nat) : Serializer Z SerialZ_Wf :=
       fun z => SerialRep SerialByte (Z_to_list z n).
 
     Definition SerialZ4 := SerialZN 4.
@@ -420,7 +426,7 @@ Module SimplParser.
 
     Fixpoint SerialDescWf (d : Desc) : (Denote d) -> Prop :=
       match d as d' return (Denote d') -> Prop with
-      | D_BASE n D_INT => fun v => (fst v) = n
+      | D_BASE n D_INT => fun v => (fst v) = n /\ SerialZ_Wf (snd v)
       | D_BASE n D_BOOL => fun v => (fst v) = n
       | D_NEST d1 d2 => fun v => let (v1, v2) := v in SerialDescWf d1 v1 /\ SerialDescWf d2 v2
       end.
@@ -464,6 +470,17 @@ Module SimplParser.
 
   Section Theorems.
 
+    Ltac comp_add := 
+      repeat match goal with
+        | |- context[Z.add ?n ?m] =>
+            match n with Z0 => idtac | Zpos _ => idtac | Zneg _ => idtac end;
+            match m with Z0 => idtac | Zpos _ => idtac | Zneg _ => idtac end;
+            let r := eval compute in (Z.add n m) in 
+              change (Z.add n m) with r
+        end.
+
+    Ltac invc H := inversion H; subst; clear H.
+
     Theorem SimplParseOk : forall (d : Desc), ParseOk (ParseDesc d) (SerialDesc' d).
     Proof.
       intros.
@@ -471,51 +488,50 @@ Module SimplParser.
       induction d.
       - intros v enc rest wf_ok.
         destruct f eqn:Hf.
-        + simpl in v. destruct v as (v__n, v__z). simpl.
-          intro HSucc. inversion HSucc as [Henc].
-          unfold ParseBind. simpl. replace (uint.Z $ W8 0) with 0%Z; last reflexivity.
+        + simpl in v. destruct v as (v__n, v__z). simpl in wf_ok.
+          destruct wf_ok as [? wf_z]. subst. simpl.
+          intro HSucc. invc HSucc.
+          unfold ParseBind. simpl.
+          change (uint.Z $ W8 0) with 0%Z.
           unfold ParseBaseDesc, ParseBind. simpl.
-          replace (uint.Z $ W8 0) with 0%Z; last reflexivity.
+          change (uint.Z $ W8 0) with 0%Z.
           unfold ParseIntField, ParseBind. simpl. 
-          rewrite Z.shiftl_0_r. rewrite Z.add_0_r.
+          repeat f_equal.
           unfold Z__next. rewrite ?Z.shiftr_shiftr; try done.
-          rewrite ?Z.add_0_l. rewrite ?Z.add_assoc.
-          replace (8 + 8)%Z with 16%Z; last reflexivity.
-          replace (16 + 8)%Z with 24%Z; last reflexivity.
+          comp_add.
           admit.
-        + simpl in v. destruct v as (v__n, v__b). simpl in wf_ok.
+        + simpl in v. destruct v as (v__n, v__b). simpl in wf_ok. subst.
           destruct (v__b); simpl.
-          * intros HSucc. inversion HSucc as [Henc].
-            unfold ParseBind. simpl. replace (uint.Z $ W8 0) with 0%Z; last reflexivity.
+          * intro. invc H.
+            unfold ParseBind. simpl.
+            change (uint.Z $ W8 0) with 0%Z.
             unfold ParseBaseDesc, ParseBind. simpl.
-            replace (uint.Z $ W8 1) with 1%Z; last reflexivity.
+            change (uint.Z $ W8 1) with 1%Z.
             unfold ParseBoolField, ParseBind. simpl.
-            replace (uint.Z (W8 1) >? 0) with true; last reflexivity.
-            rewrite wf_ok. reflexivity.
-          * intros HSucc. inversion HSucc as [Henc].
-            unfold ParseBind. simpl. replace (uint.Z $ W8 0) with 0%Z; last reflexivity.
+            change (uint.Z (W8 1) >? 0) with true.
+            reflexivity.
+          * intro. invc H.
+            unfold ParseBind. simpl.
+            change (uint.Z $ W8 0) with 0%Z.
             unfold ParseBaseDesc, ParseBind. simpl.
-            replace (uint.Z $ W8 1) with 1%Z; last reflexivity.
+            change (uint.Z $ W8 1) with 1%Z.
             unfold ParseBoolField, ParseBind. simpl.
-            replace (uint.Z (W8 0) >? 0) with false; last reflexivity.
-            rewrite wf_ok. reflexivity.
-      - intros v enc rest wf_ok. simpl in v. destruct v as (v1, v2).
+            change (uint.Z (W8 0) >? 0) with false.
+            reflexivity.
+      - intros v enc rest wf_ok.
+        simpl in v. destruct v as (v1, v2).
         simpl in wf_ok. destruct wf_ok as [wf_v1 wf_v2].
-        unfold SerialDesc'. fold SerialDesc'.
+        unfold SerialDesc'; fold SerialDesc'.
         unfold SerialConcat; simpl.
         unfold SerialLen.
         destruct (SerialDesc' d1 v1) as [v1_enc|] eqn:Hv1; last discriminate.
         destruct (SerialDesc' d2 v2) as [v2_enc|] eqn:Hv2; last discriminate.
-        unfold SerialMsgLen. simpl.
-        intro HSucc. inversion HSucc as [Henc].
+        unfold SerialMsgLen; simpl.
+        intro HSucc. invc HSucc.
         unfold ParseBind; simpl.
-        replace (uint.Z (W8 1)) with 1%Z; last reflexivity.
+        change (uint.Z (W8 1)) with 1%Z.
         unfold LenLimit, ParseBind; simpl.
         unfold ParseLimit.
-        pose proof Slice_correct
-          (App (App v1_enc v2_enc) rest) 0 (uint.nat (W8 (Z.of_nat (Length (App v1_enc v2_enc))))) as Hsl. 
-        unfold View in Hsl.
-        assert (0 ≤ 0 ≤ uint.nat (W8 (Z.of_nat (Length (App v1_enc v2_enc)))) ≤ Length (App (App v1_enc v2_enc) rest)). { (* word. *) admit. }
     Abort.
 
   End Theorems.
