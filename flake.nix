@@ -28,11 +28,14 @@
       system: let
         pkgs = import nixpkgs {
           inherit system;
-          config.allowUnfreePredicate = pkg: builtins.elem (pkgs.lib.getName pkg) [
-            "antigravity"
-          ];
+          config.allowUnfreePredicate = pkg:
+            builtins.elem (pkgs.lib.getName pkg) [
+              "antigravity"
+              "antigravity-fhs"
+            ];
         };
         pollux-go = pkgs.callPackage ./pollux-go {};
+        inherit (opam-nix.lib.${system}) queryToScope;
         scope =
           queryToScope {
             repos = [
@@ -43,16 +46,20 @@
           {
             rocq-equations = "*";
             vsrocq-language-server = "*";
+            ocaml-base-compiler = "5.2.1";
           };
-        equations = scope.rocq-equations;
-        rocq-lsp = scope.vsrocq-language-server;
+        equations = scope.rocq-equations.override {
+          inherit (scope) ocaml-base-compiler;
+        };
+        rocq-lsp = scope.vsrocq-language-server.override {
+          inherit (scope) ocaml-base-compiler;
+        };
         inherit (perennial.packages.${system}) perennialPkgs;
         perennial-pkg = perennial.packages.${system}.default;
         rocq-build = pkgs.callPackage ./nix/pollux-rocq {
           inherit equations perennialPkgs;
           perennial = perennial-pkg;
         };
-        inherit (opam-nix.lib.${system}) queryToScope;
       in {
         packages = {
           inherit pollux-go rocq-build equations;
@@ -78,7 +85,7 @@
                 nushell
                 gnumake
                 xxd
-                antigravity
+                antigravity-fhs
 
                 # eval utilities
                 gh

@@ -12,7 +12,7 @@ From Equations Require Import Equations.
 From Pollux Require Import Parser.
 From Pollux Require Import Input.
 
-(* Open Scope Z_scope. *)
+Open Scope Z_scope.
 
 Module SimplParser.
   Module ByteParsers := Parsers(ByteInput).
@@ -80,24 +80,24 @@ Module SimplParser.
 
     Definition test_desc1 : Desc := D_BASE "f1" D_INT.
     Compute Denote test_desc1.
-    Definition test_val1 : Denote test_desc1 := ("f1"%string, 32%Z).
+    Definition test_val1 : Denote test_desc1 := ("f1"%string, 32).
 
     Definition test_desc2 : Desc := D_NEST (D_BASE "f1" D_INT) (D_BASE "f2" D_BOOL).
     Compute Denote test_desc2.
-    Definition test_val2 : Denote test_desc2 := ("f1"%string, 1%Z, ("f2"%string, true)).
+    Definition test_val2 : Denote test_desc2 := ("f1"%string, 1, ("f2"%string, true)).
 
     Definition test_desc3 : Desc := D_NEST (D_BASE "f1" D_INT)
                                       (D_NEST (D_BASE "f2" D_INT) (D_BASE "f3" D_BOOL)).
     Compute Denote test_desc3.
-    Definition test_val3 : Denote test_desc3 := ("f1"%string, 32%Z, ("f2"%string, 64%Z, ("f3"%string, false))).
+    Definition test_val3 : Denote test_desc3 := ("f1"%string, 32, ("f2"%string, 64, ("f3"%string, false))).
 
     Definition test_desc4 : Desc := D_NEST (D_NEST (D_BASE "f1" D_INT) (D_BASE "f2" D_BOOL))
                                       (D_NEST (D_BASE "f3" D_INT) (D_BASE "f4" D_BOOL)).
     Compute Denote test_desc4.
-    Definition test_val4 : Denote test_desc4 := ("f1"%string, 2%Z, ("f2"%string, false),
-                                                   ("f3"%string, 4%Z, ("f4"%string, true))).
-    Definition test_val4' : Denote test_desc4 := (("f1"%string, 2%Z, ("f2"%string, false)),
-                                                    ("f3"%string, 4%Z, ("f4"%string, true))).
+    Definition test_val4 : Denote test_desc4 := ("f1"%string, 2, ("f2"%string, false),
+                                                   ("f3"%string, 4, ("f4"%string, true))).
+    Definition test_val4' : Denote test_desc4 := (("f1"%string, 2, ("f2"%string, false)),
+                                                    ("f3"%string, 4, ("f4"%string, true))).
 
     Fixpoint DescMem (d : Desc) (s : string) : Type :=
       match d with
@@ -253,13 +253,13 @@ Module SimplParser.
     (* Parse n bytes into an unsigned integer *)
     Definition ParseZN (n : nat) := Map (RepN ParseUnsigned
                                          (fun (acc : Z * Z) (new : Z) => let (n, v) := acc in
-                                                                      ((n + 8)%Z, (new ≪ n + v)%Z))
-                                         n (0%Z, 0%Z))
+                                                                       (n + 8, new ≪ n + v))
+                                         n (0, 0))
                                     (fun ret => let (_, z) := ret in z).
 
-    Definition ParseZ32 := ParseZN 4.
+    Definition ParseZ32 := ParseZN 4%nat.
 
-    Definition ParseBool : Parser bool := Map ParseUnsigned (fun z => (z >? 0)%Z).
+    Definition ParseBool : Parser bool := Map ParseUnsigned (fun z => z >? 0).
 
     (* Parse an integer field given a descriptor. The key to making this work with
        dependent types is using "match d as d' return Parser (Denote d')" which
@@ -288,8 +288,8 @@ Module SimplParser.
     Definition ParseBaseDesc (d : Desc) : Parser (Denote d) :=
         ParseBind ParseUnsigned
           (fun z => match z with
-                 | 0%Z => ParseIntField d
-                 | 1%Z => ParseBoolField d
+                 | 0 => ParseIntField d
+                 | 1 => ParseBoolField d
                  | _ => ParseFailWith "Unknown field tag" Recoverable
                  end).
 
@@ -305,14 +305,14 @@ Module SimplParser.
       ParseBind ParseUnsigned
         (fun z => 
            match z, d as d' return Parser (Denote d') with
-           | 0%Z, D_BASE n f as bd => ParseBaseDesc bd
-           | 1%Z, D_NEST d1 d2 => LenLimit (ParseConcat (ParseDesc d1) (ParseDesc d2))
-           | 0%Z, D_NEST _ _ => ParseFailWith "Mismatched tag (0) and desc (NEST)" Recoverable
-           | 1%Z, D_BASE _ _ => ParseFailWith "Mismatched tag (1) and desc (BASE)" Recoverable
+           | 0, D_BASE n f as bd => ParseBaseDesc bd
+           | 1, D_NEST d1 d2 => LenLimit (ParseConcat (ParseDesc d1) (ParseDesc d2))
+           | 0, D_NEST _ _ => ParseFailWith "Mismatched tag (0) and desc (NEST)" Recoverable
+           | 1, D_BASE _ _ => ParseFailWith "Mismatched tag (1) and desc (BASE)" Recoverable
            | _, _ => ParseFailWith "Unknown tag" Recoverable
            end).
 
-    Definition to_enc (l : list nat) : list byte := map (fun n => W8 $ Z.of_nat n) l.
+    Definition to_enc (l : list Z) : list byte := map (fun n => W8 n) l.
 
     Definition test_enc1 := to_enc [0; 0; 32; 0; 0; 0].
     Compute ParseDesc test_desc1 test_enc1.
@@ -366,7 +366,7 @@ Module SimplParser.
       fun b => SerialSuccess [b].
 
     Definition Z__next (z : Z) : Z :=
-      (z ≫ 8)%Z.
+      z ≫ 8.
 
     (* Create an n-byte little-endian list of z.
        If z doesn't fit into n bytes, the first n bytes are returned.
@@ -378,17 +378,17 @@ Module SimplParser.
       | S n' => W8 z :: Z_to_list (Z__next z) n'
       end.
 
-    Compute Z_to_list 16777215%Z 4.
+    Compute Z_to_list 16777215 4.
 
     Definition SerialZ_Wf (z : Z) : Prop :=
-      (0 <= z < 2^32)%Z.
+      (0 <= z < 2^32).
 
     Definition SerialZN (n : nat) : Serializer Z SerialZ_Wf :=
       fun z => SerialRep SerialByte (Z_to_list z n).
 
-    Definition SerialZ4 := SerialZN 4.
+    Definition SerialZ4 := SerialZN 4%nat.
 
-    Compute SerialZ4 16777215%Z.
+    Compute SerialZ4 16777215.
 
     Definition SerialBool : Serializer bool serial_trivial_wf :=
       fun b => if b then
@@ -401,8 +401,8 @@ Module SimplParser.
 
     Definition TagDesc (d : Desc) : Z :=
       match d with
-      | D_BASE _ _ => 0%Z
-      | D_NEST _ _ => 1%Z
+      | D_BASE _ _ => 0
+      | D_NEST _ _ => 1
       end.
 
     Definition TagField (f : FieldDesc) : byte :=
@@ -420,7 +420,7 @@ Module SimplParser.
             | D_NEST _ _ => SerialByte (W8 1)
             end.
 
-    Definition SerialMsgLen : Serializer nat (fun n => n < 256) :=
+    Definition SerialMsgLen : Serializer nat (fun n => (Z.of_nat n) < 256) :=
       fun n =>
         SerialByte (W8 $ Z.of_nat n).
 
@@ -492,9 +492,9 @@ Module SimplParser.
           destruct wf_ok as [? wf_z]. subst. simpl.
           intro HSucc. invc HSucc.
           unfold ParseBind. simpl.
-          change (uint.Z $ W8 0) with 0%Z.
+          change (uint.Z $ W8 0) with 0.
           unfold ParseBaseDesc, ParseBind. simpl.
-          change (uint.Z $ W8 0) with 0%Z.
+          change (uint.Z $ W8 0) with 0.
           unfold ParseIntField, ParseBind. simpl. 
           repeat f_equal.
           unfold Z__next. rewrite ?Z.shiftr_shiftr; try done.
@@ -504,17 +504,17 @@ Module SimplParser.
           destruct (v__b); simpl.
           * intro. invc H.
             unfold ParseBind. simpl.
-            change (uint.Z $ W8 0) with 0%Z.
+            change (uint.Z $ W8 0) with 0.
             unfold ParseBaseDesc, ParseBind. simpl.
-            change (uint.Z $ W8 1) with 1%Z.
+            change (uint.Z $ W8 1) with 1.
             unfold ParseBoolField, ParseBind. simpl.
             change (uint.Z (W8 1) >? 0) with true.
             reflexivity.
           * intro. invc H.
             unfold ParseBind. simpl.
-            change (uint.Z $ W8 0) with 0%Z.
+            change (uint.Z $ W8 0) with 0.
             unfold ParseBaseDesc, ParseBind. simpl.
-            change (uint.Z $ W8 1) with 1%Z.
+            change (uint.Z $ W8 1) with 1.
             unfold ParseBoolField, ParseBind. simpl.
             change (uint.Z (W8 0) >? 0) with false.
             reflexivity.
@@ -529,7 +529,7 @@ Module SimplParser.
         unfold SerialMsgLen; simpl.
         intro HSucc. invc HSucc.
         unfold ParseBind; simpl.
-        change (uint.Z (W8 1)) with 1%Z.
+        change (uint.Z (W8 1)) with 1.
         unfold LenLimit, ParseBind; simpl.
         unfold ParseLimit.
     Abort.
