@@ -54,166 +54,27 @@ Module SimplParser.
 
   Section Desc.
 
-    (* A field can be either an integer or a Boolean *)
-    Inductive FieldDesc : Set :=
-    | D_INT
-    | D_BOOL.
-
     (* A descriptor is either a base field, or two nested descriptors. *)
     Inductive Desc : Set :=
-    | D_BASE (n : string) (f : FieldDesc)
+    | D_BOOL
+    | D_INT
     | D_NEST (d1 : Desc) (d2 : Desc).
 
-    Definition FDescTy (f : FieldDesc) : Set :=
-      match f with
-      | D_INT => Z
-      | D_BOOL => bool
+    Inductive Val : Set :=
+    | V_BOOL (b : bool) : Val
+    | V_INT (i : Z) : Val
+    | V_NEST (v1 : Val) (v2 : Val) : Val.
+
+    Fixpoint Schema (v : Val) : Desc :=
+      match v with
+      | V_BOOL _ => D_BOOL
+      | V_INT _ => D_INT
+      | V_NEST v1 v2 => D_NEST (Schema v1) (Schema v2)
       end.
 
-    (* A value corresponding to some descriptor is a large tuple, using names as
-       strings and values as either ints or bools, respectively. *)
-    Fixpoint Denote (d : Desc) : Set :=
-      match d with
-      | D_BASE n f => string * FDescTy f
-      | D_NEST d1 d2 => (prod (Denote d1) (Denote d2))
-      end.
-
-    Definition test_desc1 : Desc := D_BASE "f1" D_INT.
-    Compute Denote test_desc1.
-    Definition test_val1 : Denote test_desc1 := ("f1"%string, 32).
-
-    Definition test_desc2 : Desc := D_NEST (D_BASE "f1" D_INT) (D_BASE "f2" D_BOOL).
-    Compute Denote test_desc2.
-    Definition test_val2 : Denote test_desc2 := ("f1"%string, 1, ("f2"%string, true)).
-
-    Definition test_desc3 : Desc := D_NEST (D_BASE "f1" D_INT)
-                                      (D_NEST (D_BASE "f2" D_INT) (D_BASE "f3" D_BOOL)).
-    Compute Denote test_desc3.
-    Definition test_val3 : Denote test_desc3 := ("f1"%string, 32, ("f2"%string, 64, ("f3"%string, false))).
-
-    Definition test_desc4 : Desc := D_NEST (D_NEST (D_BASE "f1" D_INT) (D_BASE "f2" D_BOOL))
-                                      (D_NEST (D_BASE "f3" D_INT) (D_BASE "f4" D_BOOL)).
-    Compute Denote test_desc4.
-    Definition test_val4 : Denote test_desc4 := ("f1"%string, 2, ("f2"%string, false),
-                                                   ("f3"%string, 4, ("f4"%string, true))).
-    Definition test_val4' : Denote test_desc4 := (("f1"%string, 2, ("f2"%string, false)),
-                                                    ("f3"%string, 4, ("f4"%string, true))).
-
-    Fixpoint DescMem (d : Desc) (s : string) : Type :=
-      match d with
-      | D_BASE n _ => (n = s)
-      | D_NEST d1 d2 => DescMem d1 s + DescMem d2 s
-      end.
-
-    Compute DescMem test_desc1 "f1".
-    Definition test_mem1 : DescMem test_desc1 "f1" := eq_refl.
-    Compute DescMem test_desc2 "f2".
-    Definition test_mem2 : DescMem test_desc2 "f2" := inr eq_refl.
-    Compute DescMem test_desc3 "f3".
-    Definition test_mem3 : DescMem test_desc3 "f3" := inr $ inr eq_refl.
-    Compute DescMem test_desc4 "f2".
-    Definition test_mem4 : DescMem test_desc4 "f2" := inl $ inr eq_refl.
-
-    (* A type representing how to get to the field we want in the descriptor.
-       Names aren't actually really used here... *)
-    Fixpoint DescMemF (d : Desc) (f : FieldDesc) : Type :=
-      match d with
-      | D_BASE _ fd => (fd = f)
-      | D_NEST d1 d2 => DescMemF d1 f + DescMemF d2 f
-      end.
-
-    Compute DescMemF test_desc1 D_INT.
-    Definition test_memf1 : DescMemF test_desc1 D_INT := eq_refl.
-    Compute DescMemF test_desc2 D_BOOL.
-    Definition test_memf2 : DescMemF test_desc2 D_BOOL := inr eq_refl.
-    Compute DescMemF test_desc3 D_BOOL.
-    Definition test_memf3 : DescMemF test_desc3 D_BOOL := inr $ inr eq_refl.
-    Compute DescMemF test_desc4 D_BOOL.
-    Definition test_memf4 : DescMemF test_desc4 D_BOOL := inl $ inr eq_refl.
-
-    Fixpoint Get (d : Desc) (f : FieldDesc) : Denote d -> DescMemF d f -> FDescTy f :=
-      match d with
-      | D_BASE n f => fun mls mem => match mem with
-                                 | eq_refl => (snd mls)
-                                 end
-      | D_NEST d1 d2 => fun mls mem =>
-                         match mem with
-                         | inl pf => Get d1 f (fst mls) pf
-                         | inr pf => Get d2 f (snd mls) pf
-                         end
-      end.
-    Arguments Get [d f] _ _.
-
-    Fixpoint NameP (d : Desc) (s : string) : bool :=
-      match d with
-      | D_BASE n _ => String.eqb n s
-      | D_NEST d1 d2 => if NameP d1 s then true
-                       else
-                         NameP d2 s
-      end.
-
-    Fixpoint GenMem (d : Desc) (s : string) : option (DescMem d s) :=
-      match d with
-      | D_BASE n _ => match decide (n = s) with
-                     | left e => Some e
-                     | right _ => None
-                     end
-      | D_NEST d1 d2 => match GenMem d1 s, GenMem d2 s with
-                       | Some m, _ => Some (inl m)
-                       | None, Some m => Some (inr m)
-                       | None, None => None
-                       end
-      end.
-
-    Fixpoint SDescTy (d : Desc) (s : string) : DescMem d s -> Set :=
-      match d with
-      | D_BASE n f => fun mem => match mem with
-                             | eq_refl => FDescTy f
-                             end
-      | D_NEST d1 d2 => fun mem => match mem with
-                               | inl pf => SDescTy d1 s pf
-                               | inr pf => SDescTy d2 s pf
-                               end
-      end.
-
-    Definition SDescTyOpt (d : Desc) (s : string) : option (DescMem d s) -> Set :=
-      fun opt_mem => match opt_mem with
-                  | Some mem => SDescTy d s mem
-                  | None => Empty_set
-                  end.
-
-    Compute SDescTy test_desc1 "f1" test_mem1.
-    Compute SDescTy test_desc2 "f2" test_mem2.
-    Compute SDescTy test_desc3 "f3" test_mem3.
-    Compute SDescTy test_desc4 "f2" test_mem4.
-
-    Fixpoint GetName (d : Desc) (s : string) : Denote d -> forall (m : DescMem d s), SDescTy d s m :=
-      match d with
-      | D_BASE n f => fun v mem => match mem with
-                               | eq_refl => snd v
-                               end
-      | D_NEST d1 d2 => fun v mem => match mem with
-                                 | inl pf => GetName d1 s (fst v) pf
-                                 | inr pf => GetName d2 s (snd v) pf
-                                 end
-      end.
-    Arguments GetName [d s] _ _.
-
-    Definition GetNameOpt {d : Desc} (s : string) (v : Denote d) :=
-      match GenMem d s as x return option (SDescTyOpt d s x) with
-      | Some mem => Some $ GetName v mem
-      | None => None
-      end.
-
-    Definition f1 : option Z := GetNameOpt "f1"%string test_val1.
-    Compute f1.
-    Definition f1' : option Empty_set := GetNameOpt "f8"%string test_val1.
-    Definition f2 : option bool := GetNameOpt "f2"%string test_val2.
-    Compute f2.
-    Definition f3 : option bool := GetNameOpt "f3"%string test_val3.
-    Compute f3.
-    Definition f4 := GetNameOpt "f3"%string test_val4.
-    Compute f4.
+    Compute Schema (V_INT 0%Z).
+    Compute Schema (V_BOOL true).
+    Compute Schema (V_NEST (V_INT 0%Z) (V_BOOL true)).
 
   End Desc.
 
@@ -261,103 +122,47 @@ Module SimplParser.
 
     Definition ParseBool : Parser bool := Map ParseUnsigned (fun z => z >? 0).
 
-    (* Parse an integer field given a descriptor. The key to making this work with
-       dependent types is using "match d as d' return Parser (Denote d')" which
-       tells Coq that the return type depends on the matched value d'.
-
-       In the D_BASE n D_INT branch, Coq knows that Denote (D_BASE n D_INT) = (string * Z),
-       so ParseSucceedWith (n, z) has the correct type.
-
-       In other branches, ParseFailWith can produce any type (it's polymorphic in R),
-       so it unifies with whatever Denote d' is in that branch. *)
-    Definition ParseIntField (d : Desc) : Parser (Denote d) :=
-      ParseBind ParseZ32
-        (fun z => match d as d' return Parser (Denote d') with
-               | D_BASE n D_INT => ParseSucceedWith (n, z)
-               | _ => ParseFailWith "Provided desc isn't for base int" Recoverable
-               end).
-
-    (* Parse a boolean field given a descriptor, following the same pattern *)
-    Definition ParseBoolField (d : Desc) : Parser (Denote d) :=
-      ParseBind ParseBool
-        (fun b => match d as d' return Parser (Denote d') with
-               | D_BASE n D_BOOL => ParseSucceedWith (n, b)
-               | _ => ParseFailWith "Provided desc isn't for base bool" Recoverable
-               end).
-
-    Definition ParseBaseDesc (d : Desc) : Parser (Denote d) :=
+    Definition ParseBaseDesc : Parser Val :=
         ParseBind ParseUnsigned
           (fun z => match z with
-                 | 0 => ParseIntField d
-                 | 1 => ParseBoolField d
+                 | 0 => Map ParseZ32 (fun z => V_INT z)
+                 | 1 => Map ParseBool (fun b => V_BOOL b)
                  | _ => ParseFailWith "Unknown field tag" Recoverable
                  end).
 
-    Definition test_field := [W8 1; W8 32; W8 0; W8 0; W8 0].
-    Compute ParseBaseDesc (D_BASE "f1" D_INT) test_field.
-    Compute ParseBaseDesc (D_BASE "f1" D_BOOL) test_field.
+    Compute ParseBaseDesc [W8 1; W8 32; W8 0; W8 0; W8 0].
+    Compute ParseBaseDesc [W8 0; W8 32; W8 0; W8 0; W8 0].
 
     Definition LenLimit {R : Type} (underlying : Parser R) : Parser R := 
       ParseBind ParseUnsigned
-                (fun len => ParseLimit underlying $ Z.to_nat len).
+                (fun len => ParseLimit underlying (Z.to_nat len)).
 
-    Fixpoint ParseDesc (d : Desc) : Parser (Denote d) :=
-      ParseBind ParseUnsigned
-        (fun z => 
-           match z, d as d' return Parser (Denote d') with
-           | 0, D_BASE n f as bd => ParseBaseDesc bd
-           | 1, D_NEST d1 d2 => LenLimit (ParseConcat (ParseDesc d1) (ParseDesc d2))
-           | 0, D_NEST _ _ => ParseFailWith "Mismatched tag (0) and desc (NEST)" Recoverable
-           | 1, D_BASE _ _ => ParseFailWith "Mismatched tag (1) and desc (BASE)" Recoverable
-           | _, _ => ParseFailWith "Unknown tag" Recoverable
-           end).
+    Definition ParseVal : Parser Val :=
+           ParseRecursive (fun pd =>
+                             ParseBind ParseUnsigned
+                               (fun z => 
+                                  match z with
+                                  | 0 => ParseBaseDesc
+                                  | 1 => LenLimit (Map (ParseConcat pd pd)
+                                                    (fun vs => let (v1, v2) := vs in V_NEST v1 v2))
+                                  | _ => ParseFailWith "Unknown tag" Recoverable
+                                  end)).
 
     Definition to_enc (l : list Z) : list byte := map (fun n => W8 n) l.
 
     Definition test_enc1 := to_enc [0; 0; 32; 0; 0; 0].
-    Compute ParseDesc test_desc1 test_enc1.
+    Compute ParseVal test_enc1.
 
     Definition test_enc2 := to_enc [1; 9; 0; 0; 1; 0; 0; 0; 0; 1; 1].
-    Compute ParseDesc test_desc2 test_enc2.
+    Compute ParseVal test_enc2.
 
     Definition test_enc3 := to_enc [1; 17; 0; 0; 32; 0; 0; 0; 1; 9; 0; 0; 64; 0; 0; 0; 0; 1; 0].
-    Compute ParseDesc test_desc3 test_enc3.
-    Compute ParseDesc test_desc3 test_enc2.
+    Compute ParseVal test_enc3.
 
     Definition test_enc4 := to_enc [1; 22;
                                     1; 9; 0; 0; 2; 0; 0; 0; 0; 1; 0;
                                     1; 9; 0; 0; 4; 0; 0; 0; 0; 1; 1].
-    Compute ParseDesc test_desc4 test_enc4.
-
-  (* So, despite having nested messages here, I didn't use the recursive combinator. The /critical/
-     observation here is, as always, in the types:
-
-     Recursive : ∀ {R : Type}, (Parser R → Parser R) → Parser R
-
-     When the parser "generator" needs to respect something like a descriptor, particularly for a
-     format with nested descriptors, we actually want to write something like this:
-
-     ParseDesc (d : Desc) (par : ∀ d', Parser (Denote d')) : Parser (Denote d)
-
-     So that we can change the descriptor during recursive calls, an basically take steps in the
-     descriptors just like how we take steps in the encoding to only consider certain parts of the
-     encoding (i.e. the part encoding this specific integer field).
-
-     The parsing happening in the simple format is extremely descriptor-centric. A simple Fixpoint
-     definition works since we only recursive down on the descriptor. The format doesn't have several
-     more complex features that are present in Protobuf, namely
-     - Parsing fields in any order
-     - Inferring the default value for any missing fields (which actually has to happen during serialization
-       since the tuple types here can't have missing values).
-
-     Since, I learned a lot doing this exercise (mostly about dependent types) since I implemented features like
-     - Have a denotation for a descriptor which generates a type for values of that descriptor rather than
-       having a universal representation for all values.
-     - Writing getter functions for these values (thanks, CPDT for the excellent starting point!).
-     - Writing my first truly recursive parser.
-     - Implementing a limiting combinator which limits how far ahead an underlying parser can consume.
-   *)
-
+    Compute ParseVal test_enc4.
   End Parser.
 
   Section Serializer.
@@ -380,10 +185,10 @@ Module SimplParser.
 
     Compute Z_to_list 16777215 4.
 
-    Definition SerialZ_Wf (z : Z) : Prop :=
-      (0 <= z < 2^32).
+    Definition SerialZ_Wf (n : nat) (z : Z) : Prop :=
+      (0 <= z < 2^(8 * Z.of_nat n)).
 
-    Definition SerialZN (n : nat) : Serializer Z SerialZ_Wf :=
+    Definition SerialZN (n : nat) : Serializer Z (SerialZ_Wf n) :=
       fun z => SerialRep SerialByte (Z_to_list z n).
 
     Definition SerialZ4 := SerialZN 4%nat.
@@ -399,71 +204,70 @@ Module SimplParser.
     Compute SerialBool true.
     Compute SerialBool false.
 
-    Definition TagDesc (d : Desc) : Z :=
-      match d with
-      | D_BASE _ _ => 0
-      | D_NEST _ _ => 1
-      end.
-
-    Definition TagField (f : FieldDesc) : byte :=
-      match f with
-      | D_INT => W8 0
-      | D_BOOL => W8 1
-      end.
-
-    Definition SerialFieldTag : Serializer FieldDesc serial_trivial_wf :=
-      fun f => SerialByte (TagField f).
-
-    Definition SerialTags : Serializer Desc serial_trivial_wf :=
-      fun d => match d with
-            | D_BASE _ fd => SerialConcat SerialByte SerialFieldTag (W8 0, fd)
-            | D_NEST _ _ => SerialByte (W8 1)
-            end.
-
     Definition SerialMsgLen : Serializer nat (fun n => (Z.of_nat n) < 256) :=
       fun n =>
         SerialByte (W8 $ Z.of_nat n).
 
-    Fixpoint SerialDescWf (d : Desc) : (Denote d) -> Prop :=
-      match d as d' return (Denote d') -> Prop with
-      | D_BASE n D_INT => fun v => (fst v) = n /\ SerialZ_Wf (snd v)
-      | D_BASE n D_BOOL => fun v => (fst v) = n
-      | D_NEST d1 d2 => fun v => let (v1, v2) := v in SerialDescWf d1 v1 /\ SerialDescWf d2 v2
+    Fixpoint ValDepth (v : Val) : nat :=
+      match v with
+      | V_BOOL _ => 0
+      | V_INT _ => 0
+      | V_NEST v1 v2 => 1 + max (ValDepth v1) (ValDepth v2)
       end.
 
-    Compute SerialDescWf test_desc1 test_val1.
-    Compute SerialDescWf test_desc2 test_val2.
-    Compute SerialDescWf test_desc3 test_val3.
-    Compute SerialDescWf test_desc4 test_val4.
 
-    Fixpoint SerialDesc' (d : Desc) : Serializer (Denote d) (SerialDescWf d) :=
-      match d as d' return Serializer (Denote d') serial_trivial_wf with
-      | D_BASE n D_INT as d'' => fun v => SerialConcat SerialTags SerialZ4 (d'', (snd v))
-      | D_BASE n D_BOOL as d'' => fun v => SerialConcat SerialTags SerialBool (d'', (snd v))
-      | D_NEST d1 d2 as d'' => fun v => SerialConcat SerialTags
-                                      (SerialLen SerialMsgLen $
-                                         SerialConcat (SerialDesc' d1) (SerialDesc' d2)) (d'', v)
-      end.
+    Definition SerialUnsigned : Serializer Z (fun z => 0 <= z < 0) :=
+      fun z => SerialByte $ W8 z.
 
-    Definition SerialDesc {d : Desc} (v : Denote d) : SerializeResult :=
-      SerialDesc' d v.
+    About SerialBind.
 
-    Definition enc_eq {d : Desc} (v : Denote d) (e : Output) : bool :=
-      match SerialDesc v with
+    Definition Restrict {R : Type} {wf : R -> Prop} (ser : Serializer R wf) (new : R -> Prop) :
+      Serializer R (fun r => new r /\ wf r) := ser.
+
+    Definition SerialVal : Serializer Val serial_trivial_wf :=
+      SerialRecursive
+        (fun ser v => match v with
+                   | V_BOOL b => SerialBind (fun _ => 0) (fun z => Restrict SerialUnsigned (fun z => z = 0))
+                                  (SerialBind (fun _ => 1) (fun z => Restrict SerialUnsigned (fun z => z = 1))
+                                     SerialBool) b
+                   | V_INT z => SerialBind (fun _ => 0) (fun z => Restrict SerialUnsigned (fun z => z = 0))
+                                  (SerialBind (fun _ => 0) (fun z => Restrict SerialUnsigned (fun z => z = 0))
+                                     SerialZ4) z
+                   | V_NEST v1 v2 => SerialBind (fun _ => 1) (fun z => Restrict SerialUnsigned (fun z => z = 1))
+                                      (SerialLen SerialMsgLen $ SerialConcat ser ser)
+                                      (v1, v2)
+                   end) ValDepth.
+
+    Definition SerialVal' : Serializer Val serial_trivial_wf :=
+      SerialRecursive
+        (fun ser v => match v with
+             | V_BOOL b => SerialConcat SerialBlob SerialBool ([W8 0; W8 1], b)
+             | V_INT z => SerialConcat SerialBlob SerialZ4 ([W8 0; W8 0], z)
+             | V_NEST v1 v2 => SerialConcat SerialBlob
+                                (SerialLen SerialMsgLen $ SerialConcat ser ser)
+                                ([W8 1], (v1, v2))
+             end) ValDepth.
+
+    Definition enc_eq (v : Val) (e : Output) : bool :=
+      match SerialVal v with
       | SerialSuccess enc => if decide (enc = e) then true else false
       | SerialFailure _ _ => false
       end.
 
-    Compute SerialDesc test_val1.
+    Definition test_val1 := V_INT 32.
+    Compute SerialVal test_val1.
     Compute enc_eq test_val1 test_enc1.
                                     
-    Compute SerialDesc test_val2.
+    Definition test_val2 := (V_NEST (V_INT 1) (V_BOOL true)).
+    Compute SerialVal test_val2.
     Compute enc_eq test_val2 test_enc2.
 
-    Compute SerialDesc test_val3.
+    Definition test_val3 := (V_NEST (V_INT 32) (V_NEST (V_INT 64) (V_BOOL false))).
+    Compute SerialVal test_val3.
     Compute enc_eq test_val3 test_enc3.
 
-    Compute SerialDesc test_val4.
+    Definition test_val4 := (V_NEST (V_NEST (V_INT 2) (V_BOOL false)) (V_NEST (V_INT 4) (V_BOOL true))).
+    Compute SerialVal test_val4.
     Compute enc_eq test_val4 test_enc4.
 
   End Serializer.
@@ -480,6 +284,70 @@ Module SimplParser.
         end.
 
     Ltac invc H := inversion H; subst; clear H.
+
+    Theorem ByteParseOk : ParseOk ParseByte SerialByte.
+    Proof.
+      intros x enc rest _.
+      unfold SerialByte.
+      intro H. invc H.
+      reflexivity.
+    Qed.
+
+    Theorem BoolParseOk : ParseOk ParseBool SerialBool.
+    Proof.
+      intros x enc rest _.
+      destruct x.
+      - unfold SerialBool. intro H. invc H.
+        vm_compute. reflexivity.
+      - unfold SerialBool. intro H. invc H.
+        vm_compute. reflexivity.
+    Qed.
+
+    (* Modularity Test *)
+    Definition ParseTest := ParseConcat ParseByte ParseBool.
+    Definition SerialTest := SerialConcat SerialByte SerialBool.
+
+    Theorem TestParseOk : ParseOk ParseTest SerialTest.
+    Proof.
+      unfold ParseOk, ParseOk', ParseOk'', ParseOk'''.
+      intros [x b] enc rest _.
+      unfold SerialTest, SerialConcat.
+      destruct (SerialByte x) eqn:Hbyte; last discriminate.
+      destruct (SerialBool b) eqn:Hbool; last discriminate.
+      intros H. invc H.
+      unfold ParseTest, ParseConcat.
+      rewrite App_assoc.
+      apply (ByteParseOk _ _ (App out0 rest)) in Hbyte; last reflexivity.
+      rewrite Hbyte.
+      apply (BoolParseOk _ _ rest) in Hbool; last reflexivity.
+      rewrite Hbool.
+      reflexivity.
+    Qed.
+
+    Theorem TestParseOk' : ParseOk ParseTest SerialTest.
+    Proof.
+      unfold ParseOk, ParseOk', ParseOk'', ParseOk'''.
+      intros [x b] enc rest _ Hser.
+      apply SerialConcatInversion in Hser.
+      destruct Hser as (out__a & out__b & Ha & Hb & Henc).
+      subst. rewrite App_assoc.
+      unfold ParseTest, ParseConcat.
+      apply (ByteParseOk _ _ (App out__b rest)) in Ha; last reflexivity.
+      apply (BoolParseOk _ _ rest) in Hb; last reflexivity.
+      rewrite Ha. rewrite Hb. reflexivity.
+    Qed.
+
+    Theorem TestParseOk'' : ParseOk ParseTest SerialTest.
+    Proof.
+      apply ConcatCorrect.
+      - apply ByteParseOk.
+      - apply BoolParseOk.
+    Qed.
+    (* Well that's definitely the cleanest proof of the lot *)
+
+    Theorem SimplParseOk : ParseOk (ParseVal) (SerialVal).
+      unfold ParseOk, ParseOk', ParseOk'', ParseOk'''.
+      intros x enc rest wf.
 
     Theorem SimplParseOk : forall (d : Desc), ParseOk (ParseDesc d) (SerialDesc' d).
     Proof.
@@ -501,23 +369,19 @@ Module SimplParser.
           comp_add.
           admit.
         + simpl in v. destruct v as (v__n, v__b). simpl in wf_ok. subst.
-          destruct (v__b); simpl.
-          * intro. invc H.
-            unfold ParseBind. simpl.
-            change (uint.Z $ W8 0) with 0.
-            unfold ParseBaseDesc, ParseBind. simpl.
-            change (uint.Z $ W8 1) with 1.
-            unfold ParseBoolField, ParseBind. simpl.
-            change (uint.Z (W8 1) >? 0) with true.
-            reflexivity.
-          * intro. invc H.
-            unfold ParseBind. simpl.
-            change (uint.Z $ W8 0) with 0.
-            unfold ParseBaseDesc, ParseBind. simpl.
-            change (uint.Z $ W8 1) with 1.
-            unfold ParseBoolField, ParseBind. simpl.
-            change (uint.Z (W8 0) >? 0) with false.
-            reflexivity.
+          unfold SerialDesc'. intros Hser. apply SerialConcatInversion in Hser.
+          destruct Hser as (enc__tag & enc__bool & Htag & Hbool & Henc).
+          apply (BoolParseOk _ _ rest) in Hbool; last easy.
+          simpl in Htag. inversion Htag.
+          subst. rewrite App_assoc. simpl.
+          unfold ParseBind. simpl.
+          change (uint.Z (W8 0)) with 0.
+          simpl. unfold ParseBaseDesc.
+          unfold ParseBind. simpl.
+          change (uint.Z (W8 1)) with 1. simpl.
+          unfold ParseBoolField.
+          unfold ParseBind. rewrite Hbool.
+          reflexivity.
       - intros v enc rest wf_ok.
         simpl in v. destruct v as (v1, v2).
         simpl in wf_ok. destruct wf_ok as [wf_v1 wf_v2].

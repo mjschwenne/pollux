@@ -2,6 +2,7 @@ From Pollux Require Import Prelude.
 From Pollux.parse Require Import Util.
 From Pollux.parse Require Import Input.
 
+From Corelib.Program Require Import Basics Tactics.
 From Equations Require Import Equations.
 
 Module Parsers (InputModule : AbstractInput).
@@ -300,6 +301,9 @@ Module Parsers (InputModule : AbstractInput).
                   (mkFailureData "expected end of input" inp None).
 
     (* WARN I also don't there is a corresponding serializer combinator here. *)
+
+    Definition SerialBlob : Serializer Output serial_trivial_wf :=
+      fun b => SerialSuccess b.
 
     (* A parser that fails if the left parser fails. If the left parser succeeds, provides its
      result and the remaining sequence to the right parser generator. *)
@@ -623,27 +627,40 @@ Module Parsers (InputModule : AbstractInput).
         | _, SerialFailure level data => SerialFailure level data
         end.
 
-    Lemma ConcatCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+    Lemma SerialConcatInversion : forall {A B : Type} {wf__a : A -> Prop} {wf__b : B -> Prop}
+                                      (ser__a : Serializer A wf__a) (ser__b : Serializer B wf__b)
+                                      (a : A) (b : B) (enc : Output),
+      SerialConcat ser__a ser__b (a, b) = SerialSuccess enc <->
+                                        exists (enc__a enc__b : Output),
+                                          ser__a a = SerialSuccess enc__a /\
+                                          ser__b b = SerialSuccess enc__b /\
+                                          enc = App enc__a enc__b.
+    Proof using Type.
+      intros. split.
+      - unfold SerialConcat.
+        destruct (ser__a a) as [out__a |] eqn:Ha; last discriminate.
+        destruct (ser__b b) as [out__b |] eqn:Hb; last discriminate.
+        intro H. inversion H as [Henc]. clear H.
+        exists out__a, out__b. repeat (split; first reflexivity); reflexivity.
+      - intros (out__a & out__b & Ha & Hb & Henc). unfold SerialConcat.
+        rewrite Ha. rewrite Hb.
+        subst. reflexivity.
+    Qed.
+
+    Theorem ConcatCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
       (lp : Parser L) (ls : Serializer L wfl)
       (rp : Parser R) (rs : Serializer R wfr) :
       ParseOk lp ls -> ParseOk rp rs -> ParseOk (ParseConcat lp rp) (SerialConcat ls rs).
     Proof using Type.
       intros Hleft_ok Hright_ok.
-      intros [l r] enc rest [Hl_wf Hr_wf].
-      unfold SerialConcat.
-      destruct (ls l) as [l_enc|] eqn:Hleft; last discriminate.
-      destruct (rs r) as [r_enc|] eqn:Hright; last discriminate.
-      intros Hser_ok. inversion Hser_ok as [Henc].
-      unfold ParseConcat. simpl. 
-      rewrite App_assoc.
-      pose proof Hleft_ok l l_enc (App r_enc rest) as Hlp.
-      pose proof Hl_wf as Hl_wf'.
-      apply Hlp in Hl_wf' as _, Hleft as Hl_ret; last assumption.
-      rewrite Hl_ret.
-      pose proof Hright_ok r r_enc rest as Hrp.
-      pose proof Hr_wf as Hr_wf'.
-      apply Hrp in Hr_wf' as _, Hright as Hr_ret; last assumption.
-      rewrite Hr_ret.
+      intros [l r] enc rest [Hl_wf Hr_wf] Hconcat.
+      apply SerialConcatInversion in Hconcat.
+      destruct Hconcat as (enc__l & enc__r & Hl & Hr & Henc).
+      subst. rewrite App_assoc.
+      apply (Hleft_ok _ _ (App enc__r rest)) in Hl; last assumption.
+      apply (Hright_ok _ _ rest) in Hr; last assumption.
+      unfold ParseConcat.
+      rewrite Hl. rewrite Hr.
       reflexivity.
     Qed.
 
@@ -864,6 +881,40 @@ Module Parsers (InputModule : AbstractInput).
                           else
                             RecursiveProgressError "Parser.Recursive" inp rem.
 
+    Program Fixpoint par_recur {R : Type} (underlying : Parser R -> Parser R) (inp : Input)
+      {measure (Length inp)} : ParseResult R :=
+      underlying (fun rem => match decide ((Length rem) < (Length inp)) with
+                          | left _ => par_recur underlying rem
+                          | right _ => RecursiveProgressError "Parser.Recursive" inp rem
+                          end) inp.
+    Next Obligation.
+      apply measure_wf.
+      apply lt_wf.
+    Defined.
+
+    Definition SerialRecursiveProgressError {R : Type} (name : string) (depth : R -> nat) (r: R) (r__next : R) :
+      SerializeResult :=
+      if depth r__next == depth r then
+        SerialFailure Recoverable (mkFailureData (name ++ " no progress in recursive serializer")
+                                     Input_default None)
+      else
+        SerialFailure Fatal (mkFailureData (name ++ " fixpoint called with deeper value to serialize")
+                               Input_default None).
+
+    Program Fixpoint ser_recur {R : Type} {wfo : R -> Prop} (underlying : Serializer R wfo -> Serializer R wfo)
+      (depth : R -> nat) (r : R) {measure (depth r)} : SerializeResult :=
+      underlying (fun r__next => match decide ((depth r__next) < (depth r)) with
+                            | left _ => ser_recur underlying depth r__next
+                            | right _ => SerialRecursiveProgressError "Serializer.Recursive" depth r r__next
+                            end) r.
+    Next Obligation.
+      apply measure_wf.
+      apply lt_wf.
+    Defined.
+
+    Definition SerialRecursive {R : Type} {wf : R -> Prop} (underlying : Serializer R wf -> Serializer R wf) depth :
+      Serializer R wf := ser_recur underlying depth.
+
   (* So this function /should/ be defined like this:
 
     Equations? recursive {R : Type} (underlying : Parser R -> Parser R) (inp : Input) :
@@ -891,7 +942,7 @@ Module Parsers (InputModule : AbstractInput).
        of this parser to that function itself.
 
        Careful: This function is not tail-recursive.*)
-    Definition Recursive {R : Type} (underlying : Parser R -> Parser R) : Parser R :=
+    Definition ParseRecursive {R : Type} (underlying : Parser R -> Parser R) : Parser R :=
       fun inp => recursive' underlying inp.
       
   (* Skipped the tail-recursive version of Recursive and RecursiveMap since I'm not sure they're useful
