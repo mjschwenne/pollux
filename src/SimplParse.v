@@ -345,58 +345,59 @@ Module SimplParser.
     Qed.
     (* Well that's definitely the cleanest proof of the lot *)
 
-    Theorem SimplParseOk : ParseOk (ParseVal) (SerialVal).
+    Theorem SimplParseOk' : ParseOk (ParseVal) (SerialVal).
       unfold ParseOk, ParseOk', ParseOk'', ParseOk'''.
       intros x enc rest wf.
+    Admitted.
 
-    Theorem SimplParseOk : forall (d : Desc), ParseOk (ParseDesc d) (SerialDesc' d).
-    Proof.
-      intros.
-      unfold ParseOk, ParseOk', ParseOk'', ParseOk'''.
-      induction d.
-      - intros v enc rest wf_ok.
-        destruct f eqn:Hf.
-        + simpl in v. destruct v as (v__n, v__z). simpl in wf_ok.
-          destruct wf_ok as [? wf_z]. subst. simpl.
-          intro HSucc. invc HSucc.
-          unfold ParseBind. simpl.
-          change (uint.Z $ W8 0) with 0.
-          unfold ParseBaseDesc, ParseBind. simpl.
-          change (uint.Z $ W8 0) with 0.
-          unfold ParseIntField, ParseBind. simpl. 
-          repeat f_equal.
-          unfold Z__next. rewrite ?Z.shiftr_shiftr; try done.
-          comp_add.
-          admit.
-        + simpl in v. destruct v as (v__n, v__b). simpl in wf_ok. subst.
-          unfold SerialDesc'. intros Hser. apply SerialConcatInversion in Hser.
-          destruct Hser as (enc__tag & enc__bool & Htag & Hbool & Henc).
-          apply (BoolParseOk _ _ rest) in Hbool; last easy.
-          simpl in Htag. inversion Htag.
-          subst. rewrite App_assoc. simpl.
-          unfold ParseBind. simpl.
-          change (uint.Z (W8 0)) with 0.
-          simpl. unfold ParseBaseDesc.
-          unfold ParseBind. simpl.
-          change (uint.Z (W8 1)) with 1. simpl.
-          unfold ParseBoolField.
-          unfold ParseBind. rewrite Hbool.
-          reflexivity.
-      - intros v enc rest wf_ok.
-        simpl in v. destruct v as (v1, v2).
-        simpl in wf_ok. destruct wf_ok as [wf_v1 wf_v2].
-        unfold SerialDesc'; fold SerialDesc'.
-        unfold SerialConcat; simpl.
-        unfold SerialLen.
-        destruct (SerialDesc' d1 v1) as [v1_enc|] eqn:Hv1; last discriminate.
-        destruct (SerialDesc' d2 v2) as [v2_enc|] eqn:Hv2; last discriminate.
-        unfold SerialMsgLen; simpl.
-        intro HSucc. invc HSucc.
-        unfold ParseBind; simpl.
-        change (uint.Z (W8 1)) with 1.
-        unfold LenLimit, ParseBind; simpl.
-        unfold ParseLimit.
-    Abort.
+    (* Theorem SimplParseOk : forall (d : Desc), ParseOk (ParseDesc d) (SerialDesc' d). *)
+    (* Proof. *)
+    (*   intros. *)
+    (*   unfold ParseOk, ParseOk', ParseOk'', ParseOk'''. *)
+    (*   induction d. *)
+    (*   - intros v enc rest wf_ok. *)
+    (*     destruct f eqn:Hf. *)
+    (*     + simpl in v. destruct v as (v__n, v__z). simpl in wf_ok. *)
+    (*       destruct wf_ok as [? wf_z]. subst. simpl. *)
+    (*       intro HSucc. invc HSucc. *)
+    (*       unfold ParseBind. simpl. *)
+    (*       change (uint.Z $ W8 0) with 0. *)
+    (*       unfold ParseBaseDesc, ParseBind. simpl. *)
+    (*       change (uint.Z $ W8 0) with 0. *)
+    (*       unfold ParseIntField, ParseBind. simpl.  *)
+    (*       repeat f_equal. *)
+    (*       unfold Z__next. rewrite ?Z.shiftr_shiftr; try done. *)
+    (*       comp_add. *)
+    (*       admit. *)
+    (*     + simpl in v. destruct v as (v__n, v__b). simpl in wf_ok. subst. *)
+    (*       unfold SerialDesc'. intros Hser. apply SerialConcatInversion in Hser. *)
+    (*       destruct Hser as (enc__tag & enc__bool & Htag & Hbool & Henc). *)
+    (*       apply (BoolParseOk _ _ rest) in Hbool; last easy. *)
+    (*       simpl in Htag. inversion Htag. *)
+    (*       subst. rewrite App_assoc. simpl. *)
+    (*       unfold ParseBind. simpl. *)
+    (*       change (uint.Z (W8 0)) with 0. *)
+    (*       simpl. unfold ParseBaseDesc. *)
+    (*       unfold ParseBind. simpl. *)
+    (*       change (uint.Z (W8 1)) with 1. simpl. *)
+    (*       unfold ParseBoolField. *)
+    (*       unfold ParseBind. rewrite Hbool. *)
+    (*       reflexivity. *)
+    (*   - intros v enc rest wf_ok. *)
+    (*     simpl in v. destruct v as (v1, v2). *)
+    (*     simpl in wf_ok. destruct wf_ok as [wf_v1 wf_v2]. *)
+    (*     unfold SerialDesc'; fold SerialDesc'. *)
+    (*     unfold SerialConcat; simpl. *)
+    (*     unfold SerialLen. *)
+    (*     destruct (SerialDesc' d1 v1) as [v1_enc|] eqn:Hv1; last discriminate. *)
+    (*     destruct (SerialDesc' d2 v2) as [v2_enc|] eqn:Hv2; last discriminate. *)
+    (*     unfold SerialMsgLen; simpl. *)
+    (*     intro HSucc. invc HSucc. *)
+    (*     unfold ParseBind; simpl. *)
+    (*     change (uint.Z (W8 1)) with 1. *)
+    (*     unfold LenLimit, ParseBind; simpl. *)
+    (*     unfold ParseLimit. *)
+    (* Abort. *)
 
   End Theorems.
 
