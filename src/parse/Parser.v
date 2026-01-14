@@ -672,6 +672,26 @@ Module Parsers (InputModule : AbstractInput).
     Definition ConcatKeepLeft {L R : Type} (left : Parser L) (right : Parser R) : Parser L :=
       ConcatMap left right (fun l r => l).
     
+    Definition SerialBind' {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (tag : R -> L) (left : Serializer L wfl) (right : Serializer R wfr) :
+      Serializer R (fun r => wfl (tag r) /\ wfr r) :=
+      fun r => SerialConcat left right (tag r, r).
+
+    Lemma BindCorrect' {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (lp : Parser L) (ls : Serializer L wfl)
+      (rp : L -> Parser R) (rs : Serializer R wfr) (tag : R -> L) :
+      forall r, ParseOk lp ls -> ParseOk' (rp (tag r)) rs r -> ParseOk' (ParseBind lp rp) (SerialBind' tag ls rs) r.
+    Proof using Type.
+      intros r Hleft_ok Hright_ok enc rest [wfl_ok wfr_ok] Hbind.
+      apply SerialConcatInversion in Hbind.
+      destruct Hbind as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
+      rewrite Henc. rewrite App_assoc.
+      unfold ParseBind.
+      apply (Hleft_ok _ _ (App enc__r rest)) in Hl_ok; last assumption.
+      rewrite Hl_ok.
+      apply (Hright_ok _ rest) in Hr_ok; assumption.
+    Qed.
+
     (* TODO debug parser? Might just need to be in OCaml since Rocq I/O functions seem funky *)
 
     Definition rep'_memory {A : Type} (underlying : Parser A) (inp : Input) : (ParseResult A * bool) :=
@@ -943,7 +963,7 @@ Module Parsers (InputModule : AbstractInput).
 
        Careful: This function is not tail-recursive.*)
     Definition ParseRecursive {R : Type} (underlying : Parser R -> Parser R) : Parser R :=
-      fun inp => recursive' underlying inp.
+      fun inp => par_recur underlying inp.
       
   (* Skipped the tail-recursive version of Recursive and RecursiveMap since I'm not sure they're useful
      and they will be a lot of work.
@@ -959,19 +979,19 @@ Module Parsers (InputModule : AbstractInput).
      I'm not actually sure how or why this would be useful.
    *)
 
+    Theorem RecursiveCorrect {R : Type} {wf : R -> Prop}
+      (underlying__parse : Parser R -> Parser R)
+      (underlying__ser : Serializer R wf -> Serializer R wf)
+      (depth : R -> nat) :
+      (forall (p : Parser R) (s : Serializer R wf), ParseOk p s -> ParseOk (underlying__parse p) (underlying__ser s)) ->
+      ParseOk (ParseRecursive underlying__parse) (SerialRecursive underlying__ser depth).
+    Proof.
+      intros H_preserve.
+      unfold ParseOk, ParseOk', ParseOk'', ParseOk''' in *.
+      intros x enc rest Hwf.
+      unfold SerialRecursive, ser_recur, ser_recur_func.
+      rewrite fix_sub_eq; simpl.
+    Admitted.
+
   End Parsers.
 End Parsers.
-
-Module test.
-
-  Module ConcreteParsers := Parsers(ByteInput).
-  Import ConcreteParsers.
-
-  Compute IsFatalFailure (ParseFailure Recoverable (mkFailureData "" [] None)).
-  Compute let pr := ParseFailure Recoverable (mkFailureData "" [] None) in
-            PropagateFailure pr I : @ParseResult bool.
-  Compute let pr := ParseSuccess 10 [] in
-            Extract pr I.
-
-
-End test.
