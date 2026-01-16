@@ -3,6 +3,7 @@ From Pollux.parse Require Import Util.
 From Pollux.parse Require Import Input.
 
 From Corelib.Program Require Import Basics Tactics.
+From Stdlib.Program Require Import Program.
 From Equations Require Import Equations.
 
 Module Parsers (InputModule : AbstractInput).
@@ -912,6 +913,21 @@ Module Parsers (InputModule : AbstractInput).
       apply lt_wf.
     Defined.
 
+
+    Lemma par_recur_unfold {R : Type} (underlying : Parser R -> Parser R) (inp : Input) :
+      par_recur underlying inp =
+      underlying (fun rem => match decide ((Length rem) < (Length inp)) with
+                          | left _ => par_recur underlying rem
+                          | right _ => RecursiveProgressError "Parser.Recursive" inp rem
+                          end) inp.
+    Proof using Type.
+      unfold par_recur at 1. unfold par_recur_func.
+      rewrite WfExtensionality.fix_sub_eq_ext.
+      f_equal. extensionality rem. simpl.
+      destruct (decide ((Length rem) < (Length inp))) eqn:Hlen; last reflexivity.
+      program_simpl.
+    Qed.
+
     Definition SerialRecursiveProgressError {R : Type} (name : string) (depth : R -> nat) (r: R) (r__next : R) :
       SerializeResult :=
       if depth r__next == depth r then
@@ -931,6 +947,21 @@ Module Parsers (InputModule : AbstractInput).
       apply measure_wf.
       apply lt_wf.
     Defined.
+
+    Lemma ser_recur_unfold {R : Type} {wfo : R -> Prop} (underlying : Serializer R wfo -> Serializer R wfo)
+      (depth : R -> nat) (r : R) :
+      ser_recur underlying depth r =
+      underlying (fun r__next => match decide ((depth r__next) < (depth r)) with
+                            | left _ => ser_recur underlying depth r__next
+                            | right _ => SerialRecursiveProgressError "Serializer.Recursive" depth r r__next
+                            end) r.
+    Proof using Type.
+      unfold ser_recur at 1. unfold ser_recur_func.
+      rewrite WfExtensionality.fix_sub_eq_ext.
+      f_equal. extensionality r__next. simpl.
+      destruct (decide ((depth r__next) < (depth r))) eqn:Hdep; last reflexivity.
+      program_simpl.
+    Qed.
 
     Definition SerialRecursive {R : Type} {wf : R -> Prop} (underlying : Serializer R wf -> Serializer R wf) depth :
       Serializer R wf := ser_recur underlying depth.
@@ -987,10 +1018,21 @@ Module Parsers (InputModule : AbstractInput).
       ParseOk (ParseRecursive underlying__parse) (SerialRecursive underlying__ser depth).
     Proof.
       intros H_preserve.
-      unfold ParseOk, ParseOk', ParseOk'', ParseOk''' in *.
-      intros x enc rest Hwf.
-      unfold SerialRecursive, ser_recur, ser_recur_func.
-      rewrite fix_sub_eq; simpl.
+      intros x enc rest Hwf Hser.
+      remember (depth x) as d eqn:Heqd.
+      revert x enc rest Hwf Hser Heqd.
+      induction d as [d IH] using lt_wf_ind.
+      intros x enc rest Hwf Hser Heqd.
+
+      rewrite ser_recur_unfold in Hser.
+      rewrite par_recur_unfold.
+
+      eapply H_preserve.
+      - unfold ParseOk.
+        intros x' enc' rest' Hwf' Hser'.
+        destruct (decide (Length (App enc' rest') < Length (App enc rest))).
+        (* + apply IH.  *)
+
     Admitted.
 
   End Parsers.
