@@ -1023,16 +1023,19 @@ Module Parsers (InputModule : AbstractInput).
       revert x enc rest Hwf Hser Heqd.
       induction d as [d IH] using lt_wf_ind.
       intros x enc rest Hwf Hser Heqd.
+      revert Hser.
 
-      rewrite ser_recur_unfold in Hser.
+      rewrite ser_recur_unfold.
       rewrite par_recur_unfold.
 
-      eapply H_preserve.
-      - unfold ParseOk.
-        intros x' enc' rest' Hwf' Hser'.
-        destruct (decide (Length (App enc' rest') < Length (App enc rest))).
-        (* + apply IH.  *)
-
+      eapply H_preserve; last assumption.
+      intros x' enc' rest' Hwf'.
+      destruct (decide (depth x' < depth x)) as [Hdepth | Hdepth].
+      + destruct (decide (Length (App enc' rest') < Length (App enc rest))) as [_ | Hlen].
+        * subst. intro Hser. apply (IH (depth x')); done.
+        * admit.
+      + unfold SerialRecursiveProgressError.
+        destruct (depth x' == depth x); simpl; discriminate.
     Admitted.
 
   End Parsers.

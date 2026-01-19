@@ -76,6 +76,32 @@ Module SimplParser.
     Compute Schema (V_BOOL true).
     Compute Schema (V_NEST (V_INT 0%Z) (V_BOOL true)).
 
+    Inductive subtermVal : Val -> Val -> Prop :=
+    | st_nest_left (v1 : Val) (v2 : Val) : subtermVal v1 (V_NEST v1 v2)
+    | st_nest_right (v1 : Val) (v2 : Val) : subtermVal v2 (V_NEST v1 v2).
+
+    Instance Val_EqDecision : EqDecision Val.
+    Proof. solve_decision. Defined. 
+
+    Definition subtermVal_dec (x y : Val) : {subtermVal x y} + {~subtermVal x y}.
+    Proof.
+      refine (
+          match y with
+          | V_NEST v1 v2 => if decide (x = v1) then
+                             left _
+                           else if decide (x = v2) then
+                                  left _
+                                else right _
+          | _ => right _
+          end
+        ).
+      - intro H; inversion H.
+      - intro H; inversion H.
+      - subst; constructor.
+      - subst; constructor.
+      - intro H; inversion H; congruence.
+    Defined.
+
   End Desc.
 
   (** ENCODING FORMAT *)
