@@ -939,9 +939,9 @@ Module Parsers (InputModule : AbstractInput).
 
     Program Fixpoint ser_recur {R : Type} {wfo : R -> Prop} (underlying : Serializer R wfo -> Serializer R wfo)
       (depth : R -> nat) (r : R) {measure (depth r)} : SerializeResult :=
-      underlying (fun r__next => match decide ((depth r__next) < (depth r)) with
+      underlying (fun r__next => match decide (depth r__next < depth r) with
                             | left _ => ser_recur underlying depth r__next
-                            | right _ => SerialRecursiveProgressError "Serializer.Recursive" depth r r__next
+                            | right _ => SerialRecursiveProgressError "Serial.Recursive" depth r r__next
                             end) r.
     Next Obligation.
       apply measure_wf.
@@ -951,9 +951,9 @@ Module Parsers (InputModule : AbstractInput).
     Lemma ser_recur_unfold {R : Type} {wfo : R -> Prop} (underlying : Serializer R wfo -> Serializer R wfo)
       (depth : R -> nat) (r : R) :
       ser_recur underlying depth r =
-      underlying (fun r__next => match decide ((depth r__next) < (depth r)) with
+      underlying (fun r__next => match decide (depth r__next < depth r) with
                             | left _ => ser_recur underlying depth r__next
-                            | right _ => SerialRecursiveProgressError "Serializer.Recursive" depth r r__next
+                            | right _ => SerialRecursiveProgressError "Serial.Recursive" depth r r__next
                             end) r.
     Proof using Type.
       unfold ser_recur at 1. unfold ser_recur_func.
