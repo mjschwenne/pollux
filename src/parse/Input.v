@@ -36,6 +36,8 @@ Module Type AbstractInput.
     forall self, App Input_default self = self.
   Axiom App_assoc :
     forall i1 i2 i3, App (App i1 i2) i3 = App i1 (App i2 i3).
+  Axiom App_Length :
+    forall i1 i2, Length (App i1 i2) = Length i1 + Length i2.
 
   (* AbstractInput must support dropping elements *)
   Parameter Drop : Input -> nat -> Input.
@@ -92,6 +94,9 @@ Module ByteInput <: AbstractInput.
 
   Theorem App_assoc : forall i1 i2 i3, App (App i1 i2) i3 = App i1 (App i2 i3).
   Proof. intros. unfold App. rewrite <- app_assoc. reflexivity. Qed.
+
+  Theorem App_Length : forall i1 i2, Length (App i1 i2) = Length i1 + Length i2.
+  Proof. intros. unfold App. unfold Length. rewrite length_app. reflexivity. Qed. 
 
   Theorem Drop_correct : forall self start, 0 <= start <= Length self ->
                                        View (Drop self start) = drop start (View self).

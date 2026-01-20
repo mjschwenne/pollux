@@ -430,45 +430,64 @@ Module SimplParser.
     Theorem SimplParseOk' : ParseOk ParseVal SerialVal.
     Proof.
       unfold ParseVal, SerialVal.
-      apply RecursiveCorrect.
-      intros p s Hps_ok.
-      intros x.
-      apply (@BindCorrect' Z Val _ (λ v : Val, 0 ≤ InnerTag v < 256 ∧ val_wf v)
-               _ SerialUnsigned
-               _ _ _ _);
-        first apply UnsignedParseOk.
-      destruct x eqn:Hx.
-      + simpl.
-        apply (BindCorrect' ParseUnsigned SerialUnsigned _ _ _ _); first apply UnsignedParseOk.
-        intros enc rest _.
-        unfold mkSerializer. simpl.
-        intro Hbool.
-        apply (BoolParseOk _ _ rest) in Hbool; last easy.
-        unfold Map. rewrite Hbool.
-        reflexivity.
-      + simpl.
-        apply (BindCorrect' ParseUnsigned SerialUnsigned _ _ _ _); first apply UnsignedParseOk.
-        intros enc rest wf.
-        unfold mkSerializer. simpl.
-        intro HZ.
-        apply (Z32ParseOk _ _ rest) in HZ.
-        - unfold Map. rewrite HZ. reflexivity.
-        - unfold SerialZ_Wf. unfold val_wf in wf. word.
-      + simpl.
-        unfold SerialBaseDesc, mkSerializer.
-        intros enc rest [wf_tag wf_pay].
-        unfold SerialBind'.
-        intro Hser.
-        apply SerialConcatInversion in Hser.
-        destruct Hser as (enc__len & enc__pay & Hlen_Succ & Hpay_Succ & Henc).
-        rewrite Henc. rewrite App_assoc.
-        unfold LenLimit, ParseBind.
-        apply (UnsignedParseOk _ _ (App enc__pay rest)) in Hlen_Succ; last assumption.
-        rewrite Hlen_Succ.
-        unfold ParseLimit.
-        unfold Map.
-        apply SerialConcatInversion in Hpay_Succ.
-        destruct Hpay_Succ as (enc__v1 & enc__v2 & Hv1 & Hv2 & Henc__pay).
+      apply RecursiveCorrect with (subterm := subtermVal).
+      * unfold SerialRecursiveOk.
+        intros r ser_rec.
+        destruct (SerialBind' _ _ _ _) as [ enc |] eqn:Houter; last trivial.
+        intros r_next Hst. destruct Hst as [v1 v | v2 v].
+        + intros Hwf.
+        apply SerialConcatInversion in Houter as (enc__ot & enc__rest & Hot_ok & Hrest_ok & Henc).
+        apply SerialConcatInversion in Hrest_ok as (enc__it & enc__v & Hit_ok & Hv_ok & Henc__rest).
+        rewrite Henc__rest in Henc.
+        destruct (ser_rec v1) as [enc__rec |] eqn:Hrec; last trivial.
+        unfold mkSerializer in Hv_ok.
+        apply SerialConcatInversion in Hv_ok as (enc__v1 & enc__v2 & Hv1_ok & Hv2_ok & Henc__v).
+        rewrite Hv1_ok in Hrec. inversion Hrec. subst.
+        exists (App enc__ot enc__it), enc__v2. rewrite !App_assoc.
+        split; first reflexivity.
+        unfold SerialUnsigned, SerialByte in *.
+        inversion Hot_ok. inversion Hit_ok.
+        rewrite App_Length. 
+        admit.
+        + admit.
+      * intros p s Hps_ok.
+        intros x.
+        apply (@BindCorrect' Z Val _ (λ v : Val, 0 ≤ InnerTag v < 256 ∧ val_wf v)
+                 _ SerialUnsigned
+                 _ _ _ _);
+          first apply UnsignedParseOk.
+        destruct x eqn:Hx.
+        + simpl.
+          apply (BindCorrect' ParseUnsigned SerialUnsigned _ _ _ _); first apply UnsignedParseOk.
+          intros enc rest _.
+          unfold mkSerializer. simpl.
+          intro Hbool.
+          apply (BoolParseOk _ _ rest) in Hbool; last easy.
+          unfold Map. rewrite Hbool.
+          reflexivity.
+        + simpl.
+          apply (BindCorrect' ParseUnsigned SerialUnsigned _ _ _ _); first apply UnsignedParseOk.
+          intros enc rest wf.
+          unfold mkSerializer. simpl.
+          intro HZ.
+          apply (Z32ParseOk _ _ rest) in HZ.
+          - unfold Map. rewrite HZ. reflexivity.
+          - unfold SerialZ_Wf. unfold val_wf in wf. word.
+        + simpl.
+          unfold SerialBaseDesc, mkSerializer.
+          intros enc rest [wf_tag wf_pay].
+          unfold SerialBind'.
+          intro Hser.
+          apply SerialConcatInversion in Hser.
+          destruct Hser as (enc__len & enc__pay & Hlen_Succ & Hpay_Succ & Henc).
+          rewrite Henc. rewrite App_assoc.
+          unfold LenLimit, ParseBind.
+          apply (UnsignedParseOk _ _ (App enc__pay rest)) in Hlen_Succ; last assumption.
+          rewrite Hlen_Succ.
+          unfold ParseLimit.
+          unfold Map.
+          apply SerialConcatInversion in Hpay_Succ.
+          destruct Hpay_Succ as (enc__v1 & enc__v2 & Hv1 & Hv2 & Henc__pay).
     Admitted.
 
   End Theorems.

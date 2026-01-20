@@ -1010,33 +1010,84 @@ Module Parsers (InputModule : AbstractInput).
      I'm not actually sure how or why this would be useful.
    *)
 
+    Definition SerialRecursiveOk
+      {R : Type} {wf : R -> Prop}
+      (ser_underlying : Serializer R wf -> Serializer R wf)
+      (subterm : R -> R -> Prop)
+      (depth : R -> nat) : Prop :=
+      forall r (ser_rec : Serializer R wf),
+      (* When serializing r with recursive calls *)
+      match ser_underlying ser_rec r with
+      | SerialSuccess bytes_r =>
+          (forall r_next, subterm r_next r -> depth r_next < depth r -> 
+                     match ser_rec r_next with
+                     | SerialSuccess bytes_r_next =>
+                         (* Then bytes_r_next is embedded in bytes_r *)
+                         exists prefix suffix,
+                           bytes_r = App prefix (App bytes_r_next suffix) /\ Length prefix > 0
+                     | _ => True
+                     end
+          )
+      | _ => True
+      end.
+
+    Definition CallbackParseOk {R : Type} {wf : R -> Prop}
+      (par : Parser R) (ser : Serializer R wf) :=
+      forall x enc,
+      wf x -> ser x = SerialSuccess enc -> (exists rest, par (App enc rest) = ParseSuccess x rest).
+
     Theorem RecursiveCorrect {R : Type} {wf : R -> Prop}
       (underlying__parse : Parser R -> Parser R)
       (underlying__ser : Serializer R wf -> Serializer R wf)
+      (subterm : R -> R -> Prop)
       (depth : R -> nat) :
-      (forall (p : Parser R) (s : Serializer R wf), ParseOk p s -> ParseOk (underlying__parse p) (underlying__ser s)) ->
+      SerialRecursiveOk underlying__ser subterm depth ->
+      (forall (p : Parser R) (s : Serializer R wf),
+         (* The key addition: callback is only called on subterms *)
+         ((forall x x', 
+             (exists enc, s x' = SerialSuccess enc) -> 
+             subterm x' x) ->
+          CallbackParseOk p s) ->
+         ParseOk (underlying__parse p) (underlying__ser s)) ->
       ParseOk (ParseRecursive underlying__parse) (SerialRecursive underlying__ser depth).
-    Proof.
-      intros H_preserve.
+    Proof using Type.
+      intros Hser_ok H_preserve.
       intros x enc rest Hwf Hser.
       remember (depth x) as d eqn:Heqd.
       revert x enc rest Hwf Hser Heqd.
       induction d as [d IH] using lt_wf_ind.
       intros x enc rest Hwf Hser Heqd.
-      revert Hser.
 
-      rewrite ser_recur_unfold.
+      rewrite ser_recur_unfold in Hser.
       rewrite par_recur_unfold.
+      remember 
+        (λ r__next : R,
+           if decide (depth r__next < depth x)
+           then ser_recur underlying__ser depth r__next
+           else SerialRecursiveProgressError "Serial.Recursive" depth x r__next)
+        as s.
 
-      eapply H_preserve; last assumption.
-      intros x' enc' rest' Hwf'.
+      eapply H_preserve; try done.
+      intros Hst x' enc' Hwf' Hser'.
       destruct (decide (depth x' < depth x)) as [Hdepth | Hdepth].
-      + destruct (decide (Length (App enc' rest') < Length (App enc rest))) as [_ | Hlen].
-        * subst. intro Hser. apply (IH (depth x')); done.
-        * admit.
-      + unfold SerialRecursiveProgressError.
-        destruct (depth x' == depth x); simpl; discriminate.
-    Admitted.
+      + pose proof (Hser_ok x s) as Hx_ok.
+        rewrite Hser in Hx_ok.
+        specialize Hx_ok with x'.
+        specialize Hst with (x := x) (x' := x').
+        specialize (Hst (ex_intro _ enc' Hser')).
+        specialize (Hx_ok Hst Hdepth).
+        rewrite Hser' in Hx_ok.
+        destruct Hx_ok as (prefix & suffix & Hlen_con & Hlen_pre).
+        exists (App suffix rest).
+        destruct (decide (Length _ < Length _)) as [_ | Hlen].
+        * subst. destruct (decide _) in Hser'; last contradiction.
+          apply (IH (depth x')); done.
+        * rewrite Hlen_con, !App_assoc, !App_Length, !Nat.add_assoc in Hlen. lia.
+      + rewrite Heqs in Hser'.
+        destruct (decide _) in Hser'; first contradiction.
+        unfold SerialRecursiveProgressError in Hser'.
+        destruct (depth x' == depth x) in Hser'; simpl; discriminate.
+    Qed.
 
   End Parsers.
 End Parsers.
