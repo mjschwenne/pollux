@@ -434,22 +434,37 @@ Module SimplParser.
       * unfold SerialRecursiveOk.
         intros r ser_rec.
         destruct (SerialBind' _ _ _ _) as [ enc |] eqn:Houter; last trivial.
-        intros r_next Hst. destruct Hst as [v1 v | v2 v].
+        intros r_next Hst. destruct Hst as [v1 v2 | v1 v2].
         + intros Hwf.
-        apply SerialConcatInversion in Houter as (enc__ot & enc__rest & Hot_ok & Hrest_ok & Henc).
-        apply SerialConcatInversion in Hrest_ok as (enc__it & enc__v & Hit_ok & Hv_ok & Henc__rest).
-        rewrite Henc__rest in Henc.
-        destruct (ser_rec v1) as [enc__rec |] eqn:Hrec; last trivial.
-        unfold mkSerializer in Hv_ok.
-        apply SerialConcatInversion in Hv_ok as (enc__v1 & enc__v2 & Hv1_ok & Hv2_ok & Henc__v).
-        rewrite Hv1_ok in Hrec. inversion Hrec. subst.
-        exists (App enc__ot enc__it), enc__v2. rewrite !App_assoc.
-        split; first reflexivity.
-        unfold SerialUnsigned, SerialByte in *.
-        inversion Hot_ok. inversion Hit_ok.
-        rewrite App_Length. 
-        admit.
-        + admit.
+          apply SerialConcatInversion in Houter as (enc__ot & enc__rest & Hot_ok & Hrest_ok & Henc).
+          apply SerialConcatInversion in Hrest_ok as (enc__it & enc__v & Hit_ok & Hv_ok & Henc__rest).
+          rewrite Henc__rest in Henc.
+          destruct (ser_rec v1) as [enc__rec |] eqn:Hrec; last trivial.
+          unfold mkSerializer in Hv_ok.
+          apply SerialConcatInversion in Hv_ok as (enc__v1 & enc__v2 & Hv1_ok & Hv2_ok & Henc__v).
+          rewrite Hv1_ok in Hrec. inversion Hrec. subst.
+          exists (App enc__ot enc__it), enc__v2. rewrite !App_assoc.
+          split; first reflexivity.
+          unfold SerialUnsigned, SerialByte in *.
+          inversion Hot_ok. inversion Hit_ok.
+          rewrite App_Length. 
+          unfold Length. simpl. lia.
+        + intros Hwf.
+          apply SerialConcatInversion in Houter as (enc__ot & enc__rest & Hot_ok & Hrest_ok & Henc).
+          apply SerialConcatInversion in Hrest_ok as (enc__it & enc__v & Hit_ok & Hv_ok & Henc__rest).
+          rewrite Henc__rest in Henc.
+          destruct (ser_rec v2) as [enc__rec |] eqn:Hrec; last trivial.
+          unfold mkSerializer in Hv_ok.
+          apply SerialConcatInversion in Hv_ok as (enc__v1 & enc__v2 & Hv1_ok & Hv2_ok & Henc__v).
+          rewrite Hv2_ok in Hrec. inversion Hrec. subst.
+          exists (App enc__ot (App enc__it enc__v1)), Input_default.
+          rewrite !App_assoc.
+          rewrite App_nil_r.
+          split; first reflexivity.
+          unfold SerialUnsigned, SerialByte in *.
+          inversion Hot_ok. inversion Hit_ok.
+          rewrite App_Length. 
+          unfold Length. simpl. lia.
       * intros p s Hps_ok.
         intros x.
         apply (@BindCorrect' Z Val _ (λ v : Val, 0 ≤ InnerTag v < 256 ∧ val_wf v)

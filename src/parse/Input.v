@@ -34,6 +34,8 @@ Module Type AbstractInput.
     forall self other, App self other = ToInput $ (View self) ++ (View other).
   Axiom App_nil_l :
     forall self, App Input_default self = self.
+  Axiom App_nil_r :
+    forall self, App self Input_default = self.
   Axiom App_assoc :
     forall i1 i2 i3, App (App i1 i2) i3 = App i1 (App i2 i3).
   Axiom App_Length :
@@ -91,6 +93,9 @@ Module ByteInput <: AbstractInput.
 
   Theorem App_nil_l : forall self, App Input_default self = self.
   Proof. intros. unfold App. rewrite app_nil_l. reflexivity. Qed.
+
+  Theorem App_nil_r : forall self, App self Input_default = self.
+  Proof. intros. unfold App. rewrite app_nil_r. reflexivity. Qed.
 
   Theorem App_assoc : forall i1 i2 i3, App (App i1 i2) i3 = App i1 (App i2 i3).
   Proof. intros. unfold App. rewrite <- app_assoc. reflexivity. Qed.

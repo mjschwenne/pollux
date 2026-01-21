@@ -1032,9 +1032,10 @@ Module Parsers (InputModule : AbstractInput).
       end.
 
     Definition CallbackParseOk {R : Type} {wf : R -> Prop}
-      (par : Parser R) (ser : Serializer R wf) :=
-      forall x enc,
-      wf x -> ser x = SerialSuccess enc -> (exists rest, par (App enc rest) = ParseSuccess x rest).
+      (par : Parser R) (ser : Serializer R wf) (subterm : R -> R -> Prop) :=
+      forall r' enc, exists r,
+      subterm r' r ->
+      wf r' -> ser r' = SerialSuccess enc -> (exists rest, par (App enc rest) = ParseSuccess r' rest).
 
     Theorem RecursiveCorrect {R : Type} {wf : R -> Prop}
       (underlying__parse : Parser R -> Parser R)
@@ -1043,11 +1044,7 @@ Module Parsers (InputModule : AbstractInput).
       (depth : R -> nat) :
       SerialRecursiveOk underlying__ser subterm depth ->
       (forall (p : Parser R) (s : Serializer R wf),
-         (* The key addition: callback is only called on subterms *)
-         ((forall x x', 
-             (exists enc, s x' = SerialSuccess enc) -> 
-             subterm x' x) ->
-          CallbackParseOk p s) ->
+         (CallbackParseOk p s subterm) ->
          ParseOk (underlying__parse p) (underlying__ser s)) ->
       ParseOk (ParseRecursive underlying__parse) (SerialRecursive underlying__ser depth).
     Proof using Type.
@@ -1068,20 +1065,19 @@ Module Parsers (InputModule : AbstractInput).
         as s.
 
       eapply H_preserve; try done.
-      intros Hst x' enc' Hwf' Hser'.
+      intros x' enc'; exists x; intros Hst Hwf' Hser'.
       destruct (decide (depth x' < depth x)) as [Hdepth | Hdepth].
       + pose proof (Hser_ok x s) as Hx_ok.
+        subst.
         rewrite Hser in Hx_ok.
         specialize Hx_ok with x'.
-        specialize Hst with (x := x) (x' := x').
-        specialize (Hst (ex_intro _ enc' Hser')).
         specialize (Hx_ok Hst Hdepth).
         rewrite Hser' in Hx_ok.
         destruct Hx_ok as (prefix & suffix & Hlen_con & Hlen_pre).
         exists (App suffix rest).
         destruct (decide (Length _ < Length _)) as [_ | Hlen].
         * subst. destruct (decide _) in Hser'; last contradiction.
-          apply (IH (depth x')); done.
+          apply (IH (depth x')); try done. 
         * rewrite Hlen_con, !App_assoc, !App_Length, !Nat.add_assoc in Hlen. lia.
       + rewrite Heqs in Hser'.
         destruct (decide _) in Hser'; first contradiction.
