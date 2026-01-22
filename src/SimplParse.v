@@ -135,10 +135,12 @@ Module SimplParser.
               | [] => ParseFailure Recoverable (mkFailureData "No more data to parse" inp None)
               end.
 
-    Definition ParseUnsigned : Parser Z := Map ParseByte word.unsigned.
+    Definition ParseUnsigned : Parser Z := ParseMap ParseByte word.unsigned.
+
+    Definition ParseNat : Parser nat := ParseMap ParseByte (fun b => Z.to_nat $ word.unsigned b).
 
     (* Parse n bytes into an unsigned integer *)
-    Definition ParseZN (n : nat) := Map (RepN ParseUnsigned
+    Definition ParseZN (n : nat) := ParseMap (RepN ParseUnsigned
                                          (fun (acc : Z * Z) (new : Z) => let (n, v) := acc in
                                                                        (n + 8, new ≪ n + v))
                                          n (0, 0))
@@ -146,22 +148,18 @@ Module SimplParser.
 
     Definition ParseZ32 := ParseZN 4%nat.
 
-    Definition ParseBool : Parser bool := Map ParseUnsigned (fun z => z >? 0).
+    Definition ParseBool : Parser bool := ParseMap ParseUnsigned (fun z => z >? 0).
 
     Definition ParseBaseDesc : Parser Val :=
         ParseBind ParseUnsigned
           (fun z => match z with
-                 | 0 => Map ParseZ32 (fun z => V_INT z)
-                 | 1 => Map ParseBool (fun b => V_BOOL b)
+                 | 0 => ParseMap ParseZ32 (fun z => V_INT z)
+                 | 1 => ParseMap ParseBool (fun b => V_BOOL b)
                  | _ => ParseFailWith "Unknown field tag" Recoverable
                  end).
 
     Compute ParseBaseDesc [W8 1; W8 32; W8 0; W8 0; W8 0].
     Compute ParseBaseDesc [W8 0; W8 32; W8 0; W8 0; W8 0].
-
-    Definition LenLimit {R : Type} (underlying : Parser R) : Parser R := 
-      ParseBind ParseUnsigned
-                (fun len => ParseLimit underlying (Z.to_nat len)).
 
     Definition ParseVal : Parser Val :=
            ParseRecursive (fun pd =>
@@ -169,8 +167,9 @@ Module SimplParser.
                                (fun z => 
                                   match z with
                                   | 0 => ParseBaseDesc
-                                  | 1 => LenLimit (Map (ParseConcat pd pd)
-                                                    (fun vs => let (v1, v2) := vs in V_NEST v1 v2))
+                                  | 1 => ParseLen ParseNat
+                                          (ParseMap (ParseConcat pd pd)
+                                             (fun vs => let (v1, v2) := vs in V_NEST v1 v2))
                                   | _ => ParseFailWith "Unknown tag" Recoverable
                                   end)).
 
@@ -244,6 +243,9 @@ Module SimplParser.
     Definition SerialUnsigned : Serializer Z (fun z => 0 <= z < 256) :=
       fun z => SerialByte $ W8 z.
 
+    Definition SerialNat : Serializer nat (fun n => (0 <= n < 256)%nat) :=
+      fun n => SerialByte $ W8 (Z.of_nat n).
+
     Definition mkSerializer {R : Type} (s : R -> SerializeResult) (wf : R -> Prop) : Serializer R wf := s.
 
     Definition Restrict {R : Type} {wf : R -> Prop} (ser : Serializer R wf) (new : R -> Prop) :
@@ -269,6 +271,8 @@ Module SimplParser.
       | V_NEST v1 v2 => ValEncLen v1 + ValEncLen v2
       end.
 
+    Definition Len (v : Val) : nat := Z.to_nat $ InnerTag v.
+
     Definition tag_wf (v : Val) : Prop := 0 <= OuterTag v < 256 /\ 0 <= InnerTag v < 256.
 
     Fixpoint val_wf (v : Val) : Prop :=
@@ -278,44 +282,43 @@ Module SimplParser.
       | V_NEST v1 v2 => val_wf v1 /\ val_wf v2
       end.
 
-    Definition SerialBaseDesc (ser : Serializer Val val_wf) : Serializer Val (fun v => 0 <= InnerTag v < 256 /\ val_wf v) :=
+    Definition SerialBaseDesc (ser : Serializer Val val_wf) :
+      Serializer Val (fun v => 0 <= InnerTag v < 256 /\ val_wf v) :=
       SerialBind' InnerTag SerialUnsigned
         (mkSerializer
            (fun v => match v with
                   | V_BOOL b => SerialBool b
                   | V_INT z => SerialZ32 z
-                  | V_NEST v1 v2 => SerialConcat ser ser (v1, v2)
+                  | V_NEST v1 v2 => SerialLimit (SerialMap (SerialConcat ser ser) $ fun _ => (v1, v2)) Len v
                   end) val_wf).
+
+    Definition IsNest (v : Val) : Prop :=
+      match v with
+      | V_NEST _ _ => True
+      | _ => False
+      end.
+
+    Definition ToPair (v : Val) (pf : IsNest v) : Val * Val. 
+    Proof.
+      destruct v.
+      - destruct pf.
+      - destruct pf.
+      - split; assumption.
+    Defined.
+
+    Definition SerialBaseDesc' (ser : Serializer Val val_wf) :
+      Serializer Val (fun v => 0 <= InnerTag v < 256 /\ val_wf v) :=
+      (fun v => match v with
+             | V_BOOL b => SerialBind' (fun _ => 1) SerialUnsigned SerialBool b
+             | V_INT z => SerialBind' (fun _ => 0) SerialUnsigned SerialZ32 z
+             | V_NEST v1 v2 => SerialLen Len SerialNat (SerialMap (SerialConcat ser ser) (fun _ => (v1, v2))) v
+             end).
 
     Definition SerialVal : Serializer Val (fun v => 0 <= OuterTag v < 256 /\ 0 <= InnerTag v < 256 /\ val_wf v) :=
       SerialRecursive
         (fun ser : Serializer Val (fun v => 0 <= OuterTag v < 256 /\ 0 <= InnerTag v < 256 /\ val_wf v) =>
-           SerialBind' OuterTag SerialUnsigned (SerialBaseDesc ser)
+           SerialBind' OuterTag SerialUnsigned (SerialBaseDesc' ser)
         ) ValDepth.
-
-    Definition SerialVal'' : Serializer Val serial_trivial_wf :=
-      SerialRecursive
-        (fun ser v => match v with
-                   | V_BOOL b => SerialBind (fun _ => 0) (fun z => Restrict SerialUnsigned (fun z => z = 0))
-                                  (SerialBind (fun _ => 1) (fun z => Restrict SerialUnsigned (fun z => z = 1))
-                                     SerialBool) b
-                   | V_INT z => SerialBind (fun _ => 0) (fun z => Restrict SerialUnsigned (fun z => z = 0))
-                                  (SerialBind (fun _ => 0) (fun z => Restrict SerialUnsigned (fun z => z = 0))
-                                     SerialZ32) z
-                   | V_NEST v1 v2 => SerialBind (fun _ => 1) (fun z => Restrict SerialUnsigned (fun z => z = 1))
-                                      (SerialLen SerialMsgLen $ SerialConcat ser ser)
-                                      (v1, v2)
-                   end) ValDepth.
-
-    Definition SerialVal' : Serializer Val (fun v => 0 <= OuterTag v < 256 /\ 0 <= InnerTag v < 256) :=
-      SerialRecursive
-        (fun ser v => match v with
-             | V_BOOL b => SerialConcat SerialBlob SerialBool ([W8 0; W8 1], b)
-             | V_INT z => SerialConcat SerialBlob SerialZ32 ([W8 0; W8 0], z)
-             | V_NEST v1 v2 => SerialConcat SerialBlob
-                                (SerialLen SerialMsgLen $ SerialConcat ser ser)
-                                ([W8 1], (v1, v2))
-             end) ValDepth.
 
     Definition enc_eq (v : Val) (e : Output) : bool :=
       match SerialVal v with
@@ -423,7 +426,16 @@ Module SimplParser.
       intros x enc rest wf.
       unfold SerialUnsigned, SerialByte.
       intros H. invc H.
-      unfold ParseUnsigned, Map.
+      unfold ParseUnsigned, ParseMap.
+      simpl. f_equal. word.
+    Qed.
+
+    Theorem NatParseOk : ParseOk ParseNat SerialNat.
+    Proof.
+      intros x enc rest wf.
+      unfold SerialNat, SerialByte.
+      intros H. invc H.
+      unfold ParseNat, ParseMap.
       simpl. f_equal. word.
     Qed.
 
@@ -473,37 +485,41 @@ Module SimplParser.
           first apply UnsignedParseOk.
         destruct x eqn:Hx.
         + simpl.
-          apply (BindCorrect' ParseUnsigned SerialUnsigned _ _ _ _); first apply UnsignedParseOk.
-          intros enc rest _.
-          unfold mkSerializer. simpl.
-          intro Hbool.
-          apply (BoolParseOk _ _ rest) in Hbool; last easy.
-          unfold Map. rewrite Hbool.
+          intros enc rest [Hit_wf Hb_wf].
+          unfold SerialBaseDesc'.
+          intros Hser.
+          apply SerialConcatInversion in Hser as (enc__it & enc__b & Hit_ok & Hb_ok & Henc).
+          unfold ParseBaseDesc, ParseBind.
+          rewrite Henc, App_assoc.
+          pose proof (UnsignedParseOk 1 enc__it (App enc__b rest) Hit_wf Hit_ok) as Hu_ok.
+          rewrite Hu_ok.
+          unfold ParseMap.
+          pose proof (BoolParseOk b enc__b rest Hb_wf Hb_ok) as Hser_b.
+          rewrite Hser_b.
           reflexivity.
         + simpl.
-          apply (BindCorrect' ParseUnsigned SerialUnsigned _ _ _ _); first apply UnsignedParseOk.
-          intros enc rest wf.
-          unfold mkSerializer. simpl.
-          intro HZ.
-          apply (Z32ParseOk _ _ rest) in HZ.
-          - unfold Map. rewrite HZ. reflexivity.
-          - unfold SerialZ_Wf. unfold val_wf in wf. word.
+          intros enc rest [Hit_wf Hz_wf].
+          unfold SerialBaseDesc'.
+          intros Hser.
+          apply SerialConcatInversion in Hser as (enc__it & enc__z & Hit_ok & Hvz_ok & Henc).
+          unfold ParseBaseDesc, ParseBind.
+          rewrite Henc, App_assoc.
+          pose proof (UnsignedParseOk 0 enc__it (App enc__z rest) Hit_wf Hit_ok) as Hu_ok.
+          rewrite Hu_ok.
+          unfold ParseMap.
+          pose proof (Z32ParseOk i enc__z rest Hz_wf Hvz_ok) as Hser_z.
+          rewrite Hser_z.
+          reflexivity.
         + simpl.
-          unfold SerialBaseDesc, mkSerializer.
-          intros enc rest [wf_tag wf_pay].
-          unfold SerialBind'.
-          intro Hser.
-          apply SerialConcatInversion in Hser.
-          destruct Hser as (enc__len & enc__pay & Hlen_Succ & Hpay_Succ & Henc).
-          rewrite Henc. rewrite App_assoc.
-          unfold LenLimit, ParseBind.
-          apply (UnsignedParseOk _ _ (App enc__pay rest)) in Hlen_Succ; last assumption.
-          rewrite Hlen_Succ.
-          unfold ParseLimit.
-          unfold Map.
-          apply SerialConcatInversion in Hpay_Succ.
-          destruct Hpay_Succ as (enc__v1 & enc__v2 & Hv1 & Hv2 & Henc__pay).
-    Admitted.
+          unfold SerialBaseDesc'.
+          intros enc rest [wf_tag [wf_v1 wf_v2]].
+          apply LenCorrect.
+          - apply NatParseOk.
+          - admit. 
+          - unfold LenOk. clear enc rest wf_tag wf_v1 wf_v2.
+            intro enc. unfold SerialMap. admit.
+          - split. { unfold Len. word. } unfold Concat_wf. split; assumption.
+    Abort.
 
   End Theorems.
 

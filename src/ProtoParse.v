@@ -62,7 +62,7 @@ Module ProtoParse.
             | [] => ParseFailure Recoverable (mkFailureData "No more data to parse" inp None)
             end.
 
-  Definition Unsigned : @Parser Z := Map Byte word.unsigned.   
+  Definition Unsigned : @Parser Z := ParseMap Byte word.unsigned.   
 
   (* Parses an unsigned integer from the byte stream.
      If successful, check that the byte satisfies the input predicate.
@@ -129,7 +129,7 @@ Module ProtoParse.
      For now, don't do it. OK, maybe I do need to chunk things here and call a separate parser on them later. *)
 
   (* Parse n bytes into an unsigned integer *)
-  Definition ZN (n : nat) := Map (RepN Unsigned
+  Definition ZN (n : nat) := ParseMap (RepN Unsigned
                                   (fun (acc : Z * Z) (new : Z) => let (n, v) := acc in
                                                                ((n + 8)%Z, (new ≪ n + v)%Z))
                                   n (0%Z, 0%Z))
@@ -161,14 +161,14 @@ Module ProtoParse.
                                                 | None => ParseFailWith "Unknown field type" Recoverable
                                                 end).
 
-  Definition TypedFieldHeader (md : MsgDesc) := Map FieldHeader
+  Definition TypedFieldHeader (md : MsgDesc) := ParseMap FieldHeader
                                                   (fun (h : Z * Tag) =>
                                                      let (fid, tag) := h in
                                                      (fid, tag, find_field md fid)).
 
   Definition LenBody := ParseBind Varint (fun len => SeqN Byte $ Z.to_nat len).
 
-  Definition Discard {A : Type} (parser : @Parser A) : @Parser unit := Map parser (fun _ => ()). 
+  Definition Discard {A : Type} (parser : @Parser A) : @Parser unit := ParseMap parser (fun _ => ()). 
 
   Definition DiscardPayload (tag : Tag) :=
     match tag with
@@ -179,21 +179,21 @@ Module ProtoParse.
     end.
 
   Definition ParseIntField (w : Width) (deco : DecoDesc) : @Parser ValVal :=
-    Map Varint (fun z => match deco with
+    ParseMap Varint (fun z => match deco with
                       | D_IMPLICIT => V_INT $ V_IMPLICIT $ int_change_w w $ uint_int width64 z
                       | D_OPTIONAL => V_INT $ V_OPTIONAL $ Some (int_change_w w $ uint_int width64 z)
                       | D_REPEATED => V_INT $ V_REPEATED $ [int_change_w w $ uint_int width64 z]
                       end).
 
   Definition ParseUintField (w : Width) (deco : DecoDesc) : @Parser ValVal :=
-    Map Varint (fun z => match deco with
+    ParseMap Varint (fun z => match deco with
                       | D_IMPLICIT => V_INT $ V_IMPLICIT $ uint_change_w w z
                       | D_OPTIONAL => V_INT $ V_OPTIONAL $ Some (uint_change_w w z)
                       | D_REPEATED => V_INT $ V_REPEATED $ [uint_change_w w z]
                       end).
 
   Definition ParseSintField (w : Width) (deco : DecoDesc) : @Parser ValVal :=
-    Map Varint (fun z => match deco with
+    ParseMap Varint (fun z => match deco with
                       | D_IMPLICIT => V_INT $ V_IMPLICIT $ sint_change_w w $ uint_sint width64 z
                       | D_OPTIONAL => V_INT $ V_OPTIONAL $ Some (sint_change_w w $ uint_sint width64 z)
                       | D_REPEATED => V_INT $ V_REPEATED $ [sint_change_w w $ uint_sint width64 z]
@@ -206,14 +206,14 @@ Module ProtoParse.
                                            end.
 
   Definition ParseFixedField (w : Width) (deco : DecoDesc) : @Parser ValVal :=
-    Map (GetFixedParser w) (fun z => match deco with
+    ParseMap (GetFixedParser w) (fun z => match deco with
                                   | D_IMPLICIT => V_INT $ V_IMPLICIT $ uint_change_w w z
                                   | D_OPTIONAL => V_INT $ V_OPTIONAL $ Some (uint_change_w w z)
                                   | D_REPEATED => V_INT $ V_REPEATED $ [uint_change_w w z]
                                   end).
 
   Definition ParseSfixedField (w : Width) (deco : DecoDesc) : @Parser ValVal :=
-    Map (GetFixedParser w) (fun z => match deco with
+    ParseMap (GetFixedParser w) (fun z => match deco with
                                   | D_IMPLICIT => V_INT $ V_IMPLICIT $ uint_change_w w $ uint_int width64 z
                                   | D_OPTIONAL => V_INT $ V_OPTIONAL $ Some
                                                    (uint_change_w w $ uint_int width64 z)
@@ -221,7 +221,7 @@ Module ProtoParse.
                                   end).
 
   Definition ParseBoolField (deco : DecoDesc) : @Parser ValVal := 
-    Map Varint (fun z => match deco with
+    ParseMap Varint (fun z => match deco with
                       | D_IMPLICIT => V_BOOL $ V_IMPLICIT $ negb (Z.eqb z 0)
                       | D_OPTIONAL => V_BOOL $ V_OPTIONAL $ Some (negb (Z.eqb z 0))
                       | D_REPEATED => V_BOOL $ V_REPEATED $ [negb (Z.eqb z 0)]
@@ -261,7 +261,7 @@ Module ProtoParse.
     end.
 
   Definition WrapPackedField (tag : Tag) (name : string) (underlying : @Parser ValVal) :=
-    Map (WrapPacked tag underlying) (fun vv => V_FIELD name vv).
+    ParseMap (WrapPacked tag underlying) (fun vv => V_FIELD name vv).
 
   Definition ParseFieldVal (header : Z * Tag * option FieldDesc) : @Parser FieldVal :=
     match header with

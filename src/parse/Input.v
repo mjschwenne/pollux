@@ -47,6 +47,11 @@ Module Type AbstractInput.
     forall self start, 0 <= start <= Length self ->
     View (Drop self start) = drop start (View self).
   Axiom Drop_zero : forall self, Drop self 0 = self.
+  Axiom DropDrop :
+    forall self a b,
+    0 <= a <= Length self -> 0 <= b <= Length self - a -> Drop self (a + b) = Drop (Drop self a) b.
+  Axiom Drop_App :
+    forall i1 i2, Drop (App i1 i2) (Length i1) = i2.
 
   (* AbstractInput must support slicing *)
   Parameter Slice : Input -> nat -> nat -> Input.
@@ -54,11 +59,9 @@ Module Type AbstractInput.
     forall self start end',
     0 <= start /\ start <= end' /\ end' <= Length self ->
     View (Slice self start end') = Util.sublist start end' (View self).
+  Axiom Slice_App :
+    forall i1 i2, Slice (App i1 i2) 0 (Length i1) = i1.
 
-  (* For the Lemma about Drop, just use drop_drop *)
-  Axiom DropDrop :
-    forall self a b,
-    0 <= a <= Length self -> 0 <= b <= Length self - a -> Drop self (a + b) = Drop (Drop self a) b.
 End AbstractInput.
 
 Module ByteInput <: AbstractInput.
@@ -107,11 +110,6 @@ Module ByteInput <: AbstractInput.
                                        View (Drop self start) = drop start (View self).
   Proof. reflexivity. Qed.
 
-  Theorem Slice_correct : forall self start end',
-    0 <= start /\ start <= end' /\ end' <= Length self ->
-    View (Slice self start end') = Util.sublist start end' (View self).
-  Proof. reflexivity. Qed.
-
   Theorem Drop_zero : forall self, Drop self 0 = self.
   Proof. intros. unfold Drop. apply drop_0. Qed.
 
@@ -123,6 +121,27 @@ Module ByteInput <: AbstractInput.
     unfold Drop.
     symmetry.
     apply drop_drop.
+  Qed.
+
+  Theorem Drop_App : forall i1 i2, Drop (App i1 i2) (Length i1) = i2.
+  Proof.
+    intros.
+    unfold Drop, App, Length.
+    rewrite drop_app_length. 
+    reflexivity.
+  Qed.
+
+  Theorem Slice_correct : forall self start end',
+    0 <= start /\ start <= end' /\ end' <= Length self ->
+    View (Slice self start end') = Util.sublist start end' (View self).
+  Proof. reflexivity. Qed.
+
+  Theorem Slice_App : forall i1 i2, Slice (App i1 i2) 0 (Length i1) = i1.
+  Proof.
+    intros.
+    unfold Slice, Util.sublist, Length, App.
+    rewrite drop_0, Nat.sub_0_r, take_app_length.
+    reflexivity.
   Qed.
 
 End ByteInput.

@@ -472,6 +472,107 @@ Module Parsers (InputModule : AbstractInput).
         (* rewrite Hl_ret in Hr_ret. *)
     Abort.
 
+    (* Apply two parser consecutively. If both succeed, return the pair of both results *)
+    Definition ParseConcat {L R : Type} (left : Parser L) (right : Parser R) : Parser (L * R) :=
+      fun inp =>
+        match left inp with
+        | ParseSuccess ll lrem => match right lrem with
+                                 | ParseSuccess rr rrem => ParseSuccess (ll, rr) rrem
+                                 | ParseFailure lvl data as p => PropagateFailure p I
+                                 end
+        | ParseFailure lvl data as p => PropagateFailure p I
+        end.
+
+    Definition Concat_wf {L R : Type} (wfl : L -> Prop) (wfr : R -> Prop) : (L * R) -> Prop :=
+      fun lr => let (l, r) := lr in wfl l /\ wfr r.
+
+    Definition SerialConcat {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (left : Serializer L wfl) (right : Serializer R wfr) : Serializer (L * R) (Concat_wf wfl wfr) :=
+      fun inp =>
+        let (l, r) := inp in 
+        match left l, right r with
+        | SerialSuccess l_enc, SerialSuccess r_enc => SerialSuccess (App l_enc r_enc)
+        | SerialFailure level data, _
+        | _, SerialFailure level data => SerialFailure level data
+        end.
+
+    Lemma SerialConcatInversion : forall {A B : Type} {wf__a : A -> Prop} {wf__b : B -> Prop}
+                                      (ser__a : Serializer A wf__a) (ser__b : Serializer B wf__b)
+                                      (a : A) (b : B) (enc : Output),
+      SerialConcat ser__a ser__b (a, b) = SerialSuccess enc <->
+                                        exists (enc__a enc__b : Output),
+                                          ser__a a = SerialSuccess enc__a /\
+                                          ser__b b = SerialSuccess enc__b /\
+                                          enc = App enc__a enc__b.
+    Proof using Type.
+      intros. split.
+      - unfold SerialConcat.
+        destruct (ser__a a) as [out__a |] eqn:Ha; last discriminate.
+        destruct (ser__b b) as [out__b |] eqn:Hb; last discriminate.
+        intro H. inversion H as [Henc]. clear H.
+        exists out__a, out__b. repeat (split; first reflexivity); reflexivity.
+      - intros (out__a & out__b & Ha & Hb & Henc). unfold SerialConcat.
+        rewrite Ha. rewrite Hb.
+        subst. reflexivity.
+    Qed.
+
+    Theorem ConcatCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (lp : Parser L) (ls : Serializer L wfl)
+      (rp : Parser R) (rs : Serializer R wfr) :
+      ParseOk lp ls -> ParseOk rp rs -> ParseOk (ParseConcat lp rp) (SerialConcat ls rs).
+    Proof using Type.
+      intros Hleft_ok Hright_ok.
+      intros [l r] enc rest [Hl_wf Hr_wf] Hconcat.
+      apply SerialConcatInversion in Hconcat.
+      destruct Hconcat as (enc__l & enc__r & Hl & Hr & Henc).
+      subst. rewrite App_assoc.
+      apply (Hleft_ok _ _ (App enc__r rest)) in Hl; last assumption.
+      apply (Hright_ok _ _ rest) in Hr; last assumption.
+      unfold ParseConcat.
+      rewrite Hl. rewrite Hr.
+      reflexivity.
+    Qed.
+
+    (* Apply two consecutive parsers consecutively. If both succeed, apply the mapper to the results
+     and return it *)
+    Definition ConcatMap {L R T : Type} (left : Parser L) (right : Parser R) (mapper : L -> R -> T) : Parser T :=
+      fun inp =>
+        match left inp with
+        | ParseSuccess ll lrem => match right lrem with
+                                 | ParseSuccess rr rrem => ParseSuccess (mapper ll rr) rrem
+                                 | ParseFailure lvl data as p => PropagateFailure p I
+                                 end
+        | ParseFailure lvl data as p => PropagateFailure p I
+        end.
+
+    (* Return only the result of the right parser if the two parsers match *)
+    Definition ConcatKeepRight {L R : Type} (left : Parser L) (right : Parser R) : Parser R :=
+      ConcatMap left right (fun l r => r).
+    
+    (* Return only the result of the left parser if the two parsers match *)
+    Definition ConcatKeepLeft {L R : Type} (left : Parser L) (right : Parser R) : Parser L :=
+      ConcatMap left right (fun l r => l).
+    
+    Definition SerialBind' {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (tag : R -> L) (left : Serializer L wfl) (right : Serializer R wfr) :
+      Serializer R (fun r => wfl (tag r) /\ wfr r) :=
+      fun r => SerialConcat left right (tag r, r).
+
+    Lemma BindCorrect' {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (lp : Parser L) (ls : Serializer L wfl)
+      (rp : L -> Parser R) (rs : Serializer R wfr) (tag : R -> L) :
+      forall r, ParseOk lp ls -> ParseOk' (rp (tag r)) rs r -> ParseOk' (ParseBind lp rp) (SerialBind' tag ls rs) r.
+    Proof using Type.
+      intros r Hleft_ok Hright_ok enc rest [wfl_ok wfr_ok] Hbind.
+      apply SerialConcatInversion in Hbind.
+      destruct Hbind as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
+      rewrite Henc. rewrite App_assoc.
+      unfold ParseBind.
+      apply (Hleft_ok _ _ (App enc__r rest)) in Hl_ok; last assumption.
+      rewrite Hl_ok.
+      apply (Hright_ok _ rest) in Hr_ok; assumption.
+    Qed.
+
     (* Limit the underlying parser to only access the first N tokens in the input. *)
     Definition ParseLimit {R : Type} (underlying : Parser R) (n : nat) : Parser R :=
       fun inp => match underlying (Slice inp 0 n) with
@@ -479,23 +580,118 @@ Module Parsers (InputModule : AbstractInput).
               | ParseFailure lvl data as f => f
               end.
 
-    Definition SerialLen {R : Type} {wfr : R -> Prop} {wfn : nat -> Prop}
-      (len : Serializer nat wfn) (underlying : Serializer R wfr) : Serializer R wfr :=
+    (* This formulation is only useful for the proof. *)
+    Definition SerialLimit {R : Type} {wfr : R -> Prop} (underlying : Serializer R wfr) (len : R -> nat) :
+      Serializer R wfr := underlying.
+
+    Definition ParseLen {R : Type} (len : Parser nat) (underlying : Parser R) : Parser R :=
+      ParseBind len (fun l => ParseLimit underlying l).
+
+    Definition SerialLen {R : Type} {wfr : R -> Prop} {wfn : nat -> Prop} (len : R -> nat)
+      (ser_len : Serializer nat wfn) (underlying : Serializer R wfr) : Serializer R (fun r => wfn (len r) /\ wfr r) :=
+      SerialBind' (len) ser_len (SerialLimit underlying len).
+
+    Definition SerialLen'_wf {R : Type} {wfr : R -> Prop} {wfn : nat -> Prop}
+      (s__len : Serializer nat wfn) (s__r : Serializer R wfr) : R -> Prop :=
+      fun r => match s__r r with
+            | SerialSuccess enc__r => match s__len (Length enc__r) with
+                                  | SerialSuccess enc__len => wfn (Length enc__r) /\ wfr r
+                                  | SerialFailure _ _ => True
+                                  end
+            | SerialFailure _ _ => True
+            end.
+    
+    Definition SerialLen' {R : Type} {wfr : R -> Prop} {wfn : nat -> Prop}
+      (ser_len : Serializer nat wfn) (underlying : Serializer R wfr) :
+      Serializer R $ SerialLen'_wf ser_len underlying :=
       fun r => match underlying r with
-            | SerialSuccess enc => match len (Length enc) with
+            | SerialSuccess enc => match ser_len (Length enc) with
                                   | SerialSuccess len_enc => SerialSuccess (App len_enc enc)
                                   | SerialFailure lvl data as f => f
                                   end
             | SerialFailure lvl data as f => f
             end.
 
+    (* Relax the rest requirement, since the Limit parser will ensure rest = [] *)
+    Definition LimitParseOk {R : Type} {wf : R -> Prop} (ser : Serializer R wf) (par : Parser R) := 
+      forall x enc,
+      wf x -> ser x = SerialSuccess enc -> par enc = ParseSuccess x Input_default.
+
+    Definition LenOk {R : Type} {wf : R -> Prop} (ser : Serializer R wf) (len : R -> nat) (r : R) :=
+      forall enc, ser r = SerialSuccess enc -> len r = Length enc.
+
+    Lemma LimitCorrect {R : Type} {wf : R -> Prop} (len : R -> nat)
+      (underlying__ser : Serializer R wf) (underlying__par : Parser R) (r : R) :
+      LimitParseOk underlying__ser underlying__par ->
+      LenOk underlying__ser len r ->
+      ParseOk' (ParseLimit underlying__par (len r)) (SerialLimit underlying__ser len) r.
+    Proof using Type.
+      intros Hlim_ok Hlen_ok.
+      intros enc rest Hwf.
+      unfold SerialLimit, ParseLimit.
+      intros Hser.
+      unfold LenOk in Hlen_ok.
+      specialize (Hlen_ok enc Hser).
+      rewrite Hlen_ok.
+      rewrite Slice_App.
+      specialize (Hlim_ok r enc Hwf Hser).
+      rewrite Hlim_ok.
+      rewrite Drop_App, App_nil_l.
+      reflexivity.
+    Qed.
+
+    Lemma LenCorrect {R : Type} {wfr : R -> Prop} {wfn : nat -> Prop}
+      (ser__len : Serializer nat wfn) (par__len : Parser nat) (len : R -> nat)
+      (ser__r : Serializer R wfr) (par__r : Parser R) (r : R) :
+      ParseOk par__len ser__len ->
+      LimitParseOk ser__r par__r ->
+      LenOk ser__r len r ->
+      ParseOk' (ParseLen par__len par__r) (SerialLen len ser__len ser__r) r.
+    Proof using Type.
+      intros Hnat_ok Hlim_ok Hlen_ok.
+      unfold ParseLen, SerialLen.
+      apply BindCorrect'; first assumption.
+      apply LimitCorrect; assumption.
+    Qed.
+
+    Lemma LenCorrect' {R : Type} {wfr : R -> Prop} {wfn : nat -> Prop}
+      (ser__len : Serializer nat wfn) (par__len : Parser nat)
+      (ser__r : Serializer R wfr) (par__r : Parser R) :
+      ParseOk par__len ser__len ->
+      LimitParseOk ser__r par__r ->
+      ParseOk (ParseLen par__len par__r) (SerialLen' ser__len ser__r).
+    Proof using Type.
+      intros Hnat_ok Hlim_ok.
+      intros r enc rest Hwf.
+      unfold ParseLen, SerialLen'.
+      destruct (ser__r r) as [enc__r |] eqn:Hser__r; last discriminate.
+      destruct (ser__len (Length enc__r)) as [enc__len |] eqn:Hser__len; last discriminate.
+      unfold SerialLen'_wf in Hwf.
+      rewrite Hser__r in Hwf.
+      rewrite Hser__len in Hwf.
+      destruct Hwf as [Hwf__len Hwf__r].
+      intros Henc. inversion Henc.
+      unfold ParseBind.
+      rewrite App_assoc.
+      specialize (Hnat_ok (Length enc__r) enc__len (App enc__r rest) Hwf__len Hser__len); rewrite Hnat_ok.
+      unfold ParseLimit.
+      rewrite Slice_App.
+      specialize (Hlim_ok r enc__r Hwf__r Hser__r); rewrite Hlim_ok.
+      rewrite App_nil_l, Drop_App.
+      reflexivity.
+    Qed.
+
     (* A parser combinator that makes it possible to transform the result of a parser in another one. *)
-    Definition Map {R U : Type} (underlying : Parser R) (f : R -> U) : Parser U :=
+    Definition ParseMap {R U : Type} (underlying : Parser R) (f : R -> U) : Parser U :=
       fun inp =>
         match underlying inp with
         | ParseSuccess leftResult remaining => ParseSuccess (f leftResult) remaining
         | ParseFailure level data => ParseFailure level data
         end.
+
+    Definition SerialMap {R U : Type} {wf : U -> Prop} (underlying : Serializer U wf) (f : R -> U) :
+      Serializer R (fun r => wf (f r)) := 
+      fun r => underlying (f r).
 
     (* Returns a parser that succeeds if the underlying parser fails and vice-versa.
      The result does not consume any input. *)
@@ -591,107 +787,6 @@ Module Parsers (InputModule : AbstractInput).
                                                 else
                                                   ParseSuccess None inp
         end.
-
-    (* Apply two consecutive parsers consecutively. If both succeed, apply the mapper to the results
-     and return it *)
-    Definition ConcatMap {L R T : Type} (left : Parser L) (right : Parser R) (mapper : L -> R -> T) : Parser T :=
-      fun inp =>
-        match left inp with
-        | ParseSuccess ll lrem => match right lrem with
-                                 | ParseSuccess rr rrem => ParseSuccess (mapper ll rr) rrem
-                                 | ParseFailure lvl data as p => PropagateFailure p I
-                                 end
-        | ParseFailure lvl data as p => PropagateFailure p I
-        end.
-
-    (* Apply two parser consecutively. If both succeed, return the pair of both results *)
-    Definition ParseConcat {L R : Type} (left : Parser L) (right : Parser R) : Parser (L * R) :=
-      fun inp =>
-        match left inp with
-        | ParseSuccess ll lrem => match right lrem with
-                                 | ParseSuccess rr rrem => ParseSuccess (ll, rr) rrem
-                                 | ParseFailure lvl data as p => PropagateFailure p I
-                                 end
-        | ParseFailure lvl data as p => PropagateFailure p I
-        end.
-
-    Definition Concat_wf {L R : Type} (wfl : L -> Prop) (wfr : R -> Prop) : (L * R) -> Prop :=
-      fun lr => let (l, r) := lr in wfl l /\ wfr r.
-
-    Definition SerialConcat {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-      (left : Serializer L wfl) (right : Serializer R wfr) : Serializer (L * R) (Concat_wf wfl wfr) :=
-      fun inp =>
-        let (l, r) := inp in 
-        match left l, right r with
-        | SerialSuccess l_enc, SerialSuccess r_enc => SerialSuccess (App l_enc r_enc)
-        | SerialFailure level data, _
-        | _, SerialFailure level data => SerialFailure level data
-        end.
-
-    Lemma SerialConcatInversion : forall {A B : Type} {wf__a : A -> Prop} {wf__b : B -> Prop}
-                                      (ser__a : Serializer A wf__a) (ser__b : Serializer B wf__b)
-                                      (a : A) (b : B) (enc : Output),
-      SerialConcat ser__a ser__b (a, b) = SerialSuccess enc <->
-                                        exists (enc__a enc__b : Output),
-                                          ser__a a = SerialSuccess enc__a /\
-                                          ser__b b = SerialSuccess enc__b /\
-                                          enc = App enc__a enc__b.
-    Proof using Type.
-      intros. split.
-      - unfold SerialConcat.
-        destruct (ser__a a) as [out__a |] eqn:Ha; last discriminate.
-        destruct (ser__b b) as [out__b |] eqn:Hb; last discriminate.
-        intro H. inversion H as [Henc]. clear H.
-        exists out__a, out__b. repeat (split; first reflexivity); reflexivity.
-      - intros (out__a & out__b & Ha & Hb & Henc). unfold SerialConcat.
-        rewrite Ha. rewrite Hb.
-        subst. reflexivity.
-    Qed.
-
-    Theorem ConcatCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-      (lp : Parser L) (ls : Serializer L wfl)
-      (rp : Parser R) (rs : Serializer R wfr) :
-      ParseOk lp ls -> ParseOk rp rs -> ParseOk (ParseConcat lp rp) (SerialConcat ls rs).
-    Proof using Type.
-      intros Hleft_ok Hright_ok.
-      intros [l r] enc rest [Hl_wf Hr_wf] Hconcat.
-      apply SerialConcatInversion in Hconcat.
-      destruct Hconcat as (enc__l & enc__r & Hl & Hr & Henc).
-      subst. rewrite App_assoc.
-      apply (Hleft_ok _ _ (App enc__r rest)) in Hl; last assumption.
-      apply (Hright_ok _ _ rest) in Hr; last assumption.
-      unfold ParseConcat.
-      rewrite Hl. rewrite Hr.
-      reflexivity.
-    Qed.
-
-    (* Return only the result of the right parser if the two parsers match *)
-    Definition ConcatKeepRight {L R : Type} (left : Parser L) (right : Parser R) : Parser R :=
-      ConcatMap left right (fun l r => r).
-    
-    (* Return only the result of the left parser if the two parsers match *)
-    Definition ConcatKeepLeft {L R : Type} (left : Parser L) (right : Parser R) : Parser L :=
-      ConcatMap left right (fun l r => l).
-    
-    Definition SerialBind' {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-      (tag : R -> L) (left : Serializer L wfl) (right : Serializer R wfr) :
-      Serializer R (fun r => wfl (tag r) /\ wfr r) :=
-      fun r => SerialConcat left right (tag r, r).
-
-    Lemma BindCorrect' {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-      (lp : Parser L) (ls : Serializer L wfl)
-      (rp : L -> Parser R) (rs : Serializer R wfr) (tag : R -> L) :
-      forall r, ParseOk lp ls -> ParseOk' (rp (tag r)) rs r -> ParseOk' (ParseBind lp rp) (SerialBind' tag ls rs) r.
-    Proof using Type.
-      intros r Hleft_ok Hright_ok enc rest [wfl_ok wfr_ok] Hbind.
-      apply SerialConcatInversion in Hbind.
-      destruct Hbind as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
-      rewrite Henc. rewrite App_assoc.
-      unfold ParseBind.
-      apply (Hleft_ok _ _ (App enc__r rest)) in Hl_ok; last assumption.
-      rewrite Hl_ok.
-      apply (Hright_ok _ rest) in Hr_ok; assumption.
-    Qed.
 
     (* TODO debug parser? Might just need to be in OCaml since Rocq I/O functions seem funky *)
 
