@@ -161,17 +161,18 @@ Module SimplParser.
     Compute ParseBaseDesc [W8 1; W8 32; W8 0; W8 0; W8 0].
     Compute ParseBaseDesc [W8 0; W8 32; W8 0; W8 0; W8 0].
 
+    Definition ParseVal' (pd : Parser Val) : Parser Val :=
+      ParseBind ParseUnsigned
+        (fun z => 
+           match z with
+           | 0 => ParseBaseDesc
+           | 1 => ParseMap (ParseLen ParseNat (ParseConcat pd pd))
+                   (fun vs => let (v1, v2) := vs in V_NEST v1 v2)
+           | _ => ParseFailWith "Unknown tag" Recoverable
+           end).
+
     Definition ParseVal : Parser Val :=
-           ParseRecursive (fun pd =>
-                             ParseBind ParseUnsigned
-                               (fun z => 
-                                  match z with
-                                  | 0 => ParseBaseDesc
-                                  | 1 => ParseLen ParseNat
-                                          (ParseMap (ParseConcat pd pd)
-                                             (fun vs => let (v1, v2) := vs in V_NEST v1 v2))
-                                  | _ => ParseFailWith "Unknown tag" Recoverable
-                                  end)).
+      ParseRecursive ParseVal'.
 
     Definition to_enc (l : list Z) : list byte := map (fun n => W8 n) l.
 
@@ -251,7 +252,7 @@ Module SimplParser.
     Definition Restrict {R : Type} {wf : R -> Prop} (ser : Serializer R wf) (new : R -> Prop) :
       Serializer R (fun r => new r /\ wf r) := ser.
 
-    Fixpoint ValEncLen (v : Val) : Z :=
+    Fixpoint ValEncLen (v : Val) : nat :=
       match v with
       | V_BOOL _ => 3 (* Two header bytes, one payload byte *)
       | V_INT _ => 6 (* Two header bytes, four payload bytes *)
@@ -268,10 +269,10 @@ Module SimplParser.
       match v with
       | V_INT _ => 0
       | V_BOOL _ => 1
-      | V_NEST v1 v2 => ValEncLen v1 + ValEncLen v2
+      | V_NEST v1 v2 => Z.of_nat (ValEncLen v1) + Z.of_nat (ValEncLen v2)
       end.
 
-    Definition Len (v : Val) : nat := Z.to_nat $ InnerTag v.
+    Definition Len (vs: Val * Val) : nat := let (v1, v2) := vs in Z.to_nat $ InnerTag (V_NEST v1 v2).
 
     Definition tag_wf (v : Val) : Prop := 0 <= OuterTag v < 256 /\ 0 <= InnerTag v < 256.
 
@@ -282,43 +283,30 @@ Module SimplParser.
       | V_NEST v1 v2 => val_wf v1 /\ val_wf v2
       end.
 
-    Definition SerialBaseDesc (ser : Serializer Val val_wf) :
-      Serializer Val (fun v => 0 <= InnerTag v < 256 /\ val_wf v) :=
-      SerialBind' InnerTag SerialUnsigned
-        (mkSerializer
-           (fun v => match v with
-                  | V_BOOL b => SerialBool b
-                  | V_INT z => SerialZ32 z
-                  | V_NEST v1 v2 => SerialLimit (SerialMap (SerialConcat ser ser) $ fun _ => (v1, v2)) Len v
-                  end) val_wf).
-
-    Definition IsNest (v : Val) : Prop :=
-      match v with
-      | V_NEST _ _ => True
-      | _ => False
-      end.
-
-    Definition ToPair (v : Val) (pf : IsNest v) : Val * Val. 
-    Proof.
-      destruct v.
-      - destruct pf.
-      - destruct pf.
-      - split; assumption.
-    Defined.
+    (* Definition SerialBaseDesc (ser : Serializer Val val_wf) : *)
+    (*   Serializer Val (fun v => 0 <= InnerTag v < 256 /\ val_wf v) := *)
+    (*   SerialBind' InnerTag SerialUnsigned *)
+    (*     (mkSerializer *)
+    (*        (fun v => match v with *)
+    (*               | V_BOOL b => SerialBool b *)
+    (*               | V_INT z => SerialZ32 z *)
+    (*               | V_NEST v1 v2 => SerialLimit (SerialMap (SerialConcat ser ser) $ fun _ => (v1, v2)) Len v *)
+    (*               end) val_wf). *)
 
     Definition SerialBaseDesc' (ser : Serializer Val val_wf) :
       Serializer Val (fun v => 0 <= InnerTag v < 256 /\ val_wf v) :=
       (fun v => match v with
              | V_BOOL b => SerialBind' (fun _ => 1) SerialUnsigned SerialBool b
              | V_INT z => SerialBind' (fun _ => 0) SerialUnsigned SerialZ32 z
-             | V_NEST v1 v2 => SerialLen Len SerialNat (SerialMap (SerialConcat ser ser) (fun _ => (v1, v2))) v
+             | V_NEST v1 v2 => SerialMap (SerialLen Len SerialNat (SerialConcat ser ser)) (fun _ => (v1, v2)) v
              end).
 
+    Definition SerialVal'
+      (ser : Serializer Val (fun v => 0 <= OuterTag v < 256 /\ 0 <= InnerTag v < 256 /\ val_wf v)) :=
+      SerialBind' OuterTag SerialUnsigned (SerialBaseDesc' ser).
+
     Definition SerialVal : Serializer Val (fun v => 0 <= OuterTag v < 256 /\ 0 <= InnerTag v < 256 /\ val_wf v) :=
-      SerialRecursive
-        (fun ser : Serializer Val (fun v => 0 <= OuterTag v < 256 /\ 0 <= InnerTag v < 256 /\ val_wf v) =>
-           SerialBind' OuterTag SerialUnsigned (SerialBaseDesc' ser)
-        ) ValDepth.
+      SerialRecursive SerialVal' ValDepth.
 
     Definition enc_eq (v : Val) (e : Output) : bool :=
       match SerialVal v with
@@ -439,12 +427,54 @@ Module SimplParser.
       simpl. f_equal. word.
     Qed.
 
+    Lemma ValLen_Length (v : Val) :
+      forall enc, SerialVal v = SerialSuccess enc -> Length enc = ValEncLen v.
+    Proof.
+      induction v.
+      - intros enc Hser. destruct b; vm_compute in Hser; inversion Hser; reflexivity.
+      - intros enc Hser. vm_compute in Hser; inversion Hser; reflexivity.
+      - intros enc. unfold SerialVal, SerialRecursive.
+        rewrite ser_recur_unfold. unfold SerialVal'.
+        intro Hser.
+        apply SerialConcatInversion in Hser as (enc__ot & enc__rest & Hot_ok & Hrest_ok & Henc).
+        unfold SerialBaseDesc', SerialMap in Hrest_ok.
+        apply SerialConcatInversion in Hrest_ok as (enc__it & enc__v & Hit_ok & Hv_ok & Henc__v).
+        unfold SerialLimit in Hv_ok.
+        apply SerialConcatInversion in Hv_ok as (enc__v1 & enc__v2 & Hv1_ok & Hv2_ok & Henc__vs).
+        destruct (decide (ValDepth v1 < ValDepth (V_NEST v1 v2))%nat) as [Hdepth__v1 | Hcontra__v1] in Hv1_ok;
+          last (unfold ValDepth in Hcontra__v1; lia).
+        destruct (decide (ValDepth v2 < ValDepth (V_NEST v1 v2))%nat) as [Hdepth__v2 | Hcontra__v2] in Hv2_ok;
+          last (unfold ValDepth in Hcontra__v2; lia).
+        specialize IHv1 with enc__v1.
+        specialize IHv2 with enc__v2.
+        apply IHv1 in Hv1_ok.
+        apply IHv2 in Hv2_ok.
+        rewrite Henc__v, Henc__vs in Henc.
+        rewrite Henc, !App_Length, !Nat.add_assoc.
+        simpl. rewrite Hv1_ok, Hv2_ok.
+        vm_compute in Hot_ok; inversion Hot_ok as [Hot_enc].
+        unfold SerialNat, SerialByte in Hit_ok. inversion Hit_ok as [Hit_enc].
+        reflexivity.
+    Qed.
+
+    Lemma SerialValInversion (v1 v2 : Val) :
+      forall enc,
+      SerialVal (V_NEST v1 v2) = SerialSuccess enc ->
+      exists enc__v1 enc__v2, SerialVal v1 = SerialSuccess enc__v1 /\ SerialVal v2 = SerialSuccess enc__v2.
+    Proof.
+      intros enc.
+      unfold SerialVal at 1, SerialRecursive, SerialVal'.
+      rewrite ser_recur_unfold.
+    Admitted.
+
     Theorem SimplParseOk' : ParseOk ParseVal SerialVal.
     Proof.
-      unfold ParseVal, SerialVal.
-      apply RecursiveCorrect with (subterm := subtermVal).
+      intros x enc__x rest__x Hwf__x Hser__x.
+      pose proof (ValLen_Length x enc__x Hser__x) as Hlength.
+      unfold ParseVal, SerialVal in *.
+      apply (RecursiveCorrect ParseVal' SerialVal' subtermVal ValDepth); try done.
       * unfold SerialRecursiveOk.
-        intros r ser_rec.
+        intros r ser_rec. unfold SerialVal'.
         destruct (SerialBind' _ _ _ _) as [ enc |] eqn:Houter; last trivial.
         intros r_next Hst. destruct Hst as [v1 v2 | v1 v2].
         + intros Hwf.
@@ -478,12 +508,12 @@ Module SimplParser.
           rewrite App_Length. 
           unfold Length. simpl. lia.
       * intros p s Hps_ok.
-        intros x.
+        intros x'.
         apply (@BindCorrect' Z Val _ (λ v : Val, 0 ≤ InnerTag v < 256 ∧ val_wf v)
                  _ SerialUnsigned
                  _ _ _ _);
           first apply UnsignedParseOk.
-        destruct x eqn:Hx.
+        destruct x' eqn:Hx.
         + simpl.
           intros enc rest [Hit_wf Hb_wf].
           unfold SerialBaseDesc'.
@@ -512,14 +542,69 @@ Module SimplParser.
           reflexivity.
         + simpl.
           unfold SerialBaseDesc'.
-          intros enc rest [wf_tag [wf_v1 wf_v2]].
-          apply LenCorrect.
-          - apply NatParseOk.
-          - admit. 
-          - unfold LenOk. clear enc rest wf_tag wf_v1 wf_v2.
-            intro enc. unfold SerialMap. admit.
-          - split. { unfold Len. word. } unfold Concat_wf. split; assumption.
+          intros enc rest [wf_tag [wf_v1 wf_v2]] Hser.
+          unfold ParseMap.
+          unfold SerialMap in Hser.
+          pose proof (LenCorrect SerialNat ParseNat Len
+                        (SerialConcat s s)
+                        (ParseConcat p p)) as Hser_len.
+          specialize (Hser_len (v1, v2) NatParseOk).
+          assert (LimitParseOk (SerialConcat s s) (ParseConcat p p)) as Hlim_ok.
+          {
+            unfold LimitParseOk.
+            intros [x__l1 x__l2] enc__l wf__l.
+            unfold CallbackParseOk in Hps_ok.
+            intros Hser__l.
+            apply SerialConcatInversion in Hser__l as (enc__l1 & enc__l2 & Hl1_ok & Hl2_ok & Henc__l).
+            unfold ParseConcat.
+            admit.
+          }
+          assert (LenOk (SerialConcat s s) Len (v1, v2)) as Hlen.
+          {
+            unfold LenOk. intro enc'.
+            unfold Len, InnerTag.
+            intro Hser_cat. 
+            apply SerialConcatInversion in Hser_cat as (enc__v1 & enc__v2 & Hv1_ok & Hv2_ok & Henc__vs).
+            unfold InnerTag in wf_tag.
+            pose proof (ValLen_Length v1 enc__v1) as Hv1_len.
+            pose proof (ValLen_Length v2 enc__v2) as Hv2_len.
+            rewrite Henc__vs, App_Length.
+            unfold CallbackParseOk in Hps_ok.
+            assert (x = x') as Heqx. { admit. }
+            rewrite Heqx, Hx in Hser__x.
+            apply SerialValInversion in Hser__x.
+            admit.
+          }
+          specialize (Hser_len Hlim_ok Hlen enc rest) as Hp_ok.
+          rewrite Hp_ok; try done.
     Abort.
+
+  (* FIXME:
+     Well, this is extremely frustrating. I feel like I'm close to having this correctness
+     theorem proven, but the gaps remains. Here's what the issues are right now:
+     - The definition of CallbackParseOk is basically unusable do the the existential quantifier,
+       but changing it to a universal quantifier makes using it the RecursiveCorrect theorem
+       unusable.
+     - The current setup requires me to prove properties about any possible callback. While this is
+       fine in general, it becomes a problem specifically with the length limiting combinators since
+       these require me to manually reason about the length of encoding coming from an opaque serializer.
+       The encoding format cannot be changed to break up nested messages and length prefixing since that's
+       a common real world feature of binary formats. This does suggest that using SerialLen' is the
+       correct move, since then I don't have to prove the correctness of the provided length function.
+       However, the issue there is the well-formed condition of that combinator. We have to show, basically,
+       that the length of the payload fits in one byte. This should be possible with some of the new
+       length based lemmas I've proved.
+     - Honestly, I think I could focus this proof on the serializer (using induction on depth)
+       WITHOUT the RecursiveCorrect theorem except for dealing with the difficulties of the
+       recursive parser combinator. While there is a link between decreasing depth and decreasing
+       encoding length, it is extremely hard to enumerate in a format generic way.
+     - I'm considering trying to name the currently anonymous callbacks in par_recur and ser_recur, but
+       having to pass around the whole closure is really messy. The advantage here is that then the
+       recursive combinator correctness theorem could use those callbacks rather than a generic one.
+       It might prove fruitful since I know that these callbacks are correct, but it is possible to
+       write ones that aren't. Then the actual callback would be exposed in my proof here. That's bad
+       encapsulation, but might just let the proof be completed...
+   *)
 
   End Theorems.
 

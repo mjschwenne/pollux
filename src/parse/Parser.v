@@ -681,6 +681,25 @@ Module Parsers (InputModule : AbstractInput).
       reflexivity.
     Qed.
 
+    Lemma SerialLen'Inversion : forall {A : Type} {wfn : nat -> Prop} {wf__a : A -> Prop}
+                                      (ser__n : Serializer nat wfn) (ser__a : Serializer A wf__a)
+                                      (a : A) (enc : Output),
+      SerialLen' ser__n ser__a a = SerialSuccess enc <->
+                                 exists (enc__n enc__a : Output),
+                                   ser__n (Length enc__a) = SerialSuccess enc__n /\
+                                   ser__a a = SerialSuccess enc__a /\
+                                   enc = App enc__n enc__a.
+    Proof using Type.
+      intros. split.
+      - unfold SerialLen'.
+        destruct (ser__a a) as [out__a |] eqn:Ha; last discriminate.
+        destruct (ser__n (Length out__a)) as [out__n |] eqn:Hn; last discriminate.
+        intro H; inversion H as [Henc]; clear H.
+        exists out__n, out__a. repeat (split; done).
+      - intros (out__n & out__a & Hn & Ha & Henc). unfold SerialLen'.
+        rewrite Ha, Hn, Henc. reflexivity.
+    Qed.
+
     (* A parser combinator that makes it possible to transform the result of a parser in another one. *)
     Definition ParseMap {R U : Type} (underlying : Parser R) (f : R -> U) : Parser U :=
       fun inp =>
@@ -1136,7 +1155,8 @@ Module Parsers (InputModule : AbstractInput).
       (underlying__parse : Parser R -> Parser R)
       (underlying__ser : Serializer R wf -> Serializer R wf)
       (subterm : R -> R -> Prop)
-      (depth : R -> nat) :
+      (depth : R -> nat)
+      (r : R):
       SerialRecursiveOk underlying__ser subterm depth ->
       (forall (p : Parser R) (s : Serializer R wf),
          (CallbackParseOk p s subterm) ->
