@@ -298,7 +298,7 @@ Module SimplParser.
       (fun v => match v with
              | V_BOOL b => SerialBind' (fun _ => 1) SerialUnsigned SerialBool b
              | V_INT z => SerialBind' (fun _ => 0) SerialUnsigned SerialZ32 z
-             | V_NEST v1 v2 => SerialMap (SerialLen Len SerialNat (SerialConcat ser ser)) (fun _ => (v1, v2)) v
+             | V_NEST v1 v2 => SerialMap (SerialLen' SerialNat (SerialConcat ser ser)) (fun _ => (v1, v2)) v
              end).
 
     Definition SerialVal'
@@ -438,7 +438,7 @@ Module SimplParser.
         intro Hser.
         apply SerialConcatInversion in Hser as (enc__ot & enc__rest & Hot_ok & Hrest_ok & Henc).
         unfold SerialBaseDesc', SerialMap in Hrest_ok.
-        apply SerialConcatInversion in Hrest_ok as (enc__it & enc__v & Hit_ok & Hv_ok & Henc__v).
+        apply SerialLen'Inversion in Hrest_ok as (enc__it & enc__v & Hit_ok & Hv_ok & Henc__v).
         unfold SerialLimit in Hv_ok.
         apply SerialConcatInversion in Hv_ok as (enc__v1 & enc__v2 & Hv1_ok & Hv2_ok & Henc__vs).
         destruct (decide (ValDepth v1 < ValDepth (V_NEST v1 v2))%nat) as [Hdepth__v1 | Hcontra__v1] in Hv1_ok;
@@ -465,146 +465,187 @@ Module SimplParser.
       intros enc.
       unfold SerialVal at 1, SerialRecursive, SerialVal'.
       rewrite ser_recur_unfold.
-    Admitted.
+      intro Hser.
+      apply SerialConcatInversion in Hser as (enc__ot & enc__rest & Hot_ok & Hrest_ok & Henc).
+      unfold SerialBaseDesc', SerialMap in Hrest_ok.
+      apply SerialLen'Inversion in Hrest_ok as (enc__it & enc__v & Hit_ok & Hv_ok & Henc__v).
+      apply SerialConcatInversion in Hv_ok as (enc__v1 & enc__v2 & Hv1_ok & Hv2_ok & Henc__vs).
+      destruct (decide (ValDepth v1 < ValDepth (V_NEST v1 v2))%nat) as [Hdepth__v1 | Hcontra__v1] in Hv1_ok;
+        last (unfold ValDepth in Hcontra__v1; lia).
+      destruct (decide (ValDepth v2 < ValDepth (V_NEST v1 v2))%nat) as [Hdepth__v2 | Hcontra__v2] in Hv2_ok;
+        last (unfold ValDepth in Hcontra__v2; lia).
+      exists enc__v1, enc__v2.
+      split.
+      - apply Hv1_ok.
+      - apply Hv2_ok.
+    Qed.
 
-    Theorem SimplParseOk' : ParseOk ParseVal SerialVal.
+    Lemma ValLen_Nest (v1 v2 : Val) :
+      forall enc,
+      SerialVal (V_NEST v1 v2) = SerialSuccess enc ->
+      exists enc__v1 enc__v2, SerialVal v1 = SerialSuccess enc__v1 /\ SerialVal v2 = SerialSuccess enc__v2 ->
+             (Length enc > Length enc__v1 /\ Length enc > Length enc__v2)%nat.
     Proof.
-      intros x enc__x rest__x Hwf__x Hser__x.
-      pose proof (ValLen_Length x enc__x Hser__x) as Hlength.
-      unfold ParseVal, SerialVal in *.
-      apply (RecursiveCorrect ParseVal' SerialVal' subtermVal ValDepth); try done.
-      * unfold SerialRecursiveOk.
-        intros r ser_rec. unfold SerialVal'.
-        destruct (SerialBind' _ _ _ _) as [ enc |] eqn:Houter; last trivial.
-        intros r_next Hst. destruct Hst as [v1 v2 | v1 v2].
-        + intros Hwf.
-          apply SerialConcatInversion in Houter as (enc__ot & enc__rest & Hot_ok & Hrest_ok & Henc).
-          apply SerialConcatInversion in Hrest_ok as (enc__it & enc__v & Hit_ok & Hv_ok & Henc__rest).
-          rewrite Henc__rest in Henc.
-          destruct (ser_rec v1) as [enc__rec |] eqn:Hrec; last trivial.
-          unfold mkSerializer in Hv_ok.
-          apply SerialConcatInversion in Hv_ok as (enc__v1 & enc__v2 & Hv1_ok & Hv2_ok & Henc__v).
-          rewrite Hv1_ok in Hrec. inversion Hrec. subst.
-          exists (App enc__ot enc__it), enc__v2. rewrite !App_assoc.
-          split; first reflexivity.
-          unfold SerialUnsigned, SerialByte in *.
-          inversion Hot_ok. inversion Hit_ok.
-          rewrite App_Length. 
-          unfold Length. simpl. lia.
-        + intros Hwf.
-          apply SerialConcatInversion in Houter as (enc__ot & enc__rest & Hot_ok & Hrest_ok & Henc).
-          apply SerialConcatInversion in Hrest_ok as (enc__it & enc__v & Hit_ok & Hv_ok & Henc__rest).
-          rewrite Henc__rest in Henc.
-          destruct (ser_rec v2) as [enc__rec |] eqn:Hrec; last trivial.
-          unfold mkSerializer in Hv_ok.
-          apply SerialConcatInversion in Hv_ok as (enc__v1 & enc__v2 & Hv1_ok & Hv2_ok & Henc__v).
-          rewrite Hv2_ok in Hrec. inversion Hrec. subst.
-          exists (App enc__ot (App enc__it enc__v1)), Input_default.
-          rewrite !App_assoc.
-          rewrite App_nil_r.
-          split; first reflexivity.
-          unfold SerialUnsigned, SerialByte in *.
-          inversion Hot_ok. inversion Hit_ok.
-          rewrite App_Length. 
-          unfold Length. simpl. lia.
-      * intros p s Hps_ok.
-        intros x'.
-        apply (@BindCorrect' Z Val _ (λ v : Val, 0 ≤ InnerTag v < 256 ∧ val_wf v)
-                 _ SerialUnsigned
-                 _ _ _ _);
-          first apply UnsignedParseOk.
-        destruct x' eqn:Hx.
-        + simpl.
-          intros enc rest [Hit_wf Hb_wf].
-          unfold SerialBaseDesc'.
-          intros Hser.
-          apply SerialConcatInversion in Hser as (enc__it & enc__b & Hit_ok & Hb_ok & Henc).
-          unfold ParseBaseDesc, ParseBind.
-          rewrite Henc, App_assoc.
-          pose proof (UnsignedParseOk 1 enc__it (App enc__b rest) Hit_wf Hit_ok) as Hu_ok.
-          rewrite Hu_ok.
-          unfold ParseMap.
-          pose proof (BoolParseOk b enc__b rest Hb_wf Hb_ok) as Hser_b.
-          rewrite Hser_b.
-          reflexivity.
-        + simpl.
-          intros enc rest [Hit_wf Hz_wf].
-          unfold SerialBaseDesc'.
-          intros Hser.
-          apply SerialConcatInversion in Hser as (enc__it & enc__z & Hit_ok & Hvz_ok & Henc).
-          unfold ParseBaseDesc, ParseBind.
-          rewrite Henc, App_assoc.
-          pose proof (UnsignedParseOk 0 enc__it (App enc__z rest) Hit_wf Hit_ok) as Hu_ok.
-          rewrite Hu_ok.
-          unfold ParseMap.
-          pose proof (Z32ParseOk i enc__z rest Hz_wf Hvz_ok) as Hser_z.
-          rewrite Hser_z.
-          reflexivity.
-        + simpl.
-          unfold SerialBaseDesc'.
-          intros enc rest [wf_tag [wf_v1 wf_v2]] Hser.
-          unfold ParseMap.
-          unfold SerialMap in Hser.
-          pose proof (LenCorrect SerialNat ParseNat Len
-                        (SerialConcat s s)
-                        (ParseConcat p p)) as Hser_len.
-          specialize (Hser_len (v1, v2) NatParseOk).
-          assert (LimitParseOk (SerialConcat s s) (ParseConcat p p)) as Hlim_ok.
-          {
-            unfold LimitParseOk.
-            intros [x__l1 x__l2] enc__l wf__l.
-            unfold CallbackParseOk in Hps_ok.
-            intros Hser__l.
-            apply SerialConcatInversion in Hser__l as (enc__l1 & enc__l2 & Hl1_ok & Hl2_ok & Henc__l).
-            unfold ParseConcat.
-            admit.
-          }
-          assert (LenOk (SerialConcat s s) Len (v1, v2)) as Hlen.
-          {
-            unfold LenOk. intro enc'.
-            unfold Len, InnerTag.
-            intro Hser_cat. 
-            apply SerialConcatInversion in Hser_cat as (enc__v1 & enc__v2 & Hv1_ok & Hv2_ok & Henc__vs).
-            unfold InnerTag in wf_tag.
-            pose proof (ValLen_Length v1 enc__v1) as Hv1_len.
-            pose proof (ValLen_Length v2 enc__v2) as Hv2_len.
-            rewrite Henc__vs, App_Length.
-            unfold CallbackParseOk in Hps_ok.
-            assert (x = x') as Heqx. { admit. }
-            rewrite Heqx, Hx in Hser__x.
-            apply SerialValInversion in Hser__x.
-            admit.
-          }
-          specialize (Hser_len Hlim_ok Hlen enc rest) as Hp_ok.
-          rewrite Hp_ok; try done.
-    Abort.
+      intros.
+      pose proof (ValLen_Length (V_NEST v1 v2) enc H) as Hv_len.
+      apply SerialValInversion in H as (enc__v1 & enc__v2 & Hv1_ok & Hv2_ok).
+      exists enc__v1, enc__v2. intros _.
+      pose proof (ValLen_Length v1 enc__v1 Hv1_ok) as Hv1_len.
+      pose proof (ValLen_Length v2 enc__v2 Hv2_ok) as Hv2_len.
+      unfold ValEncLen in Hv_len.
+      fold (ValEncLen v1) in Hv_len.
+      fold (ValEncLen v2) in Hv_len.
+      rewrite !Hv_len.
+      lia.
+    Qed.
 
-  (* FIXME:
-     Well, this is extremely frustrating. I feel like I'm close to having this correctness
-     theorem proven, but the gaps remains. Here's what the issues are right now:
-     - The definition of CallbackParseOk is basically unusable do the the existential quantifier,
-       but changing it to a universal quantifier makes using it the RecursiveCorrect theorem
-       unusable.
-     - The current setup requires me to prove properties about any possible callback. While this is
-       fine in general, it becomes a problem specifically with the length limiting combinators since
-       these require me to manually reason about the length of encoding coming from an opaque serializer.
-       The encoding format cannot be changed to break up nested messages and length prefixing since that's
-       a common real world feature of binary formats. This does suggest that using SerialLen' is the
-       correct move, since then I don't have to prove the correctness of the provided length function.
-       However, the issue there is the well-formed condition of that combinator. We have to show, basically,
-       that the length of the payload fits in one byte. This should be possible with some of the new
-       length based lemmas I've proved.
-     - Honestly, I think I could focus this proof on the serializer (using induction on depth)
-       WITHOUT the RecursiveCorrect theorem except for dealing with the difficulties of the
-       recursive parser combinator. While there is a link between decreasing depth and decreasing
-       encoding length, it is extremely hard to enumerate in a format generic way.
-     - I'm considering trying to name the currently anonymous callbacks in par_recur and ser_recur, but
-       having to pass around the whole closure is really messy. The advantage here is that then the
-       recursive combinator correctness theorem could use those callbacks rather than a generic one.
-       It might prove fruitful since I know that these callbacks are correct, but it is possible to
-       write ones that aren't. Then the actual callback would be exposed in my proof here. That's bad
-       encapsulation, but might just let the proof be completed...
-   *)
+    Lemma ValEncLen_InnerTag (v : Val) :
+      0 <= InnerTag v <= Z.of_nat $ ValEncLen v.
+    Proof.
+      destruct v.
+      - unfold ValEncLen, InnerTag. lia.
+      - unfold ValEncLen, InnerTag. lia. 
+      - unfold ValEncLen, InnerTag.
+        fold (ValEncLen v1); fold (ValEncLen v2).
+        lia.
+    Qed.
+
+    Theorem SimplParseOk : ParseOk ParseVal SerialVal.
+    Proof.
+      apply RecursiveCorrect.
+      intros x enc rest (wf_ot & wf_it & wf_val) IH.
+      unfold ser_recur_step, par_recur_step.
+      intros Hser.
+      destruct x eqn:Hx.
+      - revert Hser.
+        apply BindCorrect'; first apply UnsignedParseOk; last repeat (split; try word || assumption).
+        simpl.
+        intros enc__v rest__v [Hit_wf Hb_wf].
+        unfold SerialBaseDesc'.
+        intros Hser.
+        apply SerialConcatInversion in Hser as (enc__it & enc__b & Hit_ok & Hb_ok & Henc).
+        unfold ParseBaseDesc, ParseBind.
+        rewrite Henc, App_assoc.
+        pose proof (UnsignedParseOk 1 enc__it (App enc__b rest__v) Hit_wf Hit_ok) as Hu_ok.
+        rewrite Hu_ok.
+        unfold ParseMap.
+        pose proof (BoolParseOk b enc__b rest__v Hb_wf Hb_ok) as Hser_b.
+        rewrite Hser_b.
+        reflexivity.
+      - revert Hser.
+        apply BindCorrect'; first apply UnsignedParseOk; last repeat (split; try word || assumption).
+        simpl.
+        intros enc__v rest__v [Hit_wf Hz_wf].
+        unfold SerialBaseDesc'.
+        intros Hser.
+        apply SerialConcatInversion in Hser as (enc__it & enc__z & Hit_ok & Hvz_ok & Henc).
+        unfold ParseBaseDesc, ParseBind.
+        rewrite Henc, App_assoc.
+        pose proof (UnsignedParseOk 0 enc__it (App enc__z rest__v) Hit_wf Hit_ok) as Hu_ok.
+        rewrite Hu_ok.
+        unfold ParseMap.
+        pose proof (Z32ParseOk i enc__z rest__v Hz_wf Hvz_ok) as Hser_z.
+        rewrite Hser_z.
+        reflexivity.
+      - remember 
+          (λ r__next : Val,
+             if decide (ValDepth r__next < ValDepth (V_NEST v1 v2))%nat
+             then ser_recur SerialVal' ValDepth r__next
+             else SerialRecursiveProgressError "Serial.Recursive" ValDepth (V_NEST v1 v2) r__next)
+          as s.
+        remember
+          (λ inp__next : Input,
+             if decide (Length inp__next < Length (App enc rest))%nat
+             then par_recur ParseVal' inp__next
+             else RecursiveProgressError "Parser.Recursive" (App enc rest) inp__next)
+          as p.
+        unfold SerialVal' in Hser.
+        apply SerialConcatInversion in Hser as (enc__ot & enc__rest & Hot_ok & Hrest_ok & Henc).
+        unfold SerialBaseDesc', SerialMap in Hrest_ok.
+        set (SerialVal_wf := fun v => 0 <= InnerTag v < 256 /\ val_wf v).
+        unfold ParseVal', ParseBind.
+        rewrite Henc, App_assoc.
+        apply (UnsignedParseOk _ _ (App enc__rest rest)) in Hot_ok as Hot_succ; last word.
+        vm_compute in Hot_ok.
+        rewrite Hot_succ. simpl.
+        pose proof (@LenCorrect'Weakened _ (Concat_wf val_wf val_wf) _ SerialNat ParseNat
+                      (SerialConcat s s)
+                      (ParseConcat p p) (v1, v2) NatParseOk) as Hser_len.
+        assert (LimitParseOkWeak (@SerialConcat _ _ val_wf val_wf s s) (ParseConcat p p) (v1, v2))
+          as Hps_ok.
+        {
+          unfold LimitParseOkWeak.
+          intros enc__xs wf_xs.
+          destruct wf_xs as (wf_x1, wf_x2).
+          intros Hser__xs.
+          apply SerialLen'Inversion in Hrest_ok as (enc__len & enc__xs' & Hlen_ok & Hcxs & Henc__rest).
+          rewrite Hser__xs in Hcxs; inversion Hcxs as [Heqenc]; clear Hcxs.
+          symmetry in Heqenc.
+          apply SerialConcatInversion in Hser__xs as (enc__x1 & enc__x2 & Hx1_ok & Hx2_ok & Henc__xs).
+          rewrite Heqs in Hx1_ok, Hx2_ok.
+          destruct (decide _) in Hx1_ok;
+            last (
+                unfold SerialRecursiveProgressError in Hx1_ok;
+                destruct (ValDepth _ == ValDepth _) in Hx1_ok; discriminate
+              ).
+          destruct (decide _) in Hx2_ok;
+            last (
+                unfold SerialRecursiveProgressError in Hx2_ok;
+                destruct (ValDepth _ == ValDepth _) in Hx2_ok; discriminate
+              ).
+          rewrite Heqenc, Henc__xs.
+          unfold ParseConcat. rewrite Heqp.
+          rewrite Henc, Henc__rest, Heqenc, Henc__xs.
+          inversion Hot_ok as [Hot__enc]; symmetry in Hot__enc.
+          apply IH with (rest__next := enc__x2) in Hx1_ok.
+          - destruct (decide (Length (App enc__x1 enc__x2) < _)%nat).
+            + rewrite Hx1_ok.
+              destruct (decide (Length enc__x2 < _))%nat.
+              * apply IH with (rest__next := []) in Hx2_ok.
+                ** rewrite App_nil_r in Hx2_ok. rewrite Hx2_ok. reflexivity.
+                ** rewrite Henc, Henc__rest, Heqenc, Henc__xs, Hot__enc. lia.
+                ** done.
+                ** split; first (destruct v2; simpl; word). 
+                   split; last assumption.
+                   unfold InnerTag in wf_it.
+                   pose proof (ValEncLen_InnerTag v2) as Htag_v2.
+                   lia.
+              * rewrite !App_assoc, !App_Length, !Nat.add_assoc in n. unfold Length in n. simpl in n. lia.
+            + rewrite !App_assoc, !App_Length, !Nat.add_assoc in n. unfold Length in n. simpl in n. lia.
+          - rewrite Henc, Henc__rest, Heqenc, Henc__xs, Hot__enc.
+            rewrite !App_assoc, !App_Length, !Nat.add_assoc. unfold Length. simpl. lia.
+          - done.
+          - split; first (destruct v1; simpl; word).
+            split; last assumption.
+            unfold InnerTag in wf_it. 
+            pose proof (ValEncLen_InnerTag v1) as Htag_v1.
+            lia.
+        }
+        specialize (Hser_len Hps_ok).
+        apply (Hser_len _ rest) in Hrest_ok as Hser_ok.
+        + unfold ParseMap. rewrite Hser_ok. reflexivity.
+        + unfold SerialLen'_wf.
+          apply SerialLen'Inversion in Hrest_ok as (enc__len & enc__pay & Hlen_ok & Hpay_ok & Henc__rest).
+          rewrite Hpay_ok. rewrite Hlen_ok.
+          split; last done.
+          apply SerialConcatInversion in Hpay_ok as (enc__v1 & enc__v2 & Hv1_ok & Hv2_ok & Henc__pay).
+          rewrite Heqs in Hv1_ok, Hv2_ok.
+          destruct (decide _) in Hv1_ok;
+            last (
+                unfold SerialRecursiveProgressError in Hv1_ok;
+                destruct (ValDepth _ == ValDepth _) in Hv1_ok; discriminate
+              ).
+          destruct (decide _) in Hv2_ok;
+            last (
+                unfold SerialRecursiveProgressError in Hv2_ok;
+                destruct (ValDepth _ == ValDepth _) in Hv2_ok; discriminate
+              ).
+          rewrite Henc__pay, App_Length.
+          unfold InnerTag in wf_it.
+          pose proof (ValLen_Length v1 enc__v1 Hv1_ok) as Hv1_len.
+          pose proof (ValLen_Length v2 enc__v2 Hv2_ok) as Hv2_len.
+          lia.
+    Qed.
 
   End Theorems.
 

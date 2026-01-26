@@ -15,39 +15,43 @@
       flake = false;
     };
   };
-  outputs = {
-    nixpkgs,
-    flake-utils,
-    perennial,
-    opam-nix,
-    opam-repository,
-    opam-rocq-repo,
-    ...
-  }:
+  outputs =
+    {
+      nixpkgs,
+      flake-utils,
+      perennial,
+      opam-nix,
+      opam-repository,
+      opam-rocq-repo,
+      ...
+    }:
     flake-utils.lib.eachDefaultSystem (
-      system: let
+      system:
+      let
         pkgs = import nixpkgs {
           inherit system;
-          config.allowUnfreePredicate = pkg:
+          config.allowUnfreePredicate =
+            pkg:
             builtins.elem (pkgs.lib.getName pkg) [
               "antigravity"
               "antigravity-fhs"
             ];
         };
-        pollux-go = pkgs.callPackage ./pollux-go {};
+        pollux-go = pkgs.callPackage ./pollux-go { };
         inherit (opam-nix.lib.${system}) queryToScope;
         scope =
-          queryToScope {
-            repos = [
-              "${opam-repository}"
-              "${opam-rocq-repo}/released"
-            ];
-          }
-          {
-            rocq-equations = "*";
-            vsrocq-language-server = "*";
-            ocaml-base-compiler = "5.2.1";
-          };
+          queryToScope
+            {
+              repos = [
+                "${opam-repository}"
+                "${opam-rocq-repo}/released"
+              ];
+            }
+            {
+              rocq-equations = "*";
+              vsrocq-language-server = "*";
+              ocaml-base-compiler = "5.2.1";
+            };
         equations = scope.rocq-equations.override {
           inherit (scope) ocaml-base-compiler;
         };
@@ -60,71 +64,73 @@
           inherit equations perennialPkgs;
           perennial = perennial-pkg;
         };
-      in {
+      in
+      {
         packages = {
           inherit pollux-go rocq-build equations;
           default = rocq-build;
         };
-        devShells.default = with pkgs;
+        devShells.default =
+          with pkgs;
           mkShell {
-            buildInputs =
-              [
-                # Protobuf Deps
-                protobuf
-                protoc-gen-go
-                protoscope
-                buf
+            buildInputs = [
+              # Protobuf Deps
+              protobuf
+              protoc-gen-go
+              protoscope
+              buf
 
-                # Go deps
-                go
-                gopls
-                pollux-go
+              # Go deps
+              go
+              gopls
+              pollux-go
 
-                # Misc utilities
-                just
-                nushell
-                gnumake
-                xxd
-                antigravity-fhs
+              # Misc utilities
+              just
+              nushell
+              gnumake
+              xxd
+              antigravity-fhs
 
-                # eval utilities
-                gh
-                jq
-                (python313.withPackages (ps:
-                  with ps; [
-                    python-lsp-server
-                    pyright
-                    numpy
-                    nptyping
-                    scipy
-                    pandas
-                    pandas-stubs
-                    polars
-                    altair
-                    vl-convert-python
-                    requests
-                    rich
-                  ]))
+              # eval utilities
+              gh
+              jq
+              (python313.withPackages (
+                ps: with ps; [
+                  python-lsp-server
+                  pyright
+                  numpy
+                  nptyping
+                  scipy
+                  pandas
+                  pandas-stubs
+                  polars
+                  altair
+                  vl-convert-python
+                  requests
+                  rich
+                ]
+              ))
 
-                # nushell is great for command line polars queries
-                nushell
-                nushellPlugins.polars
+              # nushell is great for command line polars queries
+              nushell
+              nushellPlugins.polars
 
-                # nix helpers
-                nix-update
-              ]
-              ++ (with perennialPkgs; [
-                rocq-runtime
-                rocq-stdlib
-                coq-coqutil
-                coq-record-update
-                rocq-stdpp
-                rocq-iris
-                iris-named-props
-                perennial-pkg
-                equations
-                rocq-lsp
-              ]);
+              # nix helpers
+              nix-update
+            ]
+            ++ (with perennialPkgs; [
+              rocq-runtime
+              rocq-stdlib
+              coq-coqutil
+              coq-record-update
+              rocq-stdpp
+              rocq-iris
+              iris-named-props
+              perennial-pkg
+              equations
+              rocq-lsp
+            ]);
 
             shellHook = ''
               export ROCQPATH=$COQPATH:${equations}/lib/ocaml/5.2.1/site-lib/coq/user-contrib/

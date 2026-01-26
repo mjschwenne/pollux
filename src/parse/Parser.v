@@ -654,6 +654,38 @@ Module Parsers (InputModule : AbstractInput).
       apply LimitCorrect; assumption.
     Qed.
 
+    Definition LimitParseOkWeak {R : Type} {wf : R -> Prop} (ser : Serializer R wf) (par : Parser R)
+      (x : R) := 
+      forall enc,
+      wf x -> ser x = SerialSuccess enc -> par enc = ParseSuccess x Input_default.
+
+    Lemma LenCorrect'Weakened {R : Type} {wfr : R -> Prop} {wfn : nat -> Prop}
+      (ser__len : Serializer nat wfn) (par__len : Parser nat)
+      (ser__r : Serializer R wfr) (par__r : Parser R) (r : R) :
+      ParseOk par__len ser__len ->
+      LimitParseOkWeak ser__r par__r r ->
+      ParseOk' (ParseLen par__len par__r) (SerialLen' ser__len ser__r) r.
+    Proof using Type.
+      intros Hnat_ok Hlim_ok.
+      intros enc' rest Hwf.
+      unfold ParseLen, SerialLen', ParseOk'''.
+      destruct (ser__r r) as [enc__r |] eqn:Hser__r; last discriminate.
+      destruct (ser__len (Length enc__r)) as [enc__len |] eqn:Hser__len; last discriminate.
+      unfold SerialLen'_wf in Hwf.
+      rewrite Hser__r in Hwf.
+      rewrite Hser__len in Hwf.
+      destruct Hwf as [Hwf__len Hwf__r].
+      intros Henc. inversion Henc as [Henc__r].
+      unfold ParseBind.
+      rewrite App_assoc.
+      specialize (Hnat_ok (Length enc__r) enc__len (App enc__r rest) Hwf__len Hser__len); rewrite Hnat_ok.
+      unfold ParseLimit.
+      rewrite Slice_App.
+      specialize (Hlim_ok enc__r Hwf__r Hser__r); rewrite Hlim_ok.
+      rewrite App_nil_l, Drop_App.
+      reflexivity.
+    Qed.
+      
     Lemma LenCorrect' {R : Type} {wfr : R -> Prop} {wfn : nat -> Prop}
       (ser__len : Serializer nat wfn) (par__len : Parser nat)
       (ser__r : Serializer R wfr) (par__r : Parser R) :
@@ -1007,26 +1039,23 @@ Module Parsers (InputModule : AbstractInput).
                               (name ++ " fixpoint called with an increasing remaining sequence")
                               remaining None).
 
-    Equations recursive' {R : Type} (underlying : Parser R -> Parser R) (inp : Input) :
-      ParseResult R by wf (Length inp) :=
-      recursive' underlying inp := (underlying callback) inp
-    where callback : (Input -> ParseResult R) :=
-      callback := fun rem => if decide ((Length rem) < (Length inp)) then
-                            recursive' underlying rem
-                          else
-                            RecursiveProgressError "Parser.Recursive" inp rem.
+    Definition par_recur_step {R : Type}
+      (underlying : Parser R -> Parser R)
+      (inp : Input)
+      (rec_call : forall inp__next : Input, Length inp__next < Length inp -> ParseResult R)
+      (inp__next : Input) : ParseResult R :=
+      match decide (Length inp__next < Length inp) with
+      | left pf => rec_call inp__next pf
+      | right _ => RecursiveProgressError "Parser.Recursive" inp inp__next
+      end.
 
     Program Fixpoint par_recur {R : Type} (underlying : Parser R -> Parser R) (inp : Input)
       {measure (Length inp)} : ParseResult R :=
-      underlying (fun rem => match decide ((Length rem) < (Length inp)) with
-                          | left _ => par_recur underlying rem
-                          | right _ => RecursiveProgressError "Parser.Recursive" inp rem
-                          end) inp.
+      underlying (par_recur_step underlying inp (fun inp__next _ => par_recur underlying inp__next)) inp.
     Next Obligation.
       apply measure_wf.
       apply lt_wf.
     Defined.
-
 
     Lemma par_recur_unfold {R : Type} (underlying : Parser R -> Parser R) (inp : Input) :
       par_recur underlying inp =
@@ -1037,11 +1066,16 @@ Module Parsers (InputModule : AbstractInput).
     Proof using Type.
       unfold par_recur at 1. unfold par_recur_func.
       rewrite WfExtensionality.fix_sub_eq_ext.
-      f_equal. extensionality rem. simpl.
-      destruct (decide ((Length rem) < (Length inp))) eqn:Hlen; last reflexivity.
-      program_simpl.
+      f_equal.
     Qed.
 
+    (* Given a function that requires a parser to return a parser, provide the result
+       of this parser to that function itself.
+
+       Careful: This function is not tail-recursive.*)
+    Definition ParseRecursive {R : Type} (underlying : Parser R -> Parser R) : Parser R :=
+      par_recur underlying.
+      
     Definition SerialRecursiveProgressError {R : Type} (name : string) (depth : R -> nat) (r: R) (r__next : R) :
       SerializeResult :=
       if depth r__next == depth r then
@@ -1051,12 +1085,22 @@ Module Parsers (InputModule : AbstractInput).
         SerialFailure Fatal (mkFailureData (name ++ " fixpoint called with deeper value to serialize")
                                Input_default None).
 
-    Program Fixpoint ser_recur {R : Type} {wfo : R -> Prop} (underlying : Serializer R wfo -> Serializer R wfo)
+    Definition ser_recur_step {R : Type} {wfo : R -> Prop}
+      (underlying : Serializer R wfo -> Serializer R wfo)
+      (depth : R -> nat)
+      (r : R)
+      (rec_call : forall r__next : R, depth r__next < depth r -> SerializeResult)
+      (r__next : R) : SerializeResult :=
+      match decide (depth r__next < depth r) with
+      | left pf => rec_call r__next pf
+      | right _ => SerialRecursiveProgressError "Serial.Recursive" depth r r__next
+      end.
+
+    Program Fixpoint ser_recur {R : Type} {wfo : R -> Prop} 
+      (underlying : Serializer R wfo -> Serializer R wfo)
       (depth : R -> nat) (r : R) {measure (depth r)} : SerializeResult :=
-      underlying (fun r__next => match decide (depth r__next < depth r) with
-                            | left _ => ser_recur underlying depth r__next
-                            | right _ => SerialRecursiveProgressError "Serial.Recursive" depth r r__next
-                            end) r.
+      underlying (ser_recur_step underlying depth r 
+                    (fun r__next _ => ser_recur underlying depth r__next)) r.
     Next Obligation.
       apply measure_wf.
       apply lt_wf.
@@ -1072,132 +1116,53 @@ Module Parsers (InputModule : AbstractInput).
     Proof using Type.
       unfold ser_recur at 1. unfold ser_recur_func.
       rewrite WfExtensionality.fix_sub_eq_ext.
-      f_equal. extensionality r__next. simpl.
-      destruct (decide ((depth r__next) < (depth r))) eqn:Hdep; last reflexivity.
-      program_simpl.
+      f_equal. 
     Qed.
 
     Definition SerialRecursive {R : Type} {wf : R -> Prop} (underlying : Serializer R wf -> Serializer R wf) depth :
       Serializer R wf := ser_recur underlying depth.
 
-  (* So this function /should/ be defined like this:
-
-    Equations? recursive {R : Type} (underlying : Parser R -> Parser R) (inp : Input) :
-      ParseResult R by wf (Length inp) :=
-      recursive underlying inp := (underlying callback) inp
-    where callback : (Input -> ParseResult R) :=
-      callback rem with inspect (Nat.ltb (Length rem) (Length inp)) := {
-      | true eqn:H => recursive underlying rem
-      | false eqn:H => RecursiveProgressError "Parser.Recursive" inp rem
-      }.
-    Proof.
-      destruct (Nat.ltb_spec (Length rem) (Length inp)) in H.
-      - assumption.
-      - discriminate.
-    Qed.
-
-    But equations chokes on the partial application of callback in the recursive' definition.
-    Instead, we can define the where clause function to be a lambda (no partial application)
-    and use the same decide trick to force it to pick up on the Length rem < Length inp requirement.
-
-    https://github.com/mattam82/Coq-Equations/issues/623
-   *)
-
-    (* Given a function that requires a parser to return a parser, provide the result
-       of this parser to that function itself.
-
-       Careful: This function is not tail-recursive.*)
-    Definition ParseRecursive {R : Type} (underlying : Parser R -> Parser R) : Parser R :=
-      fun inp => par_recur underlying inp.
-      
-  (* Skipped the tail-recursive version of Recursive and RecursiveMap since I'm not sure they're useful
-     and they will be a lot of work.
-
-     If performance on large files becomes an issue, RecursiveNoStack could be a performance improvement.
-
-     The description for RecursiveMap is this:
-
-     "Given a map of name := recursive definitions, provide the result of this parser to the
-      recursive definitions and set 'fun' as the initial parser. Careful: This function is not
-      tail-recursive and will consume stack"
-
-     I'm not actually sure how or why this would be useful.
-   *)
-
-    Definition SerialRecursiveOk
-      {R : Type} {wf : R -> Prop}
-      (ser_underlying : Serializer R wf -> Serializer R wf)
-      (subterm : R -> R -> Prop)
-      (depth : R -> nat) : Prop :=
-      forall r (ser_rec : Serializer R wf),
-      (* When serializing r with recursive calls *)
-      match ser_underlying ser_rec r with
-      | SerialSuccess bytes_r =>
-          (forall r_next, subterm r_next r -> depth r_next < depth r -> 
-                     match ser_rec r_next with
-                     | SerialSuccess bytes_r_next =>
-                         (* Then bytes_r_next is embedded in bytes_r *)
-                         exists prefix suffix,
-                           bytes_r = App prefix (App bytes_r_next suffix) /\ Length prefix > 0
-                     | _ => True
-                     end
-          )
-      | _ => True
-      end.
-
-    Definition CallbackParseOk {R : Type} {wf : R -> Prop}
-      (par : Parser R) (ser : Serializer R wf) (subterm : R -> R -> Prop) :=
-      forall r' enc, exists r,
-      subterm r' r ->
-      wf r' -> ser r' = SerialSuccess enc -> (exists rest, par (App enc rest) = ParseSuccess r' rest).
-
     Theorem RecursiveCorrect {R : Type} {wf : R -> Prop}
-      (underlying__parse : Parser R -> Parser R)
-      (underlying__ser : Serializer R wf -> Serializer R wf)
-      (subterm : R -> R -> Prop)
+      (par_underlying : Parser R -> Parser R)
+      (ser_underlying : Serializer R wf -> Serializer R wf)
       (depth : R -> nat)
-      (r : R):
-      SerialRecursiveOk underlying__ser subterm depth ->
-      (forall (p : Parser R) (s : Serializer R wf),
-         (CallbackParseOk p s subterm) ->
-         ParseOk (underlying__parse p) (underlying__ser s)) ->
-      ParseOk (ParseRecursive underlying__parse) (SerialRecursive underlying__ser depth).
+      (H_underlying_ok : forall (r : R) (enc rest : Input),
+         wf r ->
+         (forall (inp__next : Input) (r__next : R),
+            Length inp__next < Length (App enc rest) ->
+            depth r__next < depth r ->
+            wf r__next ->
+            forall rest__next,
+            ser_recur ser_underlying depth r__next = SerialSuccess inp__next ->
+            par_recur par_underlying (App inp__next rest__next) = ParseSuccess r__next rest__next) ->
+         ser_underlying (ser_recur_step ser_underlying depth r 
+                           (fun r__next _ => ser_recur ser_underlying depth r__next)) r = SerialSuccess enc ->
+         par_underlying (par_recur_step par_underlying (App enc rest)
+                           (fun inp__next _ => par_recur par_underlying inp__next)) (App enc rest) = ParseSuccess r rest) :
+      ParseOk (ParseRecursive par_underlying) (SerialRecursive ser_underlying depth).
     Proof using Type.
-      intros Hser_ok H_preserve.
+      unfold ParseOk, ParseOk', ParseOk'', ParseOk''', ParseRecursive, SerialRecursive.
       intros x enc rest Hwf Hser.
-      remember (depth x) as d eqn:Heqd.
-      revert x enc rest Hwf Hser Heqd.
+      
+      (* The proof proceeds by well-founded induction on depth x *)
+      remember (depth x) as d eqn:Heq.
+      revert x enc rest Hwf Hser Heq.
       induction d as [d IH] using lt_wf_ind.
-      intros x enc rest Hwf Hser Heqd.
-
-      rewrite ser_recur_unfold in Hser.
+      intros x enc rest Hwf Hser Heq.
+      
       rewrite par_recur_unfold.
-      remember 
-        (λ r__next : R,
-           if decide (depth r__next < depth x)
-           then ser_recur underlying__ser depth r__next
-           else SerialRecursiveProgressError "Serial.Recursive" depth x r__next)
-        as s.
-
-      eapply H_preserve; try done.
-      intros x' enc'; exists x; intros Hst Hwf' Hser'.
-      destruct (decide (depth x' < depth x)) as [Hdepth | Hdepth].
-      + pose proof (Hser_ok x s) as Hx_ok.
-        subst.
-        rewrite Hser in Hx_ok.
-        specialize Hx_ok with x'.
-        specialize (Hx_ok Hst Hdepth).
-        rewrite Hser' in Hx_ok.
-        destruct Hx_ok as (prefix & suffix & Hlen_con & Hlen_pre).
-        exists (App suffix rest).
-        destruct (decide (Length _ < Length _)) as [_ | Hlen].
-        * subst. destruct (decide _) in Hser'; last contradiction.
-          apply (IH (depth x')); try done. 
-        * rewrite Hlen_con, !App_assoc, !App_Length, !Nat.add_assoc in Hlen. lia.
-      + rewrite Heqs in Hser'.
-        destruct (decide _) in Hser'; first contradiction.
-        unfold SerialRecursiveProgressError in Hser'.
-        destruct (depth x' == depth x) in Hser'; simpl; discriminate.
+      rewrite ser_recur_unfold in Hser.
+      
+      unfold par_recur_step in H_underlying_ok.
+      eapply H_underlying_ok; eauto.
+      
+      intros inp__next r__next Hlen Hdepth Hwf__next rest__next Hser__next.
+      
+      eapply IH.
+      - subst d. exact Hdepth.
+      - exact Hwf__next.
+      - exact Hser__next.
+      - reflexivity.
     Qed.
 
   End Parsers.
