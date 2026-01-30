@@ -1057,6 +1057,13 @@ Module Parsers (InputModule : AbstractInput).
       apply lt_wf.
     Defined.
 
+    (* Given a function that requires a parser to return a parser, provide the result
+       of this parser to that function itself.
+
+       Careful: This function is not tail-recursive.*)
+    Definition ParseRecursive {R : Type} (underlying : Parser R -> Parser R) : Parser R :=
+      par_recur underlying.
+
     Lemma par_recur_unfold {R : Type} (underlying : Parser R -> Parser R) (inp : Input) :
       par_recur underlying inp =
       underlying (fun rem => match decide ((Length rem) < (Length inp)) with
@@ -1068,13 +1075,6 @@ Module Parsers (InputModule : AbstractInput).
       rewrite WfExtensionality.fix_sub_eq_ext.
       f_equal.
     Qed.
-
-    (* Given a function that requires a parser to return a parser, provide the result
-       of this parser to that function itself.
-
-       Careful: This function is not tail-recursive.*)
-    Definition ParseRecursive {R : Type} (underlying : Parser R -> Parser R) : Parser R :=
-      par_recur underlying.
       
     Definition SerialRecursiveProgressError {R : Type} (name : string) (depth : R -> nat) (r: R) (r__next : R) :
       SerializeResult :=
@@ -1106,6 +1106,9 @@ Module Parsers (InputModule : AbstractInput).
       apply lt_wf.
     Defined.
 
+    Definition SerialRecursive {R : Type} {wf : R -> Prop} (underlying : Serializer R wf -> Serializer R wf) depth :
+      Serializer R wf := ser_recur underlying depth.
+
     Lemma ser_recur_unfold {R : Type} {wfo : R -> Prop} (underlying : Serializer R wfo -> Serializer R wfo)
       (depth : R -> nat) (r : R) :
       ser_recur underlying depth r =
@@ -1119,8 +1122,6 @@ Module Parsers (InputModule : AbstractInput).
       f_equal. 
     Qed.
 
-    Definition SerialRecursive {R : Type} {wf : R -> Prop} (underlying : Serializer R wf -> Serializer R wf) depth :
-      Serializer R wf := ser_recur underlying depth.
 
     Theorem RecursiveCorrect {R : Type} {wf : R -> Prop}
       (par_underlying : Parser R -> Parser R)
@@ -1165,5 +1166,87 @@ Module Parsers (InputModule : AbstractInput).
       - reflexivity.
     Qed.
 
+    Definition par_recur_step_st {R S : Type}
+      (underlying : (S -> Parser R) -> (S -> Parser R))
+      (inp : Input)
+      (rec_call : forall (st : S) (inp__next : Input), Length inp__next < Length inp ->
+                                                ParseResult R)
+      (st : S)
+      (inp__next : Input) : ParseResult R :=
+      match decide (Length inp__next < Length inp) with
+      | left pf => rec_call st inp__next pf
+      | right _ => RecursiveProgressError "Parser.RecursiveState" inp inp__next
+      end.
+
+    Program Fixpoint par_recur_st {R S : Type}
+      (underlying : (S -> Parser R) -> (S -> Parser R))
+      (st : S) (inp : Input) {measure (Length inp)} : ParseResult R :=
+      underlying (par_recur_step_st underlying inp
+                    (fun st__n inp__next _ => par_recur_st underlying st__n inp__next)) st inp.
+    Next Obligation.
+      apply measure_wf.
+      apply lt_wf.
+    Defined.
+
+    Definition ParseRecusriveState {R S : Type}
+      (underlying : (S -> Parser R) -> (S -> Parser R)) (st : S) : Parser R :=
+      par_recur_st underlying st.
+      
+    Lemma par_recur_st_unfold {R S : Type}
+      (underlying : (S -> Parser R) -> (S -> Parser R))
+      (st : S)
+      (inp : Input) :
+      par_recur_st underlying st inp =
+      underlying (fun st__n rem => if decide ((Length rem) < (Length inp)) then
+                                par_recur_st underlying st__n rem
+                              else
+                                RecursiveProgressError "Parser.RecursiveState" inp rem
+        ) st inp.
+    Proof using Type.
+      unfold par_recur_st at 1. unfold par_recur_st_func.
+      rewrite WfExtensionality.fix_sub_eq_ext.
+      f_equal.
+    Qed.
+    
+    Definition ser_recur_step_st {R S : Type} {wfo : R -> Prop}
+      (underlying : (S -> Serializer R wfo) -> S -> Serializer R wfo)
+      (depth : R -> nat)
+      (r : R)
+      (rec_call : forall (st : S) (r__next : R), depth r__next < depth r -> SerializeResult)
+      (st : S)
+      (r__next : R) : SerializeResult :=
+      match decide (depth r__next < depth r) with
+      | left pf => rec_call st r__next pf
+      | right _ => SerialRecursiveProgressError "Serial.RecursiveState" depth r r__next
+      end.
+
+    Program Fixpoint ser_recur_st {R S : Type} {wfo : R -> Prop} 
+      (underlying : (S -> Serializer R wfo) -> S -> Serializer R wfo)
+      (depth : R -> nat) (st : S) (r : R) {measure (depth r)} : SerializeResult :=
+      underlying (ser_recur_step_st underlying depth r 
+                    (fun st__n r__next _ => ser_recur_st underlying depth st__n r__next)) st r.
+    Next Obligation.
+      apply measure_wf.
+      apply lt_wf.
+    Defined.
+
+    Definition SerialRecursiveState {R S : Type} {wf : R -> Prop}
+      (underlying : (S -> Serializer R wf) -> S -> Serializer R wf) depth st :
+      Serializer R wf := ser_recur_st underlying depth st.
+
+    Lemma ser_recur_st_unfold {R S : Type} {wfo : R -> Prop}
+      (underlying : (S -> Serializer R wfo) -> S -> Serializer R wfo)
+      (depth : R -> nat) (st : S) (r : R) :
+      ser_recur_st underlying depth st r =
+      underlying (fun st__n r__next => match decide (depth r__next < depth r) with
+                                | left _ => ser_recur_st underlying depth st__n r__next
+                                | right _ => SerialRecursiveProgressError
+                                              "Serial.RecursiveState" depth r r__next
+                            end) st r.
+    Proof using Type.
+      unfold ser_recur_st at 1. unfold ser_recur_st_func.
+      rewrite WfExtensionality.fix_sub_eq_ext.
+      f_equal. 
+    Qed.
   End Parsers.
 End Parsers.
