@@ -10,11 +10,15 @@ From Pollux Require Import Descriptors.
 From Pollux Require Import Varint.
 From Equations Require Import Equations.
 
-From Pollux Require Import Parser.
 From Pollux Require Import Input.
+From Pollux Require Import Failure.
+From Pollux Require Import Parser.
+From Pollux Require Import Serializer.
 
 Module ProtoParse.
-
+  Module P := Parsers(ByteInput).
+  Module S := Serializers(ByteInput).
+  Import ByteInput.
   Import Descriptors.
 
   Notation "x %% y" := (Z.modulo x y) (at level 35) : Z_scope.
@@ -51,18 +55,13 @@ Module ProtoParse.
        tested against the official protobuf implementation.
      *)
 
-  Module ByteParsers := Parsers(ByteInput).
-  Import ByteInput.
-  Import ByteParsers.
-  Import Descriptors.
-
-  Definition Byte : @Parser byte :=
+  Definition Byte : P.Parser byte :=
     fun inp => match inp with
-            | byt :: rest => ParseSuccess byt rest
-            | [] => ParseFailure Recoverable (mkFailureData "No more data to parse" inp None)
+            | byt :: rest => P.Success byt rest
+            | [] => P.Failure P.Failure.Recoverable (P.Failure.mkData "No more data to parse" inp None)
             end.
 
-  Definition Unsigned : @Parser Z := ParseMap Byte word.unsigned.   
+  Definition Unsigned : P.Parser Z := P.Map Byte word.unsigned.   
 
   (* Parses an unsigned integer from the byte stream.
      If successful, check that the byte satisfies the input predicate.
@@ -70,14 +69,14 @@ Module ProtoParse.
      Else, manually build a non-committing parse failure and return that.
      This makes it usable with repeated parsing without always having to parse twice, it it would
      if we were using the If parser with a Lookahead. *)
-  Definition FilterByte (filter : Z -> bool) (transform : Z -> Z) (msg : string) : @Parser Z :=
-    ParseBindSucceeds Unsigned 
+  Definition FilterByte (filter : Z -> bool) (transform : Z -> Z) (msg : string) : P.Parser Z :=
+    P.BindSucceeds Unsigned 
       (fun z rest => if filter z then
-                    ParseSucceedWith (transform z)
+                    P.SucceedWith (transform z)
                   else
-                    ParseResultWith
-                      (ParseFailure Recoverable
-                         (mkFailureData msg (App (ToInput [W8 z]) rest) None))).
+                    P.ResultWith
+                      (P.Failure P.Failure.Recoverable
+                         (P.Failure.mkData msg (App (ToInput [W8 z]) rest) None))).
                                          
   Definition VarintNonTerm := FilterByte (Z.leb 128%Z) (flip Z.sub 128%Z) "Expected varint non-terminal byte".
 
@@ -88,12 +87,12 @@ Module ProtoParse.
 
   (* Protobuf uses a little-endian encoding, which I'm directly converting from. It's less
      convenient than big-endian since I have to track the byte length explicitly. *)
-  Definition VarintPrefix := Rep VarintNonTerm
+  Definition VarintPrefix := P.Rep VarintNonTerm
                                (fun (acc : Z * Z) (new : Z) => let (n, v) := acc in
                                             ((n + 7)%Z, (new ≪ n + v)%Z))
                                (0%Z, 0%Z).
 
-  Definition Varint := ParseBind VarintPrefix VarintTerm.
+  Definition Varint := P.Bind VarintPrefix VarintTerm.
 
   Inductive Tag :=
   | VARINT
@@ -129,7 +128,7 @@ Module ProtoParse.
      For now, don't do it. OK, maybe I do need to chunk things here and call a separate parser on them later. *)
 
   (* Parse n bytes into an unsigned integer *)
-  Definition ZN (n : nat) := ParseMap (RepN Unsigned
+  Definition ZN (n : nat) := P.Map (P.RepN Unsigned
                                   (fun (acc : Z * Z) (new : Z) => let (n, v) := acc in
                                                                ((n + 8)%Z, (new ≪ n + v)%Z))
                                   n (0%Z, 0%Z))
@@ -154,21 +153,21 @@ Module ProtoParse.
                       ) in
     find_field (msg_desc_get_fields m).
 
-  Definition FieldHeader := ParseBind Varint (fun z =>
+  Definition FieldHeader := P.Bind Varint (fun z =>
                                                 let (fid, tag_n) := ((z ≫ 3)%Z, (Z.land z 7)%Z) in
                                                 match tag_from_num tag_n with
-                                                | Some tag => ParseSucceedWith (fid, tag)
-                                                | None => ParseFailWith "Unknown field type" Recoverable
+                                                | Some tag => P.SucceedWith (fid, tag)
+                                                | None => P.FailWith "Unknown field type" P.Failure.Recoverable
                                                 end).
 
-  Definition TypedFieldHeader (md : MsgDesc) := ParseMap FieldHeader
+  Definition TypedFieldHeader (md : MsgDesc) := P.Map FieldHeader
                                                   (fun (h : Z * Tag) =>
                                                      let (fid, tag) := h in
                                                      (fid, tag, find_field md fid)).
 
-  Definition LenBody := ParseBind Varint (fun len => SeqN Byte $ Z.to_nat len).
+  Definition LenBody := P.Bind Varint (fun len => P.SeqN Byte $ Z.to_nat len).
 
-  Definition Discard {A : Type} (parser : @Parser A) : @Parser unit := ParseMap parser (fun _ => ()). 
+  Definition Discard {A : Type} (parser : P.Parser A) : P.Parser unit := P.Map parser (fun _ => ()). 
 
   Definition DiscardPayload (tag : Tag) :=
     match tag with
@@ -178,22 +177,22 @@ Module ProtoParse.
     | I32 => Discard Z32
     end.
 
-  Definition ParseIntField (w : Width) (deco : DecoDesc) : @Parser ValVal :=
-    ParseMap Varint (fun z => match deco with
+  Definition ParseIntField (w : Width) (deco : DecoDesc) : P.Parser ValVal :=
+    P.Map Varint (fun z => match deco with
                       | D_IMPLICIT => V_INT $ V_IMPLICIT $ int_change_w w $ uint_int width64 z
                       | D_OPTIONAL => V_INT $ V_OPTIONAL $ Some (int_change_w w $ uint_int width64 z)
                       | D_REPEATED => V_INT $ V_REPEATED $ [int_change_w w $ uint_int width64 z]
                       end).
 
-  Definition ParseUintField (w : Width) (deco : DecoDesc) : @Parser ValVal :=
-    ParseMap Varint (fun z => match deco with
+  Definition ParseUintField (w : Width) (deco : DecoDesc) : P.Parser ValVal :=
+    P.Map Varint (fun z => match deco with
                       | D_IMPLICIT => V_INT $ V_IMPLICIT $ uint_change_w w z
                       | D_OPTIONAL => V_INT $ V_OPTIONAL $ Some (uint_change_w w z)
                       | D_REPEATED => V_INT $ V_REPEATED $ [uint_change_w w z]
                       end).
 
-  Definition ParseSintField (w : Width) (deco : DecoDesc) : @Parser ValVal :=
-    ParseMap Varint (fun z => match deco with
+  Definition ParseSintField (w : Width) (deco : DecoDesc) : P.Parser ValVal :=
+    P.Map Varint (fun z => match deco with
                       | D_IMPLICIT => V_INT $ V_IMPLICIT $ sint_change_w w $ uint_sint width64 z
                       | D_OPTIONAL => V_INT $ V_OPTIONAL $ Some (sint_change_w w $ uint_sint width64 z)
                       | D_REPEATED => V_INT $ V_REPEATED $ [sint_change_w w $ uint_sint width64 z]
@@ -202,26 +201,26 @@ Module ProtoParse.
   Definition GetFixedParser (w : Width) := match w with
                                            | exist _ 32%Z _ => Z32
                                            | exist _ 64%Z _ => Z64
-                                           | _ => ParseFailWith "This is literally impossible." Fatal
+                                           | _ => P.FailWith "This is literally impossible." P.Failure.Fatal
                                            end.
 
-  Definition ParseFixedField (w : Width) (deco : DecoDesc) : @Parser ValVal :=
-    ParseMap (GetFixedParser w) (fun z => match deco with
+  Definition ParseFixedField (w : Width) (deco : DecoDesc) : P.Parser ValVal :=
+    P.Map (GetFixedParser w) (fun z => match deco with
                                   | D_IMPLICIT => V_INT $ V_IMPLICIT $ uint_change_w w z
                                   | D_OPTIONAL => V_INT $ V_OPTIONAL $ Some (uint_change_w w z)
                                   | D_REPEATED => V_INT $ V_REPEATED $ [uint_change_w w z]
                                   end).
 
-  Definition ParseSfixedField (w : Width) (deco : DecoDesc) : @Parser ValVal :=
-    ParseMap (GetFixedParser w) (fun z => match deco with
+  Definition ParseSfixedField (w : Width) (deco : DecoDesc) : P.Parser ValVal :=
+    P.Map (GetFixedParser w) (fun z => match deco with
                                   | D_IMPLICIT => V_INT $ V_IMPLICIT $ uint_change_w w $ uint_int width64 z
                                   | D_OPTIONAL => V_INT $ V_OPTIONAL $ Some
                                                    (uint_change_w w $ uint_int width64 z)
                                   | D_REPEATED => V_INT $ V_REPEATED $ [uint_change_w w $ uint_int width64 z]
                                   end).
 
-  Definition ParseBoolField (deco : DecoDesc) : @Parser ValVal := 
-    ParseMap Varint (fun z => match deco with
+  Definition ParseBoolField (deco : DecoDesc) : P.Parser ValVal := 
+    P.Map Varint (fun z => match deco with
                       | D_IMPLICIT => V_BOOL $ V_IMPLICIT $ negb (Z.eqb z 0)
                       | D_OPTIONAL => V_BOOL $ V_OPTIONAL $ Some (negb (Z.eqb z 0))
                       | D_REPEATED => V_BOOL $ V_REPEATED $ [negb (Z.eqb z 0)]
@@ -245,25 +244,25 @@ Module ProtoParse.
     | _, _ => None
     end.
 
-  Definition WrapPacked (tag : Tag) (underlying : @Parser ValVal) : @Parser ValVal :=
+  Definition WrapPacked (tag : Tag) (underlying : P.Parser ValVal) : P.Parser ValVal :=
     match tag with
     | VARINT => underlying
     | I64 => underlying
-    | LEN => ParseBind LenBody (fun body => match Rep underlying ValMerger None body with
-                                        | ParseSuccess (Some v) rem => ParseResultWith (ParseSuccess v rem)
-                                        | ParseSuccess None rem => ParseResultWith
-                                                                    (ParseFailure Recoverable
-                                                                       (mkFailureData "Illegal value merger"
+    | LEN => P.Bind LenBody (fun body => match P.Rep underlying ValMerger None body with
+                                        | P.Success (Some v) rem => P.ResultWith (P.Success v rem)
+                                        | P.Success None rem => P.ResultWith
+                                                                    (P.Failure P.Failure.Recoverable
+                                                                       (P.Failure.mkData "Illegal value merger"
                                                                           body None))
-                                        | ParseFailure lvl data as f => ParseResultWith (PropagateFailure f I)
+                                        | P.Failure lvl data as f => P.ResultWith (P.Propagate f I)
                                         end)
     | I32 => underlying
     end.
 
-  Definition WrapPackedField (tag : Tag) (name : string) (underlying : @Parser ValVal) :=
-    ParseMap (WrapPacked tag underlying) (fun vv => V_FIELD name vv).
+  Definition WrapPackedField (tag : Tag) (name : string) (underlying : P.Parser ValVal) :=
+    P.Map (WrapPacked tag underlying) (fun vv => V_FIELD name vv).
 
-  Definition ParseFieldVal (header : Z * Tag * option FieldDesc) : @Parser FieldVal :=
+  Definition ParseFieldVal (header : Z * Tag * option FieldDesc) : P.Parser FieldVal :=
     match header with
     | ((_, tag), Some (D_FIELD name _ (D_INT w deco))) => WrapPackedField tag name (ParseIntField w deco)
     | ((_, tag), Some (D_FIELD name _ (D_UINT w deco))) => WrapPackedField tag name (ParseUintField w deco)
@@ -273,10 +272,10 @@ Module ProtoParse.
     | ((_, tag), Some (D_FIELD name _ (D_BOOL deco))) => WrapPackedField tag name (ParseBoolField deco)
     (* | (name, _, D_STRING deco) => *)
     (* | (name, _, D_Bytes deco) => *)
-    | _ => ParseFailWith "Field type unsupported" Recoverable
+    | _ => P.FailWith "Field type unsupported" P.Failure.Recoverable
     end.
 
-  Definition ProtoField (md : MsgDesc) := ParseBind (TypedFieldHeader md) ParseFieldVal.
+  Definition ProtoField (md : MsgDesc) := P.Bind (TypedFieldHeader md) ParseFieldVal.
 
   Definition test_field__varint := [(W8 128); (W8 1); (W8 165); (W8 2); (W8 6)].
   Definition test_field__I32 := [(W8 133); (W8 1); (W8 37); (W8 1); (W8 0); (W8 0)].

@@ -5,52 +5,21 @@ From Perennial Require Import Helpers.Word.LittleEndian.
 From Perennial Require Import Helpers.Word.Automation.
 From Stdlib Require Import Structures.Equalities.
 
-From Pollux Require Import Descriptors.
-From Pollux Require Import Varint.
-From Equations Require Import Equations.
-
-From Pollux Require Import Parser.
 From Pollux Require Import Input.
+From Pollux Require Import Failure.
+From Pollux Require Import Parser.
+From Pollux Require Import Serializer.
+From Pollux Require Import Theorems.
 
 Open Scope Z_scope.
 
 Module SimplParser.
-  Module ByteParsers := Parsers(ByteInput).
+  Module F := Failures(ByteInput).
+  Module P := Parsers(ByteInput).
+  Module S := Serializers(ByteInput).
+  Module T := Theorems(ByteInput).
   Import ByteInput.
-  Import ByteParsers.
-
-  (* Taken from Section 9.3 of Certified Programming with Dependent Types *)
-  Section hlist.
-    Variable A : Set.
-    Variable B : A -> Type.
-
-    Fixpoint fhlist (ls : list A) : Type :=
-      match ls with
-      | nil => unit
-      | x :: ls' => B x * fhlist ls'
-      end%type.
-
-    Variable elm : A.
-    Fixpoint fmember (ls : list A) : Type :=
-      match ls with
-      | nil => Empty_set
-      | x :: ls' => (x = elm) + fmember ls'
-      end%type.
-
-    Fixpoint fhget (ls : list A) : fhlist ls -> fmember ls -> B elm :=
-      match ls with
-      | nil => fun _ idx => match idx with end
-      | _ :: ls' => fun mls idx =>
-                     match idx with
-                     | inl pf => match pf with
-                                | eq_refl => fst mls
-                                end
-                     | inr idx' => fhget ls' (snd mls) idx'
-                     end
-      end.
-
-  End hlist.
-  Arguments fhget [A B elm ls] _ _.
+  Import T.
 
   Section Desc.
 
@@ -76,31 +45,8 @@ Module SimplParser.
     Compute Schema (V_BOOL true).
     Compute Schema (V_NEST (V_INT 0%Z) (V_BOOL true)).
 
-    Inductive subtermVal : Val -> Val -> Prop :=
-    | st_nest_left (v1 : Val) (v2 : Val) : subtermVal v1 (V_NEST v1 v2)
-    | st_nest_right (v1 : Val) (v2 : Val) : subtermVal v2 (V_NEST v1 v2).
-
     Instance Val_EqDecision : EqDecision Val.
     Proof. solve_decision. Defined. 
-
-    Definition subtermVal_dec (x y : Val) : {subtermVal x y} + {~subtermVal x y}.
-    Proof.
-      refine (
-          match y with
-          | V_NEST v1 v2 => if decide (x = v1) then
-                             left _
-                           else if decide (x = v2) then
-                                  left _
-                                else right _
-          | _ => right _
-          end
-        ).
-      - intro H; inversion H.
-      - intro H; inversion H.
-      - subst; constructor.
-      - subst; constructor.
-      - intro H; inversion H; congruence.
-    Defined.
 
   End Desc.
 
@@ -129,18 +75,18 @@ Module SimplParser.
 
   Section Parser.
 
-    Definition ParseByte : Parser byte :=
+    Definition ParseByte : P.Parser byte :=
       fun inp => match inp with
-              | byt :: rest => ParseSuccess byt rest
-              | [] => ParseFailure Recoverable (mkFailureData "No more data to parse" inp None)
+              | byt :: rest => P.Success byt rest
+              | [] => P.Failure P.Failure.Recoverable (P.Failure.mkData "No more data to parse" inp None)
               end.
 
-    Definition ParseUnsigned : Parser Z := ParseMap ParseByte word.unsigned.
+    Definition ParseUnsigned : P.Parser Z := P.Map ParseByte word.unsigned.
 
-    Definition ParseNat : Parser nat := ParseMap ParseByte (fun b => Z.to_nat $ word.unsigned b).
+    Definition ParseNat : Parser nat := P.Map ParseByte (fun b => Z.to_nat $ word.unsigned b).
 
     (* Parse n bytes into an unsigned integer *)
-    Definition ParseZN (n : nat) := ParseMap (RepN ParseUnsigned
+    Definition ParseZN (n : nat) := P.Map (P.RepN ParseUnsigned
                                          (fun (acc : Z * Z) (new : Z) => let (n, v) := acc in
                                                                        (n + 8, new ≪ n + v))
                                          n (0, 0))
@@ -148,31 +94,31 @@ Module SimplParser.
 
     Definition ParseZ32 := ParseZN 4%nat.
 
-    Definition ParseBool : Parser bool := ParseMap ParseUnsigned (fun z => z >? 0).
+    Definition ParseBool : Parser bool := P.Map ParseUnsigned (fun z => z >? 0).
 
     Definition ParseBaseDesc : Parser Val :=
-        ParseBind ParseUnsigned
+        P.Bind ParseUnsigned
           (fun z => match z with
-                 | 0 => ParseMap ParseZ32 (fun z => V_INT z)
-                 | 1 => ParseMap ParseBool (fun b => V_BOOL b)
-                 | _ => ParseFailWith "Unknown field tag" Recoverable
+                 | 0 => P.Map ParseZ32 (fun z => V_INT z)
+                 | 1 => P.Map ParseBool (fun b => V_BOOL b)
+                 | _ => P.FailWith "Unknown field tag" P.Failure.Recoverable
                  end).
 
     Compute ParseBaseDesc [W8 1; W8 32; W8 0; W8 0; W8 0].
     Compute ParseBaseDesc [W8 0; W8 32; W8 0; W8 0; W8 0].
 
     Definition ParseVal' (pd : Parser Val) : Parser Val :=
-      ParseBind ParseUnsigned
+      P.Bind ParseUnsigned
         (fun z => 
            match z with
            | 0 => ParseBaseDesc
-           | 1 => ParseMap (ParseLen ParseNat (ParseConcat pd pd))
+           | 1 => P.Map (P.Len ParseNat (P.Concat pd pd))
                    (fun vs => let (v1, v2) := vs in V_NEST v1 v2)
-           | _ => ParseFailWith "Unknown tag" Recoverable
+           | _ => P.FailWith "Unknown tag" P.Failure.Recoverable
            end).
 
     Definition ParseVal : Parser Val :=
-      ParseRecursive ParseVal'.
+      P.Recursive ParseVal'.
 
     Definition to_enc (l : list Z) : list byte := map (fun n => W8 n) l.
 
@@ -193,8 +139,8 @@ Module SimplParser.
 
   Section Serializer.
 
-    Definition SerialByte : Serializer byte serial_trivial_wf :=
-      fun b => SerialSuccess [b].
+    Definition SerialByte : S.Serializer byte S.Trivial_wf :=
+      fun b => S.Success [b].
 
     Definition Z__next (z : Z) : Z :=
       z ≫ 8.
@@ -211,17 +157,17 @@ Module SimplParser.
 
     Compute Z_to_list 16777215 4.
 
-    Definition SerialZ_Wf (n : nat) (z : Z) : Prop :=
+    Definition SerialZ_wf (n : nat) (z : Z) : Prop :=
       (0 <= z < 2^(8 * Z.of_nat n)).
 
-    Definition SerialZN (n : nat) : Serializer Z (SerialZ_Wf n) :=
-      fun z => SerialRep SerialByte (Z_to_list z n).
+    Definition SerialZN (n : nat) : S.Serializer Z (SerialZ_wf n) :=
+      fun z => S.Rep SerialByte (Z_to_list z n).
 
     Definition SerialZ32 := SerialZN 4%nat.
 
     Compute SerialZ32 16777215.
 
-    Definition SerialBool : Serializer bool serial_trivial_wf :=
+    Definition SerialBool : S.Serializer bool S.Trivial_wf :=
       fun b => if b then
               SerialByte (W8 1)
             else
@@ -230,7 +176,7 @@ Module SimplParser.
     Compute SerialBool true.
     Compute SerialBool false.
 
-    Definition SerialMsgLen : Serializer nat (fun n => (Z.of_nat n) < 256) :=
+    Definition SerialMsgLen : S.Serializer nat (fun n => (Z.of_nat n) < 256) :=
       fun n =>
         SerialByte (W8 $ Z.of_nat n).
 
@@ -241,16 +187,16 @@ Module SimplParser.
       | V_NEST v1 v2 => 1 + max (ValDepth v1) (ValDepth v2)
       end.
 
-    Definition SerialUnsigned : Serializer Z (fun z => 0 <= z < 256) :=
+    Definition SerialUnsigned : S.Serializer Z (fun z => 0 <= z < 256) :=
       fun z => SerialByte $ W8 z.
 
-    Definition SerialNat : Serializer nat (fun n => (0 <= n < 256)%nat) :=
+    Definition SerialNat : S.Serializer nat (fun n => (0 <= n < 256)%nat) :=
       fun n => SerialByte $ W8 (Z.of_nat n).
 
-    Definition mkSerializer {R : Type} (s : R -> SerializeResult) (wf : R -> Prop) : Serializer R wf := s.
+    Definition mkSerializer {X : Type} (s : X -> S.Result) (wf : X -> Prop) : Serializer X wf := s.
 
-    Definition Restrict {R : Type} {wf : R -> Prop} (ser : Serializer R wf) (new : R -> Prop) :
-      Serializer R (fun r => new r /\ wf r) := ser.
+    Definition Restrict {X : Type} {wf : X -> Prop} (ser : Serializer X wf) (new : X -> Prop) :
+      S.Serializer X (fun x => new x /\ wf x) := ser.
 
     Fixpoint ValEncLen (v : Val) : nat :=
       match v with
@@ -283,35 +229,25 @@ Module SimplParser.
       | V_NEST v1 v2 => val_wf v1 /\ val_wf v2
       end.
 
-    (* Definition SerialBaseDesc (ser : Serializer Val val_wf) : *)
-    (*   Serializer Val (fun v => 0 <= InnerTag v < 256 /\ val_wf v) := *)
-    (*   SerialBind' InnerTag SerialUnsigned *)
-    (*     (mkSerializer *)
-    (*        (fun v => match v with *)
-    (*               | V_BOOL b => SerialBool b *)
-    (*               | V_INT z => SerialZ32 z *)
-    (*               | V_NEST v1 v2 => SerialLimit (SerialMap (SerialConcat ser ser) $ fun _ => (v1, v2)) Len v *)
-    (*               end) val_wf). *)
-
-    Definition SerialBaseDesc' (ser : Serializer Val val_wf) :
-      Serializer Val (fun v => 0 <= InnerTag v < 256 /\ val_wf v) :=
+    Definition SerialBaseDesc (ser : S.Serializer Val val_wf) :
+      S.Serializer Val (fun v => 0 <= InnerTag v < 256 /\ val_wf v) :=
       (fun v => match v with
-             | V_BOOL b => SerialBind' (fun _ => 1) SerialUnsigned SerialBool b
-             | V_INT z => SerialBind' (fun _ => 0) SerialUnsigned SerialZ32 z
-             | V_NEST v1 v2 => SerialMap (SerialLen' SerialNat (SerialConcat ser ser)) (fun _ => (v1, v2)) v
+             | V_BOOL b => S.Bind' (fun _ => 1) SerialUnsigned SerialBool b
+             | V_INT z => S.Bind' (fun _ => 0) SerialUnsigned SerialZ32 z
+             | V_NEST v1 v2 => S.Map (S.Len' SerialNat (S.Concat ser ser)) (fun _ => (v1, v2)) v
              end).
 
     Definition SerialVal'
-      (ser : Serializer Val (fun v => 0 <= OuterTag v < 256 /\ 0 <= InnerTag v < 256 /\ val_wf v)) :=
-      SerialBind' OuterTag SerialUnsigned (SerialBaseDesc' ser).
+      (ser : S.Serializer Val (fun v => 0 <= OuterTag v < 256 /\ 0 <= InnerTag v < 256 /\ val_wf v)) :=
+      S.Bind' OuterTag SerialUnsigned (SerialBaseDesc ser).
 
-    Definition SerialVal : Serializer Val (fun v => 0 <= OuterTag v < 256 /\ 0 <= InnerTag v < 256 /\ val_wf v) :=
-      SerialRecursive SerialVal' ValDepth.
+    Definition SerialVal : S.Serializer Val (fun v => 0 <= OuterTag v < 256 /\ 0 <= InnerTag v < 256 /\ val_wf v) :=
+      S.Recursive SerialVal' ValDepth.
 
     Definition enc_eq (v : Val) (e : Output) : bool :=
       match SerialVal v with
-      | SerialSuccess enc => if decide (enc = e) then true else false
-      | SerialFailure _ _ => false
+      | S.Success enc => if decide (enc = e) then true else false
+      | S.Failure _ _ => false
       end.
 
     Definition test_val1 := V_INT 32.
@@ -364,18 +300,18 @@ Module SimplParser.
     Qed.
 
     (* Modularity Test *)
-    Definition ParseTest := ParseConcat ParseByte ParseBool.
-    Definition SerialTest := SerialConcat SerialByte SerialBool.
+    Definition ParseTest := P.Concat ParseByte ParseBool.
+    Definition SerialTest := S.Concat SerialByte SerialBool.
 
     Theorem TestParseOk : ParseOk ParseTest SerialTest.
     Proof.
       unfold ParseOk, ParseOk', ParseOk'', ParseOk'''.
       intros [x b] enc rest _.
-      unfold SerialTest, SerialConcat.
+      unfold SerialTest, S.Concat.
       destruct (SerialByte x) eqn:Hbyte; last discriminate.
       destruct (SerialBool b) eqn:Hbool; last discriminate.
       intros H. invc H.
-      unfold ParseTest, ParseConcat.
+      unfold ParseTest, P.Concat.
       rewrite App_assoc.
       apply (ByteParseOk _ _ (App out0 rest)) in Hbyte; last reflexivity.
       rewrite Hbyte.
@@ -391,7 +327,7 @@ Module SimplParser.
       apply SerialConcatInversion in Hser.
       destruct Hser as (out__a & out__b & Ha & Hb & Henc).
       subst. rewrite App_assoc.
-      unfold ParseTest, ParseConcat.
+      unfold ParseTest, P.Concat.
       apply (ByteParseOk _ _ (App out__b rest)) in Ha; last reflexivity.
       apply (BoolParseOk _ _ rest) in Hb; last reflexivity.
       rewrite Ha. rewrite Hb. reflexivity.
@@ -414,7 +350,7 @@ Module SimplParser.
       intros x enc rest wf.
       unfold SerialUnsigned, SerialByte.
       intros H. invc H.
-      unfold ParseUnsigned, ParseMap.
+      unfold ParseUnsigned, P.Map.
       simpl. f_equal. word.
     Qed.
 
@@ -423,23 +359,23 @@ Module SimplParser.
       intros x enc rest wf.
       unfold SerialNat, SerialByte.
       intros H. invc H.
-      unfold ParseNat, ParseMap.
+      unfold ParseNat, P.Map.
       simpl. f_equal. word.
     Qed.
 
     Lemma ValLen_Length (v : Val) :
-      forall enc, SerialVal v = SerialSuccess enc -> Length enc = ValEncLen v.
+      forall enc, SerialVal v = S.Success enc -> Length enc = ValEncLen v.
     Proof.
       induction v.
       - intros enc Hser. destruct b; vm_compute in Hser; inversion Hser; reflexivity.
       - intros enc Hser. vm_compute in Hser; inversion Hser; reflexivity.
-      - intros enc. unfold SerialVal, SerialRecursive.
+      - intros enc. unfold SerialVal, S.Recursive.
         rewrite ser_recur_unfold. unfold SerialVal'.
         intro Hser.
         apply SerialConcatInversion in Hser as (enc__ot & enc__rest & Hot_ok & Hrest_ok & Henc).
-        unfold SerialBaseDesc', SerialMap in Hrest_ok.
+        unfold SerialBaseDesc, S.Map in Hrest_ok.
         apply SerialLen'Inversion in Hrest_ok as (enc__it & enc__v & Hit_ok & Hv_ok & Henc__v).
-        unfold SerialLimit in Hv_ok.
+        unfold S.Limit in Hv_ok.
         apply SerialConcatInversion in Hv_ok as (enc__v1 & enc__v2 & Hv1_ok & Hv2_ok & Henc__vs).
         destruct (decide (ValDepth v1 < ValDepth (V_NEST v1 v2))%nat) as [Hdepth__v1 | Hcontra__v1] in Hv1_ok;
           last (unfold ValDepth in Hcontra__v1; lia).
@@ -459,15 +395,15 @@ Module SimplParser.
 
     Lemma SerialValInversion (v1 v2 : Val) :
       forall enc,
-      SerialVal (V_NEST v1 v2) = SerialSuccess enc ->
-      exists enc__v1 enc__v2, SerialVal v1 = SerialSuccess enc__v1 /\ SerialVal v2 = SerialSuccess enc__v2.
+      SerialVal (V_NEST v1 v2) = S.Success enc ->
+      exists enc__v1 enc__v2, SerialVal v1 = S.Success enc__v1 /\ SerialVal v2 = S.Success enc__v2.
     Proof.
       intros enc.
-      unfold SerialVal at 1, SerialRecursive, SerialVal'.
+      unfold SerialVal at 1, S.Recursive, SerialVal'.
       rewrite ser_recur_unfold.
       intro Hser.
       apply SerialConcatInversion in Hser as (enc__ot & enc__rest & Hot_ok & Hrest_ok & Henc).
-      unfold SerialBaseDesc', SerialMap in Hrest_ok.
+      unfold SerialBaseDesc, S.Map in Hrest_ok.
       apply SerialLen'Inversion in Hrest_ok as (enc__it & enc__v & Hit_ok & Hv_ok & Henc__v).
       apply SerialConcatInversion in Hv_ok as (enc__v1 & enc__v2 & Hv1_ok & Hv2_ok & Henc__vs).
       destruct (decide (ValDepth v1 < ValDepth (V_NEST v1 v2))%nat) as [Hdepth__v1 | Hcontra__v1] in Hv1_ok;
@@ -482,8 +418,8 @@ Module SimplParser.
 
     Lemma ValLen_Nest (v1 v2 : Val) :
       forall enc,
-      SerialVal (V_NEST v1 v2) = SerialSuccess enc ->
-      exists enc__v1 enc__v2, SerialVal v1 = SerialSuccess enc__v1 /\ SerialVal v2 = SerialSuccess enc__v2 ->
+      SerialVal (V_NEST v1 v2) = S.Success enc ->
+      exists enc__v1 enc__v2, SerialVal v1 = S.Success enc__v1 /\ SerialVal v2 = S.Success enc__v2 ->
              (Length enc > Length enc__v1 /\ Length enc > Length enc__v2)%nat.
     Proof.
       intros.
@@ -514,21 +450,21 @@ Module SimplParser.
     Proof.
       apply RecursiveCorrect.
       intros x enc rest (wf_ot & wf_it & wf_val) IH.
-      unfold ser_recur_step, par_recur_step.
+      unfold S.recur_step, P.recur_step.
       intros Hser.
       destruct x eqn:Hx.
       - revert Hser.
         apply BindCorrect'; first apply UnsignedParseOk; last repeat (split; try word || assumption).
         simpl.
         intros enc__v rest__v [Hit_wf Hb_wf].
-        unfold SerialBaseDesc'.
+        unfold SerialBaseDesc.
         intros Hser.
         apply SerialConcatInversion in Hser as (enc__it & enc__b & Hit_ok & Hb_ok & Henc).
-        unfold ParseBaseDesc, ParseBind.
+        unfold ParseBaseDesc, P.Bind.
         rewrite Henc, App_assoc.
         pose proof (UnsignedParseOk 1 enc__it (App enc__b rest__v) Hit_wf Hit_ok) as Hu_ok.
         rewrite Hu_ok.
-        unfold ParseMap.
+        unfold P.Map.
         pose proof (BoolParseOk b enc__b rest__v Hb_wf Hb_ok) as Hser_b.
         rewrite Hser_b.
         reflexivity.
@@ -536,42 +472,42 @@ Module SimplParser.
         apply BindCorrect'; first apply UnsignedParseOk; last repeat (split; try word || assumption).
         simpl.
         intros enc__v rest__v [Hit_wf Hz_wf].
-        unfold SerialBaseDesc'.
+        unfold SerialBaseDesc.
         intros Hser.
         apply SerialConcatInversion in Hser as (enc__it & enc__z & Hit_ok & Hvz_ok & Henc).
-        unfold ParseBaseDesc, ParseBind.
+        unfold ParseBaseDesc, P.Bind.
         rewrite Henc, App_assoc.
         pose proof (UnsignedParseOk 0 enc__it (App enc__z rest__v) Hit_wf Hit_ok) as Hu_ok.
         rewrite Hu_ok.
-        unfold ParseMap.
+        unfold P.Map.
         pose proof (Z32ParseOk i enc__z rest__v Hz_wf Hvz_ok) as Hser_z.
         rewrite Hser_z.
         reflexivity.
       - remember 
-          (λ r__next : Val,
-             if decide (ValDepth r__next < ValDepth (V_NEST v1 v2))%nat
-             then ser_recur SerialVal' ValDepth r__next
-             else SerialRecursiveProgressError "Serial.Recursive" ValDepth (V_NEST v1 v2) r__next)
+          (λ x__n : Val,
+             if decide (ValDepth x__n < ValDepth (V_NEST v1 v2))%nat
+             then S.recur SerialVal' ValDepth x__n
+             else S.RecursiveProgressError "Serial.Recursive"%string ValDepth (V_NEST v1 v2) x__n)
           as s.
         remember
           (λ inp__next : Input,
              if decide (Length inp__next < Length (App enc rest))%nat
-             then par_recur ParseVal' inp__next
-             else RecursiveProgressError "Parser.Recursive" (App enc rest) inp__next)
+             then P.recur ParseVal' inp__next
+             else P.RecursiveProgressError "Parser.Recursive"%string (App enc rest) inp__next)
           as p.
         unfold SerialVal' in Hser.
         apply SerialConcatInversion in Hser as (enc__ot & enc__rest & Hot_ok & Hrest_ok & Henc).
-        unfold SerialBaseDesc', SerialMap in Hrest_ok.
+        unfold SerialBaseDesc, S.Map in Hrest_ok.
         set (SerialVal_wf := fun v => 0 <= InnerTag v < 256 /\ val_wf v).
-        unfold ParseVal', ParseBind.
+        unfold ParseVal', P.Bind.
         rewrite Henc, App_assoc.
         apply (UnsignedParseOk _ _ (App enc__rest rest)) in Hot_ok as Hot_succ; last word.
         vm_compute in Hot_ok.
         rewrite Hot_succ. simpl.
-        pose proof (@LenCorrect'Weakened _ (Concat_wf val_wf val_wf) _ SerialNat ParseNat
-                      (SerialConcat s s)
-                      (ParseConcat p p) (v1, v2) NatParseOk) as Hser_len.
-        assert (LimitParseOkWeak (@SerialConcat _ _ val_wf val_wf s s) (ParseConcat p p) (v1, v2))
+        pose proof (@LenCorrect'Weakened _ (S.Concat_wf val_wf val_wf) _ SerialNat ParseNat
+                      (S.Concat s s)
+                      (P.Concat p p) (v1, v2) NatParseOk) as Hser_len.
+        assert (LimitParseOkWeak (@S.Concat _ _ val_wf val_wf s s) (P.Concat p p) (v1, v2))
           as Hps_ok.
         {
           unfold LimitParseOkWeak.
@@ -585,23 +521,23 @@ Module SimplParser.
           rewrite Heqs in Hx1_ok, Hx2_ok.
           destruct (decide _) in Hx1_ok;
             last (
-                unfold SerialRecursiveProgressError in Hx1_ok;
+                unfold S.RecursiveProgressError in Hx1_ok;
                 destruct (ValDepth _ == ValDepth _) in Hx1_ok; discriminate
               ).
           destruct (decide _) in Hx2_ok;
             last (
-                unfold SerialRecursiveProgressError in Hx2_ok;
+                unfold S.RecursiveProgressError in Hx2_ok;
                 destruct (ValDepth _ == ValDepth _) in Hx2_ok; discriminate
               ).
           rewrite Heqenc, Henc__xs.
-          unfold ParseConcat. rewrite Heqp.
+          unfold P.Concat. rewrite Heqp.
           rewrite Henc, Henc__rest, Heqenc, Henc__xs.
           inversion Hot_ok as [Hot__enc]; symmetry in Hot__enc.
-          apply IH with (rest__next := enc__x2) in Hx1_ok.
+          apply IH with (rest__n := enc__x2) in Hx1_ok.
           - destruct (decide (Length (App enc__x1 enc__x2) < _)%nat).
             + rewrite Hx1_ok.
               destruct (decide (Length enc__x2 < _))%nat.
-              * apply IH with (rest__next := []) in Hx2_ok.
+              * apply IH with (rest__n := []) in Hx2_ok.
                 ** rewrite App_nil_r in Hx2_ok. rewrite Hx2_ok. reflexivity.
                 ** rewrite Henc, Henc__rest, Heqenc, Henc__xs, Hot__enc. lia.
                 ** done.
@@ -623,8 +559,8 @@ Module SimplParser.
         }
         specialize (Hser_len Hps_ok).
         apply (Hser_len _ rest) in Hrest_ok as Hser_ok.
-        + unfold ParseMap. rewrite Hser_ok. reflexivity.
-        + unfold SerialLen'_wf.
+        + unfold P.Map. rewrite Hser_ok. reflexivity.
+        + unfold S.Len'_wf.
           apply SerialLen'Inversion in Hrest_ok as (enc__len & enc__pay & Hlen_ok & Hpay_ok & Henc__rest).
           rewrite Hpay_ok. rewrite Hlen_ok.
           split; last done.
@@ -632,12 +568,12 @@ Module SimplParser.
           rewrite Heqs in Hv1_ok, Hv2_ok.
           destruct (decide _) in Hv1_ok;
             last (
-                unfold SerialRecursiveProgressError in Hv1_ok;
+                unfold S.RecursiveProgressError in Hv1_ok;
                 destruct (ValDepth _ == ValDepth _) in Hv1_ok; discriminate
               ).
           destruct (decide _) in Hv2_ok;
             last (
-                unfold SerialRecursiveProgressError in Hv2_ok;
+                unfold S.RecursiveProgressError in Hv2_ok;
                 destruct (ValDepth _ == ValDepth _) in Hv2_ok; discriminate
               ).
           rewrite Henc__pay, App_Length.
