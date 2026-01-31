@@ -1122,12 +1122,11 @@ Module Parsers (InputModule : AbstractInput).
       f_equal. 
     Qed.
 
-
     Theorem RecursiveCorrect {R : Type} {wf : R -> Prop}
       (par_underlying : Parser R -> Parser R)
       (ser_underlying : Serializer R wf -> Serializer R wf)
-      (depth : R -> nat)
-      (H_underlying_ok : forall (r : R) (enc rest : Input),
+      (depth : R -> nat) :
+      (forall (r : R) (enc rest : Input),
          wf r ->
          (forall (inp__next : Input) (r__next : R),
             Length inp__next < Length (App enc rest) ->
@@ -1139,9 +1138,11 @@ Module Parsers (InputModule : AbstractInput).
          ser_underlying (ser_recur_step ser_underlying depth r 
                            (fun r__next _ => ser_recur ser_underlying depth r__next)) r = SerialSuccess enc ->
          par_underlying (par_recur_step par_underlying (App enc rest)
-                           (fun inp__next _ => par_recur par_underlying inp__next)) (App enc rest) = ParseSuccess r rest) :
+                           (fun inp__next _ => par_recur par_underlying inp__next)) (App enc rest) =
+         ParseSuccess r rest) ->
       ParseOk (ParseRecursive par_underlying) (SerialRecursive ser_underlying depth).
     Proof using Type.
+      intros H_underlying_ok.
       unfold ParseOk, ParseOk', ParseOk'', ParseOk''', ParseRecursive, SerialRecursive.
       intros x enc rest Hwf Hser.
       
@@ -1188,7 +1189,7 @@ Module Parsers (InputModule : AbstractInput).
       apply lt_wf.
     Defined.
 
-    Definition ParseRecusriveState {R S : Type}
+    Definition ParseRecursiveState {R S : Type}
       (underlying : (S -> Parser R) -> (S -> Parser R)) (st : S) : Parser R :=
       par_recur_st underlying st.
       
@@ -1247,6 +1248,57 @@ Module Parsers (InputModule : AbstractInput).
       unfold ser_recur_st at 1. unfold ser_recur_st_func.
       rewrite WfExtensionality.fix_sub_eq_ext.
       f_equal. 
+    Qed.
+
+    Theorem RecursiveStateCorrect {R S : Type} {wf : R -> Prop}
+      (par_underlying : (S -> Parser R) -> S -> Parser R)
+      (ser_underlying : (S -> Serializer R wf) -> S -> Serializer R wf)
+      (valid_state : S -> R -> Prop)
+      (depth : R -> nat)
+      (st__init : S)
+      (x : R) :
+      (forall (st : S) (r : R) (enc rest : Input),
+         wf r -> valid_state st r ->
+         (forall (inp__next : Input) (st__next : S) (r__next : R),
+            Length inp__next < Length (App enc rest) ->
+            depth r__next < depth r ->
+            wf r__next ->
+            valid_state st__next r__next ->
+            forall rest__next,
+            ser_recur_st ser_underlying depth st__next r__next = SerialSuccess inp__next ->
+            par_recur_st par_underlying st__next (App inp__next rest__next) = ParseSuccess r__next rest__next) ->
+         ser_underlying (ser_recur_step_st ser_underlying depth r 
+                           (fun st__n r__n _ => ser_recur_st ser_underlying depth st__n r__n)) st r = SerialSuccess enc ->
+         par_underlying (par_recur_step_st par_underlying (App enc rest)
+                           (fun st__n inp__n _ => par_recur_st par_underlying st__n inp__n)) st (App enc rest) =
+         ParseSuccess r rest) ->
+      valid_state st__init x ->
+      ParseOk' (ParseRecursiveState par_underlying st__init)
+        (SerialRecursiveState ser_underlying depth st__init) x.
+    Proof using Type.
+      unfold ParseOk, ParseOk', ParseOk'', ParseOk''', ParseRecursiveState, SerialRecursiveState.
+      intros H_underlying_ok Hstate_valid enc rest Hwf Hser.
+      
+      (* The proof proceeds by well-founded induction on depth x *)
+      remember (depth x) as d eqn:Heq.
+      revert st__init x Hstate_valid enc rest Hwf Hser Heq.
+      induction d as [d IH] using lt_wf_ind.
+      intros st x Hstate enc rest Hwf Hser Heq.
+      
+      rewrite par_recur_st_unfold.
+      rewrite ser_recur_st_unfold in Hser.
+      
+      unfold par_recur_step_st in H_underlying_ok.
+      eapply H_underlying_ok; eauto.
+      
+      intros inp__next st__next r__next Hlen Hdepth Hwf__next Hstate__next rest__next Hser__next.
+      
+      eapply IH.
+      - subst d. exact Hdepth.
+      - exact Hstate__next.
+      - exact Hwf__next.
+      - exact Hser__next.
+      - reflexivity.
     Qed.
   End Parsers.
 End Parsers.
