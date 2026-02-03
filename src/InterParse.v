@@ -486,7 +486,21 @@ Module InterParse.
     Compute SerialValue desc3 val3'.
     Compute round_trip desc3 val3'.
     
-    (* TODO: Check ValueEncLen matches output of SerialValue *)
+    Example LengthOk1 :
+      forall enc, SerialValue desc1 val1 = S.Success enc -> ValueEncLen val1 = Length enc.
+    Proof. vm_compute. intros x' H. inversion H. reflexivity. Qed.
+
+    Example LengthOk2 :
+      forall enc, SerialValue desc2 val2 = S.Success enc -> ValueEncLen val2 = Length enc.
+    Proof. vm_compute. intros x' H. inversion H. reflexivity. Qed.
+
+    Example LengthOk3 :
+      forall enc, SerialValue desc3 val3 = S.Success enc -> ValueEncLen val3 = Length enc.
+    Proof. vm_compute. intros x' H. inversion H. reflexivity. Qed.
+
+    Example LengthOk3' :
+      forall enc, SerialValue desc3 val3' = S.Success enc -> ValueEncLen val3' = Length enc.
+    Proof. vm_compute. intros x' H. inversion H. reflexivity. Qed.
   End Serial.
 
   Section Theorems.
