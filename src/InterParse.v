@@ -260,11 +260,19 @@ Module InterParse.
     Definition ParseValue (d : Desc) : Parser Value :=
       P.RecursiveState ParseValue' d.
 
-    Definition enc2 := to_enc [1; 8; 0; 0; 0; 0; 0; 0; 0; 0;
+    Definition enc2 := to_enc [1; 10;
+                                    1; 0; 0; 0; 0; 2; 0; 0; 0; 0;
+                               2; 0; 0; 0; 1].
+    Definition enc2' := to_enc [1; 10;
+                                    1; 0; 0; 0; 0; 2; 0; 0; 0; 0;
                                2; 0; 0; 0; 1;
                                (* Extra field, which is dropped *)
                                3; 0; 0; 0; 0].
     Compute ParseValue desc2 enc2.
+    Compute match ParseValue desc2 enc2, ParseValue desc2 enc2' with
+            | P.Success v2 _, P.Success v2' _ => Eqb v2 v2'
+            | _, _ => false
+            end.
 
     Definition desc3 := DESC (list_to_map [
                                   (1, F_INT);
@@ -297,6 +305,29 @@ Module InterParse.
                          ].
     Definition result3 := fst $ (P.Extract (ParseValue desc3 enc3) I).
     Compute Eqb result3 val3.
+    Definition val3' := VALUE (list_to_map [
+                                  (1, V_INT 16777215);
+                                  (2, V_MISSING);
+                                  (3, V_MSG $ VALUE (list_to_map [
+                                                         (1, V_BOOL true);
+                                                         (2, V_MISSING)
+                                  ]));
+                                  (4, V_MSG $ VALUE (list_to_map [
+                                                         (1, V_MSG val1);
+                                                         (2, V_BOOL true)
+                                  ]))
+                         ]).
+    Definition enc3' := to_enc [
+                           1; 255; 255; 255; 0;
+                           3; 5;
+                                1; 0; 0; 0; 1;
+                           4; 17;
+                                1; 10;
+                                    1; 0; 0; 0; 0; 2; 0; 0; 0; 0;
+                                2; 0; 0; 0; 1
+                         ].
+    Definition result3' := fst $ (P.Extract (ParseValue desc3 enc3') I).
+    Compute Eqb result3' val3'.
   End Parse.
 
   Section Serial.
@@ -336,6 +367,126 @@ Module InterParse.
             else
               SerialZ32 0.
 
+    Fixpoint ValueDepth (v : Value) : nat :=
+      match v with
+      | VALUE vs => (map_fold ValueDepth__fold 0 vs)%nat
+      end
+    with ValueDepth__fold (k : Z) (v : Val) (acc : nat) :=
+           match v with
+           | V_BOOL _
+           | V_INT _
+           | V_MISSING => acc
+           | V_MSG v' => acc `max` (ValueDepth v' + 1)
+           end.
+
+    Compute ValueDepth val1. 
+    Compute ValueDepth val2.
+    Compute ValueDepth val3.
+
+    Fixpoint ValueEncLen (v : Value) : nat :=
+      match v with
+      | VALUE vs => (map_fold ValueEncLen__fold 0 vs)%nat
+      end
+    with ValueEncLen__fold (k : Z) (v : Val) (acc : nat) :=
+           match v with
+           | V_BOOL _ => (acc + 5)%nat
+           | V_INT _ => (acc + 5)%nat
+           | V_MISSING => acc
+           | V_MSG v' => (acc + 2 + ValueEncLen v')%nat
+           end.
+
+    Compute ValueEncLen val1.
+    Example Length1 : ValueEncLen val1 = length fenc3.
+    Proof. reflexivity. Qed.
+
+    Compute ValueEncLen val2.
+    Example Length2 : ValueEncLen val2 = length enc2.
+    Proof. reflexivity. Qed.
+
+    Compute ValueEncLen val3.
+    Example Length3 : ValueEncLen val3 = length enc3.
+    Proof. reflexivity. Qed.
+
+    Compute ValueEncLen val3'.
+    Example Length3' : ValueEncLen val3' = length enc3'.
+    Proof. reflexivity. Qed.
+
+    Definition Value_wf (v : Value) : Prop := True.
+    Definition Val_wf (v : Z * Val) : Prop := True.
+
+    Definition SerialVal (serial__msg : Desc -> S.Serializer Value Value_wf) (d : Desc) :
+      Serializer (Z * Val) Val_wf := 
+      fun val => let (id, v) := val in
+              match (Fields d) !! id with
+              | Some F_BOOL => match v with
+                              | V_BOOL b => S.Bind' (fun _ => id) SerialUnsigned SerialBool b
+                              | V_MISSING => S.Success []
+                              | _ => S.Failure S.Failure.Recoverable
+                                      (S.Failure.mkData "Expected Boolean" Input_default None)
+                              end
+              | Some F_INT => match v with
+                             | V_INT z => S.Bind' (fun _ => id) SerialUnsigned SerialZ32 z
+                             | V_MISSING => S.Success []
+                             | _ => S.Failure S.Failure.Recoverable
+                                     (S.Failure.mkData "Expected Integer" Input_default None)
+                             end
+              | Some (F_MSG d') => match v with
+                                  | V_MSG z => S.Bind' (fun _ => id) SerialUnsigned
+                                                      (S.Len' SerialNat (serial__msg d')) z
+                                  | V_MISSING => S.Success []
+                                  | _ => S.Failure S.Failure.Recoverable
+                                          (S.Failure.mkData "Expected nested message" Input_default None)
+                                  end
+              | None => S.Success Input_default
+              end.
+
+    Definition ValList (v : Value) : list (Z * Val) :=
+      map_fold (fun (k : Z) (v : Val) (acc : list (Z * Val)) =>
+                  (k, v) :: acc) [] (Vals v).
+      
+    Definition SerialValue' (self : Desc -> Serializer Value Value_wf) (d : Desc) : Serializer Value Value_wf :=
+      S.Map (S.Rep (SerialVal self d : S.Serializer _ Val_wf)) ValList.
+
+    Definition SerialValue (d : Desc) : Serializer Value Value_wf :=
+      S.RecursiveState SerialValue' ValueDepth d.
+
+    Definition enc_eq (d : Desc) (v : Value) (e : Input) : bool :=
+      match SerialValue d v with
+      | S.Success enc => if decide (enc = e) then true else false
+      | S.Failure _ _ => false
+      end.
+
+    Definition round_trip (d : Desc) (v : Value) : bool :=
+      match SerialValue d v with
+      | S.Success enc => match ParseValue d enc with
+                        | P.Success v' _ => Eqb v v'
+                        | P.Failure _ _ => false
+                        end
+      | S.Failure _ _ => false
+      end.
+
+    Definition check_multi_enc (d : Desc) (enc1 enc2 : Input) : bool :=
+      match ParseValue d enc1, ParseValue d enc2 with
+      | P.Success v1 _, P.Success v2 _ => Eqb v1 v2
+      | _, _ => false
+      end.
+
+    Compute SerialValue desc1 val1.
+    Compute round_trip desc1 val1.
+    Compute check_multi_enc desc1
+      (to_enc [1; 0; 0; 0; 0; 2; 0; 0; 0; 0])
+      (to_enc [2; 0; 0; 0; 0; 1; 0; 0; 0; 0]).
+
+    Compute SerialValue desc2 val2.
+    Compute round_trip desc2 val2.
+
+    Compute SerialValue desc3 val3.
+    Compute round_trip desc3 val3.
+
+    Compute SerialValue desc3 val3'.
+    Compute round_trip desc3 val3'.
+    
+    (* TODO: Check ValueEncLen matches output of SerialValue *)
   End Serial.
 
   Section Theorems.
