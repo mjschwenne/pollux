@@ -88,36 +88,37 @@ Module InterParse.
            | _ => <[ k := V_MISSING ]> acc
            end.
 
-    (* Fixpoint Eqb (v1 v2 : Value) : bool := *)
-    (*   match v1, v2 with *)
-    (*   | VALUE vs1, VALUE vs2 => andb (map_fold (Eqb__fold vs1) true vs2) *)
-    (*                                 (map_fold (Eqb__fold vs2) true vs1) *)
-    (*   end *)
-    (* with Eqb__fold (vs : gmap Z Val) (k : Z) (v : Val) (acc : bool) : bool := *)
-    (*        if negb acc then *)
-    (*          (* If we already know it isn't a subset, just feed forward *) *)
-    (*          acc *)
-    (*        else *)
-    (*          match vs !! k with *)
-    (*          | Some (V_BOOL b') => match v with *)
-    (*                              | V_BOOL b => bool_eq b' b *)
-    (*                              | _ => false *)
-    (*                              end *)
-    (*          | Some (V_INT z') => match v with *)
-    (*                             | V_INT z => Z.eqb z' z *)
-    (*                             | _ => false *)
-    (*                             end *)
-    (*          | Some V_MISSING => match v with *)
-    (*                             | V_MISSING => true *)
-    (*                             | _ => false *)
-    (*                             end *)
-    (*          | Some (V_MSG v') => match v with *)
-    (*                              | V_MSG v'' => Eqb v' v'' *)
-    (*                              | _ => false *)
-    (*                              end *)
-    (*          | None => false *)
-    (*          end. *)
-    (* FIXME: Error: Cannot guess decreasing argument of fix. *)
+    (* v1 ⊆ v2 *)
+    Fixpoint Subset (v1 v2 : Value) : bool :=
+      match v1, v2 with
+      | VALUE vs1, VALUE vs2 => map_fold (Subset__fold vs2) true vs1
+      end
+    with Subset__fold (vs : gmap Z Val) (k : Z) (v : Val) (acc : bool) : bool :=
+           if negb acc then
+             (* If we already know it isn't a subset, just feed forward *)
+             acc
+           else
+             match vs !! k with
+             | Some (V_BOOL b') => match v with
+                                 | V_BOOL b => bool_eq b' b
+                                 | _ => false
+                                 end
+             | Some (V_INT z') => match v with
+                                | V_INT z => Z.eqb z' z
+                                | _ => false
+                                end
+             | Some V_MISSING => match v with
+                                | V_MISSING => true
+                                | _ => false
+                                end
+             | Some (V_MSG v') => match v with
+                                 | V_MSG v'' => Subset v'' v'
+                                 | _ => false
+                                 end
+             | None => false
+             end.
+
+    Definition Eqb (v1 v2 : Value) : bool := andb (Subset v1 v2) (Subset v2 v1).
 
     (* Define a Value type which matches the structure of the descriptor, with
      an extra option for missing values, which will also be used as a default
@@ -278,23 +279,24 @@ Module InterParse.
                                                          (1, V_BOOL true);
                                                          (2, V_INT 3668)
                                   ]));
-                                  (3, V_MSG $ VALUE (list_to_map [
+                                  (4, V_MSG $ VALUE (list_to_map [
                                                          (1, V_MSG val1);
                                                          (2, V_BOOL true)
                                   ]))
                          ]).
     Definition enc3 := to_enc [
                            1; 255; 255; 255; 0;
-                           2; 0; 0; 0; 1;
+                           2; 0; 0; 0; 0;
                            3; 10;
                                 1; 0; 0; 0; 1;
                                 2; 84; 14; 0; 0;
-                           4; 15;
-                                1; 8; 0; 0; 0; 0; 0; 0; 0; 0;
+                           4; 17;
+                                1; 10;
+                                    1; 0; 0; 0; 0; 2; 0; 0; 0; 0;
                                 2; 0; 0; 0; 1
                          ].
-    Definition result3 := fst $ P.Extract (ParseValue desc3 enc3) I.
-    Compute decide (result3 = val3).
+    Definition result3 := fst $ (P.Extract (ParseValue desc3 enc3) I).
+    Compute Eqb result3 val3.
   End Parse.
 
   Section Serial.
