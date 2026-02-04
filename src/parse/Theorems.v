@@ -14,6 +14,9 @@ Module Theorems (InputModule : AbstractInput).
   Module S := Serializers(InputModule).
   Import InputModule.
 
+  Section Theorems.
+    Context `{EqDecision Input}.
+
   Definition Output := Input.
   Definition Parser (X : Type) := P.Parser X.
   Definition Serializer (X : Type) (wf : X -> Prop) := S.Serializer X wf.
@@ -314,6 +317,62 @@ Module Theorems (InputModule : AbstractInput).
       rewrite Hx, Hn, Henc. reflexivity.
   Qed.
 
+  Lemma par_rep'_unfold {A B : Type} (underlying : Parser B) (combine : A -> B -> A) (acc : A) (inp : Input) :
+    P.rep' underlying combine acc inp =
+    match underlying inp with
+    | P.Success ret rem => if decide (Length rem < Length inp) then
+                          P.rep' underlying combine (combine acc ret) rem
+                        else
+                          P.Success acc inp
+    | P.Failure lvl data as f => if P.NeedsAlternative f inp then
+                                P.Success acc inp
+                              else
+                                @P.Propagate A _ (P.Failure lvl data) I
+    end.
+  Proof using Type.
+    unfold P.rep' at 1. unfold P.rep'_func.
+    rewrite WfExtensionality.fix_sub_eq_ext.
+    program_simpl.
+    destruct (underlying inp); f_equal.
+  Qed.
+
+  Lemma ser_rep'_unfold {X : Type} {wfx : X -> Prop}
+    (underlying : S.Serializer X wfx) (xs : list X):
+    S.rep' underlying xs = 
+    match xs with
+    | [] => S.Success S.Output_default
+    | x :: xs' => match underlying x, S.rep' underlying xs' with
+                 | S.Success x_enc, S.Success rest_enc => S.Success $ App x_enc rest_enc
+                 | S.Failure lvl data as f, S.Success rest_enc => f
+                 | S.Success x_enc, S.Failure lvl data as f => f
+                 | S.Failure lvl__x data__x, S.Failure lvl__r data__r =>
+                     S.Failure S.Failure.Recoverable $ S.Failure.Concat data__x data__r
+                 end
+    end.
+  Proof using Type.
+    destruct xs; reflexivity.
+  Qed.
+  
+  Lemma SerialRepInversion {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) :
+    forall (x : X) (xs : list X) (enc : Output),
+      S.Rep ser__x (x :: xs) = S.Success enc <-> exists enc__x enc__rest,
+          ser__x x = S.Success enc__x /\
+          S.Rep ser__x xs = S.Success enc__rest /\
+          enc = (App enc__x enc__rest). 
+  Proof using Type.
+    intros x xs enc. split.
+    - unfold S.Rep. rewrite ser_rep'_unfold.
+      destruct (ser__x x) eqn:Hser__x.
+      * destruct (S.rep' ser__x xs); last discriminate.
+        intro Hser. inversion Hser as [Henc].
+        exists out, out0. done.
+      * destruct (S.rep' ser__x xs); last discriminate.
+        discriminate.
+    - intros (enc__x & enc__rest & Hser__x & Hser__rest & Henc).
+      unfold S.Rep in Hser__rest.
+      rewrite ser_rep'_unfold, Hser__x, Hser__rest, Henc; reflexivity.
+  Qed.
+
   Lemma par_recur_unfold {X : Type} (underlying : Parser X -> Parser X) (inp : Input) :
     P.recur underlying inp =
     underlying (fun rem => match decide (Length rem < Length inp) with
@@ -465,4 +524,5 @@ Module Theorems (InputModule : AbstractInput).
     - exact Hser__n.
     - reflexivity.
   Qed.
+  End Theorems.
 End Theorems.

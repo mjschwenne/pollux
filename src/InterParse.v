@@ -555,6 +555,18 @@ Module InterParse.
         vm_compute. reflexivity.
     Qed.
 
+    Lemma ValueEncLength_Lenght (d : Desc) (v : Value) :
+      forall enc,
+      Valid d v ->
+      SerialValue d v = S.Success enc ->
+      Length enc = ValueEncLen v.
+    Proof.
+      intros enc Hvalid.
+      destruct v.
+      unfold SerialValue, S.RecursiveState.
+      rewrite ser_recur_st_unfold. unfold SerialValue', S.Map.
+      
+
   End Theorems.
 
 End InterParse.

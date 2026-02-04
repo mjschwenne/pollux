@@ -195,19 +195,21 @@ Module Serializers (InputModule : AbstractInput).
       end.
 
     Fixpoint rep' {X : Type} {wfx : X -> Prop}
-      (underlying : Serializer X wfx) (acc : Output) : Serializer (list X) (Rep_wf wfx) :=
-      fun ls =>
-        match ls with
-        | [] => Success acc
-        | x :: ls' => match underlying x with
-                     | Success x_enc => rep' underlying (App acc x_enc) ls'
-                     | Failure lvl data as f => f
+      (underlying : Serializer X wfx) (xs : list X) : Result :=
+        match xs with
+        | [] => Success Output_default
+        | x :: xs' => match underlying x, rep' underlying xs' with
+                     | Success x_enc, Success rest_enc => Success $ App x_enc rest_enc
+                     | Failure lvl data as f, Success rest_enc => f
+                     | Success x_enc, Failure lvl data as f => f
+                     | Failure lvl__x data__x, Failure lvl__r data__r =>
+                         Failure Failure.Recoverable $ Failure.Concat data__x data__r
                      end
         end.
 
     Definition Rep {X : Type} {wfx : X -> Prop}
       (underlying : Serializer X wfx) : Serializer (list X) (Rep_wf wfx) :=
-      rep' underlying Output_default.
+      fun xs => rep' underlying xs.
 
     Definition RecursiveProgressError {X : Type} (name : string) (depth : X -> nat) (x x__n : X) : Result :=
       if depth x__n == depth x then
