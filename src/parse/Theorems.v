@@ -317,23 +317,31 @@ Module Theorems (InputModule : AbstractInput).
       rewrite Hx, Hn, Henc. reflexivity.
   Qed.
 
-  Lemma par_rep'_unfold {A B : Type} (underlying : Parser B) (combine : A -> B -> A) (acc : A) (inp : Input) :
-    P.rep' underlying combine acc inp =
-    match underlying inp with
-    | P.Success ret rem => if decide (Length rem < Length inp) then
-                          P.rep' underlying combine (combine acc ret) rem
-                        else
-                          P.Success acc inp
-    | P.Failure lvl data as f => if P.NeedsAlternative f inp then
-                                P.Success acc inp
-                              else
-                                @P.Propagate A _ (P.Failure lvl data) I
-    end.
+  Lemma par_rep'_unfold {A B : Type} (underlying : Parser B) (inp : Input) :
+    P.rep' underlying inp =
+      if Length inp == 0 then
+        P.Success [] Input_default
+      else
+        match underlying inp with
+        | P.Success x rem => if decide (Length rem < Length inp) then
+                            match P.rep' underlying rem with
+                            | P.Success xs rest => P.Success (x :: xs) rest
+                            | P.Failure P.Failure.Recoverable data => P.Success [x] rem
+                            | P.Failure P.Failure.Fatal data => P.Failure P.Failure.Fatal data
+                            end
+                          else
+                            P.Failure P.Failure.Fatal $ P.Failure.mkData
+                              "Parser.Rep underlying increased input length" rem None
+        | P.Failure lvl data => P.Failure lvl data
+        end.
   Proof using Type.
-    unfold P.rep' at 1. unfold P.rep'_func.
-    rewrite WfExtensionality.fix_sub_eq_ext.
-    program_simpl.
-    destruct (underlying inp); f_equal.
+    unfold P.rep'. unfold P.rep'_func.
+    rewrite WfExtensionality.fix_sub_eq_ext; program_simpl.
+    destruct (Length inp == 0); first reflexivity.
+    destruct (underlying inp); last reflexivity.
+    destruct (decide (Length remaining < Length inp)); last reflexivity.
+    destruct (Fix_sub _); first reflexivity.
+    destruct level; reflexivity.
   Qed.
 
   Lemma ser_rep'_unfold {X : Type} {wfx : X -> Prop}
@@ -353,7 +361,7 @@ Module Theorems (InputModule : AbstractInput).
     destruct xs; reflexivity.
   Qed.
   
-  Lemma SerialRepInversion {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) :
+  Lemma SerialRepInversion_First {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) :
     forall (x : X) (xs : list X) (enc : Output),
       S.Rep ser__x (x :: xs) = S.Success enc <-> exists enc__x enc__rest,
           ser__x x = S.Success enc__x /\
@@ -362,16 +370,79 @@ Module Theorems (InputModule : AbstractInput).
   Proof using Type.
     intros x xs enc. split.
     - unfold S.Rep. rewrite ser_rep'_unfold.
-      destruct (ser__x x) eqn:Hser__x.
+      destruct (ser__x x) as [out__x |] eqn:Hser__x.
       * destruct (S.rep' ser__x xs); last discriminate.
         intro Hser. inversion Hser as [Henc].
-        exists out, out0. done.
+        exists out__x, out. done.
       * destruct (S.rep' ser__x xs); last discriminate.
         discriminate.
     - intros (enc__x & enc__rest & Hser__x & Hser__rest & Henc).
       unfold S.Rep in Hser__rest.
       rewrite ser_rep'_unfold, Hser__x, Hser__rest, Henc; reflexivity.
   Qed.
+
+  Lemma SerialRepInversion {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) :
+    forall (xs : list X),
+      (exists enc, S.Rep ser__x xs = S.Success enc) <-> forall x, x ∈ xs -> exists enc__x, ser__x x = S.Success enc__x.
+  Proof using Type.
+    (* This proof written almost completely by Gemini 3 Pro... *)
+    intros xs.
+    induction xs as [|y ys IH].
+    - split.
+      + intros [enc Hser] x Hx. apply not_elem_of_nil in Hx. contradiction.
+      + intros H. exists S.Output_default. rewrite ser_rep'_unfold. reflexivity.
+    - split.
+      + intros [enc Hser] x Hx.
+        rewrite SerialRepInversion_First in Hser.
+        destruct Hser as (enc__y & enc__rest & Hy_ok & Hrest_ok & Henc).
+        rewrite elem_of_cons in Hx. destruct Hx as [Heq|Hin].
+        * subst. exists enc__y. assumption.
+        * apply (proj1 IH).
+          -- exists enc__rest. assumption.
+          -- assumption.
+      + intros H.
+        assert (exists enc__y, ser__x y = S.Success enc__y) as [enc__y Henc__y].
+        { destruct (H y) as [ex Hex].
+          - apply list_elem_of_here.
+          - exists ex. assumption. }
+        assert (exists enc__rest, S.Rep ser__x ys = S.Success enc__rest) as [enc__rest Henc__rest].
+        { apply (proj2 IH). intros z Hz. destruct (H z) as [ez Hez].
+          - simpl; right; assumption.
+          - exists ez. assumption. }
+        exists (App enc__y enc__rest).
+        rewrite SerialRepInversion_First.
+        exists enc__y, enc__rest.
+        repeat split; assumption.
+  Qed.
+
+  Lemma RepCorrect {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) (par__x : Parser X) :
+    (* TODO: Split this into a typeclass. Make one for consuming parsers too. *)
+    (forall x enc, ser__x x = S.Success enc -> Length enc > 0) ->
+    ParseOk par__x ser__x ->
+    LimitParseOk (S.Rep ser__x) (P.Rep par__x).
+  Proof.
+    intros Hpro HpOk xs.
+    induction xs as [| y ys].
+    - intros enc Hwf Hser. simpl in Hser.
+      inversion Hser as [Henc].
+      rewrite (@par_rep'_unfold X).
+      unfold S.Output_default;
+      rewrite Length_default.
+      reflexivity.
+    - intros enc Hwf. destruct ys.
+      + unfold S.Rep, P.Rep.
+        rewrite ser_rep'_unfold.
+        destruct (ser__x y) eqn:Hser__y; last discriminate.
+        destruct (S.rep' ser__x []) eqn:Hser__rest; last discriminate.
+        intros Hser; inversion Hser as [Henc]. 
+        specialize (IHys out0 I Hser__rest).
+        simpl in Hwf.
+        specialize (HpOk y out out0 Hwf Hser__y).
+        rewrite (@par_rep'_unfold X).
+        rewrite HpOk.
+        pose proof (Hpro y out Hser__y) as Hpro__y.
+        rewrite App_Length.
+  Admitted.
 
   Lemma par_recur_unfold {X : Type} (underlying : Parser X -> Parser X) (inp : Input) :
     P.recur underlying inp =

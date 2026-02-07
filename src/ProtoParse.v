@@ -87,7 +87,7 @@ Module ProtoParse.
 
   (* Protobuf uses a little-endian encoding, which I'm directly converting from. It's less
      convenient than big-endian since I have to track the byte length explicitly. *)
-  Definition VarintPrefix := P.Rep VarintNonTerm
+  Definition VarintPrefix := P.RepFold VarintNonTerm
                                (fun (acc : Z * Z) (new : Z) => let (n, v) := acc in
                                             ((n + 7)%Z, (new ≪ n + v)%Z))
                                (0%Z, 0%Z).
@@ -248,7 +248,7 @@ Module ProtoParse.
     match tag with
     | VARINT => underlying
     | I64 => underlying
-    | LEN => P.Bind LenBody (fun body => match P.Rep underlying ValMerger None body with
+    | LEN => P.Bind LenBody (fun body => match P.RepFold underlying ValMerger None body with
                                         | P.Success (Some v) rem => P.ResultWith (P.Success v rem)
                                         | P.Success None rem => P.ResultWith
                                                                     (P.Failure P.Failure.Recoverable

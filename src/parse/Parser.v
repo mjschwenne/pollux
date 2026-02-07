@@ -325,11 +325,32 @@ Module Parsers (InputModule : AbstractInput).
                                                      Success None inp
         end.
 
-    Program Fixpoint rep' {A B : Type} (underlying : Parser B) (combine : A -> B -> A) (acc : A) (inp : Input)
+    Program Fixpoint rep' {X : Type} (underlying : Parser X) (inp : Input)
+      {measure (Length inp)} : Result (list X) :=
+      if Length inp == 0 then
+        Success [] Input_default
+      else
+        match underlying inp with
+        | Success x rem => if decide (Length rem < Length inp) then
+                            match rep' underlying rem with
+                            | Success xs rest => Success (x :: xs) rest
+                            | Failure Failure.Recoverable data => Success [x] rem
+                            | Failure Failure.Fatal data => Failure Failure.Fatal data
+                            end
+                          else
+                            Failure Failure.Fatal $ Failure.mkData
+                              "Parser.Rep underlying increased input length" rem None
+        | Failure lvl data => Failure lvl data
+        end.
+
+    Definition Rep {X : Type} (underlying : Parser X) : Parser (list X) :=
+      fun inp => rep' underlying inp.
+
+    Program Fixpoint rep_fold' {A B : Type} (underlying : Parser B) (combine : A -> B -> A) (acc : A) (inp : Input)
       {measure (Length inp)} : Result A :=
       match underlying inp with
       | Success ret rem => if decide (Length rem < Length inp) then
-                            rep' underlying combine (combine acc ret) rem
+                            rep_fold' underlying combine (combine acc ret) rem
                           else
                             Success acc inp
       | Failure lvl data as f => if NeedsAlternative f inp then
@@ -340,9 +361,9 @@ Module Parsers (InputModule : AbstractInput).
                              
     (* Repeats the underlying parser until the first failure that accepts alternatives, combining results
      into an accumulator and return the final accumulated result. *)
-    Definition Rep {A B : Type} (underlying : Parser B) (combine : A -> B -> A) (acc : A) :
+    Definition RepFold {A B : Type} (underlying : Parser B) (combine : A -> B -> A) (acc : A) :
       Parser A :=
-      fun inp => rep' underlying combine acc inp.
+      fun inp => rep_fold' underlying combine acc inp.
 
     (* Repeats the underlying parser N times, combining results into an accumulator and returning the
        final accumulated result. *)
@@ -362,7 +383,7 @@ Module Parsers (InputModule : AbstractInput).
       Bind (Maybe underlying)
         (fun (result : option A) =>
            match result with
-           | Some ret => Rep (ConcatKeepRight separator underlying)
+           | Some ret => RepFold (ConcatKeepRight separator underlying)
                           (fun (acc : list A) (a : A) => acc ++ [a])
                           [ret]
            | None => SucceedWith []
@@ -387,7 +408,7 @@ Module Parsers (InputModule : AbstractInput).
       Bind (Maybe underlying)
         (fun (result : option X) =>
            match result with
-           | Some ret => Rep underlying merger ret
+           | Some ret => RepFold underlying merger ret
            | None => FailWith "No first element in RepMerge" Failure.Recoverable
            end).
 
@@ -408,7 +429,7 @@ Module Parsers (InputModule : AbstractInput).
       Bind (Maybe underlying)
         (fun (result : option A) =>
            match result with
-           | Some ret => Rep (ConcatKeepRight separator underlying) merger ret
+           | Some ret => RepFold (ConcatKeepRight separator underlying) merger ret
            | None => FailWith "No first element in RepSepMerge" Failure.Recoverable
            end).
 
@@ -426,13 +447,12 @@ Module Parsers (InputModule : AbstractInput).
     (* Repeated the underlying parser until the first failure that accepts alternatives, and returns the
        underlying sequence. *)
     Definition ZeroOrMore {X : Type} (underlying : Parser X) : Parser (list X) :=
-      Rep underlying (fun (acc : list X) (x : X) => acc ++ [x]) [].
+      Rep underlying.
 
     (* Like ZeroOrMore but will return a failure if there is not at least one match. *)
     Definition OneOrMore {X : Type} (underlying : Parser X) : Parser (list X) :=
       Bind underlying
-        (fun x =>
-           Rep underlying (fun (acc : list X) (x : X) => acc ++ [x]) [x]).
+        (fun x => Map (Rep underlying) (fun xs => x :: xs)).
 
     Definition SeqN {X : Type} (underlying : Parser X) (n : nat) : Parser (list X) :=
       RepN underlying (fun (acc : list X) (x : X) => acc ++ [x]) n [].

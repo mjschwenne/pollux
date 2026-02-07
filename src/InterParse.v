@@ -254,8 +254,12 @@ Module InterParse.
       | None => acc
       end.
 
+    Definition list_to_value (d : Desc) (vs : list (Z * Val)) : Value :=
+      foldl Merge (Init d) vs.
+
+    (* TODO: Rewrite to use list_to_map after filtering. Still won't add defaults... *)
     Definition ParseValue' (self : Desc -> P.Parser Value) (d : Desc) : Parser Value :=
-      P.Rep (ParseVal self d) Merge (Init d).
+      P.Map (P.Rep (ParseVal self d)) (fun vs => list_to_value d vs).
 
     Definition ParseValue (d : Desc) : Parser Value :=
       P.RecursiveState ParseValue' d.
@@ -269,6 +273,7 @@ Module InterParse.
                                (* Extra field, which is dropped *)
                                3; 0; 0; 0; 0].
     Compute ParseValue desc2 enc2.
+    Compute ParseValue desc2 enc2'.
     Compute match ParseValue desc2 enc2, ParseValue desc2 enc2' with
             | P.Success v2 _, P.Success v2' _ => Eqb v2 v2'
             | _, _ => false
@@ -441,8 +446,7 @@ Module InterParse.
               end.
 
     Definition ValList (v : Value) : list (Z * Val) :=
-      map_fold (fun (k : Z) (v : Val) (acc : list (Z * Val)) =>
-                  (k, v) :: acc) [] (Vals v).
+      map_to_list (Vals v).
       
     Definition SerialValue' (self : Desc -> Serializer Value Value_wf) (d : Desc) : Serializer Value Value_wf :=
       S.Map (S.Rep (SerialVal self d : S.Serializer _ Val_wf)) ValList.

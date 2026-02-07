@@ -14,6 +14,7 @@ Module Type AbstractInput.
 
   (* AbstractInput must support length *)
   Parameter Length : Input -> nat.
+  Axiom Length_default : Length Input_default = 0.
 
   (* AbstractInput must support viewing as a sequence *)
   Parameter View : Input -> list C.
@@ -75,7 +76,11 @@ Module ByteInput <: AbstractInput.
 
   Definition ToInput (r : list C) := r.
   Definition View (self : Input) := self.
+
   Definition Length (self : Input) := length self.
+  Theorem Length_default : Length Input_default = 0.
+  Proof. reflexivity. Qed.
+  
   Definition CharAt (self : Input) (i : nat) := nth i self C_default.
   Definition App (self : Input) (other : Input) := self ++ other.
   Definition Drop (self : Input) (start : nat) := drop start self.
