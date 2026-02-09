@@ -327,9 +327,6 @@ Module Parsers (InputModule : AbstractInput).
 
     Program Fixpoint rep' {X : Type} (underlying : Parser X) (inp : Input)
       {measure (Length inp)} : Result (list X) :=
-      if Length inp == 0 then
-        Success [] Input_default
-      else
         match underlying inp with
         | Success x rem => if decide (Length rem < Length inp) then
                             match rep' underlying rem with
@@ -340,7 +337,8 @@ Module Parsers (InputModule : AbstractInput).
                           else
                             Failure Failure.Fatal $ Failure.mkData
                               "Parser.Rep underlying increased input length" rem None
-        | Failure lvl data => Failure lvl data
+        | Failure Failure.Recoverable (Failure.mkData _ rem _) => Success [] rem
+        | Failure Failure.Fatal data => Failure Failure.Fatal data
         end.
 
     Definition Rep {X : Type} (underlying : Parser X) : Parser (list X) :=
@@ -447,7 +445,7 @@ Module Parsers (InputModule : AbstractInput).
     (* Repeated the underlying parser until the first failure that accepts alternatives, and returns the
        underlying sequence. *)
     Definition ZeroOrMore {X : Type} (underlying : Parser X) : Parser (list X) :=
-      Rep underlying.
+      RepFold underlying (fun acc x => acc ++ [x]) [].
 
     (* Like ZeroOrMore but will return a failure if there is not at least one match. *)
     Definition OneOrMore {X : Type} (underlying : Parser X) : Parser (list X) :=

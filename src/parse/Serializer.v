@@ -190,7 +190,6 @@ Module Serializers (InputModule : AbstractInput).
     Fixpoint Rep_wf {X : Type} (wf : X -> Prop) (ls : list X) : Prop :=
       match ls with
       | [] => True
-      | x :: [] => wf x
       | x :: ls' => wf x /\ Rep_wf wf ls'
       end.
 

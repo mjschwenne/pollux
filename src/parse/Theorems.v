@@ -317,11 +317,8 @@ Module Theorems (InputModule : AbstractInput).
       rewrite Hx, Hn, Henc. reflexivity.
   Qed.
 
-  Lemma par_rep'_unfold {A B : Type} (underlying : Parser B) (inp : Input) :
+  Lemma par_rep'_unfold {X : Type} (underlying : Parser X) (inp : Input) :
     P.rep' underlying inp =
-      if Length inp == 0 then
-        P.Success [] Input_default
-      else
         match underlying inp with
         | P.Success x rem => if decide (Length rem < Length inp) then
                             match P.rep' underlying rem with
@@ -332,16 +329,37 @@ Module Theorems (InputModule : AbstractInput).
                           else
                             P.Failure P.Failure.Fatal $ P.Failure.mkData
                               "Parser.Rep underlying increased input length" rem None
-        | P.Failure lvl data => P.Failure lvl data
+        | P.Failure P.Failure.Recoverable (P.Failure.mkData _ rem _) => P.Success [] rem
+        | P.Failure P.Failure.Fatal data => P.Failure P.Failure.Fatal data
         end.
   Proof using Type.
     unfold P.rep'. unfold P.rep'_func.
     rewrite WfExtensionality.fix_sub_eq_ext; program_simpl.
-    destruct (Length inp == 0); first reflexivity.
-    destruct (underlying inp); last reflexivity.
-    destruct (decide (Length remaining < Length inp)); last reflexivity.
-    destruct (Fix_sub _); first reflexivity.
-    destruct level; reflexivity.
+    destruct (underlying inp); program_simpl.
+    - destruct (decide (Length remaining < Length inp)); last reflexivity.
+      destruct (Fix_sub _); first reflexivity.
+      destruct level; reflexivity.
+    - destruct level; first reflexivity.
+      destruct data; reflexivity.
+  Qed.
+
+  Lemma par_rep_fold'_unfold {A B : Type} (underlying : Parser B) (combine : A -> B -> A)
+    (acc : A) (inp : Input) :
+    P.rep_fold' underlying combine acc inp =
+      match underlying inp with
+      | P.Success ret rem => if decide (Length rem < Length inp) then
+                            P.rep_fold' underlying combine (combine acc ret) rem
+                          else
+                            P.Success acc inp
+      | P.Failure lvl data as f => if P.NeedsAlternative f inp then
+                                  P.Success acc inp
+                                else
+                                  @P.Propagate A _ (P.Failure lvl data) I
+      end.
+  Proof using Type.
+    unfold P.rep_fold', P.rep_fold'_func.
+    rewrite WfExtensionality.fix_sub_eq_ext; program_simpl.
+    destruct (underlying inp); last reflexivity. f_equal.
   Qed.
 
   Lemma ser_rep'_unfold {X : Type} {wfx : X -> Prop}
@@ -417,32 +435,33 @@ Module Theorems (InputModule : AbstractInput).
 
   Lemma RepCorrect {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) (par__x : Parser X) :
     (* TODO: Split this into a typeclass. Make one for consuming parsers too. *)
+    (exists msg, par__x Input_default = P.Failure P.Failure.Recoverable $ P.Failure.mkData msg Input_default None) ->
     (forall x enc, ser__x x = S.Success enc -> Length enc > 0) ->
     ParseOk par__x ser__x ->
     LimitParseOk (S.Rep ser__x) (P.Rep par__x).
-  Proof.
-    intros Hpro HpOk xs.
+  Proof using Type.
+    intros HparEmp Hpro HpOk xs.
     induction xs as [| y ys].
     - intros enc Hwf Hser. simpl in Hser.
       inversion Hser as [Henc].
       rewrite (@par_rep'_unfold X).
       unfold S.Output_default;
       rewrite Length_default.
+      destruct HparEmp as [emp_msg HparEmp].
+      rewrite HparEmp.
       reflexivity.
-    - intros enc Hwf. destruct ys.
-      + unfold S.Rep, P.Rep.
-        rewrite ser_rep'_unfold.
-        destruct (ser__x y) eqn:Hser__y; last discriminate.
-        destruct (S.rep' ser__x []) eqn:Hser__rest; last discriminate.
-        intros Hser; inversion Hser as [Henc]. 
-        specialize (IHys out0 I Hser__rest).
-        simpl in Hwf.
-        specialize (HpOk y out out0 Hwf Hser__y).
-        rewrite (@par_rep'_unfold X).
-        rewrite HpOk.
-        pose proof (Hpro y out Hser__y) as Hpro__y.
-        rewrite App_Length.
-  Admitted.
+    - intros enc Hwf. destruct Hwf as [Hwf__y Hwf__rest].
+      unfold S.Rep, P.Rep.
+      intros Hser. rewrite SerialRepInversion_First in Hser.
+      destruct Hser as (enc__y & enc__rest & Hser__y & Hser__rest & Henc).
+      rewrite (@par_rep'_unfold X), Henc, App_Length.
+      specialize (HpOk y enc__y enc__rest Hwf__y Hser__y) as Hok__y.
+      rewrite Hok__y.
+      pose proof (Hpro y enc__y Hser__y) as Hpro__y.
+      destruct (decide (Length _ < _)); last lia.
+      specialize (IHys enc__rest Hwf__rest Hser__rest); unfold P.Rep in IHys.
+      rewrite IHys. reflexivity.
+  Qed.
 
   Lemma par_recur_unfold {X : Type} (underlying : Parser X -> Parser X) (inp : Input) :
     P.recur underlying inp =
