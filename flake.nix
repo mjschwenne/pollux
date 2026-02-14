@@ -35,6 +35,8 @@
             builtins.elem (pkgs.lib.getName pkg) [
               "antigravity"
               "antigravity-fhs"
+              "claude-code"
+              "claude-code-acp"
             ];
         };
         pollux-go = pkgs.callPackage ./pollux-go { };
@@ -118,6 +120,8 @@
 
               # nix helpers
               nix-update
+              claude-code
+              claude-code-acp
             ]
             ++ (with perennialPkgs; [
               rocq-runtime

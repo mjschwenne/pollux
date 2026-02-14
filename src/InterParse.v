@@ -11,6 +11,9 @@ From Pollux Require Import Parser.
 From Pollux Require Import Serializer.
 From Pollux Require Import Theorems.
 
+Require Import Stdlib.Arith.Wf_nat.
+Require Import Stdlib.Program.Wf.
+
 Open Scope Z_scope.
 
 Module InterParse.
@@ -196,6 +199,224 @@ Module InterParse.
     Compute Init desc2.
 
   End Desc.
+
+  Section Desc_Field_ind.
+
+    Definition map_size_sum (m : gmap Z Field) (f : Field -> nat) : nat :=
+      map_fold (λ _ v acc, f v + acc)%nat 0%nat m.
+
+    (** Structural size metrics for well-founded induction **)
+    Fixpoint Desc_size (d : Desc) : nat :=
+      match d with
+      | DESC fs => 1 + map_size_sum fs Field_size
+      end
+    with Field_size (f : Field) : nat :=
+           match f with
+           | F_MSG d => 1 + Desc_size d
+           | F_BOOL => 1
+           | F_INT => 1
+           end.
+
+    (** Every Field has positive size *)
+    Lemma Field_size_positive : ∀ f, (Field_size f > 0)%nat.
+    Proof. 
+      destruct f; simpl; lia. 
+    Qed.
+    
+    (** Every Desc has positive size *)
+    Lemma Desc_size_positive : ∀ d, (Desc_size d > 0)%nat.
+    Proof. 
+      destruct d; simpl; lia. 
+    Qed.
+    
+    (** Fields in a map are smaller than the containing descriptor *)
+    Lemma Field_in_map_smaller : 
+      ∀ k f (fs : gmap Z Field), 
+      fs !! k = Some f -> 
+      (Field_size f < S (map_fold (λ _ v acc, Field_size v + acc) 0 fs))%nat.
+    Proof.
+      intros k f m Hlookup.
+    Admitted.
+
+    (** When we insert a new field, elements from the old map remain smaller *)
+    Lemma map_elem_size_bound :
+      ∀ k f (fs : gmap Z Field) x,
+      fs !! k = None ->
+      (match x with
+       | inl d' => Desc_size d'
+       | inr f' => Field_size f'
+       end < S (map_fold (λ _ v acc, Field_size v + acc) 0 fs))%nat ->
+      (match x with
+       | inl d' => Desc_size d'
+       | inr f' => Field_size f'
+       end < S (map_fold (λ _ v acc, Field_size v + acc) 0 (<[k := f]> fs)))%nat.
+    Proof.
+      intros k f fs x Hno Hsize.
+      rewrite map_fold_insert_L.
+      - destruct x; simpl in *; 
+          pose proof (Field_size_positive f); lia.
+      - intros; lia.
+      - assumption.
+    Qed.
+    
+    (** ============================================
+      PART 2: Induction Principle Setup
+      ============================================ **)
+    
+    (** The predicates we want to prove for each type *)
+    Variable P_Desc : Desc -> Prop.
+    Variable P_Field : Field -> Prop.
+    
+    (** Constructor cases that must be proven **)
+    
+    (** For DESC: if all fields satisfy P_Field, then the descriptor satisfies P_Desc *)
+    Hypothesis DESC_case : 
+      ∀ fs, map_Forall (λ _ f, P_Field f) fs -> P_Desc (DESC fs).
+    
+    (** For F_MSG: if the nested descriptor satisfies P_Desc, then the field satisfies P_Field *)
+    Hypothesis F_MSG_case : 
+      ∀ d, P_Desc d -> P_Field (F_MSG d).
+    
+    (** For F_BOOL: the field satisfies P_Field *)
+    Hypothesis F_BOOL_case : 
+      P_Field F_BOOL.
+    
+    (** For F_INT: the field satisfies P_Field *)
+    Hypothesis F_INT_case : 
+      P_Field F_INT.
+
+    Lemma Desc_size_fold :
+      (fix Desc_size (d : Desc) : nat :=
+         match d with
+         | DESC fs0 => S (map_fold (λ (_ : Z) (v : Field) (acc : nat), Field_size v + acc) 0 fs0)
+         end
+       with Field_size (f0 : Field) : nat :=
+              match f0 with
+              | F_MSG d => S (Desc_size d)
+              | _ => 1
+              end
+                for
+                Desc_size)%nat = Desc_size.
+    Proof using Type.
+      reflexivity.
+    Qed.
+
+    Lemma Field_size_fold :
+      (fix Desc_size (d : Desc) : nat :=
+         match d with
+         | DESC fs0 => S (map_fold (λ (_ : Z) (v : Field) (acc : nat), Field_size v + acc) 0 fs0)
+         end
+       with Field_size (f0 : Field) : nat :=
+              match f0 with
+              | F_MSG d => S (Desc_size d)
+              | _ => 1
+              end
+                for
+                Field_size)%nat = Field_size.
+    Proof using Type.
+      reflexivity.
+    Qed.
+
+    (** 
+    Mutual induction principle for Desc and Field.
+    
+    PROOF STRATEGY:
+    1. Combine both predicates (P_Desc and P_Field) into a single predicate 
+       over the sum type (Desc + Field)
+    2. Apply well-founded induction on the size measure
+    3. Case split on whether we have a Desc (inl) or Field (inr)
+    4. For Desc: use map induction to prove P_Field for all fields in the map
+    5. For Field: handle each constructor (F_MSG, F_BOOL, F_INT)
+    6. All inductive calls are justified by strictly decreasing size
+    
+     **)
+    Theorem Desc_Field_ind_raw : (∀ d, P_Desc d) ∧ (∀ f, P_Field f).
+    Proof.
+      (** Step 1: Combine predicates into one over sum type **)
+      set (P_sum := λ x : Desc + Field, 
+             match x with 
+             | inl d => P_Desc d 
+             | inr f => P_Field f 
+             end).
+      
+      (* We'll prove ∀ x, P_sum x, then split back into the conjunction *)
+      cut (∀ x, P_sum x).
+      { intros H; split; intros; apply (H (inl _)) || apply (H (inr _)). }
+      
+      (** Step 2: Apply well-founded induction on size **)
+      apply (well_founded_ind 
+               (measure_wf lt_wf 
+                  (λ x : Desc + Field, 
+                     match x with 
+                     | inl d => Desc_size d 
+                     | inr f => Field_size f 
+                     end))).
+      
+      (* Now we have: ∀ x, (∀ y, size(y) < size(x) -> P_sum y) -> P_sum x *)
+      intros [d | f] IH; simpl in *.
+      
+      (** Step 3a: DESC case **)
+      - destruct d as [fs].
+        apply DESC_case.
+        
+        (* Use map induction to prove P_Field for all elements *)
+        induction fs as [| k f fs Hno Hfst] using map_first_key_ind.
+        
+        + (* Base case: empty map *)
+          apply map_Forall_empty.
+          
+        + (* Inductive case: map with first key k *)
+          rewrite map_Forall_insert; last assumption.
+          split.
+          
+          * (* Prove P_Field f for the first field *)
+            apply (IH (inr f)).
+            unfold Desc_size, map_size_sum, MR.
+            rewrite map_fold_insert_L.
+            -- simpl; rewrite ?Field_size_fold; 
+                 pose proof (Field_size_positive f); lia.
+            -- simpl; rewrite !Field_size_fold; intros; lia.
+            -- assumption.
+               
+          * (* Prove P_Field for all remaining fields using IHfs *)
+            apply IHfs.
+            intros x Hsize.
+            unfold MR in Hsize; simpl in Hsize.
+            apply (IH x).
+            apply map_elem_size_bound; auto.
+            
+      (** Step 3b: Field cases **)
+      - destruct f.
+        
+        + (* F_MSG case *)
+          apply F_MSG_case.
+          apply (IH (inl d)).
+          unfold Desc_size, map_size_sum, MR.
+          simpl; rewrite Desc_size_fold. lia.
+          
+        + (* F_BOOL case *)
+          apply F_BOOL_case.
+          
+        + (* F_INT case *)
+          apply F_INT_case.
+    Defined.
+
+    (** ============================================
+      PART 5: Extracted Principles
+      ============================================ **)
+    
+    (** Induction principle for Desc alone *)
+
+    Definition Descriptor_ind := proj1 Desc_Field_ind_raw.
+
+    (** Induction principle for Field alone *)
+    Definition Field_ind' : ∀ f, P_Field f := 
+    proj2 Desc_Field_ind_raw.
+    
+    (** Combined mutual induction principle *)
+    Definition Desc_Field_ind := Desc_Field_ind_raw.
+
+  End Desc_Field_ind.
 
   (** Encoding format *)
 
