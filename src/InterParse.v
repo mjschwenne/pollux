@@ -231,12 +231,32 @@ Module InterParse.
     
     (** Fields in a map are smaller than the containing descriptor *)
     Lemma Field_in_map_smaller : 
-      ∀ k f (fs : gmap Z Field), 
-      fs !! k = Some f -> 
-      (Field_size f < S (map_fold (λ _ v acc, Field_size v + acc) 0 fs))%nat.
+      ∀ (m : gmap Z Field) k f, 
+      m !! k = Some f -> 
+      (Field_size f < S (map_fold (λ _ v acc, Field_size v + acc) 0 m))%nat.
     Proof.
-      intros k f m Hlookup.
-    Admitted.
+      intros m k v.
+      induction m as [| k' v' m' Hno Hfst] using map_first_key_ind.
+      - (* Empty map case: contradiction *)
+        rewrite lookup_empty. discriminate.
+      - (* Non-empty map case *)
+        rewrite lookup_insert.
+        case_decide as Heq.
+        + (* k = k': we found the element *)
+          intro Hlookup. inversion Hlookup; subst; clear Hlookup.
+          rewrite map_fold_insert_L.
+          * simpl. lia.
+          * intros; lia.
+          * assumption.
+        + (* k ≠ k': element is in the rest *)
+          intro Hlookup.
+          rewrite map_fold_insert_L.
+          * simpl.
+            specialize (IHm Hlookup).
+            lia.
+          * intros; lia.
+          * assumption.
+    Qed.
 
     (** When we insert a new field, elements from the old map remain smaller *)
     Lemma map_elem_size_bound :
@@ -417,6 +437,251 @@ Module InterParse.
     Definition Desc_Field_ind := Desc_Field_ind_raw.
 
   End Desc_Field_ind.
+
+  Section Value_Val_ind.
+
+    Definition val_map_size_sum (m : gmap Z Val) (f : Val -> nat) : nat :=
+      map_fold (λ _ v acc, f v + acc)%nat 0%nat m.
+
+    (** Structural size metrics for well-founded induction ***)
+    Fixpoint Value_size (v : Value) : nat :=
+      match v with
+      | VALUE vs => 1 + val_map_size_sum vs Val_size
+      end
+    with Val_size (v : Val) : nat :=
+           match v with
+           | V_MSG val => 1 + Value_size val
+           | V_BOOL _ => 1
+           | V_INT _ => 1
+           | V_MISSING => 1
+           end.
+
+    (** Every Val has positive size **)
+    Lemma Val_size_positive : ∀ v, (Val_size v > 0)%nat.
+    Proof.
+      destruct v; simpl; lia.
+    Qed.
+
+    (** Every Value has positive size **)
+    Lemma Value_size_positive : ∀ v, (Value_size v > 0)%nat.
+    Proof.
+      destruct v; simpl; lia.
+    Qed.
+
+    (** Vals in a map are smaller than the containing value **)
+    Lemma Val_in_map_smaller :
+      ∀ (m : gmap Z Val) k v,
+      m !! k = Some v ->
+      (Val_size v < S (map_fold (λ _ v acc, Val_size v + acc) 0 m))%nat.
+    Proof.
+      intros m k v.
+      induction m as [| k' v' m' Hno Hfst] using map_first_key_ind.
+      - (* Empty map case: contradiction *)
+        rewrite lookup_empty. discriminate.
+      - (* Non-empty map case *)
+        rewrite lookup_insert.
+        case_decide as Heq.
+        + (* k = k': we found the element *)
+          intro Hlookup. inversion Hlookup; subst; clear Hlookup.
+          rewrite map_fold_insert_L.
+          * simpl. lia.
+          * intros; lia.
+          * assumption.
+        + (* k ≠ k': element is in the rest *)
+          intro Hlookup.
+          rewrite map_fold_insert_L.
+          * simpl.
+            specialize (IHm Hlookup).
+            lia.
+          * intros; lia.
+          * assumption.
+    Qed.
+
+    (** When we insert a new val, elements from the old map remain smaller **)
+    Lemma val_map_elem_size_bound :
+      ∀ k v (vs : gmap Z Val) x,
+      vs !! k = None ->
+      (match x with
+       | inl val' => Value_size val'
+       | inr v' => Val_size v'
+       end < S (map_fold (λ _ v acc, Val_size v + acc) 0 vs))%nat ->
+      (match x with
+       | inl val' => Value_size val'
+       | inr v' => Val_size v'
+       end < S (map_fold (λ _ v acc, Val_size v + acc) 0 (<[k := v]> vs)))%nat.
+    Proof.
+      intros k v vs x Hno Hsize.
+      rewrite map_fold_insert_L.
+      - destruct x; simpl in *;
+          pose proof (Val_size_positive v); lia.
+      - intros; lia.
+      - assumption.
+    Qed.
+
+    (** ============================================
+      PART 2: Induction Principle Setup
+      ============================================ ***)
+
+    (** The predicates we want to prove for each type **)
+    Variable P_Value : Value -> Prop.
+    Variable P_Val : Val -> Prop.
+
+    (** Constructor cases that must be proven ***)
+
+    (** For VALUE: if all vals satisfy P_Val, then the value satisfies P_Value **)
+    Hypothesis VALUE_case :
+      ∀ vs, map_Forall (λ _ v, P_Val v) vs -> P_Value (VALUE vs).
+
+    (** For V_MSG: if the nested value satisfies P_Value, then the val satisfies P_Val **)
+    Hypothesis V_MSG_case :
+      ∀ v, P_Value v -> P_Val (V_MSG v).
+
+    (** For V_BOOL: the val satisfies P_Val **)
+    Hypothesis V_BOOL_case :
+      ∀ b, P_Val (V_BOOL b).
+
+    (** For V_INT: the val satisfies P_Val **)
+    Hypothesis V_INT_case :
+      ∀ z, P_Val (V_INT z).
+
+    (** For V_MISSING: the val satisfies P_Val **)
+    Hypothesis V_MISSING_case :
+      P_Val V_MISSING.
+
+    Lemma Value_size_fold :
+      (fix Value_size (v : Value) : nat :=
+         match v with
+         | VALUE vs0 => S (map_fold (λ (_ : Z) (v : Val) (acc : nat), Val_size v + acc) 0 vs0)
+         end
+       with Val_size (v0 : Val) : nat :=
+              match v0 with
+              | V_MSG val => S (Value_size val)
+              | _ => 1
+              end
+                for
+                Value_size)%nat = Value_size.
+    Proof using Type.
+      reflexivity.
+    Qed.
+
+    Lemma Val_size_fold :
+      (fix Value_size (v : Value) : nat :=
+         match v with
+         | VALUE vs0 => S (map_fold (λ (_ : Z) (v : Val) (acc : nat), Val_size v + acc) 0 vs0)
+         end
+       with Val_size (v0 : Val) : nat :=
+              match v0 with
+              | V_MSG val => S (Value_size val)
+              | _ => 1
+              end
+                for
+                Val_size)%nat = Val_size.
+    Proof using Type.
+      reflexivity.
+    Qed.
+
+    (**
+    Mutual induction principle for Value and Val.
+
+    PROOF STRATEGY:
+    1. Combine both predicates (P_Value and P_Val) into a single predicate
+       over the sum type (Value + Val)
+    2. Apply well-founded induction on the size measure
+    3. Case split on whether we have a Value (inl) or Val (inr)
+    4. For Value: use map induction to prove P_Val for all vals in the map
+    5. For Val: handle each constructor (V_MSG, V_BOOL, V_INT, V_MISSING)
+    6. All inductive calls are justified by strictly decreasing size
+
+     ***)
+    Theorem Value_Val_ind_raw : (∀ v, P_Value v) ∧ (∀ v, P_Val v).
+    Proof.
+      (** Step 1: Combine predicates into one over sum type ***)
+      set (P_sum := λ x : Value + Val,
+             match x with
+             | inl v => P_Value v
+             | inr v => P_Val v
+             end).
+
+      (* We'll prove ∀ x, P_sum x, then split back into the conjunction *)
+      cut (∀ x, P_sum x).
+      { intros H; split; intros; apply (H (inl _)) || apply (H (inr _)). }
+
+      (** Step 2: Apply well-founded induction on size ***)
+      apply (well_founded_ind
+               (measure_wf lt_wf
+                  (λ x : Value + Val,
+                     match x with
+                     | inl v => Value_size v
+                     | inr v => Val_size v
+                     end))).
+
+      (* Now we have: ∀ x, (∀ y, size(y) < size(x) -> P_sum y) -> P_sum x *)
+      intros [v | v] IH; simpl in *.
+
+      (** Step 3a: VALUE case ***)
+      - destruct v as [vs].
+        apply VALUE_case.
+
+        (* Use map induction to prove P_Val for all elements *)
+        induction vs as [| k v vs Hno Hfst] using map_first_key_ind.
+
+        + (* Base case: empty map *)
+          apply map_Forall_empty.
+
+        + (* Inductive case: map with first key k *)
+          rewrite map_Forall_insert; last assumption.
+          split.
+
+          * (* Prove P_Val v for the first val *)
+            apply (IH (inr v)).
+            unfold Value_size, val_map_size_sum, MR.
+            rewrite map_fold_insert_L.
+            -- simpl; rewrite ?Val_size_fold;
+                 pose proof (Val_size_positive v); lia.
+            -- simpl; rewrite !Val_size_fold; intros; lia.
+            -- assumption.
+
+          * (* Prove P_Val for all remaining vals using IHvs *)
+            apply IHvs.
+            intros x Hsize.
+            unfold MR in Hsize; simpl in Hsize.
+            apply (IH x).
+            apply val_map_elem_size_bound; auto.
+
+      (** Step 3b: Val cases ***)
+      - destruct v.
+
+        + (* V_MSG case *)
+          apply V_MSG_case.
+          apply (IH (inl v)).
+          unfold Value_size, val_map_size_sum, MR.
+          simpl; rewrite Value_size_fold. lia.
+
+        + (* V_BOOL case *)
+          apply V_BOOL_case.
+
+        + (* V_INT case *)
+          apply V_INT_case.
+
+        + (* V_MISSING case *)
+          apply V_MISSING_case.
+    Defined.
+
+    (** ============================================
+      PART 5: Extracted Principles
+      ============================================ ***)
+
+    (** Induction principle for Value alone **)
+    Definition Value_ind' := proj1 Value_Val_ind_raw.
+
+    (** Induction principle for Val alone **)
+    Definition Val_ind' : ∀ v, P_Val v :=
+      proj2 Value_Val_ind_raw.
+
+    (** Combined mutual induction principle **)
+    Definition Value_Val_ind := Value_Val_ind_raw.
+
+  End Value_Val_ind.
 
   (** Encoding format *)
 
