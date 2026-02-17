@@ -433,6 +433,12 @@ Module Theorems (InputModule : AbstractInput).
         repeat split; assumption.
   Qed.
 
+
+  Lemma SerialRepSubst {X : Type} {wfx : X -> Prop} (ser1 ser2 : S.Serializer X wfx) :
+    forall xs, (forall x, x ∈ xs -> ser1 x = ser2 x) -> S.Rep ser1 xs = S.Rep ser2 xs.
+    Proof.
+    Admitted.
+
   Lemma RepCorrect {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) (par__x : Parser X) :
     (* TODO: Split this into a typeclass. Make one for consuming parsers too. *)
     (exists msg, par__x Input_default = P.Failure P.Failure.Recoverable $ P.Failure.mkData msg Input_default None) ->
