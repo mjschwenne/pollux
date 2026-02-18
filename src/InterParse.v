@@ -159,6 +159,46 @@ Module InterParse.
            | V_MISSING => True /\ acc (* While the True isn't needed, the uniform structure helps proofs *)
            end.
 
+    Lemma Valid'_fold :
+      (fix Valid' (d : Desc) (v0 : Value) {struct v0} : Prop :=
+         match d with
+         | DESC fs0 => match v0 with
+                      | VALUE vs => map_fold (Valid'__fold fs0) True vs
+                      end
+         end
+       with Valid'__fold (fs0 : gmap Z Field) (k0 : Z) (v0 : Val) (acc : Prop) {struct v0} : Prop :=
+              match v0 with
+              | V_MSG value => (∃ d : Desc, fs0 !! k0 = Some (F_MSG d) ∧ Valid' d value) ∧ acc
+              | V_BOOL _ => fs0 !! k0 = Some F_BOOL ∧ acc
+              | V_INT _ => fs0 !! k0 = Some F_INT ∧ acc
+              | V_MISSING => True ∧ acc
+              end
+                for
+                Valid')%nat = Valid'.
+    Proof using Type.
+      reflexivity.
+    Qed.
+
+    Lemma Valid'__fold_fold :
+      (fix Valid' (d : Desc) (v0 : Value) {struct v0} : Prop :=
+         match d with
+         | DESC fs0 => match v0 with
+                      | VALUE vs => map_fold (Valid'__fold fs0) True vs
+                      end
+         end
+       with Valid'__fold (fs0 : gmap Z Field) (k0 : Z) (v0 : Val) (acc : Prop) {struct v0} : Prop :=
+              match v0 with
+              | V_MSG value => (∃ d : Desc, fs0 !! k0 = Some (F_MSG d) ∧ Valid' d value) ∧ acc
+              | V_BOOL _ => fs0 !! k0 = Some F_BOOL ∧ acc
+              | V_INT _ => fs0 !! k0 = Some F_INT ∧ acc
+              | V_MISSING => True ∧ acc
+              end
+                for
+                Valid'__fold)%nat = Valid'__fold.
+    Proof using Type.
+      reflexivity.
+    Qed.
+
     Definition desc1 := DESC (list_to_map [
                                   (1, F_BOOL);
                                   (2, F_INT)
@@ -882,6 +922,38 @@ Module InterParse.
            | V_MSG v' => acc `max` (ValueDepth v' + 1)
            end.
 
+    Lemma ValueDepth_fold :
+      (fix ValueDepth (v0 : Value) : nat :=
+         match v0 with
+         | VALUE vs => map_fold ValueDepth__fold 0 vs
+         end
+       with ValueDepth__fold (k0 : Z) (v0 : Val) (acc : nat) {struct v0} : nat :=
+              match v0 with
+              | V_MSG v' => acc `max` (ValueDepth v' + 1)
+              | _ => acc
+              end
+                for
+                ValueDepth)%nat = ValueDepth.
+    Proof using Type.
+      reflexivity.
+    Qed.
+
+    Lemma ValueDepth__fold_fold :
+      (fix ValueDepth (v0 : Value) : nat :=
+         match v0 with
+         | VALUE vs => map_fold ValueDepth__fold 0 vs
+         end
+       with ValueDepth__fold (k0 : Z) (v0 : Val) (acc : nat) {struct v0} : nat :=
+              match v0 with
+              | V_MSG v' => acc `max` (ValueDepth v' + 1)
+              | _ => acc
+              end
+                for
+                ValueDepth__fold)%nat = ValueDepth__fold.
+    Proof using Type.
+      reflexivity.
+    Qed.
+
     Compute ValueDepth val1. 
     Compute ValueDepth val2.
     Compute ValueDepth val3.
@@ -1084,69 +1156,18 @@ Module InterParse.
     Lemma ValueDepthDropFirst :
       forall z v vs,
       vs !! z = None -> map_first_key (<[z := v]> vs) z ->
-      (forall v', v <> V_MSG v') ->
-      ValueDepth (VALUE $ <[z := v]> vs) = ValueDepth (VALUE vs).
-    Proof.
-      intros z v vs Hno Hfst HnotMsg.
-      destruct v; first (specialize (HnotMsg v); contradiction).
-      all: (
-             unfold ValueDepth at 1;
-             rewrite map_fold_insert_first_key by assumption;
-             reflexivity
-           ).
-    Qed.
-
-    Lemma ValueDepthDropFirstMsg :
-      forall z v vs,
-      vs !! z = None -> map_first_key (<[z := V_MSG v]> vs) z ->
-      (ValueDepth (VALUE vs) <= ValueDepth (VALUE $ <[z := V_MSG v]> vs))%nat.
+      (ValueDepth (VALUE vs) <= ValueDepth (VALUE $ <[z := v]> vs))%nat.
     Proof.
       intros z v vs Hno Hfst.
-      unfold ValueDepth at 2.
-      rewrite map_fold_insert_first_key by assumption.
-      fold (ValueDepth (VALUE vs)).
-      fold (ValueDepth v).
-      lia.
-    Qed.
-
-    Lemma Valid'_fold :
-      (fix Valid' (d : Desc) (v0 : Value) {struct v0} : Prop :=
-         match d with
-         | DESC fs0 => match v0 with
-                      | VALUE vs => map_fold (Valid'__fold fs0) True vs
-                      end
-         end
-       with Valid'__fold (fs0 : gmap Z Field) (k0 : Z) (v0 : Val) (acc : Prop) {struct v0} : Prop :=
-              match v0 with
-              | V_MSG value => (∃ d : Desc, fs0 !! k0 = Some (F_MSG d) ∧ Valid' d value) ∧ acc
-              | V_BOOL _ => fs0 !! k0 = Some F_BOOL ∧ acc
-              | V_INT _ => fs0 !! k0 = Some F_INT ∧ acc
-              | V_MISSING => True ∧ acc
-              end
-                for
-                Valid')%nat = Valid'.
-    Proof using Type.
-      reflexivity.
-    Qed.
-
-    Lemma Valid'__fold_fold :
-      (fix Valid' (d : Desc) (v0 : Value) {struct v0} : Prop :=
-         match d with
-         | DESC fs0 => match v0 with
-                      | VALUE vs => map_fold (Valid'__fold fs0) True vs
-                      end
-         end
-       with Valid'__fold (fs0 : gmap Z Field) (k0 : Z) (v0 : Val) (acc : Prop) {struct v0} : Prop :=
-              match v0 with
-              | V_MSG value => (∃ d : Desc, fs0 !! k0 = Some (F_MSG d) ∧ Valid' d value) ∧ acc
-              | V_BOOL _ => fs0 !! k0 = Some F_BOOL ∧ acc
-              | V_INT _ => fs0 !! k0 = Some F_INT ∧ acc
-              | V_MISSING => True ∧ acc
-              end
-                for
-                Valid'__fold)%nat = Valid'__fold.
-    Proof using Type.
-      reflexivity.
+      destruct v;
+        unfold ValueDepth at 2;
+        rewrite map_fold_insert_first_key by assumption.
+      - fold (ValueDepth (VALUE vs)).
+        fold (ValueDepth v).
+        lia.
+      - reflexivity.
+      - reflexivity.
+      - reflexivity.
     Qed.
 
     Lemma ValidInsert (d : Desc) (k : Z) (v : Val) (m : gmap Z Val) :
@@ -1203,16 +1224,74 @@ Module InterParse.
       m !! k = Some (V_MSG v) ->
       (ValueDepth v < ValueDepth (VALUE m))%nat.
     Proof.
-      intros m k v Hlookup.
-      (* Simplified proof: Just unfold and use the structure of ValueDepth *)
-      unfold ValueDepth.
-      (* By structural analysis: if m !! k = Some (V_MSG v), then when we fold
-         over m, we encounter V_MSG v at key k, which contributes ValueDepth v + 1
-         to the accumulator's max. Since the final result is this max, we have
-         ValueDepth v < final_result *)
-      (* This is actually provable without induction using just the definition *)
-      (* For now, admit this - it's intuitively obvious but requires careful reasoning about map_fold *)
-      admit.
+      intros m k v.
+      induction m as [| k' v' m' Hno Hfst] using map_first_key_ind.
+      - (* Empty map case: contradiction *)
+        rewrite lookup_empty. discriminate.
+      - (* Non-empty map case *)
+        rewrite lookup_insert.
+        case_decide as Heq.
+        + (* k = k': we found the element *)
+          intro Hlookup. inversion Hlookup; subst; clear Hlookup.
+          unfold ValueDepth at 2.
+          rewrite map_fold_insert_L.
+          * rewrite ValueDepth_fold, ValueDepth__fold_fold.
+            lia.
+          * intros. simpl. rewrite ValueDepth__fold_fold.
+            destruct z1, z2; unfold ValueDepth__fold; lia.
+          * assumption.
+        + (* k ≠ k': element is in the rest *)
+          intro Hlookup.
+          unfold ValueDepth at 2.
+          rewrite map_fold_insert_L.
+          * simpl.
+            specialize (IHm Hlookup).
+            rewrite ValueDepth__fold_fold.
+            change (map_fold ValueDepth__fold 0%nat m') with (ValueDepth (VALUE m')).
+            destruct v'; unfold ValueDepth__fold; lia.
+          * intros; simpl; rewrite ValueDepth__fold_fold.
+            destruct z1, z2; unfold ValueDepth__fold; lia.
+          * assumption.
+    Qed.
+
+    Lemma SerialValWeakenDepth (d : Desc) (k : Z) (v : Val) (m : gmap Z Val) : 
+      m !! k = None -> map_first_key (<[k := v]> m) k ->
+      forall kv,
+      kv ∈ map_to_list m ->
+      SerialVal (λ (st__n : Desc) (x__n : Value),
+                   if decide (ValueDepth x__n < ValueDepth (VALUE (<[k:=v]> m)))%nat
+                   then @S.recur_st _ _ Value_wf SerialValue' ValueDepth st__n x__n
+                   else S.RecursiveProgressError "Serial.RecursiveState" ValueDepth (VALUE (<[k:=v]> m)) x__n)
+        d kv =
+      SerialVal (λ (st__n : Desc) (x__n : Value),
+                   if decide (ValueDepth x__n < ValueDepth (VALUE m))%nat
+                   then @S.recur_st _ _ Value_wf SerialValue' ValueDepth st__n x__n
+                   else S.RecursiveProgressError "Serial.RecursiveState" ValueDepth (VALUE m) x__n)
+        d kv.
+    Proof.
+      intros Hnone Hfst [key val] Hin.
+      unfold SerialVal.
+      (* The serializers only differ in recursive calls on V_MSG values *)
+      destruct ((Fields d) !! key); try reflexivity.
+      destruct f; try reflexivity.
+      (* For F_MSG, we need to show the depth checks evaluate the same *)
+      destruct val as [val | z | b |]; try reflexivity.
+      (* For V_MSG v0, both depth checks should be true since v0 comes from m *)
+      unfold S.Bind', S.Concat.
+      destruct (SerialUnsigned key); last reflexivity.
+      unfold S.Len'.
+      (* Show that both decide expressions evaluate to true *)
+      rewrite elem_of_map_to_list in Hin.
+      pose proof (ValueDepthDropFirst k v m Hnone Hfst) as Hdepth. 
+      destruct (decide (ValueDepth val < ValueDepth (VALUE m))%nat) eqn:Hm.
+      - destruct (decide (ValueDepth val < ValueDepth (VALUE (<[k := v]> m)))%nat) eqn:Hn;
+          (reflexivity || lia).
+      - destruct (decide (ValueDepth val < ValueDepth (VALUE (<[k := v]> m)))%nat) eqn:Hn.
+        + pose proof (Val_in_map_smaller_depth m key val Hin). lia.
+        + unfold S.RecursiveProgressError.
+          destruct (ValueDepth val == ValueDepth (VALUE m)),
+                     (* TODO: Will probably have to remove error handling from the combinators... *)
+                     (ValueDepth val == ValueDepth (VALUE (<[k := v]> m))). all: admit.
     Admitted.
 
     Lemma SerializeValueInversion (d : Desc) :
@@ -1223,6 +1302,7 @@ Module InterParse.
                       SerialVal (SerialValue) d (k, v) = S.Success enc__v /\
                       enc = App enc__v enc__rest.
     Proof.
+      intros k v m enc Hnone Hfst.
       split.
       - unfold SerialValue at 1, S.RecursiveState.
         rewrite ser_recur_st_unfold.
@@ -1240,120 +1320,54 @@ Module InterParse.
           (* and ValueDepth (VALUE m) <= ValueDepth (VALUE (<[k:=v]> m)) *)
 
           (* First establish the depth relationship *)
-          assert (Hdepth_le: (ValueDepth (VALUE m) <= ValueDepth (VALUE (<[k:=v]> m)))%nat).
-          {
-            destruct v eqn:Hv.
-            - (* V_MSG case: use ValueDepthDropFirstMsg *)
-              apply ValueDepthDropFirstMsg; assumption.
-            - (* V_BOOL case: depth stays the same *)
-              rewrite ValueDepthDropFirst; try assumption.
-              + lia.
-              + intros v'. discriminate.
-            - (* V_INT case: depth stays the same *)
-              rewrite ValueDepthDropFirst; try assumption.
-              + lia.
-              + intros v'. discriminate.
-            - (* V_MISSING case: depth stays the same *)
-              rewrite ValueDepthDropFirst; try assumption.
-              + lia.
-              + intros v'. discriminate.
-          }
+          pose proof (ValueDepthDropFirst k v m Hnone Hfst) as Hdepth_le.
 
           (* Now we need to show S.rep' with both serializers gives the same result *)
           (* Key strategy: prove by asserting that for any element in map_to_list m,
              both depth checks will evaluate the same way, so both serializers are equal *)
 
-          (* The proof proceeds by showing that Hrest_ok already gives us what we need,
-             just with a looser bound that doesn't affect the result *)
-
-          (* Use generalization to abstract over the specific depth values *)
-          assert (Hserializer_equiv: forall kv,
-            kv ∈ map_to_list m ->
-            SerialVal (λ (st__n : Desc) (x__n : Value),
-              if decide (ValueDepth x__n < ValueDepth (VALUE (<[k:=v]> m)))%nat
-              then @S.recur_st _ _ Value_wf SerialValue' ValueDepth st__n x__n
-              else S.RecursiveProgressError "Serial.RecursiveState" ValueDepth (VALUE (<[k:=v]> m)) x__n)
-              d kv =
-            SerialVal (λ (st__n : Desc) (x__n : Value),
-              if decide (ValueDepth x__n < ValueDepth (VALUE m))%nat
-              then @S.recur_st _ _ Value_wf SerialValue' ValueDepth st__n x__n
-              else S.RecursiveProgressError "Serial.RecursiveState" ValueDepth (VALUE m) x__n)
-              d kv).
-          {
-            intros [key val] Hin.
-            unfold SerialVal.
-            (* The serializers only differ in recursive calls on V_MSG values *)
-            destruct ((Fields d) !! key); try reflexivity.
-            destruct f; try reflexivity.
-            (* For F_MSG, we need to show the depth checks evaluate the same *)
-            destruct val; try reflexivity.
-            (* For V_MSG v0, both depth checks should be true since v0 comes from m *)
-            unfold S.Bind', S.Concat.
-            destruct (SerialUnsigned key); last reflexivity.
-            unfold S.Len'.
-            (* Show that both decide expressions evaluate to true *)
-            assert (Hlookup: m !! key = Some (V_MSG v0)).
-            {
-              (* (key, V_MSG v0) ∈ map_to_list m implies m !! key = Some (V_MSG v0) *)
-              apply elem_of_map_to_list in Hin.
-              assumption.
-            }
-            destruct (decide (ValueDepth v0 < ValueDepth (VALUE m))%nat) eqn:Hm.
-            * destruct (decide (ValueDepth v0 < ValueDepth (VALUE (<[k := v]> m)))%nat) eqn:Hn;
-                (reflexivity || lia).
-            * destruct (decide (ValueDepth v0 < ValueDepth (VALUE (<[k := v]> m)))%nat) eqn:Hn.
-              + pose proof (Val_in_map_smaller_depth m key v0 Hlookup). lia.
-              + unfold S.RecursiveProgressError.
-                destruct (ValueDepth v0 == ValueDepth (VALUE m)), (ValueDepth v0 == ValueDepth (VALUE (<[k := v]> m))); admit.
-          }
-
-          (* Now use the equivalence to transform Hrest_ok into what we need *)
-          (* Apply induction on map_to_list m to show both S.rep' calls are equal *)
-          (* clear Hdepth_le. (* No longer needed *) *)
-
-          generalize dependent enc__rest.
-          induction (map_to_list m) as [|[k' v'] xs IH].
-          -- (* Empty map case *)
-             intros enc__rest Hrest_ok.
-             unfold S.Rep in Hrest_ok.
-             rewrite !ser_rep'_unfold in *.
-             assumption.
-          -- (* Non-empty map case *)
-             intros enc__rest Hrest_ok.
-             unfold S.Rep in *.
-             rewrite !ser_rep'_unfold in *.
-             (* Use Hserializer_equiv to rewrite the first element serialization *)
-             assert (H_equiv_first:
-               SerialVal (λ st__n x__n,
-                 if decide (ValueDepth x__n < ValueDepth (VALUE (<[k:=v]> m)))%nat
-                 then @S.recur_st _ _ Value_wf SerialValue' ValueDepth st__n x__n
-                 else S.RecursiveProgressError "Serial.RecursiveState" ValueDepth (VALUE (<[k:=v]> m)) x__n) d (k', v') =
-               SerialVal (λ st__n x__n,
-                 if decide (ValueDepth x__n < ValueDepth (VALUE m))%nat
-                 then @S.recur_st _ _ Value_wf SerialValue' ValueDepth st__n x__n
-                 else S.RecursiveProgressError "Serial.RecursiveState" ValueDepth (VALUE m) x__n) d (k', v')).
-             { apply Hserializer_equiv. apply list_elem_of_here. }
-             (* Rewrite the first element serialization using equivalence *)
-             unfold SerialValue' in H_equiv_first.
-        (*      rewrite <- H_equiv_first in Hrest_ok. *)
-        (*      (* Pattern match on serialization results *) *)
-        (*      destruct (SerialVal _ d (k', v')) as [enc_first|] eqn:Hser_first; [|discriminate]. *)
-        (*      destruct (S.rep' _ xs) as [enc_tail|] eqn:Hser_tail; [|discriminate]. *)
-        (*      (* Hrest_ok is now: S.Success (App enc_first enc_tail) = S.Success enc__rest *) *)
-        (*      injection Hrest_ok as Henc__rest. subst enc__rest. *)
-        (*      (* Now apply IH to show the tail serializes correctly *) *)
-        (*      f_equal. *)
-        (*      apply IH. *)
-        (*      { (* Need to show serializer_equiv for all elements in xs *) *)
-        (*        intros kv Hkv_in. *)
-        (*        apply Hserializer_equiv. *)
-        (*        apply list_elem_of_tail. *)
-        (*        assumption. *)
-        (*      } *)
-        (*      assumption. *)
-        (* * split; assumption. *)
-             admit.
-        * admit.
+          (* TODO Clean this up *)
+          set (ser__deep :=
+                 (SerialVal
+                    (λ (st__n : Desc) (x__n : Value),
+                       if decide (ValueDepth x__n < ValueDepth (VALUE (<[k:=v]> m)))%nat
+                       then
+                         S.recur_st
+                           (λ (self : Desc → Serializer Value Value_wf) (d : Desc) (a : Value),
+                              @S.Rep _ Val_wf (SerialVal self d) (map_to_list match a with
+                                                                    | VALUE vs => vs
+                                                                    end))
+                           ValueDepth st__n x__n
+                       else S.RecursiveProgressError "Serial.RecursiveState" ValueDepth (VALUE (<[k:=v]> m)) x__n)
+                    d)
+              ).
+          rewrite SerialRepSubst with (ser2 := ser__deep);
+            (* For some reason, the 'by' tactical isn't working here. *)
+            first (unfold ser__deep; assumption).
+          unfold ser__deep.
+          pose proof (SerialValWeakenDepth d k v m Hnone Hfst).
+          symmetry in H.
+          apply H.
+        * split; last reflexivity.
+          change (
+            (λ (self : Desc → Serializer Value Value_wf) (d : Desc) (a : Value),
+               S.Rep (SerialVal self d) (map_to_list match a with
+                                                     | VALUE vs => vs
+                                                     end))
+            ) with SerialValue' in Hv_ok.
+          rewrite <- Hv_ok.
+          unfold SerialVal.
+          destruct (Fields d !! k); last reflexivity.
+          destruct f; try reflexivity.
+          destruct v; try reflexivity.
+          unfold S.Bind', S.Concat.
+          destruct (SerialUnsigned k); last reflexivity.
+          unfold S.Len'.
+          case_eq (decide (ValueDepth v < ValueDepth (VALUE (<[k := V_MSG v]> m))))%nat.
+          -- intros Hdep _. unfold SerialValue, S.RecursiveState. reflexivity.
+          -- intros Hdep _. pose proof (lookup_insert_eq m k (V_MSG v)) as Hlookup.
+             pose proof (Val_in_map_smaller_depth (<[k := V_MSG v]> m) k v Hlookup).
+             contradiction.
       - (* Reverse direction: <- *)
         admit.
     Admitted.

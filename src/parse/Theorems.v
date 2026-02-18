@@ -436,8 +436,24 @@ Module Theorems (InputModule : AbstractInput).
 
   Lemma SerialRepSubst {X : Type} {wfx : X -> Prop} (ser1 ser2 : S.Serializer X wfx) :
     forall xs, (forall x, x ∈ xs -> ser1 x = ser2 x) -> S.Rep ser1 xs = S.Rep ser2 xs.
-    Proof.
-    Admitted.
+  Proof using Type.
+    intros xs Heq.
+    induction xs.
+    - reflexivity.
+    - unfold S.Rep.
+      rewrite ser_rep'_unfold.
+      rewrite Heq by apply list_elem_of_here.
+      rewrite (ser_rep'_unfold ser2).
+      destruct (ser2 a).
+      + unfold S.Rep in IHxs; rewrite IHxs; first reflexivity.
+        intros x Helem.
+        apply list_elem_of_further with (y := a) in Helem.
+        apply Heq. assumption.
+      + unfold S.Rep in IHxs; rewrite IHxs; first reflexivity.
+        intros x Helem.
+        apply list_elem_of_further with (y := a) in Helem.
+        apply Heq. assumption.
+  Qed.
 
   Lemma RepCorrect {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) (par__x : Parser X) :
     (* TODO: Split this into a typeclass. Make one for consuming parsers too. *)
