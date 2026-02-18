@@ -83,20 +83,23 @@ Module InterParse.
 
     Fixpoint Init (d : Desc) : Value :=
       match d with
-      | DESC fs => VALUE $ map_fold (Init__fold) gmap_empty fs
+      | DESC fs => VALUE $ map_fold (InitFold) gmap_empty fs
       end
-    with Init__fold (k : Z) (f : Field) (acc : gmap Z Val) : gmap Z Val :=
+    with InitFold (k : Z) (f : Field) (acc : gmap Z Val) : gmap Z Val :=
            match f with
            | F_MSG d => <[ k := V_MSG (Init d) ]> acc
            | _ => <[ k := V_MISSING ]> acc
            end.
 
+    Definition Init_eq := mk_eq Init.
+    Definition InitFold_eq := mk_eq InitFold.
+
     (* v1 ⊆ v2 *)
     Fixpoint Subset (v1 v2 : Value) : bool :=
       match v1, v2 with
-      | VALUE vs1, VALUE vs2 => map_fold (Subset__fold vs2) true vs1
+      | VALUE vs1, VALUE vs2 => map_fold (SubsetFold vs2) true vs1
       end
-    with Subset__fold (vs : gmap Z Val) (k : Z) (v : Val) (acc : bool) : bool :=
+    with SubsetFold (vs : gmap Z Val) (k : Z) (v : Val) (acc : bool) : bool :=
            if negb acc then
              (* If we already know it isn't a subset, just feed forward *)
              acc
@@ -120,6 +123,8 @@ Module InterParse.
                                  end
              | None => false
              end.
+    Definition Subset_eq := mk_eq Subset.
+    Definition SubsetFold_eq := mk_eq SubsetFold.
 
     Definition Eqb (v1 v2 : Value) : bool := andb (Subset v1 v2) (Subset v2 v1).
 
@@ -137,67 +142,32 @@ Module InterParse.
 
     Fixpoint Valid (d : Desc) (v : Value) : Prop :=
       match d, v with
-      | DESC fs, VALUE vs => map_fold (Valid__fold vs) True fs
+      | DESC fs, VALUE vs => map_fold (ValidFold vs) True fs
       end
-    with Valid__fold (vs : gmap Z Val) (k : Z) (f : Field) (acc : Prop) : Prop :=
+    with ValidFold (vs : gmap Z Val) (k : Z) (f : Field) (acc : Prop) : Prop :=
            match f with
            | F_BOOL => acc /\ exists b, vs !! k = Some (V_BOOL b)
            | F_INT => acc /\ exists z, vs !! k = Some (V_INT z)
            | F_MSG d => acc /\ exists v, vs !! k = Some (V_MSG v) /\ Valid d v
            end.
-    Opaque Valid.
+    Definition Valid_eq := mk_eq Valid.
+    Definition ValidFold_eq := mk_eq ValidFold.
 
     Fixpoint Valid' (d : Desc) (v : Value) : Prop :=
       match d, v with
-      | DESC fs, VALUE vs => map_fold (Valid'__fold fs) True vs
+      | DESC fs, VALUE vs => map_fold (Valid'Fold fs) True vs
       end
-    with Valid'__fold (fs : gmap Z Field) (k : Z) (v : Val) (acc : Prop) : Prop :=
+    with Valid'Fold (fs : gmap Z Field) (k : Z) (v : Val) (acc : Prop) : Prop :=
            match v with
            | V_BOOL _ => fs !! k = Some F_BOOL /\ acc
            | V_INT _ => fs !! k = Some F_INT /\ acc
            | V_MSG value => (exists d, fs !! k = Some (F_MSG d) /\ Valid' d value) /\ acc
-           | V_MISSING => True /\ acc (* While the True isn't needed, the uniform structure helps proofs *)
+             (* While the True isn't needed, the uniform structure helps proofs *)
+           | V_MISSING => True /\ acc
            end.
 
-    Lemma Valid'_fold :
-      (fix Valid' (d : Desc) (v0 : Value) {struct v0} : Prop :=
-         match d with
-         | DESC fs0 => match v0 with
-                      | VALUE vs => map_fold (Valid'__fold fs0) True vs
-                      end
-         end
-       with Valid'__fold (fs0 : gmap Z Field) (k0 : Z) (v0 : Val) (acc : Prop) {struct v0} : Prop :=
-              match v0 with
-              | V_MSG value => (∃ d : Desc, fs0 !! k0 = Some (F_MSG d) ∧ Valid' d value) ∧ acc
-              | V_BOOL _ => fs0 !! k0 = Some F_BOOL ∧ acc
-              | V_INT _ => fs0 !! k0 = Some F_INT ∧ acc
-              | V_MISSING => True ∧ acc
-              end
-                for
-                Valid')%nat = Valid'.
-    Proof using Type.
-      reflexivity.
-    Qed.
-
-    Lemma Valid'__fold_fold :
-      (fix Valid' (d : Desc) (v0 : Value) {struct v0} : Prop :=
-         match d with
-         | DESC fs0 => match v0 with
-                      | VALUE vs => map_fold (Valid'__fold fs0) True vs
-                      end
-         end
-       with Valid'__fold (fs0 : gmap Z Field) (k0 : Z) (v0 : Val) (acc : Prop) {struct v0} : Prop :=
-              match v0 with
-              | V_MSG value => (∃ d : Desc, fs0 !! k0 = Some (F_MSG d) ∧ Valid' d value) ∧ acc
-              | V_BOOL _ => fs0 !! k0 = Some F_BOOL ∧ acc
-              | V_INT _ => fs0 !! k0 = Some F_INT ∧ acc
-              | V_MISSING => True ∧ acc
-              end
-                for
-                Valid'__fold)%nat = Valid'__fold.
-    Proof using Type.
-      reflexivity.
-    Qed.
+    Definition Valid'_eq := mk_eq Valid'.
+    Definition Valid'Fold_eq := mk_eq Valid'Fold.
 
     Definition desc1 := DESC (list_to_map [
                                   (1, F_BOOL);
@@ -242,13 +212,10 @@ Module InterParse.
 
   Section Desc_Field_ind.
 
-    Definition map_size_sum (m : gmap Z Field) (f : Field -> nat) : nat :=
-      map_fold (λ _ v acc, f v + acc)%nat 0%nat m.
-
     (** Structural size metrics for well-founded induction **)
     Fixpoint Desc_size (d : Desc) : nat :=
       match d with
-      | DESC fs => 1 + map_size_sum fs Field_size
+      | DESC fs => 1 + map_fold (fun _ v acc => Field_size v + acc)%nat 0%nat fs
       end
     with Field_size (f : Field) : nat :=
            match f with
@@ -256,6 +223,9 @@ Module InterParse.
            | F_BOOL => 1
            | F_INT => 1
            end.
+
+    Definition Desc_size_eq := mk_eq Desc_size.
+    Definition Field_size_eq := mk_eq Field_size.
 
     (** Every Field has positive size *)
     Lemma Field_size_positive : ∀ f, (Field_size f > 0)%nat.
@@ -345,38 +315,6 @@ Module InterParse.
     Hypothesis F_INT_case : 
       P_Field F_INT.
 
-    Lemma Desc_size_fold :
-      (fix Desc_size (d : Desc) : nat :=
-         match d with
-         | DESC fs0 => S (map_fold (λ (_ : Z) (v : Field) (acc : nat), Field_size v + acc) 0 fs0)
-         end
-       with Field_size (f0 : Field) : nat :=
-              match f0 with
-              | F_MSG d => S (Desc_size d)
-              | _ => 1
-              end
-                for
-                Desc_size)%nat = Desc_size.
-    Proof using Type.
-      reflexivity.
-    Qed.
-
-    Lemma Field_size_fold :
-      (fix Desc_size (d : Desc) : nat :=
-         match d with
-         | DESC fs0 => S (map_fold (λ (_ : Z) (v : Field) (acc : nat), Field_size v + acc) 0 fs0)
-         end
-       with Field_size (f0 : Field) : nat :=
-              match f0 with
-              | F_MSG d => S (Desc_size d)
-              | _ => 1
-              end
-                for
-                Field_size)%nat = Field_size.
-    Proof using Type.
-      reflexivity.
-    Qed.
-
     (** 
     Mutual induction principle for Desc and Field.
     
@@ -431,11 +369,11 @@ Module InterParse.
           
           * (* Prove P_Field f for the first field *)
             apply (IH (inr f)).
-            unfold Desc_size, map_size_sum, MR.
+            unfold Desc_size, MR.
             rewrite map_fold_insert_L.
-            -- simpl; rewrite ?Field_size_fold; 
+            -- rewrite Field_size_eq; simpl;
                  pose proof (Field_size_positive f); lia.
-            -- simpl; rewrite !Field_size_fold; intros; lia.
+            -- rewrite !Field_size_eq; simpl; intros; lia.
             -- assumption.
                
           * (* Prove P_Field for all remaining fields using IHfs *)
@@ -451,8 +389,8 @@ Module InterParse.
         + (* F_MSG case *)
           apply F_MSG_case.
           apply (IH (inl d)).
-          unfold Desc_size, map_size_sum, MR.
-          simpl; rewrite Desc_size_fold. lia.
+          unfold Desc_size, MR.
+          rewrite Desc_size_eq; simpl. lia.
           
         + (* F_BOOL case *)
           apply F_BOOL_case.
@@ -480,13 +418,10 @@ Module InterParse.
 
   Section Value_Val_ind.
 
-    Definition val_map_size_sum (m : gmap Z Val) (f : Val -> nat) : nat :=
-      map_fold (λ _ v acc, f v + acc)%nat 0%nat m.
-
     (** Structural size metrics for well-founded induction ***)
     Fixpoint Value_size (v : Value) : nat :=
       match v with
-      | VALUE vs => 1 + val_map_size_sum vs Val_size
+      | VALUE vs => 1 + map_fold (fun _ v acc => Val_size v + acc)%nat 0%nat vs
       end
     with Val_size (v : Val) : nat :=
            match v with
@@ -495,6 +430,9 @@ Module InterParse.
            | V_INT _ => 1
            | V_MISSING => 1
            end.
+
+    Definition Value_size_eq := mk_eq Value_size.
+    Definition Val_size_eq := mk_eq Val_size.
 
     (** Every Val has positive size **)
     Lemma Val_size_positive : ∀ v, (Val_size v > 0)%nat.
@@ -588,38 +526,6 @@ Module InterParse.
     Hypothesis V_MISSING_case :
       P_Val V_MISSING.
 
-    Lemma Value_size_fold :
-      (fix Value_size (v : Value) : nat :=
-         match v with
-         | VALUE vs0 => S (map_fold (λ (_ : Z) (v : Val) (acc : nat), Val_size v + acc) 0 vs0)
-         end
-       with Val_size (v0 : Val) : nat :=
-              match v0 with
-              | V_MSG val => S (Value_size val)
-              | _ => 1
-              end
-                for
-                Value_size)%nat = Value_size.
-    Proof using Type.
-      reflexivity.
-    Qed.
-
-    Lemma Val_size_fold :
-      (fix Value_size (v : Value) : nat :=
-         match v with
-         | VALUE vs0 => S (map_fold (λ (_ : Z) (v : Val) (acc : nat), Val_size v + acc) 0 vs0)
-         end
-       with Val_size (v0 : Val) : nat :=
-              match v0 with
-              | V_MSG val => S (Value_size val)
-              | _ => 1
-              end
-                for
-                Val_size)%nat = Val_size.
-    Proof using Type.
-      reflexivity.
-    Qed.
-
     (**
     Mutual induction principle for Value and Val.
 
@@ -674,11 +580,11 @@ Module InterParse.
 
           * (* Prove P_Val v for the first val *)
             apply (IH (inr v)).
-            unfold Value_size, val_map_size_sum, MR.
+            unfold Value_size, MR.
             rewrite map_fold_insert_L.
-            -- simpl; rewrite ?Val_size_fold;
+            -- rewrite ?Val_size_eq; simpl;
                  pose proof (Val_size_positive v); lia.
-            -- simpl; rewrite !Val_size_fold; intros; lia.
+            -- rewrite !Val_size_eq; simpl; intros; lia.
             -- assumption.
 
           * (* Prove P_Val for all remaining vals using IHvs *)
@@ -694,8 +600,8 @@ Module InterParse.
         + (* V_MSG case *)
           apply V_MSG_case.
           apply (IH (inl v)).
-          unfold Value_size, val_map_size_sum, MR.
-          simpl; rewrite Value_size_fold. lia.
+          unfold Value_size, MR.
+          rewrite Value_size_eq; simpl. lia.
 
         + (* V_BOOL case *)
           apply V_BOOL_case.
@@ -912,9 +818,9 @@ Module InterParse.
 
     Fixpoint ValueDepth (v : Value) : nat :=
       match v with
-      | VALUE vs => (map_fold ValueDepth__fold 0 vs)%nat
+      | VALUE vs => (map_fold ValueDepthFold 0 vs)%nat
       end
-    with ValueDepth__fold (k : Z) (v : Val) (acc : nat) :=
+    with ValueDepthFold (k : Z) (v : Val) (acc : nat) :=
            match v with
            | V_BOOL _
            | V_INT _
@@ -922,37 +828,8 @@ Module InterParse.
            | V_MSG v' => acc `max` (ValueDepth v' + 1)
            end.
 
-    Lemma ValueDepth_fold :
-      (fix ValueDepth (v0 : Value) : nat :=
-         match v0 with
-         | VALUE vs => map_fold ValueDepth__fold 0 vs
-         end
-       with ValueDepth__fold (k0 : Z) (v0 : Val) (acc : nat) {struct v0} : nat :=
-              match v0 with
-              | V_MSG v' => acc `max` (ValueDepth v' + 1)
-              | _ => acc
-              end
-                for
-                ValueDepth)%nat = ValueDepth.
-    Proof using Type.
-      reflexivity.
-    Qed.
-
-    Lemma ValueDepth__fold_fold :
-      (fix ValueDepth (v0 : Value) : nat :=
-         match v0 with
-         | VALUE vs => map_fold ValueDepth__fold 0 vs
-         end
-       with ValueDepth__fold (k0 : Z) (v0 : Val) (acc : nat) {struct v0} : nat :=
-              match v0 with
-              | V_MSG v' => acc `max` (ValueDepth v' + 1)
-              | _ => acc
-              end
-                for
-                ValueDepth__fold)%nat = ValueDepth__fold.
-    Proof using Type.
-      reflexivity.
-    Qed.
+    Definition ValueDepth_eq := mk_eq ValueDepth.
+    Definition ValueDepthFold_eq := mk_eq ValueDepthFold.
 
     Compute ValueDepth val1. 
     Compute ValueDepth val2.
@@ -960,9 +837,9 @@ Module InterParse.
 
     Fixpoint ValueEncLen (v : Value) : nat :=
       match v with
-      | VALUE vs => (map_fold ValueEncLen__fold 0 vs)%nat
+      | VALUE vs => (map_fold ValueEncLenFold 0 vs)%nat
       end
-    with ValueEncLen__fold (k : Z) (v : Val) (acc : nat) :=
+    with ValueEncLenFold (k : Z) (v : Val) (acc : nat) :=
            match v with
            | V_BOOL _ => (acc + 5)%nat
            | V_INT _ => (acc + 5)%nat
@@ -970,11 +847,14 @@ Module InterParse.
            | V_MSG v' => (acc + 2 + ValueEncLen v')%nat
            end.
 
+    Definition ValueEncLen_eq := mk_eq ValueEncLen.
+    Definition ValueEncLenFold_eq := mk_eq ValueEncLenFold.
+
     Fixpoint ValueEncLen' (d : Desc) (v : Value) : nat :=
       match v, d with
-      | VALUE vs, DESC ds => (map_fold (ValueEncLen'__fold ds) 0 vs)%nat
+      | VALUE vs, DESC ds => (map_fold (ValueEncLen'Fold ds) 0 vs)%nat
       end
-    with ValueEncLen'__fold (ds : gmap Z Field) (k : Z) (v : Val) (acc : nat) : nat :=
+    with ValueEncLen'Fold (ds : gmap Z Field) (k : Z) (v : Val) (acc : nat) : nat :=
            match ds !! k, v with
            | None, _ => acc
            | Some _, V_BOOL _ => (acc + 5)%nat
@@ -982,6 +862,9 @@ Module InterParse.
            | Some (F_MSG d), V_MSG val => (acc + 2 + ValueEncLen' d val)%nat
            | Some _, _ => acc
            end.
+
+    Definition ValueEncLen'_eq := mk_eq ValueEncLen'.
+    Definition ValueEncLen'Fold_eq := mk_eq ValueEncLen'Fold.
 
     Compute ValueEncLen val1.
     Example Length1 : ValueEncLen val1 = length fenc3.
@@ -1185,49 +1068,50 @@ Module InterParse.
 
     Lemma ValidInsert (d : Desc) (k : Z) (v : Val) (m : gmap Z Val) :
       m !! k = None -> map_first_key (<[k := v]> m) k ->
-      Valid' d (VALUE (<[k := v]> m)) <-> Valid'__fold (Fields d) k v True /\ Valid' d (VALUE m).
+      Valid' d (VALUE (<[k := v]> m)) <-> Valid'Fold (Fields d) k v True /\ Valid' d (VALUE m).
     Proof.
       intros Hnone Hfst.
       split.
       - destruct d; unfold Valid' at 1.
         rewrite map_fold_insert_first_key by assumption.
-        rewrite Valid'__fold_fold. intros Hvalid.
+        rewrite Valid'Fold_eq. intros Hvalid.
         split.
         + destruct v;
             (split; last easy);
-            unfold Valid'__fold at 1 in Hvalid;
+            unfold Valid'Fold at 1 in Hvalid;
             destruct Hvalid as [Hvalid  _]; assumption.
-        + destruct v; unfold Valid'__fold at 1 in Hvalid;
+        + destruct v; unfold Valid'Fold at 1 in Hvalid;
             destruct Hvalid as [_ Hvalid]; assumption.
       - intros [Hfst_valid Hrest_valid].
         destruct d; unfold Valid'.
         rewrite map_fold_insert_first_key by assumption.
-        rewrite Valid'__fold_fold.
+        rewrite Valid'Fold_eq.
         destruct v;
-          unfold Valid'__fold at 1;
+          unfold Valid'Fold at 1;
           destruct Hfst_valid as [Hfst_valid _] in Hfst_valid;
           unfold Valid' in Hrest_valid; split; assumption.
     Qed.
 
-    Lemma ValueEncLen'__fold_linear :
+    Lemma ValueEncLen'Fold_linear :
       forall (fs : gmap Z Field) k v acc,
-        ValueEncLen'__fold fs k v acc = (ValueEncLen'__fold fs k v 0 + acc)%nat.
+        ValueEncLen'Fold fs k v acc = (ValueEncLen'Fold fs k v 0 + acc)%nat.
     Proof.
       intros fs k v acc.
-      destruct (fs !! k) eqn:Hfield; [destruct f|]; destruct v; simpl; rewrite ?Hfield; lia.
+      destruct (fs !! k) eqn:Hfield; [destruct f|]; destruct v;
+        simpl; rewrite ?Hfield; lia.
     Qed.
 
     Lemma ValueEncLength_unfold (d : Desc) (k : Z) (v : Val) (m : gmap Z Val) :
       m !! k = None -> map_first_key (<[k := v]> m) k ->
       ValueEncLen' d (VALUE (<[k := v]> m)) =
-      (ValueEncLen'__fold (Fields d) k v 0 + ValueEncLen' d (VALUE m))%nat.
+      (ValueEncLen'Fold (Fields d) k v 0 + ValueEncLen' d (VALUE m))%nat.
     Proof.
       intros Hnone Hfst.
       destruct d as [fs].
       unfold Fields, ValueEncLen' at 1.
       rewrite map_fold_insert_first_key by assumption.
       unfold ValueEncLen'.
-      rewrite ValueEncLen'__fold_linear.
+      rewrite ValueEncLen'Fold_linear.
       reflexivity.
     Qed.
 
@@ -1248,10 +1132,10 @@ Module InterParse.
           intro Hlookup. inversion Hlookup; subst; clear Hlookup.
           unfold ValueDepth at 2.
           rewrite map_fold_insert_L.
-          * rewrite ValueDepth_fold, ValueDepth__fold_fold.
+          * rewrite ValueDepth_eq, ValueDepthFold_eq.
             lia.
-          * intros. simpl. rewrite ValueDepth__fold_fold.
-            destruct z1, z2; unfold ValueDepth__fold; lia.
+          * intros. simpl. rewrite ValueDepthFold_eq.
+            destruct z1, z2; unfold ValueDepthFold; lia.
           * assumption.
         + (* k ≠ k': element is in the rest *)
           intro Hlookup.
@@ -1259,11 +1143,11 @@ Module InterParse.
           rewrite map_fold_insert_L.
           * simpl.
             specialize (IHm Hlookup).
-            rewrite ValueDepth__fold_fold.
-            change (map_fold ValueDepth__fold 0%nat m') with (ValueDepth (VALUE m')).
-            destruct v'; unfold ValueDepth__fold; lia.
-          * intros; simpl; rewrite ValueDepth__fold_fold.
-            destruct z1, z2; unfold ValueDepth__fold; lia.
+            rewrite ValueDepthFold_eq.
+            change (map_fold ValueDepthFold 0%nat m') with (ValueDepth (VALUE m')).
+            destruct v'; unfold ValueDepthFold; lia.
+          * intros; simpl; rewrite ValueDepthFold_eq.
+            destruct z1, z2; unfold ValueDepthFold; lia.
           * assumption.
     Qed.
 
@@ -1432,9 +1316,9 @@ Module InterParse.
 
     Definition ValEncLength_P (v : Val) :=
       forall d k enc,
-      Valid'__fold (Fields d) k v True ->
+      Valid'Fold (Fields d) k v True ->
       SerialVal SerialValue d (k, v) = S.Success enc ->
-      Length enc = ValueEncLen'__fold (Fields d) k v 0.
+      Length enc = ValueEncLen'Fold (Fields d) k v 0.
 
     Lemma ValueEncLength_Length : forall v, ValueEncLength_P v.
     Proof.
@@ -1473,10 +1357,10 @@ Module InterParse.
           subst. rewrite !App_Length.
           apply UnsignedLength in Htag_ok.
           apply UnsignedLength in Hlen_ok.
-          unfold Valid'__fold in Hvalid.
+          unfold Valid'Fold in Hvalid.
           destruct Hvalid as [(d__n & Hfound' & Hvalid__n) _].
           unfold Fields in Hfound'. rewrite Hfound' in Hfound.
-          invc Hfound. rewrite Valid'_fold in Hvalid__n.
+          invc Hfound. rewrite Valid'_eq in Hvalid__n.
           rewrite IHv__n with (d := d) (enc := enc__pay) by assumption.
           lia.
         + intro Hv_ok; invc Hv_ok. apply Length_default.

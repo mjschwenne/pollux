@@ -8,6 +8,12 @@ Definition inspect {A} (a : A) : {b | a = b} := exist _ a eq_refl.
 
 Notation "x 'eqn' ':' p" := (exist _ x p) (only parsing, at level 20).
 
+Ltac _mk_eq def :=
+  let x := (eval red in def) in
+  exact x.
+Notation mk_eq def :=
+  (eq_refl : ltac:(_mk_eq def) = def) (only parsing).
+
 Require Export List.
 From Stdlib Require Export Lists.List.
 Export ListNotations.
