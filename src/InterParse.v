@@ -1119,6 +1119,15 @@ Module InterParse.
       simpl. f_equal. word.
     Qed.
 
+    Lemma UnsignedLength : forall x enc, SerialUnsigned x = S.Success enc -> Length enc = 1%nat.
+    Proof.
+      intros x enc.
+      unfold SerialUnsigned, SerialByte.
+      intros Hser; invc Hser.
+      unfold Length; simpl.
+      reflexivity.
+    Qed.
+
     Theorem NatParseOk : ParseOk ParseNat SerialNat.
     Proof.
       intros x enc rest wf.
@@ -1129,6 +1138,10 @@ Module InterParse.
     Qed.
 
     Theorem Z32ParseOk : ParseOk ParseZ32 SerialZ32.
+    Proof.
+    Admitted.
+
+    Lemma Z32Length : forall x enc, SerialZ32 x = S.Success enc -> Length enc = 4%nat.
     Proof.
     Admitted.
 
@@ -1294,7 +1307,7 @@ Module InterParse.
                      (ValueDepth val == ValueDepth (VALUE (<[k := v]> m))). all: admit.
     Admitted.
 
-    Lemma SerializeValueInversion (d : Desc) :
+    Lemma SerialValueInversion (d : Desc) :
       forall k v (m : gmap Z Val) enc,
       m !! k = None -> map_first_key (<[k := v]> m) k ->
       SerialValue d (VALUE (<[k := v]> m)) = S.Success enc <->
@@ -1315,19 +1328,13 @@ Module InterParse.
         * unfold SerialValue, S.RecursiveState.
           rewrite ser_recur_st_unfold.
           unfold SerialValue', S.Map, ValList, Vals, S.Rep.
-          (* Key insight: Need to show that the depth bound difference doesn't matter *)
+          rewrite <- Hrest_ok.
+          (* Need to show that the depth bound difference doesn't matter *)
           (* because all elements in map_to_list m have depth < ValueDepth (VALUE m) *)
-          (* and ValueDepth (VALUE m) <= ValueDepth (VALUE (<[k:=v]> m)) *)
-
-          (* First establish the depth relationship *)
-          pose proof (ValueDepthDropFirst k v m Hnone Hfst) as Hdepth_le.
-
+          (* Fortunately, that's exactly what SerialValWeakenDepth tells us. *)
           (* Now we need to show S.rep' with both serializers gives the same result *)
-          (* Key strategy: prove by asserting that for any element in map_to_list m,
-             both depth checks will evaluate the same way, so both serializers are equal *)
-
-          (* TODO Clean this up *)
-          set (ser__deep :=
+          rewrite SerialRepSubst with
+            (ser2 :=
                  (SerialVal
                     (λ (st__n : Desc) (x__n : Value),
                        if decide (ValueDepth x__n < ValueDepth (VALUE (<[k:=v]> m)))%nat
@@ -1340,14 +1347,9 @@ Module InterParse.
                            ValueDepth st__n x__n
                        else S.RecursiveProgressError "Serial.RecursiveState" ValueDepth (VALUE (<[k:=v]> m)) x__n)
                     d)
-              ).
-          rewrite SerialRepSubst with (ser2 := ser__deep);
-            (* For some reason, the 'by' tactical isn't working here. *)
-            first (unfold ser__deep; assumption).
-          unfold ser__deep.
-          pose proof (SerialValWeakenDepth d k v m Hnone Hfst).
-          symmetry in H.
-          apply H.
+            ); first reflexivity.
+          symmetry.
+          apply SerialValWeakenDepth; assumption.
         * split; last reflexivity.
           change (
             (λ (self : Desc → Serializer Value Value_wf) (d : Desc) (a : Value),
@@ -1369,8 +1371,58 @@ Module InterParse.
              pose proof (Val_in_map_smaller_depth (<[k := V_MSG v]> m) k v Hlookup).
              contradiction.
       - (* Reverse direction: <- *)
-        admit.
-    Admitted.
+        intros (enc__v & enc__rest & Hrest_ok & Hv_ok & Henc).
+        unfold SerialValue, S.RecursiveState.
+        rewrite ser_recur_st_unfold.
+        unfold SerialValue', S.Map, ValList, Vals.
+        rewrite map_to_list_insert_first_key by assumption.
+        change (
+            (λ (self : Desc → Serializer Value Value_wf) (d : Desc) (a : Value),
+               S.Rep (SerialVal self d) (map_to_list match a with
+                                           | VALUE vs => vs
+                                           end))
+          ) with SerialValue'.
+        rewrite SerialRepInversion_First.
+        exists enc__v, enc__rest. subst. split.
+        + (* Use Hv_ok to show (k, v) meets the depth requirement *)
+          (* Since the if is embedded in a lambda term, we chase down
+             until it's been applied and then show recursive call is
+             always made. *)
+          rewrite <- Hv_ok.
+          unfold SerialVal.
+          destruct (Fields d !! k); last reflexivity.
+          destruct f; try reflexivity.
+          destruct v; try reflexivity.
+          unfold S.Bind', S.Concat.
+          destruct (SerialUnsigned k); last reflexivity.
+          unfold S.Len'.
+          case_eq (decide (ValueDepth v < ValueDepth (VALUE (<[k:=V_MSG v]> m)))%nat).
+          * intros Hdep _. unfold SerialValue, S.RecursiveState. reflexivity.
+          * intros Hdep _. pose proof (lookup_insert_eq m k (V_MSG v)) as Hlookup.
+            pose proof (Val_in_map_smaller_depth (<[k := V_MSG v]> m) k v Hlookup).
+            contradiction.
+        + split; last reflexivity. 
+          rewrite <- Hrest_ok.
+          unfold SerialValue, S.RecursiveState.
+          rewrite ser_recur_st_unfold.
+          unfold SerialValue', S.Map, ValList, Vals.
+          rewrite SerialRepSubst with
+            (ser2 :=
+               (SerialVal
+                  (λ (st__n : Desc) (x__n : Value),
+                     if decide (ValueDepth x__n < ValueDepth (VALUE m))%nat
+                     then
+                       S.recur_st
+                         (λ (self : Desc → Serializer Value Value_wf) (d0 : Desc) (a : Value),
+                            @S.Rep _ Val_wf (SerialVal self d0) (map_to_list match a with
+                                                                   | VALUE vs => vs
+                                                                   end))
+                         ValueDepth st__n x__n
+                     else S.RecursiveProgressError "Serial.RecursiveState" ValueDepth (VALUE m) x__n)
+                  d)
+            ); first reflexivity.
+          apply SerialValWeakenDepth; assumption.
+    Qed.
 
     Definition ValueEncLength_P (v : Value) :=
       forall d enc,
@@ -1378,190 +1430,89 @@ Module InterParse.
       SerialValue d v = S.Success enc ->
       Length enc = ValueEncLen' d v.
 
-    Definition ValEncLength_P (v : Val) := True.
+    Definition ValEncLength_P (v : Val) :=
+      forall d k enc,
+      Valid'__fold (Fields d) k v True ->
+      SerialVal SerialValue d (k, v) = S.Success enc ->
+      Length enc = ValueEncLen'__fold (Fields d) k v 0.
 
     Lemma ValueEncLength_Length : forall v, ValueEncLength_P v.
     Proof.
-      induction v using Value_ind' with
+      induction v as [vs IHv | v__n | b | x |] using Value_ind' with
         (P_Value := ValueEncLength_P)
         (P_Val := ValEncLength_P).
-      - induction vs as [| k v m Hno Hfst ] using map_first_key_ind.
-        + intros d enc Hvalid Hser; vm_compute in Hser.
+      - (* Prove the main statement about Values, using nested induction. *)
+        revert IHv. induction vs as [| k v m Hno Hfst ] using map_first_key_ind.
+        + intros _ d enc Hvalid Hser; vm_compute in Hser.
           inversion Hser. destruct d; reflexivity.
-        + intros d enc Hvalid Hser; unfold S.Output in *. 
-          apply SerializeValueInversion in Hser; try assumption.
-          destruct Hser as (enc__v & enc__rest & Hv_ok & Henc).
+        + intros IHv d enc Hvalid Hser; unfold S.Output in *. 
+          apply SerialValueInversion in Hser; try assumption.
+          destruct Hser as (enc__v & enc__rest & Hrest_ok & Hv_ok & Henc).
           rewrite ValidInsert in Hvalid by assumption.
           destruct Hvalid as [Hfst_valid Hrest_valid].
           unfold ValueEncLength_P in IHvs.
-          rewrite map_Forall_insert in H by assumption.
-          destruct H as [Hlen_v' Hlen_rest].
-          specialize (IHvs Hlen_rest d enc__rest Hrest_valid Hv_ok).
+          rewrite map_Forall_insert in IHv by assumption.
+          destruct IHv as [Hlen_v' Hlen_rest].
+          specialize (IHvs Hlen_rest d enc__rest Hrest_valid Hrest_ok).
           rewrite ValueEncLength_unfold by assumption.
           rewrite <- IHvs. destruct d; simpl.
-          admit.
-      - admit.
-      - admit.
-      - admit.
-      - admit.
-    Admitted.
-
-    
-    (*   - intros d enc Hvalid Hser. *)
-    (*     vm_compute in Hser. inversion Hser. *)
-    (*     destruct d. reflexivity. *)
-    (*   - intros d enc Hvalid. *)
-    (*     unfold ValList, Vals. *)
-    (*     rewrite map_to_list_insert_first_key by assumption. *)
-    (*     rewrite ser_rep'_unfold. *)
-    (*     destruct v as [v' | b | z' |] eqn:Hv. *)
-    (*     + simpl. destruct d. *)
-    (*       destruct (Fields (DESC fs) !! z) eqn:Hf. *)
-    (*       * destruct f. *)
-    (*         -- destruct (S.Bind' _ _ _ v') eqn:Hv'; last (destruct (S.rep' _ (map_to_list m)); discriminate).  *)
-    (*            destruct (S.rep' _ (map_to_list m)) eqn:Hser; last discriminate. *)
-    (*            pose proof (ValueDepthDropFirstMsg z v' m Hno Hfst) as Hv__drop. *)
-    (*            admit. *)
-    (*         -- destruct (S.rep' _ (map_to_list m)); discriminate. *)
-    (*         -- destruct (S.rep' _ (map_to_list m)); discriminate. *)
-    (*       * destruct (S.rep' _ (map_to_list m)) eqn:Hser; last discriminate. *)
-    (*         admit. *)
-    (*     + simpl. destruct d. *)
-    (*       destruct (Fields (DESC fs) !! z) eqn:Hf. *)
-    (*       * destruct f. *)
-    (*         -- destruct (S.rep' _ (map_to_list m)); discriminate. *)
-    (*         -- destruct (S.Bind' _ _ _ b) eqn:Hb; last (destruct (S.rep' _ (map_to_list m)); discriminate). *)
-    (*            destruct (S.rep' _ (map_to_list m)) eqn:Hser; last discriminate. *)
-    (*            intros Henc. invc Henc. *)
-    (*            rewrite App_Length. *)
-    (*            unfold S.Bind' in Hb. *)
-    (*            rewrite SerialConcatInversion in Hb. *)
-    (*            destruct Hb as (enc__id & enc__b & Hok__id & Hok__b & Henc__f). *)
-    (*            unfold SerialUnsigned, SerialByte in Hok__id. *)
-    (*            vm_compute in Hok__b. *)
-    (*            pose proof (ValidDropFirst (DESC fs) z (V_BOOL b) m Hno Hfst Hvalid) as Hv__drop. *)
-    (*            assert (forall v', V_BOOL b <> V_MSG v') as Hneq by done. *)
-    (*            pose proof (ValueDepthDropFirst z (V_BOOL b) m Hno Hfst Hneq) as Hd__drop. *)
-    (*            simpl in Hd__drop, IHvs; rewrite Hd__drop in Hser. *)
-    (*            unfold S.RecursiveProgressError in Hser, IHvs. *)
-    (*            simpl in Hser. *)
-    (*            rewrite Hd__drop in Hser. *)
-    (*            specialize (IHvs (DESC fs) out0 Hv__drop Hser). *)
-    (*            destruct b; ( *)
-    (*                          rewrite Henc__f, App_Length; invc Hok__id; invc Hok__b; *)
-    (*                          unfold Length; simpl; *)
-    (*                          rewrite map_fold_insert_first_key by assumption; *)
-    (*                          simpl in *; rewrite Hf, <- IHvs; unfold Length; lia *)
-    (*                        ). *)
-    (*         -- destruct (S.rep' _ (map_to_list m)); discriminate. *)
-    (*       * destruct (S.rep' _ (map_to_list m)) eqn:Hser; last discriminate. *)
-    (*         pose proof (ValidDropFirst (DESC fs) z (V_BOOL b) m Hno Hfst Hvalid) as Hv__drop. *)
-    (*         assert (forall v', V_BOOL b <> V_MSG v') as Hneq by done. *)
-    (*         pose proof (ValueDepthDropFirst z (V_BOOL b) m Hno Hfst Hneq) as Hd__drop. *)
-    (*         simpl in Hd__drop, IHvs; rewrite Hd__drop in Hser. *)
-    (*         unfold S.RecursiveProgressError in Hser, IHvs. *)
-    (*         simpl in Hser. *)
-    (*         rewrite Hd__drop in Hser. *)
-    (*         specialize (IHvs (DESC fs) out Hv__drop Hser). *)
-    (*         intros Henc'. invc Henc'. *)
-    (*         rewrite map_fold_insert_first_key by assumption. *)
-    (*         simpl in *. rewrite Hf. assumption. *)
-    (*     + simpl. destruct d. *)
-    (*       destruct (Fields (DESC fs) !! z) eqn:Hf. *)
-    (*       * destruct f. *)
-    (*         -- destruct (S.rep' _ (map_to_list m)); discriminate. *)
-    (*         -- destruct (S.rep' _ (map_to_list m)); discriminate. *)
-    (*         -- destruct (S.Bind' _ _ _ z') eqn:Hz'; last (destruct (S.rep' _ (map_to_list m)); discriminate). *)
-    (*            destruct (S.rep' _ (map_to_list m)) eqn:Hser; last discriminate. *)
-    (*            intros Henc. invc Henc. *)
-    (*            rewrite App_Length. *)
-    (*            unfold S.Bind' in Hz'. *)
-    (*            rewrite SerialConcatInversion in Hz'. *)
-    (*            destruct Hz' as (enc__id & enc__z' & Hok__id & Hok__z' & Henc__f). *)
-    (*            unfold SerialUnsigned, SerialByte in Hok__id. *)
-    (*            pose proof (ValidDropFirst (DESC fs) z (V_INT z') m Hno Hfst Hvalid) as Hv__drop. *)
-    (*            assert (forall v', V_INT z' <> V_MSG v') as Hneq by done. *)
-    (*            pose proof (ValueDepthDropFirst z (V_INT z') m Hno Hfst Hneq) as Hd__drop. *)
-    (*            simpl in Hd__drop, IHvs; rewrite Hd__drop in Hser. *)
-    (*            unfold S.RecursiveProgressError in Hser, IHvs. *)
-    (*            simpl in Hser. *)
-    (*            rewrite Hd__drop in Hser. *)
-    (*            specialize (IHvs (DESC fs) out0 Hv__drop Hser). *)
-    (*            rewrite Henc__f, App_Length. invc Hok__id. invc Hok__z'. *)
-    (*            unfold Length; simpl. *)
-    (*            rewrite map_fold_insert_first_key by assumption. *)
-    (*            simpl in *; rewrite Hf, <- IHvs; unfold Length. lia. *)
-    (*       * destruct (S.rep' _ (map_to_list m)) eqn:Hser; last discriminate. *)
-    (*         pose proof (ValidDropFirst (DESC fs) z (V_INT z') m Hno Hfst Hvalid) as Hv__drop. *)
-    (*         assert (forall v', V_INT z' <> V_MSG v') as Hneq by done. *)
-    (*         pose proof (ValueDepthDropFirst z (V_INT z') m Hno Hfst Hneq) as Hd__drop. *)
-    (*         simpl in Hd__drop, IHvs; rewrite Hd__drop in Hser. *)
-    (*         unfold S.RecursiveProgressError in Hser, IHvs. *)
-    (*         simpl in Hser. *)
-    (*         rewrite Hd__drop in Hser. *)
-    (*         specialize (IHvs (DESC fs) out Hv__drop Hser). *)
-    (*         intros Henc'. invc Henc'. *)
-    (*         rewrite map_fold_insert_first_key by assumption. *)
-    (*         simpl in *. rewrite Hf. assumption. *)
-    (*     + simpl. destruct (Fields d !! z). *)
-    (*       * destruct f. *)
-    (*         -- destruct (S.rep' _ (map_to_list m)) eqn:Hser; last discriminate. *)
-    (*            destruct d. *)
-    (*            pose proof (ValidDropFirst (DESC fs) z (V_MISSING) m Hno Hfst Hvalid) as Hv__drop. *)
-    (*            assert (forall v', V_MISSING <> V_MSG v') as Hneq by done. *)
-    (*            pose proof (ValueDepthDropFirst z (V_MISSING) m Hno Hfst Hneq) as Hd__drop. *)
-    (*            simpl in Hd__drop, IHvs; rewrite Hd__drop in Hser. *)
-    (*            unfold S.RecursiveProgressError in Hser, IHvs. *)
-    (*            simpl in Hser. *)
-    (*            rewrite Hd__drop in Hser. *)
-    (*            specialize (IHvs (DESC fs) out Hv__drop Hser). *)
-    (*            intros Henc'. invc Henc'. *)
-    (*            rewrite map_fold_insert_first_key by assumption. *)
-    (*            simpl in *. destruct (fs !! z); last assumption. *)
-    (*            destruct f; assumption. *)
-    (*         -- destruct (S.rep' _ (map_to_list m)) eqn:Hser; last discriminate. *)
-    (*            destruct d. *)
-    (*            pose proof (ValidDropFirst (DESC fs) z (V_MISSING) m Hno Hfst Hvalid) as Hv__drop. *)
-    (*            assert (forall v', V_MISSING <> V_MSG v') as Hneq by done. *)
-    (*            pose proof (ValueDepthDropFirst z (V_MISSING) m Hno Hfst Hneq) as Hd__drop. *)
-    (*            simpl in Hd__drop, IHvs; rewrite Hd__drop in Hser. *)
-    (*            unfold S.RecursiveProgressError in Hser, IHvs. *)
-    (*            simpl in Hser. *)
-    (*            rewrite Hd__drop in Hser. *)
-    (*            specialize (IHvs (DESC fs) out Hv__drop Hser). *)
-    (*            intros Henc'. invc Henc'. *)
-    (*            rewrite map_fold_insert_first_key by assumption. *)
-    (*            simpl in *. destruct (fs !! z); last assumption. *)
-    (*            destruct f; assumption. *)
-    (*         -- destruct (S.rep' _ (map_to_list m)) eqn:Hser; last discriminate. *)
-    (*            destruct d. *)
-    (*            pose proof (ValidDropFirst (DESC fs) z (V_MISSING) m Hno Hfst Hvalid) as Hv__drop. *)
-    (*            assert (forall v', V_MISSING <> V_MSG v') as Hneq by done. *)
-    (*            pose proof (ValueDepthDropFirst z (V_MISSING) m Hno Hfst Hneq) as Hd__drop. *)
-    (*            simpl in Hd__drop, IHvs; rewrite Hd__drop in Hser. *)
-    (*            unfold S.RecursiveProgressError in Hser, IHvs. *)
-    (*            simpl in Hser. *)
-    (*            rewrite Hd__drop in Hser. *)
-    (*            specialize (IHvs (DESC fs) out Hv__drop Hser). *)
-    (*            intros Henc'. invc Henc'. *)
-    (*            rewrite map_fold_insert_first_key by assumption. *)
-    (*            simpl in *. destruct (fs !! z); last assumption. *)
-    (*            destruct f; assumption. *)
-    (*       * destruct (S.rep' _ (map_to_list m)) eqn:Hser; last discriminate. *)
-    (*         destruct d. *)
-    (*         pose proof (ValidDropFirst (DESC fs) z (V_MISSING) m Hno Hfst Hvalid) as Hv__drop. *)
-    (*         assert (forall v', V_MISSING <> V_MSG v') as Hneq by done. *)
-    (*         pose proof (ValueDepthDropFirst z (V_MISSING) m Hno Hfst Hneq) as Hd__drop. *)
-    (*         simpl in Hd__drop, IHvs; rewrite Hd__drop in Hser. *)
-    (*         unfold S.RecursiveProgressError in Hser, IHvs. *)
-    (*         simpl in Hser. *)
-    (*         rewrite Hd__drop in Hser. *)
-    (*         specialize (IHvs (DESC fs) out Hv__drop Hser). *)
-    (*         intros Henc'. invc Henc'. *)
-    (*         rewrite map_fold_insert_first_key by assumption. *)
-    (*         simpl in *. destruct (fs !! z); last assumption. *)
-    (*         destruct f; assumption. *)
-    (* Admitted. *)
+          subst. rewrite App_Length. f_equal.
+          unfold ValEncLength_P in Hlen_v'.
+          rewrite Hlen_v' with (d := DESC fs) (k := k); done.
+      - (* Val case : V_MSG *)
+        intros [fs] k enc Hvalid. 
+        unfold ValueEncLength_P in IHv__n.
+        unfold SerialVal, Fields; simpl.
+        destruct (fs !! k) eqn:Hfound.
+        + destruct f; try discriminate. 
+          intro Hv_ok.
+          apply SerialConcatInversion in Hv_ok.
+          destruct Hv_ok as (enc__tag & enc__rest & Htag_ok & Hrest_ok & Henc).
+          apply SerialLen'Inversion in Hrest_ok. subst.
+          destruct Hrest_ok as (enc__len & enc__pay & Hlen_ok & Hpay_ok & Henc).
+          subst. rewrite !App_Length.
+          apply UnsignedLength in Htag_ok.
+          apply UnsignedLength in Hlen_ok.
+          unfold Valid'__fold in Hvalid.
+          destruct Hvalid as [(d__n & Hfound' & Hvalid__n) _].
+          unfold Fields in Hfound'. rewrite Hfound' in Hfound.
+          invc Hfound. rewrite Valid'_fold in Hvalid__n.
+          rewrite IHv__n with (d := d) (enc := enc__pay) by assumption.
+          lia.
+        + intro Hv_ok; invc Hv_ok. apply Length_default.
+      - (* Val case : V_BOOL *)
+        intros [fs] k enc _. 
+        unfold SerialVal, Fields; simpl.
+        destruct (fs !! k).
+        + (* Either the field is in the descriptor, and we output an encoding... *)
+          destruct f; try discriminate.
+          intros Hv_ok.
+          apply SerialConcatInversion in Hv_ok.
+          destruct Hv_ok as (enc__tag & enc__pay & Htag_ok & Hpay_ok & Henc).
+          subst. apply UnsignedLength in Htag_ok.
+          destruct b; apply Z32Length in Hpay_ok;
+            rewrite App_Length; lia.
+        + (* ... or it isn't and we output nothing. *)
+          intros Hv_ok; invc Hv_ok. apply Length_default. 
+      - (* Val case : V_INT *)
+        intros [fs] k enc _.
+        unfold SerialVal, Fields; simpl.
+        destruct (fs !! k).
+        + destruct f; try discriminate.
+          intro Hv_ok.
+          apply SerialConcatInversion in Hv_ok.
+          destruct Hv_ok as (enc__tag & enc__pay & Htag_ok & Hpay_ok & Henc).
+          subst. apply UnsignedLength in Htag_ok.
+          apply Z32Length in Hpay_ok.
+          rewrite App_Length; lia.
+        + intros Hv_ok; invc Hv_ok. apply Length_default.
+      - (* Val case : V_MISSING *)
+        intros [fs] k enc _.
+        unfold SerialVal, Fields; simpl.
+        destruct (fs !! k).
+        + destruct f; try discriminate; (intros Hv_ok; invc Hv_ok; apply Length_default).
+        + intros Hv_ok; invc Hv_ok; apply Length_default.
+    Qed.
 
   End Theorems.
 
