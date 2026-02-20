@@ -35,6 +35,14 @@ Module Failures (InputModule : AbstractInput).
       | mkData _ _ next => next
       end.
 
+    Definition maxLevel (l1 l2 : Level) : Level :=
+      match l1, l2 with
+      | Recoverable, Recoverable => Recoverable
+      | Recoverable, Fatal => Fatal
+      | Fatal, Recoverable => Fatal
+      | Fatal, Fatal => Fatal
+      end.
+
     (* Add more failure data to the end of the current chain of failures *)
     Fixpoint Concat (self other : Data) : Data :=
       match self with

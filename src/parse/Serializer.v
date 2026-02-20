@@ -87,8 +87,19 @@ Module Serializers (InputModule : AbstractInput).
         let (l, r) := inp in 
         match left l, right r with
         | Success l_enc, Success r_enc => Success (App l_enc r_enc)
-        | Failure level data, _
-        | _, Failure level data => Failure level data
+        | Failure level data, Success r_enc =>
+            Failure level $
+              Failure.mkData "Conat left failed, right succeeded" r_enc
+              (Some data)
+        | Success l_enc, Failure level data =>
+            Failure level $
+              Failure.mkData "Concat right failed, left succeeded" l_enc
+              (Some data)
+        | Failure l_lvl l_data, Failure r_lvl r_data =>
+            Failure (Failure.maxLevel l_lvl r_lvl) $
+              Failure.mkData "Concat both failed"
+              Output_default
+              (Some $ Failure.Concat l_data r_data)
         end.
 
     Definition Bind'_wf {L R : Type} (wfl : L -> Prop) (wfr : R -> Prop) (tag : R -> L) : R -> Prop :=
@@ -110,9 +121,17 @@ Module Serializers (InputModule : AbstractInput).
         match left r (tag r) with
         | Success l_enc => match right r with
                           | Success r_enc => Success (App l_enc r_enc)
-                          | Failure lvl data as f => f
+                          | Failure lvl data => Failure lvl $
+                                                 Failure.mkData
+                                                 "Bind serializing body failed"
+                                                 l_enc
+                                                 (Some data)
                           end
-        | Failure lvl data as f => f
+        | Failure lvl data => Failure lvl $
+                               Failure.mkData
+                               "Bind serializing tag failed"
+                               Output_default
+                               (Some data)
         end.
 
     Definition BindSucceeds_wf {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
@@ -130,9 +149,17 @@ Module Serializers (InputModule : AbstractInput).
         match right r with
         | Success r_enc => match left r r_enc (tag r) with
                           | Success l_enc => Success (App l_enc r_enc)
-                          | Failure lvl data as f => f
+                          | Failure lvl data => Failure lvl $
+                                                 Failure.mkData
+                                                 "BindSucceeds serializing tag failed"
+                                                 r_enc
+                                                 (Some data)
                           end
-        | Failure lvl data as f => f
+        | Failure lvl data => Failure lvl $
+                               Failure.mkData
+                               "BindSucceeds serializing body failed"
+                               Output_default
+                               (Some data)
         end.
 
     Definition BindResult_wf {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
@@ -175,9 +202,17 @@ Module Serializers (InputModule : AbstractInput).
       fun x => match underlying x with
             | Success enc => match ser__len (Length enc) with
                             | Success len_enc => Success (App len_enc enc)
-                            | Failure lvl data as f => f
+                            | Failure lvl data => Failure lvl $
+                                                   Failure.mkData
+                                                   "Len' serializing tag failed"
+                                                   enc
+                                                   (Some data)
                             end
-            | Failure lvl data as f => f
+            | Failure lvl data => Failure lvl $
+                                   Failure.mkData
+                                   "Len' serializing body failed"
+                                   Output_default
+                                   (Some data)
             end.
 
     Definition Map_wf {A B : Type} (wf : B -> Prop) (f : A -> B) : A -> Prop :=

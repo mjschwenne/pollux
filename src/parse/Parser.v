@@ -158,8 +158,19 @@ Module Parsers (InputModule : AbstractInput).
     Definition Bind {L R : Type} (left : Parser L) (right : L -> Parser R) : Parser R :=
       fun inp =>
         match left inp with
-        | Success leftResult remaining => right leftResult remaining
-        | Failure level data => Failure level data
+        | Success l_result l_rem => match right l_result l_rem with
+                                   | Success r_result r_rem as s => s
+                                   | Failure lvl data => Failure lvl $
+                                                          Failure.mkData
+                                                          "Bind right failed"
+                                                          l_rem
+                                                          (Some data)
+                                   end
+        | Failure lvl data => Failure lvl $
+                               Failure.mkData
+                               "Bind left failed"
+                               inp
+                               (Some data)
         end.
 
     (* A parser that fails if the left parser fails. If the left parser
@@ -168,8 +179,19 @@ Module Parsers (InputModule : AbstractInput).
     Definition BindSucceeds {L R : Type} (left : Parser L) (right : L -> Input -> Parser R) : Parser R :=
       fun inp =>
         match left inp with
-        | Success leftResult remaining => right leftResult remaining remaining
-        | Failure level data => Failure level data
+        | Success l_result l_rem => match right l_result l_rem l_rem with
+                                   | Success r_result r_rem as s => s
+                                   | Failure lvl data => Failure lvl $
+                                                          Failure.mkData
+                                                          "BindSucceeds right failed"
+                                                          l_rem
+                                                          (Some data)
+                                   end
+        | Failure lvl data => Failure lvl $
+                               Failure.mkData
+                               "BindSucceeds left failed"
+                               inp
+                               (Some data)
         end.
 
     (* Given a left parser and a parser generator based on the output of the left parser,
@@ -183,11 +205,19 @@ Module Parsers (InputModule : AbstractInput).
     Definition Concat {L R : Type} (left : Parser L) (right : Parser R) : Parser (L * R) :=
       fun inp =>
         match left inp with
-        | Success ll lrem => match right lrem with
-                                 | Success rr rrem => Success (ll, rr) rrem
-                                 | Failure lvl data as p => Propagate p I
-                                 end
-        | Failure lvl data as p => Propagate p I
+        | Success l_result l_rem => match right l_rem with
+                                   | Success r_result r_rem => Success (l_result, r_result) r_rem
+                                   | Failure lvl data => Failure lvl $
+                                                          Failure.mkData
+                                                          "Concat right failed"
+                                                          l_rem
+                                                          (Some data)
+                                   end
+        | Failure lvl data => Failure lvl $
+                               Failure.mkData
+                               "Concat left failed"
+                               inp
+                               (Some data)
         end.
 
     (* Apply two consecutive parsers consecutively. If both succeed, apply the mapper to the results
@@ -195,11 +225,19 @@ Module Parsers (InputModule : AbstractInput).
     Definition ConcatMap {L R T : Type} (left : Parser L) (right : Parser R) (mapper : L -> R -> T) : Parser T :=
       fun inp =>
         match left inp with
-        | Success ll lrem => match right lrem with
-                            | Success rr rrem => Success (mapper ll rr) rrem
-                            | Failure lvl data as p => Propagate p I
-                            end
-        | Failure lvl data as p => Propagate p I
+        | Success l_result l_rem => match right l_rem with
+                                   | Success r_result r_rem => Success (mapper l_result r_result) r_rem
+                                   | Failure lvl data => Failure lvl $
+                                                          Failure.mkData
+                                                          "ConcatMap right failed"
+                                                          l_rem
+                                                          (Some data)
+                                   end
+        | Failure lvl data => Failure lvl $
+                               Failure.mkData
+                               "ConcatMap left failed"
+                               inp
+                               (Some data)
         end.
 
     (* Return only the result of the right parser if the two parsers match *)
@@ -212,9 +250,14 @@ Module Parsers (InputModule : AbstractInput).
     
     (* Limit the underlying parser to only access the first N tokens in the input. *)
     Definition Limit {X : Type} (underlying : Parser X) (n : nat) : Parser X :=
-      fun inp => match underlying (Slice inp 0 n) with
+      fun inp => let inp' := Slice inp 0 n in
+              match underlying inp' with
               | Success r rem => Success r (App rem (Drop inp n))
-              | Failure lvl data as f => f
+              | Failure lvl data => Failure lvl $
+                                     Failure.mkData
+                                     "Limit underlying failed"
+                                     inp'
+                                     (Some data)
               end.
 
     Definition Len {X : Type} (len : Parser nat) (underlying : Parser X) : Parser X :=
@@ -225,7 +268,11 @@ Module Parsers (InputModule : AbstractInput).
       fun inp =>
         match underlying inp with
         | Success result remaining => Success (f result) remaining
-        | Failure level data => Failure level data
+        | Failure lvl data => Failure lvl $
+                               Failure.mkData
+                               "Map underlying failed"
+                               inp
+                               (Some data)
         end.
 
     (* Returns a parser that succeeds if the underlying parser fails and vice-versa.
@@ -250,8 +297,19 @@ Module Parsers (InputModule : AbstractInput).
       fun inp =>
         match left inp, right inp with
         | Success a _, Success b rr => Success (a, b) rr
-        | Failure level data, _
-        | _, Failure level data => Failure level data
+        | Failure lvl data, Success _ _ => Failure lvl $ Failure.mkData
+                                              "And left failed"
+                                              inp
+                                              (Some data)
+        | Success _ _, Failure lvl data => Failure lvl $ Failure.mkData
+                                            "And right failed"
+                                            inp
+                                            (Some data)
+        | Failure l_lvl l_data, Failure r_lvl r_data => Failure (Failure.maxLevel l_lvl r_lvl) $
+                                                         Failure.mkData
+                                                         "And both parsers failed"
+                                                         inp
+                                                         (Some $ Failure.Concat l_data r_data)
         end.
 
     Definition Or {X : Type} (left right : Parser X) : Parser X :=
@@ -266,7 +324,11 @@ Module Parsers (InputModule : AbstractInput).
               if negb $ NeedsAlternative p2 inp then
                 p2
               else
-                MapRecoverableError p2 (fun dataRight => Failure.Concat data dataRight)
+                MapRecoverableError p2 (fun dataRight =>
+                                          Failure.mkData
+                                            "Or both options failed"
+                                            inp
+                                            (Some $Failure.Concat data dataRight))
         end.
 
     (* Like Or, but takes as many parsers as needed *)
@@ -319,10 +381,11 @@ Module Parsers (InputModule : AbstractInput).
         match underlying inp with
         | Success rr rem => Success (Some rr) rem
         | Failure Failure.Fatal data as pr => Propagate pr I
-        | Failure Failure.Recoverable data as pr => if negb $ NeedsAlternative pr inp then
-                                                     Propagate pr I
-                                                   else
-                                                     Success None inp
+        | Failure Failure.Recoverable data as pr =>
+            if negb $ NeedsAlternative pr inp then
+              Propagate pr I
+            else
+              Success None inp
         end.
 
     Program Fixpoint rep' {X : Type} (underlying : Parser X) (inp : Input)
@@ -370,7 +433,11 @@ Module Parsers (InputModule : AbstractInput).
               | O => Success acc inp
               | S m => match underlying inp with
                       | Success b rem => RepN underlying combine m (combine acc b) rem
-                      | Failure lvl data => Failure lvl data
+                      | Failure lvl data => Failure lvl $
+                                             Failure.mkData
+                                             "RepN underlying failed before N"
+                                             inp
+                                             (Some data)
                       end
               end.
 
