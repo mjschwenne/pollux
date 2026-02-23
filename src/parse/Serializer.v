@@ -1,59 +1,23 @@
 From Pollux Require Import Prelude.
 From Pollux.parse Require Import Util.
 From Pollux.parse Require Import Input.
-From Pollux.parse Require Import Failure.
+From Pollux.parse Require Import Result.
 
 From Corelib.Program Require Import Basics Tactics.
 From Stdlib.Program Require Import Program.
 
 Module Serializers (InputModule : AbstractInput).
-  Module Failure := Failures(InputModule).
+  Module Result := Result(InputModule).
+  Import Result.
   Import InputModule.
 
-  (* Use Output type for serializers *)
+  (* Use Output type for serializers, just to help keep the terminology intuitive. *)
+  (* Since results have an result for use in parsers, we'll always use unit for the Serializers *)
   Definition Output := Input.
   Definition Output_default := Input_default.
-
-  Section Results.
-    Context `{EqDecision Input}.
-
-    Inductive Result :=
-    | Success (out : Output)
-    | Failure (level : Failure.Level) (data : Failure.Data).
-
-    (** FUNCTIONS ON SERIALIZER RESULTS *)
-
-    Definition Out (sr : Result) : Output := 
-      match sr with
-      | Success out
-      | Failure _ (Failure.mkData _ out _) => out
-      end.
-
-    Definition IsFailure (sr : Result) : bool :=
-      match sr with
-      | Failure _ _ => true
-      | _ => false
-      end.
-    
-    Definition IsFatalFailure (sr : Result) : bool :=
-      match sr with
-      | Failure Failure.Fatal _ => true
-      | _ => false
-      end.
-
-    Definition IsFailureProp (sr : Result) : Prop :=
-      match sr with
-      | Success _ => False
-      | Failure _ _ => True
-      end.
-    
-    Definition IsSuccessProp (sr : Result) : Prop :=
-      match sr with
-      | Success _ => True
-      | Failure _ _ => False
-      end.
-
-  End Results.
+  Definition mkSuccess enc := Success () enc.
+  Definition Out := @getEnc unit.
+  Definition Result := @Result unit.
 
   Section Def.
     Definition Serializer (X : Type) (wf : X -> Prop) := X -> Result. 
@@ -64,19 +28,19 @@ Module Serializers (InputModule : AbstractInput).
   Section Combinators.
 
     Definition SucceedWith {X : Type} : Serializer X Trivial_wf :=
-      fun inp => Success Output_default.
+      fun inp => mkSuccess Output_default.
 
     Definition Epsilon : (Serializer unit Trivial_wf) := SucceedWith.
-  
-    Definition FailWith {X : Type} (message : string) (level : Failure.Level) :
+    
+    Definition FailWith {X : Type} (message : string) (level : Level) :
       Serializer X Trivial_wf :=
-        fun inp => Failure level $ Failure.mkData message Output_default None.
+      fun inp => Failure level $ mkData message Output_default None.
 
     Definition ResultWith {X : Type} (result : Result) : Serializer X Trivial_wf :=
       fun inp => result.
 
     Definition Blob : Serializer Output Trivial_wf :=
-      fun b => Success b.
+      fun b => mkSuccess b.
 
     Definition Concat_wf {L R : Type} (wfl : L -> Prop) (wfr : R -> Prop) : (L * R) -> Prop :=
       fun lr => let (l, r) := lr in wfl l /\ wfr r.
@@ -86,20 +50,20 @@ Module Serializers (InputModule : AbstractInput).
       fun inp =>
         let (l, r) := inp in 
         match left l, right r with
-        | Success l_enc, Success r_enc => Success (App l_enc r_enc)
-        | Failure level data, Success r_enc =>
+        | Success _ l_enc, Success _ r_enc => mkSuccess (App l_enc r_enc)
+        | Failure level data, Success _ r_enc =>
             Failure level $
-              Failure.mkData "Conat left failed, right succeeded" r_enc
+              mkData "Conat left failed, right succeeded" r_enc
               (Some data)
-        | Success l_enc, Failure level data =>
+        | Success _ l_enc, Failure level data =>
             Failure level $
-              Failure.mkData "Concat right failed, left succeeded" l_enc
+              mkData "Concat right failed, left succeeded" l_enc
               (Some data)
         | Failure l_lvl l_data, Failure r_lvl r_data =>
-            Failure (Failure.maxLevel l_lvl r_lvl) $
-              Failure.mkData "Concat both failed"
+            Failure (maxLevel l_lvl r_lvl) $
+              mkData "Concat both failed"
               Output_default
-              (Some $ Failure.Concat l_data r_data)
+              (Some $ ConcatData l_data r_data)
         end.
 
     Definition Bind'_wf {L R : Type} (wfl : L -> Prop) (wfr : R -> Prop) (tag : R -> L) : R -> Prop :=
@@ -119,16 +83,16 @@ Module Serializers (InputModule : AbstractInput).
       Serializer R (@Bind_wf L R wfl wfr tag left right) := 
       fun r =>
         match left r (tag r) with
-        | Success l_enc => match right r with
-                          | Success r_enc => Success (App l_enc r_enc)
-                          | Failure lvl data => Failure lvl $
-                                                 Failure.mkData
-                                                 "Bind serializing body failed"
-                                                 l_enc
-                                                 (Some data)
-                          end
+        | Success _ l_enc => match right r with
+                            | Success _ r_enc => mkSuccess (App l_enc r_enc)
+                            | Failure lvl data => Failure lvl $
+                                                   mkData
+                                                   "Bind serializing body failed"
+                                                   l_enc
+                                                   (Some data)
+                            end
         | Failure lvl data => Failure lvl $
-                               Failure.mkData
+                               mkData
                                "Bind serializing tag failed"
                                Output_default
                                (Some data)
@@ -147,16 +111,16 @@ Module Serializers (InputModule : AbstractInput).
       Serializer R (BindSucceeds_wf tag left right) := 
       fun r =>
         match right r with
-        | Success r_enc => match left r r_enc (tag r) with
-                          | Success l_enc => Success (App l_enc r_enc)
-                          | Failure lvl data => Failure lvl $
-                                                 Failure.mkData
-                                                 "BindSucceeds serializing tag failed"
-                                                 r_enc
-                                                 (Some data)
-                          end
+        | Success _ r_enc => match left r r_enc (tag r) with
+                            | Success _ l_enc => mkSuccess (App l_enc r_enc)
+                            | Failure lvl data => Failure lvl $
+                                                   mkData
+                                                   "BindSucceeds serializing tag failed"
+                                                   r_enc
+                                                   (Some data)
+                            end
         | Failure lvl data => Failure lvl $
-                               Failure.mkData
+                               mkData
                                "BindSucceeds serializing body failed"
                                Output_default
                                (Some data)
@@ -189,10 +153,10 @@ Module Serializers (InputModule : AbstractInput).
     Definition Len'_wf {X : Type} {wfx : X -> Prop} {wfn : nat -> Prop}
       (ser__len : Serializer nat wfn) (ser__x : Serializer X wfx) : X -> Prop :=
       fun x => match ser__x x with
-            | Success enc__x => match ser__len (Length enc__x) with
-                             | Success enc__len => wfn (Length enc__x) /\ wfx x
-                             | Failure _ _ => True
-                             end
+            | Success _ enc__x => match ser__len (Length enc__x) with
+                               | Success _ enc__len => wfn (Length enc__x) /\ wfx x
+                               | Failure _ _ => True
+                               end
             | Failure _ _ => True
             end.
     
@@ -200,16 +164,16 @@ Module Serializers (InputModule : AbstractInput).
       (ser__len : Serializer nat wfn) (underlying : Serializer X wfx) :
       Serializer X $ Len'_wf ser__len underlying :=
       fun x => match underlying x with
-            | Success enc => match ser__len (Length enc) with
-                            | Success len_enc => Success (App len_enc enc)
-                            | Failure lvl data => Failure lvl $
-                                                   Failure.mkData
-                                                   "Len' serializing tag failed"
-                                                   enc
-                                                   (Some data)
-                            end
+            | Success _ enc => match ser__len (Length enc) with
+                              | Success _ len_enc => mkSuccess (App len_enc enc)
+                              | Failure lvl data => Failure lvl $
+                                                     mkData
+                                                     "Len' serializing tag failed"
+                                                     enc
+                                                     (Some data)
+                              end
             | Failure lvl data => Failure lvl $
-                                   Failure.mkData
+                                   mkData
                                    "Len' serializing body failed"
                                    Output_default
                                    (Some data)
@@ -230,16 +194,16 @@ Module Serializers (InputModule : AbstractInput).
 
     Fixpoint rep' {X : Type} {wfx : X -> Prop}
       (underlying : Serializer X wfx) (xs : list X) : Result :=
-        match xs with
-        | [] => Success Output_default
-        | x :: xs' => match underlying x, rep' underlying xs' with
-                     | Success x_enc, Success rest_enc => Success $ App x_enc rest_enc
-                     | Failure lvl data as f, Success rest_enc => f
-                     | Success x_enc, Failure lvl data as f => f
-                     | Failure lvl__x data__x, Failure lvl__r data__r =>
-                         Failure Failure.Recoverable $ Failure.Concat data__x data__r
-                     end
-        end.
+      match xs with
+      | [] => mkSuccess Output_default
+      | x :: xs' => match underlying x, rep' underlying xs' with
+                   | Success _ x_enc, Success _ rest_enc => mkSuccess $ App x_enc rest_enc
+                   | Failure lvl data as f, Success _ rest_enc => f
+                   | Success _ x_enc, Failure lvl data as f => f
+                   | Failure lvl__x data__x, Failure lvl__r data__r =>
+                       Failure Recoverable $ ConcatData data__x data__r
+                   end
+      end.
 
     Definition Rep {X : Type} {wfx : X -> Prop}
       (underlying : Serializer X wfx) : Serializer (list X) (Rep_wf wfx) :=
@@ -247,13 +211,13 @@ Module Serializers (InputModule : AbstractInput).
 
     Definition RecursiveProgressError {X : Type} (name : string) (depth : X -> nat) (x x__n : X) : Result :=
       if depth x__n == depth x then
-        Failure Failure.Recoverable (Failure.mkData
-                                       (name ++ " no progress in recursive serializer")
-                                       Output_default None)
+        Failure Recoverable (mkData
+                               (name ++ " no progress in recursive serializer")
+                               Output_default None)
       else
-        Failure Failure.Fatal (Failure.mkData
-                                 (name ++ " fixpoint called with deeper value to serialize")
-                                 Output_default None).
+        Failure Fatal (mkData
+                         (name ++ " fixpoint called with deeper value to serialize")
+                         Output_default None).
 
     Definition recur_step {X : Type} {wfx : X -> Prop}
       (underlying : Serializer X wfx -> Serializer X wfx)

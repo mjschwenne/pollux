@@ -1,157 +1,72 @@
 From Pollux Require Import Prelude.
 From Pollux.parse Require Import Util.
 From Pollux.parse Require Import Input.
-From Pollux.parse Require Import Failure.
+From Pollux.parse Require Import Result.
 
 From Corelib.Program Require Import Basics Tactics.
 From Stdlib.Program Require Import Program.
 
 Module Parsers (InputModule : AbstractInput).
-  Module Failure := Failures(InputModule).
+  Module Result := Result(InputModule).
+  Import Result.
   Import InputModule.
 
-  Section Results.
+  Arguments Result X : clear implicits.
+  Definition Remaining {X : Type} (pr : Result X) : Input := getEnc pr.
+
+  Section Def.
+    (** Parser Definition *)
+
+    (* A parser is a total function from a position to a parse result *)
+    Definition Parser (X : Type) := Input -> Result X.
+
+    Definition IsRemaining (input remaining : Input) : Prop :=
+      Length remaining <= Length input /\ Drop input (Length input - Length remaining) = remaining.
+
+    Lemma IsRemainingTrans (input remaining1 remaining2 : Input) :
+      IsRemaining input remaining1 -> IsRemaining remaining1 remaining2 -> IsRemaining input remaining2.
+    Proof using Type.
+      intros [H1_len H1_drop] [H2_len H2_drop].
+      unfold IsRemaining.
+      split.
+      - apply Nat.le_trans with (Length remaining1); assumption.
+      - rewrite <- H2_drop at 2. 
+        rewrite <- H1_drop at 1.
+        rewrite <- DropDrop.
+        * rewrite Nat.add_sub_assoc; last assumption.
+          rewrite Nat.sub_add; last assumption.
+          reflexivity.
+        * lia.
+        * lia.
+    Qed.
+
+  End Def.
+
+  Section Combinators.
     Context `{EqDecision Input}.
 
-    Inductive Result {X : Type} :=
-    | Success (result : X) (remaining : Input)
-    | Failure (level : Failure.Level) (data : Failure.Data).
-    Arguments Result X : clear implicits.
+    (* This parser does not consume any input and returns the given value *)
+    Definition SucceedWith {X : Type} (result : X) : Parser X :=
+      fun inp => Success result inp.
 
-    (** FUNCTIONS ON PARSE RESULTS *)
+    (* A parser that always succeeds, consumes nothing and returns () *)
+    Definition Epsilon : (Parser unit) := SucceedWith tt.
 
-    (* If Remaining is the same as the input, then parser is "uncommitted",
-     so combinators like Or or ZeroOrMore can try alternatives. *)
-    Definition Remaining {X : Type} (pr : Result X) : Input :=
-      match pr with
-      | Success _ rem
-      | Failure _ (Failure.mkData _ rem _) => rem
-      end.
-    
-    Definition IsFailure {X : Type} (pr : Result X) : bool :=
-      match pr with
-      | Failure _ _ => true
-      | _ => false
-      end.
+    (* A parser that does not consume any input and returns the given failure *)
+    Definition FailWith {X : Type} (message : string) (level : Level) : Parser X :=
+      fun inp => Failure level $ mkData message inp None.
 
-    Definition IsFatalFailure {X : Type} (pr : Result X) : bool :=
-      match pr with
-      | Failure Failure.Fatal _ => true
-      | _ => false
-      end.
-
-    Definition IsFailureProp {X : Type} (pr : Result X) : Prop :=
-      match pr with
-      | Success _ _ => False
-      | Failure _ _ => True
-      end.
-
-    (* This function basically lets us change the parameterized type of a parse failure. This is useful
-     if we imagine that parsing a number depends are first parsing a list of digits. If we fail to
-     parse the list of digits, we want to propagate that error up as the result of paring the number
-     but can't (directly) do this since the type of the failure is wrong. This function constructs
-     the same parse failure but with the correct type. It takes a proof term as input since this
-     only makes sense for failures. Successes with have something of type R in them, which we can't
-     convert to a U. *)
-    Definition Propagate {A B : Type} (pr : Result A) (pf : IsFailureProp pr) :
-      Result B.
-    Proof.
-      destruct pr.
-      - destruct pf.
-      - apply Failure; assumption.
-    Defined.
-
-    Definition IsSuccessProp {X : Type} (pr : Result X) : Prop :=
-      match pr with
-      | Success _ _ => True
-      | Failure _ _ => False
-      end.
-
-    (* Similarly to PropagateFailure, this function only works on a ParseSuccess and lets us unwrap it.
-     Honestly, both of these could be done inline whenever needed, but I like learning more about how
-     to handle these in Rocq. I don't know what extraction would do to these. *)
-    Definition Extract {X : Type} (pr : Result X) (pf : IsSuccessProp pr) : X * Input. 
-    Proof.
-      destruct pr.
-      - split; assumption.
-      - destruct pf.
-    Defined.
-
-    Definition ResultMap {X Y : Type} (pr : Result X) (f : X -> Y) : Result Y :=
-      match pr with
-      | Success result remaining => Success (f result) remaining
-      | Failure lvl data => Failure lvl data
-      end.
-
-    Definition MapRecoverableError {X : Type} (pr : Result X) (f : Failure.Data -> Failure.Data) :
-      Result X :=
-      match pr with
-      | Failure Failure.Recoverable data => Failure Failure.Recoverable (f data)
-      | _ => pr
-      end.
-
-    Definition NeedsAlternative {X : Type} (pr : Result X) (input : Input) : bool :=
-      match pr with
-      | Failure Failure.Recoverable (Failure.mkData _ rem _) => if rem == input then true else false
-      | _ => false
-      end.
-
-    End Results.
-    Arguments Result X : clear implicits.
-
-    Section Def.
-      (** Parser Definition *)
-
-      (* A parser is a total function from a position to a parse result *)
-      Definition Parser (X : Type) := Input -> Result X.
-
-      Definition IsRemaining (input remaining : Input) : Prop :=
-        Length remaining <= Length input /\ Drop input (Length input - Length remaining) = remaining.
-
-      Lemma IsRemainingTrans (input remaining1 remaining2 : Input) :
-        IsRemaining input remaining1 -> IsRemaining remaining1 remaining2 -> IsRemaining input remaining2.
-      Proof using Type.
-        intros [H1_len H1_drop] [H2_len H2_drop].
-        unfold IsRemaining.
-        split.
-        - apply Nat.le_trans with (Length remaining1); assumption.
-        - rewrite <- H2_drop at 2. 
-          rewrite <- H1_drop at 1.
-          rewrite <- DropDrop.
-          * rewrite Nat.add_sub_assoc; last assumption.
-            rewrite Nat.sub_add; last assumption.
-            reflexivity.
-          * lia.
-          * lia.
-      Qed.
-
-    End Def.
-
-    Section Combinators.
-      Context `{EqDecision Input}.
-
-      (* This parser does not consume any input and returns the given value *)
-      Definition SucceedWith {X : Type} (result : X) : Parser X :=
-        fun inp => Success result inp.
-
-      (* A parser that always succeeds, consumes nothing and returns () *)
-      Definition Epsilon : (Parser unit) := SucceedWith tt.
-
-      (* A parser that does not consume any input and returns the given failure *)
-      Definition FailWith {X : Type} (message : string) (level : Failure.Level) : Parser X :=
-        fun inp => Failure level $ Failure.mkData message inp None.
-
-      (* A parser that always returns the given result *)
-      Definition ResultWith {X : Type} (result : Result X) : Parser X :=
-        fun inp => result.
+    (* A parser that always returns the given result *)
+    Definition ResultWith {X : Type} (result : Result X) : Parser X :=
+      fun inp => result.
 
     (* A parser that fails if the string has not been entirely consumed *)
-      Definition EndOfInput : Parser unit :=
-        fun inp => if Length inp == 0 then
-                  Success () inp
-                else
-                  Failure Failure.Recoverable
-                    (Failure.mkData "expected end of input" inp None).
+    Definition EndOfInput : Parser unit :=
+      fun inp => if Length inp == 0 then
+                Success () inp
+              else
+                Failure Recoverable
+                  (mkData "expected end of input" inp None).
 
     (* A parser that fails if the left parser fails. If the left parser succeeds, provides its
      result and the remaining sequence to the right parser generator. *)
@@ -161,13 +76,13 @@ Module Parsers (InputModule : AbstractInput).
         | Success l_result l_rem => match right l_result l_rem with
                                    | Success r_result r_rem as s => s
                                    | Failure lvl data => Failure lvl $
-                                                          Failure.mkData
+                                                          mkData
                                                           "Bind right failed"
                                                           l_rem
                                                           (Some data)
                                    end
         | Failure lvl data => Failure lvl $
-                               Failure.mkData
+                               mkData
                                "Bind left failed"
                                inp
                                (Some data)
@@ -182,13 +97,13 @@ Module Parsers (InputModule : AbstractInput).
         | Success l_result l_rem => match right l_result l_rem l_rem with
                                    | Success r_result r_rem as s => s
                                    | Failure lvl data => Failure lvl $
-                                                          Failure.mkData
+                                                          mkData
                                                           "BindSucceeds right failed"
                                                           l_rem
                                                           (Some data)
                                    end
         | Failure lvl data => Failure lvl $
-                               Failure.mkData
+                               mkData
                                "BindSucceeds left failed"
                                inp
                                (Some data)
@@ -208,13 +123,13 @@ Module Parsers (InputModule : AbstractInput).
         | Success l_result l_rem => match right l_rem with
                                    | Success r_result r_rem => Success (l_result, r_result) r_rem
                                    | Failure lvl data => Failure lvl $
-                                                          Failure.mkData
+                                                          mkData
                                                           "Concat right failed"
                                                           l_rem
                                                           (Some data)
                                    end
         | Failure lvl data => Failure lvl $
-                               Failure.mkData
+                               mkData
                                "Concat left failed"
                                inp
                                (Some data)
@@ -228,13 +143,13 @@ Module Parsers (InputModule : AbstractInput).
         | Success l_result l_rem => match right l_rem with
                                    | Success r_result r_rem => Success (mapper l_result r_result) r_rem
                                    | Failure lvl data => Failure lvl $
-                                                          Failure.mkData
+                                                          mkData
                                                           "ConcatMap right failed"
                                                           l_rem
                                                           (Some data)
                                    end
         | Failure lvl data => Failure lvl $
-                               Failure.mkData
+                               mkData
                                "ConcatMap left failed"
                                inp
                                (Some data)
@@ -254,7 +169,7 @@ Module Parsers (InputModule : AbstractInput).
               match underlying inp' with
               | Success r rem => Success r (App rem (Drop inp n))
               | Failure lvl data => Failure lvl $
-                                     Failure.mkData
+                                     mkData
                                      "Limit underlying failed"
                                      inp'
                                      (Some data)
@@ -269,7 +184,7 @@ Module Parsers (InputModule : AbstractInput).
         match underlying inp with
         | Success result remaining => Success (f result) remaining
         | Failure lvl data => Failure lvl $
-                               Failure.mkData
+                               mkData
                                "Map underlying failed"
                                inp
                                (Some data)
@@ -285,7 +200,7 @@ Module Parsers (InputModule : AbstractInput).
               Propagate result I
             else
               Success () inp
-        | Success _ _ => Failure Failure.Recoverable (Failure.mkData "Not failed" inp None)
+        | Success _ _ => Failure Recoverable (mkData "Not failed" inp None)
         end.
 
     (* Make the two parsers parse the same string and, if both succeed, return a pair of the
@@ -297,19 +212,19 @@ Module Parsers (InputModule : AbstractInput).
       fun inp =>
         match left inp, right inp with
         | Success a _, Success b rr => Success (a, b) rr
-        | Failure lvl data, Success _ _ => Failure lvl $ Failure.mkData
-                                              "And left failed"
-                                              inp
-                                              (Some data)
-        | Success _ _, Failure lvl data => Failure lvl $ Failure.mkData
+        | Failure lvl data, Success _ _ => Failure lvl $ mkData
+                                            "And left failed"
+                                            inp
+                                            (Some data)
+        | Success _ _, Failure lvl data => Failure lvl $ mkData
                                             "And right failed"
                                             inp
                                             (Some data)
-        | Failure l_lvl l_data, Failure r_lvl r_data => Failure (Failure.maxLevel l_lvl r_lvl) $
-                                                         Failure.mkData
+        | Failure l_lvl l_data, Failure r_lvl r_data => Failure (maxLevel l_lvl r_lvl) $
+                                                         mkData
                                                          "And both parsers failed"
                                                          inp
-                                                         (Some $ Failure.Concat l_data r_data)
+                                                         (Some $ ConcatData l_data r_data)
         end.
 
     Definition Or {X : Type} (left right : Parser X) : Parser X :=
@@ -325,16 +240,16 @@ Module Parsers (InputModule : AbstractInput).
                 p2
               else
                 MapRecoverableError p2 (fun dataRight =>
-                                          Failure.mkData
+                                          mkData
                                             "Or both options failed"
                                             inp
-                                            (Some $Failure.Concat data dataRight))
+                                            (Some $ ConcatData data dataRight))
         end.
 
     (* Like Or, but takes as many parsers as needed *)
     Fixpoint OrSeq {X : Type} (alternatives : list (Parser X)) : Parser X :=
       match alternatives with
-      | [] => FailWith "no alternatives" Failure.Recoverable
+      | [] => FailWith "no alternatives" Recoverable
       | alt :: [] => alt
       | alt :: alts => Or alt (OrSeq alts)
       end.
@@ -347,9 +262,9 @@ Module Parsers (InputModule : AbstractInput).
       fun inp =>
         match underlying inp with
         | Success r rem => Success r inp
-        | Failure Failure.Fatal data as p => p
-        | Failure Failure.Recoverable data =>
-            Failure Failure.Recoverable (Failure.mkData (Failure.getMsg data) inp None)
+        | Failure Fatal data as p => p
+        | Failure Recoverable data =>
+            Failure Recoverable (mkData (getMsg data) inp None)
         end.
 
     (* (Opt a) evaluates `a` on the input, and then
@@ -362,9 +277,9 @@ Module Parsers (InputModule : AbstractInput).
       fun inp =>
         match underlying inp with
         | Success r rem as p => p
-        | Failure Failure.Fatal data as p => p
-        | Failure Failure.Recoverable data =>
-            Failure Failure.Recoverable (Failure.mkData (Failure.getMsg data) inp None)
+        | Failure Fatal data as p => p
+        | Failure Recoverable data =>
+            Failure Recoverable (mkData (getMsg data) inp None)
         end.
     
     (* If the condition parser fails, returns a non-committing failure.
@@ -380,8 +295,8 @@ Module Parsers (InputModule : AbstractInput).
       fun inp =>
         match underlying inp with
         | Success rr rem => Success (Some rr) rem
-        | Failure Failure.Fatal data as pr => Propagate pr I
-        | Failure Failure.Recoverable data as pr =>
+        | Failure Fatal data as pr => Propagate pr I
+        | Failure Recoverable data as pr =>
             if negb $ NeedsAlternative pr inp then
               Propagate pr I
             else
@@ -390,19 +305,19 @@ Module Parsers (InputModule : AbstractInput).
 
     Program Fixpoint rep' {X : Type} (underlying : Parser X) (inp : Input)
       {measure (Length inp)} : Result (list X) :=
-        match underlying inp with
-        | Success x rem => if decide (Length rem < Length inp) then
-                            match rep' underlying rem with
-                            | Success xs rest => Success (x :: xs) rest
-                            | Failure Failure.Recoverable data => Success [x] rem
-                            | Failure Failure.Fatal data => Failure Failure.Fatal data
-                            end
-                          else
-                            Failure Failure.Fatal $ Failure.mkData
-                              "Parser.Rep underlying increased input length" rem None
-        | Failure Failure.Recoverable (Failure.mkData _ rem _) => Success [] rem
-        | Failure Failure.Fatal data => Failure Failure.Fatal data
-        end.
+      match underlying inp with
+      | Success x rem => if decide (Length rem < Length inp) then
+                          match rep' underlying rem with
+                          | Success xs rest => Success (x :: xs) rest
+                          | Failure Recoverable data => Success [x] rem
+                          | Failure Fatal data => Failure Fatal data
+                          end
+                        else
+                          Failure Fatal $ mkData
+                            "Parser.Rep underlying increased input length" rem None
+      | Failure Recoverable (mkData _ rem _) => Success [] rem
+      | Failure Fatal data => Failure Fatal data
+      end.
 
     Definition Rep {X : Type} (underlying : Parser X) : Parser (list X) :=
       fun inp => rep' underlying inp.
@@ -419,7 +334,7 @@ Module Parsers (InputModule : AbstractInput).
                                 else
                                   @Propagate A _ (Failure lvl data) I
       end.
-                             
+    
     (* Repeats the underlying parser until the first failure that accepts alternatives, combining results
      into an accumulator and return the final accumulated result. *)
     Definition RepFold {A B : Type} (underlying : Parser B) (combine : A -> B -> A) (acc : A) :
@@ -434,7 +349,7 @@ Module Parsers (InputModule : AbstractInput).
               | S m => match underlying inp with
                       | Success b rem => RepN underlying combine m (combine acc b) rem
                       | Failure lvl data => Failure lvl $
-                                             Failure.mkData
+                                             mkData
                                              "RepN underlying failed before N"
                                              inp
                                              (Some data)
@@ -466,7 +381,7 @@ Module Parsers (InputModule : AbstractInput).
                           (fun (acc : list A) (a : A) => acc ++ [a])
                           (pred n) [ret]
            | None => SucceedWith []
-        end).
+           end).
 
     (* Repeats the underlying parser, merging intermediate results. Returns the final merged result. *)
     Definition RepMerge {X : Type} (underlying : Parser X) (merger : X -> X -> X) : Parser X :=
@@ -474,7 +389,7 @@ Module Parsers (InputModule : AbstractInput).
         (fun (result : option X) =>
            match result with
            | Some ret => RepFold underlying merger ret
-           | None => FailWith "No first element in RepMerge" Failure.Recoverable
+           | None => FailWith "No first element in RepMerge" Recoverable
            end).
 
     (* Repeats the underlying parser, merging intermediate results exactly N time.
@@ -484,7 +399,7 @@ Module Parsers (InputModule : AbstractInput).
         (fun (result : option X) =>
            match result with
            | Some ret => RepN underlying merger (pred n) ret
-           | None => FailWith "No first element in RepMergeN" Failure.Recoverable
+           | None => FailWith "No first element in RepMergeN" Recoverable
            end).
 
     (* Repeats the underlying parser separated by the given separator parser, merging intermediate results.
@@ -495,7 +410,7 @@ Module Parsers (InputModule : AbstractInput).
         (fun (result : option A) =>
            match result with
            | Some ret => RepFold (ConcatKeepRight separator underlying) merger ret
-           | None => FailWith "No first element in RepSepMerge" Failure.Recoverable
+           | None => FailWith "No first element in RepSepMerge" Recoverable
            end).
 
     (* Repeats the underlying parser separated by the given separator parser, merging intermediate results,
@@ -506,7 +421,7 @@ Module Parsers (InputModule : AbstractInput).
         (fun (result : option A) =>
            match result with
            | Some ret => RepN (ConcatKeepRight separator underlying) merger (pred n) ret
-           | None => FailWith "No first element in RepSepMergeN" Failure.Recoverable
+           | None => FailWith "No first element in RepSepMergeN" Recoverable
            end).
 
     (* Repeated the underlying parser until the first failure that accepts alternatives, and returns the
@@ -525,11 +440,11 @@ Module Parsers (InputModule : AbstractInput).
     Definition RecursiveProgressError {R : Type} (name : string) (inp : Input) (remaining : Input) :
       Result R :=
       if Length remaining == Length inp then
-        Failure Failure.Recoverable (Failure.mkData (name ++ " no progress in recursive parser") remaining None)
+        Failure Recoverable (mkData (name ++ " no progress in recursive parser") remaining None)
       else
-        Failure Failure.Fatal (Failure.mkData
-                              (name ++ " fixpoint called with an increasing remaining sequence")
-                              remaining None).
+        Failure Fatal (mkData
+                         (name ++ " fixpoint called with an increasing remaining sequence")
+                         remaining None).
 
     Definition recur_step {X : Type}
       (underlying : Parser X -> Parser X)
@@ -572,6 +487,6 @@ Module Parsers (InputModule : AbstractInput).
     Definition RecursiveState {X S : Type}
       (underlying : (S -> Parser X) -> (S -> Parser X)) (st : S) : Parser X :=
       recur_st underlying st.
-      
-    End Combinators.
+    
+  End Combinators.
 End Parsers.
