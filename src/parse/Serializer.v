@@ -210,7 +210,7 @@ Module Serializers (InputModule : AbstractInput).
                    | Failure lvl data as f, Success _ rest_enc => f
                    | Success _ x_enc, Failure lvl data as f => f
                    | Failure lvl__x data__x, Failure lvl__r data__r =>
-                       Failure Recoverable $ ConcatData data__x data__r
+                       Failure (maxLevel lvl__x lvl__r) $ ConcatData data__x data__r
                    end
       end.
 

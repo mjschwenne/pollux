@@ -192,6 +192,24 @@ Module Result (InputModule : AbstractInput).
                     end.
     Infix "≡ᵣ" := result_equiv (at level 70):type_scope.
 
+    Theorem ResultEquivSuccess : forall r1 r2 x1 x2 enc1 enc2,
+      r1 ≡ᵣ r2 -> r1 = Success x1 enc1 -> r2 = Success x2 enc2 ->
+      x1 = x2 /\ enc1 = enc2.
+    Proof using Type.
+      intros r1 r2 x1 x2 enc1 enc2 Hequiv Hsucc1 Hsucc2.
+      subst. unfold result_equiv in Hequiv.
+      assumption.
+    Qed.
+
+    Theorem ResultEquivSuccessApp : forall x enc enc1 enc2,
+      Success x enc1 ≡ᵣ Success x enc2 ->
+      Success x (App enc enc1) ≡ᵣ Success x (App enc enc2).
+    Proof using Type.
+      unfold result_equiv.
+      intros x enc enc1 enc2 [_ Henc].
+      subst. split; reflexivity.
+    Qed.
+
     Lemma result_equiv_refl : Reflexive result_equiv.
     Proof using Type.
       intros r. destruct r; done.

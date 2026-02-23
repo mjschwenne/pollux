@@ -379,7 +379,24 @@ Module Theorems (InputModule : AbstractInput).
                  | S.R.Failure lvl data as f, S.R.Success _ rest_enc => f
                  | S.R.Success _ x_enc, S.R.Failure lvl data as f => f
                  | S.R.Failure lvl__x data__x, S.R.Failure lvl__r data__r =>
-                     S.R.Failure S.R.Recoverable $ S.R.ConcatData data__x data__r
+                     S.R.Failure (S.R.maxLevel lvl__x lvl__r) $ S.R.ConcatData data__x data__r
+                 end
+    end.
+  Proof using Type.
+    destruct xs; reflexivity.
+  Qed.
+
+  Lemma ser_rep_unfold {X : Type} {wfx : X -> Prop}
+    (underlying : S.Serializer X wfx) (xs : list X):
+    S.Rep underlying xs = 
+    match xs with
+    | [] => S.mkSuccess S.Output_default
+    | x :: xs' => match underlying x, S.rep' underlying xs' with
+                 | S.R.Success _ x_enc, S.R.Success _ rest_enc => S.mkSuccess $ App x_enc rest_enc
+                 | S.R.Failure lvl data as f, S.R.Success _ rest_enc => f
+                 | S.R.Success _ x_enc, S.R.Failure lvl data as f => f
+                 | S.R.Failure lvl__x data__x, S.R.Failure lvl__r data__r =>
+                     S.R.Failure (S.R.maxLevel lvl__x lvl__r) $ S.R.ConcatData data__x data__r
                  end
     end.
   Proof using Type.
@@ -440,7 +457,64 @@ Module Theorems (InputModule : AbstractInput).
         repeat split; assumption.
   Qed.
 
-  Lemma SerialRepSubst {X : Type} {wfx : X -> Prop} (ser1 ser2 : S.Serializer X wfx) :
+  Infix "ₛ≡ᵣ" := S.R.result_equiv (at level 70):type_scope.
+
+  Instance SerRep_Proper {X : Type} {wfx : X -> Prop} :
+    Proper ((@eq X ==> S.R.result_equiv) ==> eq ==> S.R.result_equiv) (@S.Rep X wfx).
+  Proof using Type. 
+    intros ser1 ser2 H xs ys Heq. subst.
+    induction ys.
+    - unfold S.Rep.
+      rewrite !ser_rep_unfold.
+      unfold S.mkSuccess, S.R.result_equiv.
+      done.
+    - rewrite ser_rep_unfold.
+      rewrite (ser_rep_unfold ser2).
+      assert (ser1 a ₛ≡ᵣ ser2 a) as Hequiv_a by (apply H; reflexivity).
+      destruct (ser1 a) as [[] enc1 | lvl1 data1] eqn:Hser1, (ser2 a) as [[] enc2 | lvl2 data2] eqn:Hser2.
+      + destruct (S.rep' ser1 ys) as [[] enc_ys1 | lvl_ys1 data_ys1] eqn:Hser_ys1,
+                   (S.rep' ser2 ys) as [[] enc_ys2 | lvl_ys2 data_ys2] eqn:Hser_ys2.
+        * unfold S.mkSuccess, S.R.result_equiv. split; first reflexivity.
+          unfold S.Rep in IHys.
+          apply S.R.ResultEquivSuccess with
+            (x1 := ()) (x2 := ())
+            (enc1 := enc_ys1) (enc2 := enc_ys2) in IHys as [[] IHys].
+          -- unfold S.R.result_equiv in Hequiv_a.
+             destruct Hequiv_a as [[] Henc]; congruence.
+          -- rewrite Hser_ys1; reflexivity.
+          -- rewrite Hser_ys2; reflexivity.
+        * unfold S.mkSuccess, S.R.result_equiv.
+          unfold S.Rep, S.R.result_equiv in IHys.
+          rewrite Hser_ys1, Hser_ys2 in IHys.
+          assumption.
+        * unfold S.mkSuccess, S.R.result_equiv.
+          unfold S.Rep, S.R.result_equiv in IHys.
+          rewrite Hser_ys1, Hser_ys2 in IHys.
+          assumption.
+        * unfold S.Rep, S.R.result_equiv in *.
+          rewrite Hser_ys1, Hser_ys2 in IHys.
+          assumption.
+      + unfold S.R.result_equiv in Hequiv_a. contradiction.
+      + unfold S.R.result_equiv in Hequiv_a. contradiction.
+      + unfold S.R.result_equiv in Hequiv_a; subst.
+        destruct (S.rep' ser1 ys) as [[] enc_ys1 | lvl_ys1 data_ys1] eqn:Hser_ys1,
+                   (S.rep' ser2 ys) as [[] enc_ys2 | lvl_ys2 data_ys2] eqn:Hser_ys2.
+        * reflexivity.
+        * unfold S.Rep in IHys.
+          rewrite Hser_ys1, Hser_ys2 in IHys.
+          unfold S.R.result_equiv in IHys.
+          contradiction.
+        * unfold S.Rep in IHys.
+          rewrite Hser_ys1, Hser_ys2 in IHys.
+          unfold S.R.result_equiv in IHys.
+          contradiction.
+        * unfold S.Rep in IHys.
+          rewrite Hser_ys1, Hser_ys2 in IHys.
+          unfold S.R.result_equiv in IHys.
+          congruence.
+  Qed.
+
+  Lemma SerialRepSubst' {X : Type} {wfx : X -> Prop} (ser1 ser2 : S.Serializer X wfx) :
     forall xs, (forall x, x ∈ xs -> ser1 x = ser2 x) -> S.Rep ser1 xs = S.Rep ser2 xs.
   Proof using Type.
     intros xs Heq.
@@ -459,6 +533,80 @@ Module Theorems (InputModule : AbstractInput).
         intros x Helem.
         apply list_elem_of_further with (y := a) in Helem.
         apply Heq. assumption.
+  Qed.
+
+  Lemma SerialRepSubst {X : Type} {wfx : X -> Prop} (ser1 ser2 : S.Serializer X wfx) :
+    forall xs, (forall x, x ∈ xs -> ser1 x ₛ≡ᵣ ser2 x) -> S.Rep ser1 xs ₛ≡ᵣ S.Rep ser2 xs.
+  Proof using Type.
+    intros xs Heq. 
+    induction xs.
+    - done.
+    - rewrite ser_rep_unfold, (ser_rep_unfold ser2).
+      (* Get the equivalence for the head element *)
+      assert (ser1 a ₛ≡ᵣ ser2 a) as Ha by apply Heq, list_elem_of_here.
+      (* Get the equivalence for the tail *)
+      unfold S.Rep in IHxs.
+      (* Now destruct all the results and use the equivalences *)
+      destruct (ser1 a) as [[] enc1 | lvl1 data1] eqn:Hser1,
+               (ser2 a) as [[] enc2 | lvl2 data2] eqn:Hser2;
+        unfold S.R.result_equiv in Ha; try contradiction.
+      + (* Both Success *)
+        destruct Ha as [_ Henc]. subst enc2.
+        destruct (S.rep' ser1 xs) as [[] enc_xs1 | lvl_xs1 data_xs1] eqn:Hser_xs1,
+                 (S.rep' ser2 xs) as [[] enc_xs2 | lvl_xs2 data_xs2] eqn:Hser_xs2;
+          try contradiction.
+        * (* Both rep' Success *)
+          apply S.R.ResultEquivSuccessApp.
+          apply IHxs. intros x Helem. 
+          apply list_elem_of_further with (y := a) in Helem.
+          apply Heq. assumption.
+        * (* ser1 rep' Success, ser2 rep' Failure *)
+          apply IHxs. intros x Helem.
+          apply list_elem_of_further with (y := a) in Helem.
+          apply Heq. assumption.
+        * (* ser1 rep' Failure, ser2 rep' Success *)
+          apply IHxs. intros x Helem.
+          apply list_elem_of_further with (y := a) in Helem.
+          apply Heq. assumption.
+        * (* Both rep' Failure *)
+          apply IHxs. intros x Helem.
+          apply list_elem_of_further with (y := a) in Helem.
+          apply Heq. assumption.
+      + (* Both Failure *)
+        subst lvl2.
+        destruct (S.rep' ser1 xs) as [[] enc_xs1 | lvl_xs1 data_xs1] eqn:Hser_xs1,
+                 (S.rep' ser2 xs) as [[] enc_xs2 | lvl_xs2 data_xs2] eqn:Hser_xs2;
+          try reflexivity; try assumption.
+        * assert (S.rep' ser1 xs ₛ≡ᵣ S.rep' ser2 xs) as Hequiv.
+          {
+            rewrite Hser_xs1, Hser_xs2.
+            apply IHxs. intros x Helem.
+            apply list_elem_of_further with (y := a) in Helem.
+            apply Heq. assumption.
+          }
+          rewrite Hser_xs1, Hser_xs2 in Hequiv.
+          unfold S.R.result_equiv in Hequiv.
+          contradiction.
+        * assert (S.rep' ser1 xs ₛ≡ᵣ S.rep' ser2 xs) as Hequiv.
+          {
+            rewrite Hser_xs1, Hser_xs2.
+            apply IHxs. intros x Helem.
+            apply list_elem_of_further with (y := a) in Helem.
+            apply Heq. assumption.
+          }
+          rewrite Hser_xs1, Hser_xs2 in Hequiv.
+          unfold S.R.result_equiv in Hequiv.
+          contradiction.
+        * assert (S.rep' ser1 xs ₛ≡ᵣ S.rep' ser2 xs) as Hequiv.
+          {
+            rewrite Hser_xs1, Hser_xs2.
+            apply IHxs. intros x Helem.
+            apply list_elem_of_further with (y := a) in Helem.
+            apply Heq. assumption.
+          }
+          rewrite Hser_xs1, Hser_xs2 in Hequiv.
+          unfold S.R.result_equiv in Hequiv.
+          subst. done.
   Qed.
 
   Lemma RepCorrect {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) (par__x : Parser X) :
