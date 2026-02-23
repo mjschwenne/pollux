@@ -76,7 +76,7 @@ Module Theorems (InputModule : AbstractInput).
     pose proof Hleft_ok (tag x) l_enc (App r_enc rest) wfl_ok Hleft as Hl_ret.
     rewrite Hl_ret.
     pose proof Hright_ok x r_enc rest wfr_ok Hright as Hr_ret.
-    assumption.
+    destruct (rp (tag x) (App r_enc rest)); (assumption || discriminate).
   Qed.
 
   Definition BindSucceedsRightOk {R L : Type} {wfr : R -> Prop}
@@ -108,6 +108,7 @@ Module Theorems (InputModule : AbstractInput).
     pose proof Hright_ok x r_enc rest as Hrp.
     pose proof wfr_ok as wfr_ok'.
     apply Hrp in wfr_ok' as _, Hright as Hr_ret; try assumption.
+    destruct (rp (tag x) (App r_enc rest) (App r_enc rest)); (assumption || discriminate).
   Qed.
 
   Definition BindResultLeftOk {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
@@ -162,8 +163,7 @@ Module Theorems (InputModule : AbstractInput).
   Proof using Type.
     intros. split.
     - unfold S.Concat.
-      destruct (ser__a a) as [out__a |] eqn:Ha; last discriminate.
-      destruct (ser__b b) as [out__b |] eqn:Hb; last discriminate.
+      destruct (ser__a a) as [out__a |] eqn:Ha, (ser__b b) as [out__b |] eqn:Hb; try discriminate.
       intro H; inversion H as [Henc]; clear H.
       exists out__a, out__b. repeat (split; first reflexivity); reflexivity.
     - intros (out__a & out__b & Ha & Hb & Henc). unfold S.Concat.
@@ -199,7 +199,11 @@ Module Theorems (InputModule : AbstractInput).
     unfold P.Bind.
     apply (Hleft_ok _ _ (App enc__r rest)) in Hl_ok; last assumption.
     rewrite Hl_ok.
-    apply (Hright_ok _ rest) in Hr_ok; assumption.
+    destruct (rp (tag r) (App enc__r rest)) eqn:Hrp.
+    - apply (Hright_ok _ rest) in Hr_ok; last assumption.
+      rewrite Hrp in Hr_ok; assumption.
+    - apply (Hright_ok _ rest) in Hr_ok; last assumption.
+      rewrite Hr_ok in Hrp; discriminate.
   Qed.
 
   (* Relax the rest requirement, since the Limit parser will ensure rest = [] *)
@@ -432,7 +436,6 @@ Module Theorems (InputModule : AbstractInput).
         exists enc__y, enc__rest.
         repeat split; assumption.
   Qed.
-
 
   Lemma SerialRepSubst {X : Type} {wfx : X -> Prop} (ser1 ser2 : S.Serializer X wfx) :
     forall xs, (forall x, x ∈ xs -> ser1 x = ser2 x) -> S.Rep ser1 xs = S.Rep ser2 xs.
