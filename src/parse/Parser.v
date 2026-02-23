@@ -7,8 +7,8 @@ From Corelib.Program Require Import Basics Tactics.
 From Stdlib.Program Require Import Program.
 
 Module Parsers (InputModule : AbstractInput).
-  Module Result := Result(InputModule).
-  Import Result.
+  Module R := Result(InputModule).
+  Import R.
   Import InputModule.
 
   Arguments Result X : clear implicits.

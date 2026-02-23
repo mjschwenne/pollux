@@ -1,7 +1,7 @@
 From Pollux Require Import Prelude.
 From Pollux.parse Require Import Util.
 From Pollux.parse Require Import Input.
-From Pollux.parse Require Import Failure.
+From Pollux.parse Require Import Result.
 From Pollux.parse Require Import Parser.
 From Pollux.parse Require Import Serializer.
 
@@ -9,7 +9,7 @@ From Corelib.Program Require Import Basics Tactics.
 From Stdlib.Program Require Import Program.
 
 Module Theorems (InputModule : AbstractInput).
-  Module F := Failures(InputModule).
+  Module R := Result(InputModule).
   Module P := Parsers(InputModule).
   Module S := Serializers(InputModule).
   Import InputModule.
@@ -23,7 +23,7 @@ Module Theorems (InputModule : AbstractInput).
 
   Definition ParseOk''' {X : Type} {wf : X -> Prop}
     (par : Parser X) (ser : Serializer X wf) (x : X) (enc rest : Input) :=
-    wf x -> ser x = S.Success enc -> par (App enc rest) = P.Success x rest.
+    wf x -> ser x = S.mkSuccess enc -> par (App enc rest) = P.R.Success x rest.
 
   Definition ParseOk'' {X : Type} {wf : X -> Prop}
     (par : Parser X) (ser : Serializer X wf) (x : X) (enc : Input) :=
@@ -67,8 +67,9 @@ Module Theorems (InputModule : AbstractInput).
   Proof using Type.
     intros x Hleft_ok Hright_ok enc rest wf_ok.
     unfold S.Bind.
-    destruct (ls x (tag x)) as [l_enc|] eqn:Hleft; last discriminate.
-    destruct (rs x) as [r_enc|] eqn:Hright; last discriminate.
+    destruct (ls x (tag x)) as [[] l_enc|] eqn:Hleft; last discriminate.
+    destruct (rs x) as [[] r_enc|] eqn:Hright; last discriminate.
+    rewrite S.mkSuccess_eq in Hleft, Hright.
     intro Hser_ok. inversion Hser_ok as [Henc].
     rewrite App_assoc.
     unfold P.Bind.
@@ -95,8 +96,9 @@ Module Theorems (InputModule : AbstractInput).
   Proof using Type.
     intros Hright_ok Hleft_ok x enc rest wf_ok.
     unfold S.BindSucceeds.
-    destruct (rs x) as [r_enc|] eqn:Hright; last discriminate.
-    destruct (ls x r_enc (tag x)) as [l_enc|] eqn:Hleft; last discriminate.
+    destruct (rs x) as [[] r_enc|] eqn:Hright; last discriminate.
+    destruct (ls x r_enc (tag x)) as [[] l_enc|] eqn:Hleft; last discriminate.
+    rewrite S.mkSuccess_eq in Hleft, Hright.
     intros Hser_ok. inversion Hser_ok as [Henc].
     destruct wf_ok as [wfl_ok wfr_ok].
     rewrite App_assoc.
@@ -117,7 +119,7 @@ Module Theorems (InputModule : AbstractInput).
     forall (r : R), ParseOk' lp (ls (rs r) (S.Out $ rs r)) (tag r).
 
   Definition BindResultRightOk {L R : Type} {wfr : R -> Prop}
-    (rp : P.Result L -> Input -> Parser R) (rs : Serializer R wfr)
+    (rp : P.R.Result L -> Input -> Parser R) (rs : Serializer R wfr)
     (lp : Parser L) (tag : R -> L) : Prop :=
     forall (r : R) (l_enc r_enc rest: Input),
     let enc := (App (App l_enc r_enc) rest) in
@@ -125,14 +127,14 @@ Module Theorems (InputModule : AbstractInput).
 
   Lemma BindResultCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
     (lp : Parser L) (ls : S.Result -> Output -> S.Serializer L wfl)
-    (rp : P.Result L -> Input -> Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
+    (rp : P.R.Result L -> Input -> Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
     BindResultLeftOk lp ls rs tag -> BindResultRightOk rp rs lp tag ->
     ParseOk (P.BindResult lp rp) (S.BindResult tag ls rs).
   Proof using Type.
     unfold ParseOk, ParseOk', ParseOk'', ParseOk'''.
     intros Hleft_ok Hright_ok x enc rest wf_ok.
     unfold S.BindResult.
-    destruct (rs x) as [r_enc|] eqn:Hright.
+    destruct (rs x) as [[] r_enc|] eqn:Hright.
     - simpl. symmetry in Hright.
       intro Hls. unfold S.BindResult_wf in wf_ok.
       destruct wf_ok as [wfl_ok wfr_ok].
@@ -155,18 +157,18 @@ Module Theorems (InputModule : AbstractInput).
   Lemma SerialConcatInversion {A B : Type} {wf__a : A -> Prop} {wf__b : B -> Prop}
     (ser__a : S.Serializer A wf__a) (ser__b : S.Serializer B wf__b) : 
     forall (a : A) (b : B) (enc : Output),
-    S.Concat ser__a ser__b (a, b) = S.Success enc <->
+    S.Concat ser__a ser__b (a, b) = S.mkSuccess enc <->
                                   exists (enc__a enc__b : Output),
-                                    ser__a a = S.Success enc__a /\
-                                    ser__b b = S.Success enc__b /\
+                                    ser__a a = S.mkSuccess enc__a /\
+                                    ser__b b = S.mkSuccess enc__b /\
                                     enc = App enc__a enc__b.
   Proof using Type.
     intros. split.
     - unfold S.Concat.
-      destruct (ser__a a) as [out__a |] eqn:Ha, (ser__b b) as [out__b |] eqn:Hb; try discriminate.
+      destruct (ser__a a) as [[] out__a |] eqn:Ha, (ser__b b) as [[] out__b |] eqn:Hb; try discriminate.
       intro H; inversion H as [Henc]; clear H.
       exists out__a, out__b. repeat (split; first reflexivity); reflexivity.
-    - intros (out__a & out__b & Ha & Hb & Henc). unfold S.Concat.
+    - intros (out__a & out__b & Ha & Hb & Henc). unfold S.Concat, S.mkSuccess in *.
       rewrite Ha, Hb. congruence.
   Qed.
 
@@ -209,10 +211,10 @@ Module Theorems (InputModule : AbstractInput).
   (* Relax the rest requirement, since the Limit parser will ensure rest = [] *)
   Definition LimitParseOk {X : Type} {wf : X -> Prop} (ser : Serializer X wf) (par : Parser X) := 
     forall x enc,
-    wf x -> ser x = S.Success enc -> par enc = P.Success x Input_default.
+    wf x -> ser x = S.mkSuccess enc -> par enc = P.R.Success x Input_default.
 
   Definition LenOk {X : Type} {wf : X -> Prop} (ser : Serializer X wf) (len : X -> nat) (x : X) :=
-    forall enc, ser x = S.Success enc -> len x = Length enc.
+    forall enc, ser x = S.mkSuccess enc -> len x = Length enc.
 
   Lemma LimitCorrect {X : Type} {wf : X -> Prop} (len : X -> nat)
     (underlying__ser : S.Serializer X wf) (underlying__par : Parser X) (x : X) :
@@ -248,7 +250,7 @@ Module Theorems (InputModule : AbstractInput).
   Qed.
 
   Definition LimitParseOkWeak {X : Type} {wf : X -> Prop} (ser : Serializer X wf) (par : Parser X) (x : X) := 
-    forall enc, wf x -> ser x = S.Success enc -> par enc = P.Success x Input_default.
+    forall enc, wf x -> ser x = S.mkSuccess enc -> par enc = P.R.Success x Input_default.
 
   Lemma LenCorrect'Weakened {X : Type} {wfx : X -> Prop} {wfn : nat -> Prop}
     (ser__len : S.Serializer nat wfn) (par__len : Parser nat)
@@ -259,8 +261,8 @@ Module Theorems (InputModule : AbstractInput).
   Proof using Type.
     intros Hnat_ok Hlim_ok enc' rest Hwf.
     unfold P.Len, S.Len'.
-    destruct (ser__x x) as [enc__x |] eqn:Hser__x; last discriminate.
-    destruct (ser__len (Length enc__x)) as [enc__len |] eqn:Hser__len; last discriminate.
+    destruct (ser__x x) as [[] enc__x |] eqn:Hser__x; last discriminate.
+    destruct (ser__len (Length enc__x)) as [[] enc__len |] eqn:Hser__len; last discriminate.
     unfold S.Len'_wf in Hwf.
     rewrite Hser__x in Hwf.
     rewrite Hser__len in Hwf.
@@ -285,8 +287,8 @@ Module Theorems (InputModule : AbstractInput).
   Proof using Type.
     intros Hnat_ok Hlim_ok x enc rest Hwf.
     unfold P.Len, S.Len'.
-    destruct (ser__x x) as [enc__x |] eqn:Hser__x; last discriminate.
-    destruct (ser__len (Length enc__x)) as [enc__len |] eqn:Hser__len; last discriminate.
+    destruct (ser__x x) as [[] enc__x |] eqn:Hser__x; last discriminate.
+    destruct (ser__len (Length enc__x)) as [[] enc__len |] eqn:Hser__len; last discriminate.
     unfold S.Len'_wf in Hwf.
     rewrite Hser__x in Hwf.
     rewrite Hser__len in Hwf.
@@ -305,45 +307,46 @@ Module Theorems (InputModule : AbstractInput).
   Lemma SerialLen'Inversion {X : Type} {wfn : nat -> Prop} {wfx : X -> Prop}
     (ser__n : S.Serializer nat wfn) (ser__x : S.Serializer X wfx) :
     forall (x : X) (enc : Output),
-    S.Len' ser__n ser__x x = S.Success enc <->
+    S.Len' ser__n ser__x x = S.mkSuccess enc <->
                            exists (enc__n enc__x : Output),
-                             ser__n (Length enc__x) = S.Success enc__n /\
-                             ser__x x = S.Success enc__x /\
+                             ser__n (Length enc__x) = S.mkSuccess enc__n /\
+                             ser__x x = S.mkSuccess enc__x /\
                              enc = App enc__n enc__x.
   Proof using Type.
     intros. split.
     - unfold S.Len'.
-      destruct (ser__x x) as [out__x |] eqn:Hx; last discriminate.
-      destruct (ser__n (Length out__x)) as [out__n |] eqn:Hn; last discriminate.
+      destruct (ser__x x) as [[] out__x |] eqn:Hx; last discriminate.
+      destruct (ser__n (Length out__x)) as [[] out__n |] eqn:Hn; last discriminate.
+      rewrite S.mkSuccess_eq in *.
       intro H; inversion H as [Henc]; clear H.
       exists out__n, out__x. repeat (split; done).
-    - intros (out__n & out__x & Hn & Hx & Henc). unfold S.Len'.
+    - intros (out__n & out__x & Hn & Hx & Henc). unfold S.Len', S.mkSuccess in *.
       rewrite Hx, Hn, Henc. reflexivity.
   Qed.
 
   Lemma par_rep'_unfold {X : Type} (underlying : Parser X) (inp : Input) :
     P.rep' underlying inp =
         match underlying inp with
-        | P.Success x rem => if decide (Length rem < Length inp) then
+        | P.R.Success x rem => if decide (Length rem < Length inp) then
                             match P.rep' underlying rem with
-                            | P.Success xs rest => P.Success (x :: xs) rest
-                            | P.Failure P.Failure.Recoverable data => P.Success [x] rem
-                            | P.Failure P.Failure.Fatal data => P.Failure P.Failure.Fatal data
+                            | P.R.Success xs rest => P.R.Success (x :: xs) rest
+                            | P.R.Failure P.R.Recoverable data => P.R.Success [x] rem
+                            | P.R.Failure P.R.Fatal data => P.R.Failure P.R.Fatal data
                             end
                           else
-                            P.Failure P.Failure.Fatal $ P.Failure.mkData
+                            P.R.Failure P.R.Fatal $ P.R.mkData
                               "Parser.Rep underlying increased input length" rem None
-        | P.Failure P.Failure.Recoverable (P.Failure.mkData _ rem _) => P.Success [] rem
-        | P.Failure P.Failure.Fatal data => P.Failure P.Failure.Fatal data
+        | P.R.Failure P.R.Recoverable (P.R.mkData _ rem _) => P.R.Success [] rem
+        | P.R.Failure P.R.Fatal data => P.R.Failure P.R.Fatal data
         end.
   Proof using Type.
     unfold P.rep'. unfold P.rep'_func.
     rewrite WfExtensionality.fix_sub_eq_ext; program_simpl.
     destruct (underlying inp); program_simpl.
-    - destruct (decide (Length remaining < Length inp)); last reflexivity.
+    - destruct (decide (Length enc < Length inp)); last reflexivity.
       destruct (Fix_sub _); first reflexivity.
-      destruct level; reflexivity.
-    - destruct level; first reflexivity.
+      destruct lvl; reflexivity.
+    - destruct lvl; first reflexivity.
       destruct data; reflexivity.
   Qed.
 
@@ -351,14 +354,14 @@ Module Theorems (InputModule : AbstractInput).
     (acc : A) (inp : Input) :
     P.rep_fold' underlying combine acc inp =
       match underlying inp with
-      | P.Success ret rem => if decide (Length rem < Length inp) then
+      | P.R.Success ret rem => if decide (Length rem < Length inp) then
                             P.rep_fold' underlying combine (combine acc ret) rem
                           else
-                            P.Success acc inp
-      | P.Failure lvl data as f => if P.NeedsAlternative f inp then
-                                  P.Success acc inp
+                            P.R.Success acc inp
+      | P.R.Failure lvl data as f => if P.R.NeedsAlternative f inp then
+                                  P.R.Success acc inp
                                 else
-                                  @P.Propagate A _ (P.Failure lvl data) I
+                                  @P.R.Propagate A _ (P.R.Failure lvl data) I
       end.
   Proof using Type.
     unfold P.rep_fold', P.rep_fold'_func.
@@ -370,13 +373,13 @@ Module Theorems (InputModule : AbstractInput).
     (underlying : S.Serializer X wfx) (xs : list X):
     S.rep' underlying xs = 
     match xs with
-    | [] => S.Success S.Output_default
+    | [] => S.mkSuccess S.Output_default
     | x :: xs' => match underlying x, S.rep' underlying xs' with
-                 | S.Success x_enc, S.Success rest_enc => S.Success $ App x_enc rest_enc
-                 | S.Failure lvl data as f, S.Success rest_enc => f
-                 | S.Success x_enc, S.Failure lvl data as f => f
-                 | S.Failure lvl__x data__x, S.Failure lvl__r data__r =>
-                     S.Failure S.Failure.Recoverable $ S.Failure.Concat data__x data__r
+                 | S.R.Success _ x_enc, S.R.Success _ rest_enc => S.mkSuccess $ App x_enc rest_enc
+                 | S.R.Failure lvl data as f, S.R.Success _ rest_enc => f
+                 | S.R.Success _ x_enc, S.R.Failure lvl data as f => f
+                 | S.R.Failure lvl__x data__x, S.R.Failure lvl__r data__r =>
+                     S.R.Failure S.R.Recoverable $ S.R.ConcatData data__x data__r
                  end
     end.
   Proof using Type.
@@ -385,15 +388,15 @@ Module Theorems (InputModule : AbstractInput).
   
   Lemma SerialRepInversion_First {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) :
     forall (x : X) (xs : list X) (enc : Output),
-      S.Rep ser__x (x :: xs) = S.Success enc <-> exists enc__x enc__rest,
-          ser__x x = S.Success enc__x /\
-          S.Rep ser__x xs = S.Success enc__rest /\
+      S.Rep ser__x (x :: xs) = S.mkSuccess enc <-> exists enc__x enc__rest,
+          ser__x x = S.mkSuccess enc__x /\
+          S.Rep ser__x xs = S.mkSuccess enc__rest /\
           enc = (App enc__x enc__rest). 
   Proof using Type.
     intros x xs enc. split.
     - unfold S.Rep. rewrite ser_rep'_unfold.
-      destruct (ser__x x) as [out__x |] eqn:Hser__x.
-      * destruct (S.rep' ser__x xs); last discriminate.
+      destruct (ser__x x) as [[] out__x |] eqn:Hser__x.
+      * destruct (S.rep' ser__x xs) as [[] out |]; last discriminate.
         intro Hser. inversion Hser as [Henc].
         exists out__x, out. done.
       * destruct (S.rep' ser__x xs); last discriminate.
@@ -405,7 +408,7 @@ Module Theorems (InputModule : AbstractInput).
 
   Lemma SerialRepInversion {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) :
     forall (xs : list X),
-      (exists enc, S.Rep ser__x xs = S.Success enc) <-> forall x, x ∈ xs -> exists enc__x, ser__x x = S.Success enc__x.
+      (exists enc, S.Rep ser__x xs = S.mkSuccess enc) <-> forall x, x ∈ xs -> exists enc__x, ser__x x = S.mkSuccess enc__x.
   Proof using Type.
     (* This proof written almost completely by Gemini 3 Pro... *)
     intros xs.
@@ -423,11 +426,11 @@ Module Theorems (InputModule : AbstractInput).
           -- exists enc__rest. assumption.
           -- assumption.
       + intros H.
-        assert (exists enc__y, ser__x y = S.Success enc__y) as [enc__y Henc__y].
+        assert (exists enc__y, ser__x y = S.mkSuccess enc__y) as [enc__y Henc__y].
         { destruct (H y) as [ex Hex].
           - apply list_elem_of_here.
           - exists ex. assumption. }
-        assert (exists enc__rest, S.Rep ser__x ys = S.Success enc__rest) as [enc__rest Henc__rest].
+        assert (exists enc__rest, S.Rep ser__x ys = S.mkSuccess enc__rest) as [enc__rest Henc__rest].
         { apply (proj2 IH). intros z Hz. destruct (H z) as [ez Hez].
           - simpl; right; assumption.
           - exists ez. assumption. }
@@ -460,8 +463,8 @@ Module Theorems (InputModule : AbstractInput).
 
   Lemma RepCorrect {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) (par__x : Parser X) :
     (* TODO: Split this into a typeclass. Make one for consuming parsers too. *)
-    (exists msg, par__x Input_default = P.Failure P.Failure.Recoverable $ P.Failure.mkData msg Input_default None) ->
-    (forall x enc, ser__x x = S.Success enc -> Length enc > 0) ->
+    (exists msg, par__x Input_default = P.R.Failure P.R.Recoverable $ P.R.mkData msg Input_default None) ->
+    (forall x enc, ser__x x = S.mkSuccess enc -> Length enc > 0) ->
     ParseOk par__x ser__x ->
     LimitParseOk (S.Rep ser__x) (P.Rep par__x).
   Proof using Type.
@@ -524,13 +527,13 @@ Module Theorems (InputModule : AbstractInput).
           depth x__n < depth x ->
           wf x__n ->
           forall rest__n,
-          S.recur ser_underlying depth x__n = S.Success inp__n ->
-          P.recur par_underlying (App inp__n rest__n) = P.Success x__n rest__n) ->
+          S.recur ser_underlying depth x__n = S.mkSuccess inp__n ->
+          P.recur par_underlying (App inp__n rest__n) = P.R.Success x__n rest__n) ->
        ser_underlying (S.recur_step ser_underlying depth x
-                         (fun x__n _ => S.recur ser_underlying depth x__n)) x = S.Success enc ->
+                         (fun x__n _ => S.recur ser_underlying depth x__n)) x = S.mkSuccess enc ->
        par_underlying (P.recur_step par_underlying (App enc rest)
                          (fun inp__n _ => P.recur par_underlying inp__n)) (App enc rest) =
-       P.Success x rest) ->
+       P.R.Success x rest) ->
     ParseOk (P.Recursive par_underlying) (S.Recursive ser_underlying depth).
   Proof using Type.
     intros H_underlying_ok.
@@ -604,13 +607,13 @@ Module Theorems (InputModule : AbstractInput).
           wf x__n ->
           valid_state st__n x__n ->
           forall rest__n,
-          S.recur_st ser_underlying depth st__n x__n = S.Success inp__n ->
-          P.recur_st par_underlying st__n (App inp__n rest__n) = P.Success x__n rest__n) ->
+          S.recur_st ser_underlying depth st__n x__n = S.mkSuccess inp__n ->
+          P.recur_st par_underlying st__n (App inp__n rest__n) = P.R.Success x__n rest__n) ->
        ser_underlying (S.recur_step_st ser_underlying depth x
-                         (fun st__n x__n _ => S.recur_st ser_underlying depth st__n x__n)) st x = S.Success enc ->
+                         (fun st__n x__n _ => S.recur_st ser_underlying depth st__n x__n)) st x = S.mkSuccess enc ->
        par_underlying (P.recur_step_st par_underlying (App enc rest)
                          (fun st__n inp__n _ => P.recur_st par_underlying st__n inp__n)) st (App enc rest) =
-       P.Success x rest) ->
+       P.R.Success x rest) ->
     valid_state st x ->
     ParseOk' (P.RecursiveState par_underlying st)
       (S.RecursiveState ser_underlying depth st) x.

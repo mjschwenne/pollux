@@ -7,8 +7,8 @@ From Corelib.Program Require Import Basics Tactics.
 From Stdlib.Program Require Import Program.
 
 Module Serializers (InputModule : AbstractInput).
-  Module Result := Result(InputModule).
-  Import Result.
+  Module R := Result(InputModule).
+  Import R.
   Import InputModule.
 
   (* Use Output type for serializers, just to help keep the terminology intuitive. *)
@@ -16,6 +16,8 @@ Module Serializers (InputModule : AbstractInput).
   Definition Output := Input.
   Definition Output_default := Input_default.
   Definition mkSuccess enc := Success () enc.
+  Lemma mkSuccess_eq : forall enc, R.Success () enc = mkSuccess enc.
+  Proof. intros. reflexivity. Qed.
   Definition Out := @getEnc unit.
   Definition Result := @Result unit.
 
@@ -38,6 +40,13 @@ Module Serializers (InputModule : AbstractInput).
 
     Definition ResultWith {X : Type} (result : Result) : Serializer X Trivial_wf :=
       fun inp => result.
+    Instance ResultWith_Proper (X : Type) :
+      forall x, Proper (result_equiv ==> result_equiv) (@flip Result X Result ResultWith x).
+    Proof.
+      intros x r1 r2 Hequiv.
+      unfold flip, ResultWith.
+      assumption.
+    Qed.
 
     Definition Blob : Serializer Output Trivial_wf :=
       fun b => mkSuccess b.
@@ -262,5 +271,4 @@ Module Serializers (InputModule : AbstractInput).
       Serializer X wfx := recur_st underlying depth st.
 
   End Combinators.
-  
 End Serializers.

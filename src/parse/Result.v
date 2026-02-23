@@ -16,6 +16,18 @@ Module Result (InputModule : AbstractInput).
     | Fatal
     | Recoverable.
 
+    Global Instance Level_dec : forall (x y : Level), Decision (x = y).
+    Proof using Type.
+      intros x y.
+      destruct x, y; ((left; reflexivity) || (right; discriminate)).
+    Qed.
+
+    Global Instance Level_eqdec : EqDecision Level.
+    Proof.
+      unfold EqDecision.
+      apply Level_dec.
+    Defined.
+
     (* Record information about when a parse / serialize fails *)
     (* I'll use the failure data for the serializers too, but interpret "remaining" as "output". *)
     Inductive Data :=
@@ -151,7 +163,70 @@ Module Result (InputModule : AbstractInput).
       end.
 
   End Result.
+  Arguments Result X : clear implicits.
 
   Section ResultEquivalence.
+    Import InputModule.
+
+    Context {X : Type}.
+    Context `{EqDecision X}.
+    Context `{EqDecision Input}.
+
+    Definition result_equivb (ret1 ret2 : Result X) : bool :=
+      match ret1, ret2 with
+      | Success r1 rem1, Success r2 rem2 => if r1 == r2 then
+                                             if rem1 == rem2 then true else false
+                                           else
+                                             false
+      | Success _ _, Failure _ _
+      | Failure _ _, Success _ _ => false
+      | Failure lvl1 _, Failure lvl2 _ => if lvl1 == lvl2 then true else false
+      end.
+
+    Definition result_equiv : relation (Result X) :=
+      fun ret1 ret2 => match ret1, ret2 with
+                    | Success r1 rem1, Success r2 rem2 => r1 = r2 /\ rem1 = rem2
+                    | Success _ _, Failure _ _
+                    | Failure _ _, Success _ _ => False
+                    | Failure lvl1 _, Failure lvl2 _ => lvl1 = lvl2
+                    end.
+    Infix "≡ᵣ" := result_equiv (at level 70):type_scope.
+
+    Lemma result_equiv_refl : Reflexive result_equiv.
+    Proof using Type.
+      intros r. destruct r; done.
+    Qed.
+
+    Lemma result_equiv_sym : Symmetric result_equiv.
+    Proof using Type.
+      intros r1 r2 H.
+      destruct r1 as [x1 enc1 | lvl1 data1], r2 as [x2 enc2 | lvl2 data2].
+      - destruct H as [Hx Henc]. done.
+      - unfold result_equiv in H. contradiction.
+      - unfold result_equiv in H. contradiction.
+      - unfold result_equiv in H. done.
+    Qed.
+
+    Lemma result_equiv_trans : Transitive result_equiv.
+    Proof using Type.
+      intros r1 r2 r3 H H'.
+      destruct r1 as [x1 enc1 | lvl1 data1],
+                 r2 as [x2 enc2 | lvl2 data2],
+                   r3 as [x3 enc3 | lvl3 data3];
+                   unfold result_equiv in *; try contradiction.
+      - destruct H as [Hx12 Henc12], H' as [Hx23 Henc23]; subst. easy.
+      - congruence.
+    Qed.
+
+    Instance result_equiv_Equiv : Equivalence result_equiv.
+    Proof using Type.
+      split; [
+          apply result_equiv_refl |
+          apply result_equiv_sym |
+          apply result_equiv_trans
+        ].
+    Qed.
+
   End ResultEquivalence.
+  Infix "≡ᵣ" := result_equiv (at level 70):type_scope.
 End Result.
