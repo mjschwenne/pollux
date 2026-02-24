@@ -6,7 +6,7 @@ From Perennial Require Import Helpers.Word.Automation.
 From Stdlib Require Import Structures.Equalities.
 
 From Pollux Require Import Input.
-From Pollux Require Import Failure.
+From Pollux Require Import Result.
 From Pollux Require Import Parser.
 From Pollux Require Import Serializer.
 From Pollux Require Import Theorems.
@@ -17,7 +17,7 @@ Require Import Stdlib.Program.Wf.
 Open Scope Z_scope.
 
 Module InterParse.
-  Module F := Failures(ByteInput).
+  Module R := Result(ByteInput).
   Module P := Parsers(ByteInput).
   Module S := Serializers(ByteInput).
   Module T := Theorems(ByteInput).
@@ -648,8 +648,8 @@ Module InterParse.
   Section Parse.
     Definition ParseByte : P.Parser byte :=
       fun inp => match inp with
-              | byt :: rest => P.Success byt rest
-              | [] => P.Failure P.Failure.Recoverable (P.Failure.mkData "No more data to parse" inp None)
+              | byt :: rest => P.R.Success byt rest
+              | [] => P.R.Failure P.R.Recoverable (P.R.mkData "No more data to parse" inp None)
               end.
 
     Definition ParseUnsigned : P.Parser Z := P.Map ParseByte word.unsigned.
@@ -719,7 +719,7 @@ Module InterParse.
     Compute ParseValue desc2 enc2.
     Compute ParseValue desc2 enc2'.
     Compute match ParseValue desc2 enc2, ParseValue desc2 enc2' with
-            | P.Success v2 _, P.Success v2' _ => Eqb v2 v2'
+            | P.R.Success v2 _, P.R.Success v2' _ => Eqb v2 v2'
             | _, _ => false
             end.
 
@@ -752,7 +752,7 @@ Module InterParse.
                                     1; 0; 0; 0; 0; 2; 0; 0; 0; 0;
                                 2; 0; 0; 0; 1
                          ].
-    Definition result3 := fst $ (P.Extract (ParseValue desc3 enc3) I).
+    Definition result3 := fst $ (P.R.Extract (ParseValue desc3 enc3) I).
     Compute Eqb result3 val3.
     Definition val3' := VALUE (list_to_map [
                                   (1, V_INT 16777215);
@@ -775,13 +775,13 @@ Module InterParse.
                                     1; 0; 0; 0; 0; 2; 0; 0; 0; 0;
                                 2; 0; 0; 0; 1
                          ].
-    Definition result3' := fst $ (P.Extract (ParseValue desc3 enc3') I).
+    Definition result3' := fst $ (P.R.Extract (ParseValue desc3 enc3') I).
     Compute Eqb result3' val3'.
   End Parse.
 
   Section Serial.
     Definition SerialByte : S.Serializer byte S.Trivial_wf :=
-      fun b => S.Success [b].
+      fun b => S.mkSuccess [b].
 
     Definition SerialUnsigned : S.Serializer Z (fun z => 0 <= z < 256) :=
       fun z => SerialByte $ W8 z.
@@ -891,24 +891,24 @@ Module InterParse.
               match (Fields d) !! id with
               | Some F_BOOL => match v with
                               | V_BOOL b => S.Bind' (fun _ => id) SerialUnsigned SerialBool b
-                              | V_MISSING => S.Success []
-                              | _ => S.Failure S.Failure.Recoverable
-                                      (S.Failure.mkData "Expected Boolean" Input_default None)
+                              | V_MISSING => S.mkSuccess []
+                              | _ => S.R.Failure S.R.Recoverable
+                                      (S.R.mkData "Expected Boolean" Input_default None)
                               end
               | Some F_INT => match v with
                              | V_INT z => S.Bind' (fun _ => id) SerialUnsigned SerialZ32 z
-                             | V_MISSING => S.Success []
-                             | _ => S.Failure S.Failure.Recoverable
-                                     (S.Failure.mkData "Expected Integer" Input_default None)
+                             | V_MISSING => S.mkSuccess []
+                             | _ => S.R.Failure S.R.Recoverable
+                                     (S.R.mkData "Expected Integer" Input_default None)
                              end
               | Some (F_MSG d') => match v with
                                   | V_MSG z => S.Bind' (fun _ => id) SerialUnsigned
                                                       (S.Len' SerialNat (serial__msg d')) z
-                                  | V_MISSING => S.Success []
-                                  | _ => S.Failure S.Failure.Recoverable
-                                          (S.Failure.mkData "Expected nested message" Input_default None)
+                                  | V_MISSING => S.mkSuccess []
+                                  | _ => S.R.Failure S.R.Recoverable
+                                          (S.R.mkData "Expected nested message" Input_default None)
                                   end
-              | None => S.Success Input_default
+              | None => S.mkSuccess Input_default
               end.
 
     Definition ValList (v : Value) : list (Z * Val) :=
@@ -922,22 +922,22 @@ Module InterParse.
 
     Definition enc_eq (d : Desc) (v : Value) (e : Input) : bool :=
       match SerialValue d v with
-      | S.Success enc => if decide (enc = e) then true else false
-      | S.Failure _ _ => false
+      | S.R.Success _ enc => if decide (enc = e) then true else false
+      | S.R.Failure _ _ => false
       end.
 
     Definition round_trip (d : Desc) (v : Value) : bool :=
       match SerialValue d v with
-      | S.Success enc => match ParseValue d enc with
-                        | P.Success v' _ => Eqb v v'
-                        | P.Failure _ _ => false
+      | S.R.Success _ enc => match ParseValue d enc with
+                        | P.R.Success v' _ => Eqb v v'
+                        | P.R.Failure _ _ => false
                         end
-      | S.Failure _ _ => false
+      | S.R.Failure _ _ => false
       end.
 
     Definition check_multi_enc (d : Desc) (enc1 enc2 : Input) : bool :=
       match ParseValue d enc1, ParseValue d enc2 with
-      | P.Success v1 _, P.Success v2 _ => Eqb v1 v2
+      | P.R.Success v1 _, P.R.Success v2 _ => Eqb v1 v2
       | _, _ => false
       end.
 
@@ -957,19 +957,19 @@ Module InterParse.
     Compute round_trip desc3 val3'.
     
     Example LengthOk1 :
-      forall enc, SerialValue desc1 val1 = S.Success enc -> ValueEncLen val1 = Length enc.
+      forall enc, SerialValue desc1 val1 = S.mkSuccess enc -> ValueEncLen val1 = Length enc.
     Proof. vm_compute. intros x' H. inversion H. reflexivity. Qed.
 
     Example LengthOk2 :
-      forall enc, SerialValue desc2 val2 = S.Success enc -> ValueEncLen val2 = Length enc.
+      forall enc, SerialValue desc2 val2 = S.mkSuccess enc -> ValueEncLen val2 = Length enc.
     Proof. vm_compute. intros x' H. inversion H. reflexivity. Qed.
 
     Example LengthOk3 :
-      forall enc, SerialValue desc3 val3 = S.Success enc -> ValueEncLen val3 = Length enc.
+      forall enc, SerialValue desc3 val3 = S.mkSuccess enc -> ValueEncLen val3 = Length enc.
     Proof. vm_compute. intros x' H. inversion H. reflexivity. Qed.
 
     Example LengthOk3' :
-      forall enc, SerialValue desc3 val3' = S.Success enc -> ValueEncLen val3' = Length enc.
+      forall enc, SerialValue desc3 val3' = S.mkSuccess enc -> ValueEncLen val3' = Length enc.
     Proof. vm_compute. intros x' H. inversion H. reflexivity. Qed.
   End Serial.
 
@@ -1002,7 +1002,7 @@ Module InterParse.
       simpl. f_equal. word.
     Qed.
 
-    Lemma UnsignedLength : forall x enc, SerialUnsigned x = S.Success enc -> Length enc = 1%nat.
+    Lemma UnsignedLength : forall x enc, SerialUnsigned x = S.mkSuccess enc -> Length enc = 1%nat.
     Proof.
       intros x enc.
       unfold SerialUnsigned, SerialByte.
@@ -1024,7 +1024,7 @@ Module InterParse.
     Proof.
     Admitted.
 
-    Lemma Z32Length : forall x enc, SerialZ32 x = S.Success enc -> Length enc = 4%nat.
+    Lemma Z32Length : forall x enc, SerialZ32 x = S.mkSuccess enc -> Length enc = 4%nat.
     Proof.
     Admitted.
 
@@ -1151,6 +1151,7 @@ Module InterParse.
           * assumption.
     Qed.
 
+    Infix "ₛ≡ᵣ" := S.R.result_equiv (at level 70):type_scope.
     Lemma SerialValWeakenDepth (d : Desc) (k : Z) (v : Val) (m : gmap Z Val) : 
       m !! k = None -> map_first_key (<[k := v]> m) k ->
       forall kv,
@@ -1159,7 +1160,7 @@ Module InterParse.
                    if decide (ValueDepth x__n < ValueDepth (VALUE (<[k:=v]> m)))%nat
                    then @S.recur_st _ _ Value_wf SerialValue' ValueDepth st__n x__n
                    else S.RecursiveProgressError "Serial.RecursiveState" ValueDepth (VALUE (<[k:=v]> m)) x__n)
-        d kv =
+        d kv ₛ≡ᵣ
       SerialVal (λ (st__n : Desc) (x__n : Value),
                    if decide (ValueDepth x__n < ValueDepth (VALUE m))%nat
                    then @S.recur_st _ _ Value_wf SerialValue' ValueDepth st__n x__n
@@ -1169,14 +1170,12 @@ Module InterParse.
       intros Hnone Hfst [key val] Hin.
       unfold SerialVal.
       (* The serializers only differ in recursive calls on V_MSG values *)
-      destruct ((Fields d) !! key); try reflexivity.
+      destruct ((Fields d) !! key); try done.
       destruct f; try reflexivity.
       (* For F_MSG, we need to show the depth checks evaluate the same *)
       destruct val as [val | z | b |]; try reflexivity.
       (* For V_MSG v0, both depth checks should be true since v0 comes from m *)
-      unfold S.Bind', S.Concat.
-      destruct (SerialUnsigned key); last reflexivity.
-      unfold S.Len'.
+      unfold S.Bind', S.Concat, S.Len'.
       (* Show that both decide expressions evaluate to true *)
       rewrite elem_of_map_to_list in Hin.
       pose proof (ValueDepthDropFirst k v m Hnone Hfst) as Hdepth. 
@@ -1187,16 +1186,15 @@ Module InterParse.
         + pose proof (Val_in_map_smaller_depth m key val Hin). lia.
         + unfold S.RecursiveProgressError.
           destruct (ValueDepth val == ValueDepth (VALUE m)),
-                     (* TODO: Will probably have to remove error handling from the combinators... *)
-                     (ValueDepth val == ValueDepth (VALUE (<[k := v]> m))). all: admit.
-    Admitted.
+                     (ValueDepth val == ValueDepth (VALUE (<[k := v]> m))); try done.
+    Qed.
 
     Lemma SerialValueInversion (d : Desc) :
       forall k v (m : gmap Z Val) enc,
       m !! k = None -> map_first_key (<[k := v]> m) k ->
-      SerialValue d (VALUE (<[k := v]> m)) = S.Success enc <->
-      exists enc__v enc__rest, SerialValue d (VALUE m) = S.Success enc__rest /\
-                      SerialVal (SerialValue) d (k, v) = S.Success enc__v /\
+      SerialValue d (VALUE (<[k := v]> m)) ₛ≡ᵣ S.mkSuccess enc <->
+      exists enc__v enc__rest, SerialValue d (VALUE m) ₛ≡ᵣ S.mkSuccess enc__rest /\
+                      SerialVal (SerialValue) d (k, v) ₛ≡ᵣ S.mkSuccess enc__v /\
                       enc = App enc__v enc__rest.
     Proof.
       intros k v m enc Hnone Hfst.

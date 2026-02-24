@@ -220,9 +220,11 @@ Module Serializers (InputModule : AbstractInput).
 
     Definition RecursiveProgressError {X : Type} (name : string) (depth : X -> nat) (x x__n : X) : Result :=
       if depth x__n == depth x then
-        Failure Recoverable (mkData
-                               (name ++ " no progress in recursive serializer")
-                               Output_default None)
+        (* FIXME: This should be a recoverable error. However, for proofs with ₛ≡ᵣ we need these to line up. *)
+        (* Hopefully different error messages will be enough to trouble shoot. *)
+        Failure Fatal (mkData
+                         (name ++ " no progress in recursive serializer")
+                         Output_default None)
       else
         Failure Fatal (mkData
                          (name ++ " fixpoint called with deeper value to serialize")

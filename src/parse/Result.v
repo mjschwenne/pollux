@@ -236,7 +236,7 @@ Module Result (InputModule : AbstractInput).
       - congruence.
     Qed.
 
-    Instance result_equiv_Equiv : Equivalence result_equiv.
+    Global Instance result_equiv_Equiv : Equivalence result_equiv.
     Proof using Type.
       split; [
           apply result_equiv_refl |
