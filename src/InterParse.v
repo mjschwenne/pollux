@@ -1414,6 +1414,10 @@ Module InterParse.
         + intros Hv_ok; invc Hv_ok; apply Length_default.
     Qed.
 
+    Theorem InterParseOk : forall d, ParseOk (ParseValue d) (SerialValue d).
+    Proof.
+    Abort.
+
   End Theorems.
 
 End InterParse.

@@ -33,8 +33,6 @@
           config.allowUnfreePredicate =
             pkg:
             builtins.elem (pkgs.lib.getName pkg) [
-              "antigravity"
-              "antigravity-fhs"
               "claude-code"
               "claude-code-acp"
             ];
@@ -51,13 +49,9 @@
             }
             {
               rocq-equations = "*";
-              vsrocq-language-server = "*";
               ocaml-base-compiler = "5.2.1";
             };
         equations = scope.rocq-equations.override {
-          inherit (scope) ocaml-base-compiler;
-        };
-        rocq-lsp = scope.vsrocq-language-server.override {
           inherit (scope) ocaml-base-compiler;
         };
         inherit (perennial.packages.${system}) perennialPkgs;
@@ -92,7 +86,6 @@
               nushell
               gnumake
               xxd
-              antigravity-fhs
 
               # eval utilities
               gh
@@ -133,7 +126,6 @@
               iris-named-props
               perennial-pkg
               equations
-              rocq-lsp
             ]);
 
             shellHook = ''
