@@ -250,8 +250,8 @@ Module Serializers (InputModule : AbstractInput).
     Definition Recursive {X : Type} {wfx : X -> Prop} (underlying : Serializer X wfx -> Serializer X wfx) depth :
       Serializer X wfx := recur underlying depth.
 
-    Definition recur_step_st {X S : Type} {wfx : X -> Prop}
-      (underlying : (S -> Serializer X wfx) -> S -> Serializer X wfx)
+    Definition recur_step_st {X S : Type} {wfx : S -> X -> Prop}
+      (underlying : (forall s : S, Serializer X $ wfx s) -> forall s : S, Serializer X $ wfx s)
       (depth : X -> nat)
       (x : X)
       (rec_call : forall (st : S) (x__n : X), depth x__n < depth x -> Result)
@@ -262,15 +262,15 @@ Module Serializers (InputModule : AbstractInput).
       | right _ => RecursiveProgressError "Serial.RecursiveState" depth x x__n
       end.
 
-    Program Fixpoint recur_st {X S : Type} {wfx : X -> Prop} 
-      (underlying : (S -> Serializer X wfx) -> S -> Serializer X wfx)
+    Program Fixpoint recur_st {X S : Type} {wfx : S -> X -> Prop} 
+      (underlying : (forall s : S, Serializer X $ wfx s) -> forall s : S, Serializer X $ wfx s)
       (depth : X -> nat) (st : S) (x : X) {measure (depth x)} : Result :=
       underlying (recur_step_st underlying depth x
                     (fun st__n x__n _ => recur_st underlying depth st__n x__n)) st x.
 
-    Definition RecursiveState {X S : Type} {wfx : X -> Prop}
-      (underlying : (S -> Serializer X wfx) -> S -> Serializer X wfx) depth st :
-      Serializer X wfx := recur_st underlying depth st.
+    Definition RecursiveState {X S : Type} {wfx : S -> X -> Prop}
+      (underlying : (forall s : S, Serializer X $ wfx s) -> forall s : S, Serializer X $ wfx s) depth st :
+      Serializer X $ wfx st := recur_st underlying depth st.
 
   End Combinators.
 End Serializers.

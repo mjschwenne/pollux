@@ -882,11 +882,26 @@ Module InterParse.
     Example Length3' : ValueEncLen val3' = length enc3'.
     Proof. reflexivity. Qed.
 
-    Definition Value_wf (v : Value) : Prop := True.
-    Definition Val_wf (v : Z * Val) : Prop := True.
+    Fixpoint Value_wf (d : Desc) (v : Value) : Prop :=
+      match v, d with
+      | VALUE vs, DESC ds => map_fold (Val_wf_fold ds) True vs
+      end
+    with Val_wf_fold (ds : gmap Z Field) (k : Z) (v : Val) (acc : Prop) : Prop :=
+           match ds !! k, v with
+           | None, _ => acc (* Skip fields that will be dropped *)
+           | Some F_BOOL, V_BOOL _ => acc (* All Booleans are intrinsically well-formed *)
+           | Some F_INT, V_INT z => acc /\ 0 <= z < 2^32 (* Integer fits in bounds *)
+           | Some (F_MSG d), V_MSG val => acc /\ Value_wf d val (* Nested message is also well-formed *)
+           | _, _ => False
+           end.
+        
+    (* Helper definition to shim between Val_wf_fold and Serializer API *)
+    Definition Val_wf (d : Desc) (v : Z * Val) : Prop :=
+      let (key, val) := v in  
+      Val_wf_fold (Fields d) key val True.
 
-    Definition SerialVal (serial__msg : Desc -> S.Serializer Value Value_wf) (d : Desc) :
-      Serializer (Z * Val) Val_wf := 
+    Definition SerialVal (serial__msg : forall d : Desc, S.Serializer Value $ Value_wf d) (d : Desc) :
+      Serializer (Z * Val) (Val_wf d) := 
       fun val => let (id, v) := val in
               match (Fields d) !! id with
               | Some F_BOOL => match v with
@@ -914,10 +929,11 @@ Module InterParse.
     Definition ValList (v : Value) : list (Z * Val) :=
       map_to_list (Vals v).
       
-    Definition SerialValue' (self : Desc -> Serializer Value Value_wf) (d : Desc) : Serializer Value Value_wf :=
-      S.Map (S.Rep (SerialVal self d : S.Serializer _ Val_wf)) ValList.
+    Definition SerialValue' (self : forall d : Desc, Serializer Value $ Value_wf d) (d : Desc) :
+      Serializer Value $ Value_wf d :=
+      S.Map (S.Rep (SerialVal self d : S.Serializer _ (Val_wf d))) ValList.
 
-    Definition SerialValue (d : Desc) : Serializer Value Value_wf :=
+    Definition SerialValue (d : Desc) : Serializer Value $ Value_wf d :=
       S.RecursiveState SerialValue' ValueDepth d.
 
     Definition enc_eq (d : Desc) (v : Value) (e : Input) : bool :=
@@ -1209,26 +1225,26 @@ Module InterParse.
         split.
         * unfold SerialValue, S.RecursiveState.
           rewrite ser_recur_st_unfold.
-          unfold SerialValue', S.Map, ValList, Vals, S.Rep, S.mkSuccess.
-          rewrite <- S.R.ResultEquivSuccessIff with (r := S.rep' _ _).
-          unfold S.Rep, S.mkSuccess in Hrest_ok.
+          unfold SerialValue', S.Map, ValList, Vals, S.mkSuccess.
+          rewrite <- S.R.ResultEquivSuccessIff with (r := S.Rep _ _).
+          unfold S.mkSuccess in Hrest_ok.
           rewrite <- Hrest_ok.
           (* Need to show that the depth bound difference doesn't matter *)
           (* because all elements in map_to_list m have depth < ValueDepth (VALUE m) *)
           (* Fortunately, that's exactly what SerialValWeakenDepth tells us. *)
           (* Now we need to show S.rep' with both serializers gives the same result *)
+          change (
+            (λ (self : forall d : Desc, Serializer Value $ Value_wf d) (d0 : Desc) (a : Value),
+               S.Rep (SerialVal self d0) (map_to_list match a with
+                                            | VALUE vs => vs
+                                            end))
+            ) with SerialValue'.
           rewrite SerialRepSubst with
             (ser2 :=
                  (SerialVal
                     (λ (st__n : Desc) (x__n : Value),
                        if decide (ValueDepth x__n < ValueDepth (VALUE (<[k:=v]> m)))%nat
-                       then
-                         S.recur_st
-                           (λ (self : Desc → Serializer Value Value_wf) (d : Desc) (a : Value),
-                              @S.Rep _ Val_wf (SerialVal self d) (map_to_list match a with
-                                                                    | VALUE vs => vs
-                                                                    end))
-                           ValueDepth st__n x__n
+                       then @S.recur_st _ _ Value_wf SerialValue' ValueDepth st__n x__n
                        else S.RecursiveProgressError "Serial.RecursiveState" ValueDepth (VALUE (<[k:=v]> m)) x__n)
                     d)
             ); first reflexivity.
@@ -1236,7 +1252,7 @@ Module InterParse.
           apply SerialValWeakenDepth; assumption.
         * split; last reflexivity.
           change (
-            (λ (self : Desc → Serializer Value Value_wf) (d : Desc) (a : Value),
+            (λ (self : forall d : Desc, Serializer Value $ Value_wf d) (d : Desc) (a : Value),
                S.Rep (SerialVal self d) (map_to_list match a with
                                                      | VALUE vs => vs
                                                      end))
@@ -1259,10 +1275,10 @@ Module InterParse.
         unfold SerialValue', S.Map, ValList, Vals.
         rewrite map_to_list_insert_first_key by assumption.
         change (
-            (λ (self : Desc → Serializer Value Value_wf) (d : Desc) (a : Value),
-               S.Rep (SerialVal self d) (map_to_list match a with
-                                           | VALUE vs => vs
-                                           end))
+            (λ (self : forall d : Desc, Serializer Value $ Value_wf d) (d0 : Desc) (a : Value),
+               S.Rep (SerialVal self d0) (map_to_list match a with
+                                            | VALUE vs => vs
+                                            end))
           ) with SerialValue'.
         rewrite SerialRepInversion_First.
         exists enc__v, enc__rest. subst. split.
@@ -1286,7 +1302,7 @@ Module InterParse.
           rewrite ser_recur_st_unfold. 
           unfold SerialValue', S.Map, ValList, Vals, S.mkSuccess.
           change (
-              (λ (self : Desc → Serializer Value Value_wf) (d : Desc) (a : Value),
+              (λ (self : forall d : Desc, Serializer Value $ Value_wf d) (d : Desc) (a : Value),
                  S.Rep (SerialVal self d) (map_to_list match a with
                                              | VALUE vs => vs
                                              end))
@@ -1300,11 +1316,7 @@ Module InterParse.
                   (λ (st__n : Desc) (x__n : Value),
                      if decide (ValueDepth x__n < ValueDepth (VALUE m))%nat
                      then
-                       S.recur_st
-                         (λ (self : Desc → Serializer Value Value_wf) (d0 : Desc) (a : Value),
-                            @S.Rep _ Val_wf (SerialVal self d0) (map_to_list match a with
-                                                                   | VALUE vs => vs
-                                                                   end))
+                       @S.recur_st _ _ Value_wf SerialValue'
                          ValueDepth st__n x__n
                      else S.RecursiveProgressError "Serial.RecursiveState" ValueDepth (VALUE m) x__n)
                   d)

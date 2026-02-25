@@ -725,12 +725,12 @@ Module Theorems (InputModule : AbstractInput).
     f_equal.
   Qed.
 
-  Lemma ser_recur_st_unfold {X S : Type} {wfx : X -> Prop}
-    (underlying : (S -> S.Serializer X wfx) -> S -> S.Serializer X wfx)
+  Lemma ser_recur_st_unfold {X S : Type} {wfx : S -> X -> Prop}
+    (underlying : (forall s : S, Serializer X $ wfx s) -> forall s : S, Serializer X $ wfx s)
     (depth : X -> nat) (st : S) (x : X) :
-    S.recur_st underlying depth st x =
+    @S.recur_st _ _ wfx underlying depth st x =
     underlying (fun st__n x__n => if decide (depth x__n < depth x) then
-                             S.recur_st underlying depth st__n x__n
+                             @S.recur_st _ _ wfx underlying depth st__n x__n
                            else
                              S.RecursiveProgressError "Serial.RecursiveState" depth x x__n
       ) st x.
