@@ -6,7 +6,7 @@ From Perennial Require Import Helpers.Word.Automation.
 From Stdlib Require Import Structures.Equalities.
 
 From Pollux Require Import Input.
-From Pollux Require Import Failure.
+From Pollux Require Import Result.
 From Pollux Require Import Parser.
 From Pollux Require Import Serializer.
 From Pollux Require Import Theorems.
@@ -14,7 +14,7 @@ From Pollux Require Import Theorems.
 Open Scope Z_scope.
 
 Module SimplParser.
-  Module F := Failures(ByteInput).
+  Module R := Result(ByteInput).
   Module P := Parsers(ByteInput).
   Module S := Serializers(ByteInput).
   Module T := Theorems(ByteInput).
@@ -77,8 +77,8 @@ Module SimplParser.
 
     Definition ParseByte : P.Parser byte :=
       fun inp => match inp with
-              | byt :: rest => P.Success byt rest
-              | [] => P.Failure P.Failure.Recoverable (P.Failure.mkData "No more data to parse" inp None)
+              | byt :: rest => P.R.Success byt rest
+              | [] => P.R.Failure P.R.Recoverable (P.R.mkData "No more data to parse" inp None)
               end.
 
     Definition ParseUnsigned : P.Parser Z := P.Map ParseByte word.unsigned.
@@ -101,7 +101,7 @@ Module SimplParser.
           (fun z => match z with
                  | 0 => P.Map ParseZ32 (fun z => V_INT z)
                  | 1 => P.Map ParseBool (fun b => V_BOOL b)
-                 | _ => P.FailWith "Unknown field tag" P.Failure.Recoverable
+                 | _ => P.FailWith "Unknown field tag" P.R.Recoverable
                  end).
 
     Compute ParseBaseDesc [W8 1; W8 32; W8 0; W8 0; W8 0].
@@ -114,7 +114,7 @@ Module SimplParser.
            | 0 => ParseBaseDesc
            | 1 => P.Map (P.Len ParseNat (P.Concat pd pd))
                    (fun vs => let (v1, v2) := vs in V_NEST v1 v2)
-           | _ => P.FailWith "Unknown tag" P.Failure.Recoverable
+           | _ => P.FailWith "Unknown tag" P.R.Recoverable
            end).
 
     Definition ParseVal : Parser Val :=
@@ -140,7 +140,7 @@ Module SimplParser.
   Section Serializer.
 
     Definition SerialByte : S.Serializer byte S.Trivial_wf :=
-      fun b => S.Success [b].
+      fun b => S.mkSuccess [b].
 
     Definition Z__next (z : Z) : Z :=
       z ≫ 8.
@@ -246,8 +246,8 @@ Module SimplParser.
 
     Definition enc_eq (v : Val) (e : Output) : bool :=
       match SerialVal v with
-      | S.Success enc => if decide (enc = e) then true else false
-      | S.Failure _ _ => false
+      | S.R.Success _ enc => if decide (enc = e) then true else false
+      | S.R.Failure _ _ => false
       end.
 
     Definition test_val1 := V_INT 32.
@@ -308,12 +308,12 @@ Module SimplParser.
       unfold ParseOk, ParseOk', ParseOk'', ParseOk'''.
       intros [x b] enc rest _.
       unfold SerialTest, S.Concat.
-      destruct (SerialByte x) eqn:Hbyte; last discriminate.
-      destruct (SerialBool b) eqn:Hbool; last discriminate.
+      destruct (SerialByte x) as [[] enc__x |] eqn:Hbyte; last discriminate.
+      destruct (SerialBool b) as [[] enc__b |] eqn:Hbool; last discriminate.
       intros H. invc H.
       unfold ParseTest, P.Concat.
       rewrite App_assoc.
-      apply (ByteParseOk _ _ (App out0 rest)) in Hbyte; last reflexivity.
+      apply (ByteParseOk _ _ (App enc__b rest)) in Hbyte; last reflexivity.
       rewrite Hbyte.
       apply (BoolParseOk _ _ rest) in Hbool; last reflexivity.
       rewrite Hbool.
@@ -364,7 +364,7 @@ Module SimplParser.
     Qed.
 
     Lemma ValLen_Length (v : Val) :
-      forall enc, SerialVal v = S.Success enc -> Length enc = ValEncLen v.
+      forall enc, SerialVal v = S.mkSuccess enc -> Length enc = ValEncLen v.
     Proof.
       induction v.
       - intros enc Hser. destruct b; vm_compute in Hser; inversion Hser; reflexivity.
@@ -395,8 +395,8 @@ Module SimplParser.
 
     Lemma SerialValInversion (v1 v2 : Val) :
       forall enc,
-      SerialVal (V_NEST v1 v2) = S.Success enc ->
-      exists enc__v1 enc__v2, SerialVal v1 = S.Success enc__v1 /\ SerialVal v2 = S.Success enc__v2.
+      SerialVal (V_NEST v1 v2) = S.mkSuccess enc ->
+      exists enc__v1 enc__v2, SerialVal v1 = S.mkSuccess enc__v1 /\ SerialVal v2 = S.mkSuccess enc__v2.
     Proof.
       intros enc.
       unfold SerialVal at 1, S.Recursive, SerialVal'.
@@ -418,8 +418,8 @@ Module SimplParser.
 
     Lemma ValLen_Nest (v1 v2 : Val) :
       forall enc,
-      SerialVal (V_NEST v1 v2) = S.Success enc ->
-      exists enc__v1 enc__v2, SerialVal v1 = S.Success enc__v1 /\ SerialVal v2 = S.Success enc__v2 ->
+      SerialVal (V_NEST v1 v2) = S.mkSuccess enc ->
+      exists enc__v1 enc__v2, SerialVal v1 = S.mkSuccess enc__v1 /\ SerialVal v2 = S.mkSuccess enc__v2 ->
              (Length enc > Length enc__v1 /\ Length enc > Length enc__v2)%nat.
     Proof.
       intros.
@@ -562,7 +562,7 @@ Module SimplParser.
         + unfold P.Map. rewrite Hser_ok. reflexivity.
         + unfold S.Len'_wf.
           apply SerialLen'Inversion in Hrest_ok as (enc__len & enc__pay & Hlen_ok & Hpay_ok & Henc__rest).
-          rewrite Hpay_ok. rewrite Hlen_ok.
+          rewrite Hpay_ok. unfold S.mkSuccess. rewrite Hlen_ok.
           split; last done.
           apply SerialConcatInversion in Hpay_ok as (enc__v1 & enc__v2 & Hv1_ok & Hv2_ok & Henc__pay).
           rewrite Heqs in Hv1_ok, Hv2_ok.
