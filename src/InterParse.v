@@ -1192,9 +1192,9 @@ Module InterParse.
     Lemma SerialValueInversion (d : Desc) :
       forall k v (m : gmap Z Val) enc,
       m !! k = None -> map_first_key (<[k := v]> m) k ->
-      SerialValue d (VALUE (<[k := v]> m)) ₛ≡ᵣ S.mkSuccess enc <->
-      exists enc__v enc__rest, SerialValue d (VALUE m) ₛ≡ᵣ S.mkSuccess enc__rest /\
-                      SerialVal (SerialValue) d (k, v) ₛ≡ᵣ S.mkSuccess enc__v /\
+      SerialValue d (VALUE (<[k := v]> m)) = S.mkSuccess enc <->
+      exists enc__v enc__rest, SerialValue d (VALUE m) = S.mkSuccess enc__rest /\
+                      SerialVal (SerialValue) d (k, v) = S.mkSuccess enc__v /\
                       enc = App enc__v enc__rest.
     Proof.
       intros k v m enc Hnone Hfst.
@@ -1209,7 +1209,9 @@ Module InterParse.
         split.
         * unfold SerialValue, S.RecursiveState.
           rewrite ser_recur_st_unfold.
-          unfold SerialValue', S.Map, ValList, Vals, S.Rep.
+          unfold SerialValue', S.Map, ValList, Vals, S.Rep, S.mkSuccess.
+          rewrite <- S.R.ResultEquivSuccessIff with (r := S.rep' _ _).
+          unfold S.Rep, S.mkSuccess in Hrest_ok.
           rewrite <- Hrest_ok.
           (* Need to show that the depth bound difference doesn't matter *)
           (* because all elements in map_to_list m have depth < ValueDepth (VALUE m) *)
@@ -1244,9 +1246,7 @@ Module InterParse.
           destruct (Fields d !! k); last reflexivity.
           destruct f; try reflexivity.
           destruct v; try reflexivity.
-          unfold S.Bind', S.Concat.
-          destruct (SerialUnsigned k); last reflexivity.
-          unfold S.Len'.
+          unfold S.Bind', S.Concat, S.Len'.
           case_eq (decide (ValueDepth v < ValueDepth (VALUE (<[k := V_MSG v]> m))))%nat.
           -- intros Hdep _. unfold SerialValue, S.RecursiveState. reflexivity.
           -- intros Hdep _. pose proof (lookup_insert_eq m k (V_MSG v)) as Hlookup.
@@ -1275,19 +1275,25 @@ Module InterParse.
           destruct (Fields d !! k); last reflexivity.
           destruct f; try reflexivity.
           destruct v; try reflexivity.
-          unfold S.Bind', S.Concat.
-          destruct (SerialUnsigned k); last reflexivity.
-          unfold S.Len'.
+          unfold S.Bind', S.Concat, S.Len'.
           case_eq (decide (ValueDepth v < ValueDepth (VALUE (<[k:=V_MSG v]> m)))%nat).
           * intros Hdep _. unfold SerialValue, S.RecursiveState. reflexivity.
           * intros Hdep _. pose proof (lookup_insert_eq m k (V_MSG v)) as Hlookup.
             pose proof (Val_in_map_smaller_depth (<[k := V_MSG v]> m) k v Hlookup).
             contradiction.
-        + split; last reflexivity. 
-          rewrite <- Hrest_ok.
+        + split; last reflexivity. revert Hrest_ok.
           unfold SerialValue, S.RecursiveState.
-          rewrite ser_recur_st_unfold.
-          unfold SerialValue', S.Map, ValList, Vals.
+          rewrite ser_recur_st_unfold. 
+          unfold SerialValue', S.Map, ValList, Vals, S.mkSuccess.
+          change (
+              (λ (self : Desc → Serializer Value Value_wf) (d : Desc) (a : Value),
+                 S.Rep (SerialVal self d) (map_to_list match a with
+                                             | VALUE vs => vs
+                                             end))
+            ) with SerialValue'.
+          intros Hrest_ok. 
+          rewrite <- S.R.ResultEquivSuccessIff with (r := S.Rep _ _).
+          rewrite <- Hrest_ok.
           rewrite SerialRepSubst with
             (ser2 :=
                (SerialVal
@@ -1309,13 +1315,13 @@ Module InterParse.
     Definition ValueEncLength_P (v : Value) :=
       forall d enc,
       Valid' d v ->
-      SerialValue d v = S.Success enc ->
+      SerialValue d v = S.mkSuccess enc ->
       Length enc = ValueEncLen' d v.
 
     Definition ValEncLength_P (v : Val) :=
       forall d k enc,
       Valid'Fold (Fields d) k v True ->
-      SerialVal SerialValue d (k, v) = S.Success enc ->
+      SerialVal SerialValue d (k, v) = S.mkSuccess enc ->
       Length enc = ValueEncLen'Fold (Fields d) k v 0.
 
     Lemma ValueEncLength_Length : forall v, ValueEncLength_P v.

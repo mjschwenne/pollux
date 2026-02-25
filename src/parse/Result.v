@@ -210,6 +210,20 @@ Module Result (InputModule : AbstractInput).
       subst. split; reflexivity.
     Qed.
 
+    Lemma ResultEquivSuccessIff :
+      forall r x enc,
+      r ≡ᵣ Success x enc <-> r = Success x enc.
+    Proof using Type.
+      intros r x enc.
+      split.
+      - intro Hequiv.
+        unfold result_equiv in Hequiv.
+        destruct r; last contradiction.
+        destruct Hequiv as [Hx Henc]; congruence.
+      - intro Hequiv.
+        unfold result_equiv. subst. done.
+    Qed.
+
     Lemma result_equiv_refl : Reflexive result_equiv.
     Proof using Type.
       intros r. destruct r; done.
