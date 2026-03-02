@@ -13,6 +13,8 @@ From Pollux Require Import Theorems.
 
 Require Import Stdlib.Arith.Wf_nat.
 Require Import Stdlib.Program.Wf.
+From Corelib.Program Require Import Basics Tactics.
+From Stdlib.Program Require Import Program.
 
 Open Scope Z_scope.
 
@@ -895,6 +897,25 @@ Module InterParse.
            | _, _ => False
            end.
         
+    Definition Value_wf_eq := mk_eq Value_wf.
+    Definition Val_wf_fold_eq := mk_eq Val_wf_fold.
+
+    Lemma Val_wf_fold_unfold :
+      forall d key val,
+      Val_wf_fold (Fields d) key val True =
+      match (Fields d) !! key, val with
+      | None, _ => True (* Skip fields that will be dropped *)
+      | Some F_BOOL, V_BOOL _ => True (* All Booleans are intrinsically well-formed *)
+      | Some F_INT, V_INT z => True /\ 0 <= z < 2^32 (* Integer fits in bounds *)
+      | Some (F_MSG d), V_MSG val => True /\ Value_wf d val (* Nested message is also well-formed *)
+      | _, _ => False
+      end.
+    Proof using Type.
+      intros [ds] k v.
+      unfold Val_wf_fold, Fields.
+      destruct v; destruct (ds !! k) eqn:Hin_d; try reflexivity.
+    Qed.
+
     (* Helper definition to shim between Val_wf_fold and Serializer API *)
     Definition Val_wf (d : Desc) (v : Z * Val) : Prop :=
       let (key, val) := v in  
@@ -926,12 +947,41 @@ Module InterParse.
               | None => S.mkSuccess Input_default
               end.
 
-    Definition ValList (v : Value) : list (Z * Val) :=
-      map_to_list (Vals v).
+    Definition ValList_filter_p (d : Desc) (kv : Z * Val) : Prop :=
+      match (Fields d) !! (fst kv), (snd kv) with
+      | Some _, V_MISSING => False
+      | None, _ => False
+      | _, _ => True
+      end.
+
+    Global Instance ValList_filter_Decision (d : Desc) : forall kv : Z * Val, Decision (ValList_filter_p d kv).
+    Proof.
+      intros [k v].
+      unfold ValList_filter_p, fst, snd.
+      destruct (Fields d !! k); last apply False_dec.
+      destruct v; (apply True_dec || apply False_dec).
+    Defined.
       
+    Definition ValList (d : Desc) (v : Value) : list (Z * Val) :=
+      filter (ValList_filter_p d) (map_to_list (Vals v)).
+      
+    Definition field_val_match (f : Field) (v : Val) : Prop :=
+      match v, f with
+      | V_BOOL _, F_BOOL
+      | V_INT _, F_INT
+      | V_MSG _, F_MSG _ => True
+      | _, _ => False
+      end.
+
+    Definition WillEncode (d : Desc) (kv : Z * Val) : Prop :=
+      exists f, (Fields d) !! (fst kv) = Some f /\ Val_wf d kv. 
+
+    Definition SerialValueList_wf (d : Desc) (vs : list (Z * Val)) : Prop :=
+      Forall (WillEncode d) vs.
+
     Definition SerialValue' (self : forall d : Desc, Serializer Value $ Value_wf d) (d : Desc) :
       Serializer Value $ Value_wf d :=
-      S.Map (S.Rep (SerialVal self d : S.Serializer _ (Val_wf d))) ValList.
+      S.Map (S.Rep (SerialVal self d : S.Serializer _ (WillEncode d))) (ValList d).
 
     Definition SerialValue (d : Desc) : Serializer Value $ Value_wf d :=
       S.RecursiveState SerialValue' ValueDepth d.
@@ -1171,7 +1221,7 @@ Module InterParse.
     Lemma SerialValWeakenDepth (d : Desc) (k : Z) (v : Val) (m : gmap Z Val) : 
       m !! k = None -> map_first_key (<[k := v]> m) k ->
       forall kv,
-      kv ∈ map_to_list m ->
+      kv ∈ ValList d (VALUE m) ->
       SerialVal (λ (st__n : Desc) (x__n : Value),
                    if decide (ValueDepth x__n < ValueDepth (VALUE (<[k:=v]> m)))%nat
                    then @S.recur_st _ _ Value_wf SerialValue' ValueDepth st__n x__n
@@ -1193,6 +1243,9 @@ Module InterParse.
       (* For V_MSG v0, both depth checks should be true since v0 comes from m *)
       unfold S.Bind', S.Concat, S.Len'.
       (* Show that both decide expressions evaluate to true *)
+      unfold ValList, Vals in Hin.
+      rewrite list_elem_of_filter in Hin.
+      destruct Hin as [Hfilter Hin].
       rewrite elem_of_map_to_list in Hin.
       pose proof (ValueDepthDropFirst k v m Hnone Hfst) as Hdepth. 
       destruct (decide (ValueDepth val < ValueDepth (VALUE m))%nat) eqn:Hm.
@@ -1219,55 +1272,101 @@ Module InterParse.
         rewrite ser_recur_st_unfold.
         unfold SerialValue', S.Map, ValList, Vals.
         rewrite map_to_list_insert_first_key by assumption.
-        intros Hser. rewrite SerialRepInversion_First in Hser.
-        destruct Hser as (enc__v & enc__rest & Hv_ok & Hrest_ok & Henc).
-        subst. exists enc__v, enc__rest.
-        split.
-        * unfold SerialValue, S.RecursiveState.
-          rewrite ser_recur_st_unfold.
-          unfold SerialValue', S.Map, ValList, Vals, S.mkSuccess.
-          rewrite <- S.R.ResultEquivSuccessIff with (r := S.Rep _ _).
-          unfold S.mkSuccess in Hrest_ok.
-          rewrite <- Hrest_ok.
-          (* Need to show that the depth bound difference doesn't matter *)
-          (* because all elements in map_to_list m have depth < ValueDepth (VALUE m) *)
-          (* Fortunately, that's exactly what SerialValWeakenDepth tells us. *)
-          (* Now we need to show S.rep' with both serializers gives the same result *)
-          change (
-            (λ (self : forall d : Desc, Serializer Value $ Value_wf d) (d0 : Desc) (a : Value),
-               S.Rep (SerialVal self d0) (map_to_list match a with
-                                            | VALUE vs => vs
-                                            end))
-            ) with SerialValue'.
-          rewrite SerialRepSubst with
-            (ser2 :=
+        rewrite filter_cons.
+        destruct (decide (ValList_filter_p d (k, v))) as [Hfilter_in | Hfilter_out].
+        + intros Hser. rewrite SerialRepInversion_First in Hser.
+          destruct Hser as (enc__v & enc__rest & Hv_ok & Hrest_ok & Henc).
+          subst. exists enc__v, enc__rest.
+          split.
+          * unfold SerialValue, S.RecursiveState.
+            rewrite ser_recur_st_unfold.
+            unfold SerialValue', S.Map, ValList, Vals, S.mkSuccess.
+            rewrite <- S.R.ResultEquivSuccessIff with (r := S.Rep _ _).
+            unfold S.mkSuccess in Hrest_ok.
+            rewrite <- Hrest_ok.
+            (* Need to show that the depth bound difference doesn't matter *)
+            (* because all elements in map_to_list m have depth < ValueDepth (VALUE m) *)
+            (* Fortunately, that's exactly what SerialValWeakenDepth tells us. *)
+            (* Now we need to show S.rep' with both serializers gives the same result *)
+            change (
+                (λ (self : forall d : Desc, Serializer Value $ Value_wf d) (d0 : Desc) (a : Value),
+                   S.Rep (SerialVal self d0) (map_to_list match a with
+                                                | VALUE vs => vs
+                                                end))
+              ) with SerialValue'.
+            rewrite SerialRepSubst with
+              (ser2 :=
                  (SerialVal
                     (λ (st__n : Desc) (x__n : Value),
                        if decide (ValueDepth x__n < ValueDepth (VALUE (<[k:=v]> m)))%nat
                        then @S.recur_st _ _ Value_wf SerialValue' ValueDepth st__n x__n
                        else S.RecursiveProgressError "Serial.RecursiveState" ValueDepth (VALUE (<[k:=v]> m)) x__n)
                     d)
-            ); first reflexivity.
-          symmetry.
-          apply SerialValWeakenDepth; assumption.
-        * split; last reflexivity.
-          change (
-            (λ (self : forall d : Desc, Serializer Value $ Value_wf d) (d : Desc) (a : Value),
-               S.Rep (SerialVal self d) (map_to_list match a with
-                                                     | VALUE vs => vs
-                                                     end))
-            ) with SerialValue' in Hv_ok.
-          rewrite <- Hv_ok.
-          unfold SerialVal.
-          destruct (Fields d !! k); last reflexivity.
-          destruct f; try reflexivity.
-          destruct v; try reflexivity.
-          unfold S.Bind', S.Concat, S.Len'.
-          case_eq (decide (ValueDepth v < ValueDepth (VALUE (<[k := V_MSG v]> m))))%nat.
-          -- intros Hdep _. unfold SerialValue, S.RecursiveState. reflexivity.
-          -- intros Hdep _. pose proof (lookup_insert_eq m k (V_MSG v)) as Hlookup.
-             pose proof (Val_in_map_smaller_depth (<[k := V_MSG v]> m) k v Hlookup).
-             contradiction.
+              ); first reflexivity.
+            symmetry.
+            apply SerialValWeakenDepth; assumption.
+          * split; last reflexivity.
+            change (
+                (λ (self : forall d : Desc, Serializer Value $ Value_wf d) (d : Desc) (a : Value),
+                   S.Rep (SerialVal self d) (map_to_list match a with
+                                               | VALUE vs => vs
+                                               end))
+              ) with SerialValue' in Hv_ok.
+            rewrite <- Hv_ok.
+            unfold SerialVal.
+            destruct (Fields d !! k); last reflexivity.
+            destruct f; try reflexivity.
+            destruct v; try reflexivity.
+            unfold S.Bind', S.Concat, S.Len'.
+            case_eq (decide (ValueDepth v < ValueDepth (VALUE (<[k := V_MSG v]> m))))%nat.
+            -- intros Hdep _. unfold SerialValue, S.RecursiveState. reflexivity.
+            -- intros Hdep _. pose proof (lookup_insert_eq m k (V_MSG v)) as Hlookup.
+               pose proof (Val_in_map_smaller_depth (<[k := V_MSG v]> m) k v Hlookup).
+               contradiction.
+        + destruct (filter (ValList_filter_p d) (map_to_list m)) eqn:Hlst.
+          * rewrite ser_rep_unfold. intros Hser. invc Hser.
+            exists S.Output_default, S.Output_default.
+            split.
+            -- unfold SerialValue, S.RecursiveState.
+               rewrite ser_recur_st_unfold.
+               unfold SerialValue', S.Map, ValList, Vals.
+               rewrite Hlst. reflexivity.
+            -- split; last (unfold S.Output_default; rewrite App_nil_r; reflexivity).
+               unfold ValList_filter_p, fst, snd in Hfilter_out.
+               unfold SerialVal. destruct (Fields d !! k); last reflexivity.
+               destruct f; destruct v; (reflexivity || specialize (Hfilter_out I); contradiction).
+          * intro Hser. exists Input_default, enc. 
+            split.
+            -- unfold SerialValue, S.RecursiveState.
+               rewrite ser_recur_st_unfold.
+               unfold SerialValue', S.Map, ValList, Vals, S.mkSuccess.
+               rewrite <- Hlst in Hser. 
+               rewrite <- S.R.ResultEquivSuccessIff with (r := S.Rep _ _).
+               unfold S.mkSuccess in Hser.
+               rewrite <- Hser.
+               rewrite SerialRepSubst with
+                 (ser2 :=
+                    (SerialVal
+                       (λ (st__n : Desc) (x__n : Value),
+                          if decide (ValueDepth x__n < ValueDepth (VALUE (<[k:=v]> m)))%nat
+                          then
+                            S.recur_st
+                              (λ (self : ∀ d0 : Desc, Serializer Value (Value_wf d0)) (d0 : Desc) (a : Value),
+                                 @S.Rep _ (WillEncode d0) (SerialVal self d0)
+                                   (filter (ValList_filter_p d0) (map_to_list match a with
+                                                                    | VALUE vs => vs
+                                                                    end)))
+                              ValueDepth st__n x__n
+                          else S.RecursiveProgressError "Serial.RecursiveState" ValueDepth (VALUE (<[k:=v]> m)) x__n)
+                       d)
+                 ); first reflexivity.
+               symmetry.
+               apply SerialValWeakenDepth; assumption.
+            -- split; last (rewrite App_nil_l; reflexivity).
+               unfold ValList_filter_p, fst, snd in Hfilter_out.
+               unfold SerialVal. destruct (Fields d !! k); last reflexivity.
+               destruct f; destruct v; (reflexivity || specialize (Hfilter_out I); contradiction).
+          
       - (* Reverse direction: <- *)
         intros (enc__v & enc__rest & Hrest_ok & Hv_ok & Henc).
         unfold SerialValue, S.RecursiveState.
@@ -1280,48 +1379,94 @@ Module InterParse.
                                             | VALUE vs => vs
                                             end))
           ) with SerialValue'.
-        rewrite SerialRepInversion_First.
-        exists enc__v, enc__rest. subst. split.
-        + (* Use Hv_ok to show (k, v) meets the depth requirement *)
-          (* Since the if is embedded in a lambda term, we chase down
+        rewrite filter_cons.
+        destruct (decide (ValList_filter_p d (k, v))) as [Hfilter_in | Hfilter_out].
+        + rewrite SerialRepInversion_First.
+          exists enc__v, enc__rest. subst. split.
+          * (* Use Hv_ok to show (k, v) meets the depth requirement *)
+            (* Since the if is embedded in a lambda term, we chase down
              until it's been applied and then show recursive call is
              always made. *)
-          rewrite <- Hv_ok.
-          unfold SerialVal.
-          destruct (Fields d !! k); last reflexivity.
-          destruct f; try reflexivity.
-          destruct v; try reflexivity.
-          unfold S.Bind', S.Concat, S.Len'.
-          case_eq (decide (ValueDepth v < ValueDepth (VALUE (<[k:=V_MSG v]> m)))%nat).
-          * intros Hdep _. unfold SerialValue, S.RecursiveState. reflexivity.
-          * intros Hdep _. pose proof (lookup_insert_eq m k (V_MSG v)) as Hlookup.
-            pose proof (Val_in_map_smaller_depth (<[k := V_MSG v]> m) k v Hlookup).
-            contradiction.
-        + split; last reflexivity. revert Hrest_ok.
-          unfold SerialValue, S.RecursiveState.
-          rewrite ser_recur_st_unfold. 
-          unfold SerialValue', S.Map, ValList, Vals, S.mkSuccess.
-          change (
-              (λ (self : forall d : Desc, Serializer Value $ Value_wf d) (d : Desc) (a : Value),
-                 S.Rep (SerialVal self d) (map_to_list match a with
-                                             | VALUE vs => vs
-                                             end))
-            ) with SerialValue'.
-          intros Hrest_ok. 
-          rewrite <- S.R.ResultEquivSuccessIff with (r := S.Rep _ _).
-          rewrite <- Hrest_ok.
-          rewrite SerialRepSubst with
-            (ser2 :=
-               (SerialVal
-                  (λ (st__n : Desc) (x__n : Value),
-                     if decide (ValueDepth x__n < ValueDepth (VALUE m))%nat
-                     then
-                       @S.recur_st _ _ Value_wf SerialValue'
-                         ValueDepth st__n x__n
-                     else S.RecursiveProgressError "Serial.RecursiveState" ValueDepth (VALUE m) x__n)
-                  d)
-            ); first reflexivity.
-          apply SerialValWeakenDepth; assumption.
+            rewrite <- Hv_ok.
+            unfold SerialVal.
+            destruct (Fields d !! k); last reflexivity.
+            destruct f; try reflexivity.
+            destruct v; try reflexivity.
+            unfold S.Bind', S.Concat, S.Len'.
+            case_eq (decide (ValueDepth v < ValueDepth (VALUE (<[k:=V_MSG v]> m)))%nat).
+            -- intros Hdep _. unfold SerialValue, S.RecursiveState. reflexivity.
+            -- intros Hdep _. pose proof (lookup_insert_eq m k (V_MSG v)) as Hlookup.
+               pose proof (Val_in_map_smaller_depth (<[k := V_MSG v]> m) k v Hlookup).
+               contradiction.
+          * split; last reflexivity. revert Hrest_ok.
+            unfold SerialValue, S.RecursiveState.
+            rewrite ser_recur_st_unfold. 
+            unfold SerialValue', S.Map, ValList, Vals, S.mkSuccess.
+            change (
+                (λ (self : forall d : Desc, Serializer Value $ Value_wf d) (d : Desc) (a : Value),
+                   S.Rep (SerialVal self d) (map_to_list match a with
+                                               | VALUE vs => vs
+                                               end))
+              ) with SerialValue'.
+            intros Hrest_ok. 
+            rewrite <- S.R.ResultEquivSuccessIff with (r := S.Rep _ _).
+            rewrite <- Hrest_ok.
+            rewrite SerialRepSubst with
+              (ser2 :=
+                 (SerialVal
+                    (λ (st__n : Desc) (x__n : Value),
+                       if decide (ValueDepth x__n < ValueDepth (VALUE m))%nat
+                       then
+                         @S.recur_st _ _ Value_wf SerialValue'
+                           ValueDepth st__n x__n
+                       else S.RecursiveProgressError "Serial.RecursiveState" ValueDepth (VALUE m) x__n)
+                    d)
+              ); first reflexivity.
+            apply SerialValWeakenDepth; assumption.
+        + unfold ValList_filter_p, fst, snd in Hfilter_out.
+          unfold SerialVal in Hv_ok.
+          unfold SerialValue, S.RecursiveState in Hrest_ok.
+          rewrite ser_recur_st_unfold in Hrest_ok.
+          destruct (Fields d !! k) eqn:Hin_d.
+          * (* v was dropped for being V_MISSING *) 
+            destruct v; try (reflexivity || specialize (Hfilter_out I); contradiction).
+            destruct f;
+              invc Hv_ok; rewrite App_nil_l; unfold S.mkSuccess in *;
+              rewrite <- S.R.ResultEquivSuccessIff with (r := S.Rep _ _);
+              rewrite <- Hrest_ok;
+              rewrite SerialRepSubst with
+              (ser2 :=
+                 (SerialVal
+                    (λ (st__n : Desc) (x__n : Value),
+                       if decide (ValueDepth x__n < ValueDepth (VALUE m))%nat
+                       then
+                         @S.recur_st _ _ Value_wf SerialValue'
+                           ValueDepth st__n x__n
+                       else S.RecursiveProgressError "Serial.RecursiveState" ValueDepth (VALUE m) x__n)
+                    d)
+              ); first reflexivity.
+            -- apply SerialValWeakenDepth; assumption.
+            -- unfold SerialValue', S.Map, ValList, Vals. reflexivity.
+            -- apply SerialValWeakenDepth; assumption.
+            -- unfold SerialValue', S.Map, ValList, Vals. reflexivity.
+            -- apply SerialValWeakenDepth; assumption.
+          * (* v dropped for being unknown *)
+            unfold S.mkSuccess in *.
+            invc Hv_ok. rewrite App_nil_l.
+            rewrite <- S.R.ResultEquivSuccessIff with (r := S.Rep _ _).
+            rewrite <- Hrest_ok.
+            rewrite SerialRepSubst with
+              (ser2 :=
+                 (SerialVal
+                    (λ (st__n : Desc) (x__n : Value),
+                       if decide (ValueDepth x__n < ValueDepth (VALUE m))%nat
+                       then
+                         @S.recur_st _ _ Value_wf SerialValue'
+                           ValueDepth st__n x__n
+                       else S.RecursiveProgressError "Serial.RecursiveState" ValueDepth (VALUE m) x__n)
+                    d)
+              ); first reflexivity.
+            apply SerialValWeakenDepth; assumption.
     Qed.
 
     Definition ValueEncLength_P (v : Value) :=
@@ -1412,6 +1557,62 @@ Module InterParse.
         destruct (fs !! k).
         + destruct f; try discriminate; (intros Hv_ok; invc Hv_ok; apply Length_default).
         + intros Hv_ok; invc Hv_ok; apply Length_default.
+    Qed.
+
+    Lemma WillEncode_NonEmpty :
+      forall d k v enc,
+      WillEncode d (k, v) ->
+      SerialVal SerialValue d (k, v) = S.mkSuccess enc ->
+      (Length enc > 0)%nat.
+    Proof.
+      (* Proof basically argues that whenever we encode a field, one byte will be the id field... *)
+      intros [ds] k v enc wf.
+      unfold SerialVal.
+      destruct wf as [f [Hin_d Hval_wf]].
+      unfold fst in Hin_d. rewrite Hin_d.
+      destruct f.
+      - unfold Val_wf, Val_wf_fold in Hval_wf.
+        rewrite Val_wf_fold_eq in Hval_wf.
+        rewrite Val_wf_fold_unfold in Hval_wf.
+        rewrite Hin_d in Hval_wf.
+        destruct v.
+        + intros Hser.
+          apply SerialConcatInversion in Hser.
+          destruct Hser as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
+          subst. rewrite App_Length.
+          apply UnsignedLength in Hl_ok.
+          lia.
+        + intros Hcontra; contradiction.
+        + intros Hcontra; contradiction.
+        + contradiction.
+      - unfold Val_wf, Val_wf_fold in Hval_wf.
+        rewrite Val_wf_fold_eq in Hval_wf.
+        rewrite Val_wf_fold_unfold in Hval_wf.
+        rewrite Hin_d in Hval_wf.
+        destruct v.
+        + intros Hcontra; contradiction.
+        + intros Hser.
+          apply SerialConcatInversion in Hser.
+          destruct Hser as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
+          subst. rewrite App_Length.
+          apply UnsignedLength in Hl_ok.
+          lia.
+        + intros Hcontra; contradiction.
+        + contradiction.
+      - unfold Val_wf, Val_wf_fold in Hval_wf.
+        rewrite Val_wf_fold_eq in Hval_wf.
+        rewrite Val_wf_fold_unfold in Hval_wf.
+        rewrite Hin_d in Hval_wf.
+        destruct v.
+        + intros Hcontra; contradiction.
+        + intros Hcontra; contradiction.
+        + intros Hser.
+          apply SerialConcatInversion in Hser.
+          destruct Hser as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
+          subst. rewrite App_Length.
+          apply UnsignedLength in Hl_ok.
+          lia.
+        + contradiction.
     Qed.
 
     Theorem InterParseOk : forall d, ParseOk (ParseValue d) (SerialValue d).

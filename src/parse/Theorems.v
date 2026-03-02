@@ -189,6 +189,25 @@ Module Theorems (InputModule : AbstractInput).
     reflexivity.
   Qed.
 
+  Definition LengthIf (ss : S.R.Result unit) : nat :=
+    match ss with
+    | S.R.Success () enc => Length enc
+    | S.R.Failure _ _ => 0
+    end.
+
+  Lemma Bind'Length {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+    (ls : S.Serializer L wfl) (rs : S.Serializer R wfr) (tag : R -> L):
+    forall r enc,
+      S.Bind' tag ls rs r = S.mkSuccess enc -> Length enc = LengthIf (ls $ tag r) + LengthIf (rs r).
+  Proof using Type.
+    intros r enc Hbind.
+    apply SerialConcatInversion in Hbind.
+    destruct Hbind as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
+    subst. rewrite Hl_ok, Hr_ok.
+    unfold LengthIf, S.mkSuccess.
+    rewrite App_Length. reflexivity.
+  Qed.
+
   Lemma BindCorrect' {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
     (lp : Parser L) (ls : S.Serializer L wfl)
     (rp : L -> Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
