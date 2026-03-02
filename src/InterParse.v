@@ -1615,6 +1615,80 @@ Module InterParse.
         + contradiction.
     Qed.
 
+    Fixpoint SchemaCorrect (d : Desc) (v : Value) : Prop :=
+      match d, v with
+      | DESC fs, VALUE vs =>
+          (* Every field in the value is in the descriptor *)
+          (forall k val, vs !! k = Some val -> exists f, fs !! k = Some f) /\
+          (* Every field in the descriptor is in the value *)
+          (forall k f, fs !! k = Some f -> exists val, vs !! k = Some val) /\
+          (* Every field in the value is not V_MISSING *)
+          (forall k, vs !! k <> Some V_MISSING) /\
+          (* Nested messages are also schema correct *)
+          map_fold (SchemaCorrectFold fs) True vs
+      end
+    with SchemaCorrectFold (fs : gmap Z Field) (k : Z) (v : Val) (acc : Prop) : Prop :=
+           match fs !! k, v with
+           | Some (F_MSG d), V_MSG val => acc /\ SchemaCorrect d val
+           | _, _ => acc
+           end.
+      
+    Definition SchemaCorrect_eq := mk_eq SchemaCorrect.
+    Definition SchemaCorrectFold_eq := mk_eq SchemaCorrectFold.
+
+    Inductive IdCompatible : Desc -> Value -> Desc -> Value -> Prop :=
+    | CompatRefl (d : Desc) (v : Value) :
+      SchemaCorrect d v ->
+      IdCompatible d v d v
+    | CompatDropUnknown (d : Desc) (v1 v2 : Value) :
+      (* v2 has unknown fields that v1 doesn't have *)
+      SchemaCorrect d v1 ->
+      (forall k val, (Vals v1) !! k = Some val -> (Vals v2) !! k = Some val) ->
+      IdCompatible d v1 d v2
+    | CompatAddMissing (d : Desc) (v1 v2 : Value) :
+      (* v1 has V_MISSINGs that v2 *)
+      SchemaCorrect d v2 ->
+      (forall k val, (Vals v2) !! k = Some val -> val <> V_MISSING -> (Vals v1) !! k = Some val) ->
+      IdCompatible d v1 d v2.
+      
+    Notation "⟨ d1 , v1 ⟩ ⪯ ⟨ d2 , v2 ⟩" := (IdCompatible d1 v1 d2 v2) (at level 70).
+
+    Theorem Compatible_Identity :
+      forall d1 d2 v1 v2,
+      d1 = d2 ->
+      SchemaCorrect d1 v1 ->
+      SchemaCorrect d2 v2 ->
+      ⟨ d1, v1 ⟩ ⪯ ⟨ d2, v2 ⟩ ->
+      v1 = v2.
+    Proof.
+      intros d d' v1 v2 Hdeq Hschema1 Hschema2 Hcompat.
+      subst d'. destruct Hcompat as [| d v1 v2 _ Hvals | d' Hvals].
+      - reflexivity.
+      - destruct v1 as [vs1]. destruct v2 as [vs2]. destruct d as [ds].
+        f_equal.
+        unfold SchemaCorrect in *.
+        rewrite SchemaCorrectFold_eq in *.
+        destruct Hschema1 as (Hvd1 & Hdv1 & Hvm1 & Hvn1).
+        destruct Hschema2 as (Hvd2 & Hdv2 & Hvm2 & Hvn2).
+        unfold Vals in Hvals.
+        induction vs2 using map_first_key_ind.
+        + induction vs1 as [| k2 v2 vs2' Hnone2 Hfst2] using map_first_key_ind.
+          * reflexivity.
+          * pose proof (lookup_insert_eq vs2' k2 v2) as Hsome2.
+            specialize (Hvals k2 v2 Hsome2).
+            rewrite lookup_empty in Hvals.
+            discriminate.
+        + destruct vs1 as [| k1 v1 vs1' Hnone1 Hfst1] using map_first_key_ind.
+          * pose proof (lookup_insert_eq m i x) as Hsome1.
+            specialize (Hvd2 i x Hsome1) as Hf.
+            destruct Hf as [f Hf_in].
+            specialize (Hdv1 i f Hf_in) as Hget1.
+            destruct Hget1 as [v1 Hget1].
+            rewrite lookup_empty in Hget1.
+            discriminate.
+          * (* FIXME: Something about this relation isn't right... *)
+    Admitted.
+    
     Theorem InterParseOk : forall d, ParseOk (ParseValue d) (SerialValue d).
     Proof.
     Abort.
