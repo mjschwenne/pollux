@@ -1624,69 +1624,100 @@ Module InterParse.
           (forall k f, fs !! k = Some f -> exists val, vs !! k = Some val) /\
           (* Every field in the value is not V_MISSING *)
           (forall k, vs !! k <> Some V_MISSING) /\
-          (* Nested messages are also schema correct *)
           map_fold (SchemaCorrectFold fs) True vs
       end
     with SchemaCorrectFold (fs : gmap Z Field) (k : Z) (v : Val) (acc : Prop) : Prop :=
            match fs !! k, v with
            | Some (F_MSG d), V_MSG val => acc /\ SchemaCorrect d val
+           | Some F_BOOL, V_BOOL _ => acc
+           | Some F_INT, V_INT _ => acc             
            | _, _ => acc
            end.
       
     Definition SchemaCorrect_eq := mk_eq SchemaCorrect.
     Definition SchemaCorrectFold_eq := mk_eq SchemaCorrectFold.
 
-    Inductive IdCompatible : Desc -> Value -> Desc -> Value -> Prop :=
-    | CompatRefl (d : Desc) (v : Value) :
-      SchemaCorrect d v ->
-      IdCompatible d v d v
-    | CompatDropUnknown (d : Desc) (v1 v2 : Value) :
-      (* v2 has unknown fields that v1 doesn't have *)
-      SchemaCorrect d v1 ->
-      (forall k val, (Vals v1) !! k = Some val -> (Vals v2) !! k = Some val) ->
-      IdCompatible d v1 d v2
-    | CompatAddMissing (d : Desc) (v1 v2 : Value) :
-      (* v1 has V_MISSINGs that v2 *)
-      SchemaCorrect d v2 ->
-      (forall k val, (Vals v2) !! k = Some val -> val <> V_MISSING -> (Vals v1) !! k = Some val) ->
-      IdCompatible d v1 d v2.
+    (* Use this relation to relate the input value to serialization
+       to the output value of parsing. At the moment, we require
+       that each value be fully described by the linked descriptor. *)
+    (* Naturally, for the moment we're doing to have d1 = d2 which should
+       imply v1 = v2. *)
+    Inductive Compatible : Desc -> Value -> Desc -> Value -> Prop :=
+    | CompatID (d1 : Desc) (v1 : Value) (d2 : Desc) (v2 : Value) :
+      SchemaCorrect d1 v1 -> SchemaCorrect d2 v2 -> Compatible d1 v1 d2 v2.
       
-    Notation "⟨ d1 , v1 ⟩ ⪯ ⟨ d2 , v2 ⟩" := (IdCompatible d1 v1 d2 v2) (at level 70).
+    Notation "⟨ d1 , v1 ⟩ ⪯ ⟨ d2 , v2 ⟩" := (Compatible d1 v1 d2 v2) (at level 70).
 
     Theorem Compatible_Identity :
       forall d1 d2 v1 v2,
       d1 = d2 ->
-      SchemaCorrect d1 v1 ->
-      SchemaCorrect d2 v2 ->
       ⟨ d1, v1 ⟩ ⪯ ⟨ d2, v2 ⟩ ->
       v1 = v2.
     Proof.
-      intros d d' v1 v2 Hdeq Hschema1 Hschema2 Hcompat.
-      subst d'. destruct Hcompat as [| d v1 v2 _ Hvals | d' Hvals].
-      - reflexivity.
-      - destruct v1 as [vs1]. destruct v2 as [vs2]. destruct d as [ds].
-        f_equal.
-        unfold SchemaCorrect in *.
-        rewrite SchemaCorrectFold_eq in *.
-        destruct Hschema1 as (Hvd1 & Hdv1 & Hvm1 & Hvn1).
-        destruct Hschema2 as (Hvd2 & Hdv2 & Hvm2 & Hvn2).
-        unfold Vals in Hvals.
-        induction vs2 using map_first_key_ind.
-        + induction vs1 as [| k2 v2 vs2' Hnone2 Hfst2] using map_first_key_ind.
+      intros [ds].
+      induction ds as [| k f ds Hnone__d Hfst__d IHds ] using map_first_key_ind.
+      - intros d' v1 v2 Heq Hcompat. 
+        inversion Hcompat as [d1' v1' d2' v2' Hschema1 Hschema2]; subst.
+        destruct v1 as [vs1]; destruct v2 as [vs2].
+        f_equal. unfold SchemaCorrect in *. rewrite SchemaCorrectFold_eq in *.
+        destruct Hschema1 as (Hin_v1 & Hin_d1 & Hmissing1 & Hnested1).
+        destruct Hschema2 as (Hin_v2 & Hin_d2 & Hmissing2 & Hnested2).
+        destruct vs1 as [| i x m Hnone Hfst _ ] using map_first_key_ind.
+        + destruct vs2 as [| i x m Hnone Hfst _ ]using map_first_key_ind.
           * reflexivity.
-          * pose proof (lookup_insert_eq vs2' k2 v2) as Hsome2.
-            specialize (Hvals k2 v2 Hsome2).
-            rewrite lookup_empty in Hvals.
+          * specialize Hin_v2 with (k := i) (val := x).
+            rewrite lookup_insert_eq in Hin_v2.
+            specialize (Hin_v2 eq_refl).
+            destruct Hin_v2 as [f Hin_v2].
+            rewrite lookup_empty in Hin_v2.
             discriminate.
-        + destruct vs1 as [| k1 v1 vs1' Hnone1 Hfst1] using map_first_key_ind.
-          * pose proof (lookup_insert_eq m i x) as Hsome1.
-            specialize (Hvd2 i x Hsome1) as Hf.
-            destruct Hf as [f Hf_in].
-            specialize (Hdv1 i f Hf_in) as Hget1.
-            destruct Hget1 as [v1 Hget1].
-            rewrite lookup_empty in Hget1.
+        + specialize Hin_v1 with (k := i) (val := x).
+          rewrite lookup_insert_eq in Hin_v1.
+          specialize (Hin_v1 eq_refl).
+          rewrite lookup_empty in Hin_v1.
+          destruct Hin_v1 as [f Hin_v1].
+          discriminate.
+      - intros d2 v1 v2 Heq_d Hcompat. subst d2.
+        inversion Hcompat as [d1' v1' d2' v2' Hschema1 Hschema2]; subst.
+        destruct v1 as [vs1]; destruct v2 as [vs2].
+        f_equal. unfold SchemaCorrect in *; rewrite SchemaCorrectFold_eq in *.
+        destruct Hschema1 as (Hin_v1 & Hin_d1 & Hmissing1 & Hnested1).
+        destruct Hschema2 as (Hin_v2 & Hin_d2 & Hmissing2 & Hnested2).
+        destruct vs1 as [| k1 v1 m1 Hnone1 Hfst1 _ ] using map_first_key_ind.
+        + destruct vs2 as [| k2 v2 m2 Hnone2 Hfst2 _ ] using map_first_key_ind.
+          * reflexivity. 
+          * specialize Hin_v2 with (k := k2) (val := v2). 
+            rewrite lookup_insert_eq in Hin_v2.
+            specialize (Hin_v2 eq_refl).
+            destruct Hin_v2 as [f' Hin_v2].
+            specialize (Hin_d1 k2 f' Hin_v2).
+            destruct Hin_d1 as [v' Hin_d1].
+            rewrite lookup_empty in Hin_d1.
             discriminate.
-          * (* FIXME: Something about this relation isn't right... *)
+        + destruct vs2 as [| k2 v2 m2 Hnone2 Hfst2 _ ] using map_first_key_ind.
+          * specialize Hin_v1 with (k := k1) (val := v1).
+            rewrite lookup_insert_eq in Hin_v1.
+            specialize (Hin_v1 eq_refl).
+            destruct Hin_v1 as [f' Hin_v1].
+            specialize (Hin_d2 k1 f' Hin_v1).
+            destruct Hin_d2 as [v' Hin_d2].
+            rewrite lookup_empty in Hin_d2.
+            discriminate.
+          * assert (⟨ DESC ds, VALUE m1 ⟩ ⪯ ⟨ DESC ds, VALUE m2 ⟩).
+            {
+              apply CompatID; unfold SchemaCorrect; rewrite SchemaCorrectFold_eq.
+              - split.
+                + intros k' v' Hin.
+                  specialize Hin_v1 with (k := k') (val := v').
+                  rewrite lookup_insert in Hin_v1. 
+                  destruct (k1 == k').
+                  * rewrite e in Hnone1. rewrite Hnone1 in Hin.
+                    discriminate.
+                  * specialize (Hin_v1 Hin).
+                    destruct Hin_v1 as [f' Hin_v1].
+                    exists f'. rewrite lookup_insert in Hin_v1.
+                    destruct (k == k').
+                    -- subst k'. 
     Admitted.
     
     Theorem InterParseOk : forall d, ParseOk (ParseValue d) (SerialValue d).
