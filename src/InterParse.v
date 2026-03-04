@@ -1615,7 +1615,7 @@ Module InterParse.
         + contradiction.
     Qed.
 
-    Fixpoint SchemaCorrect (d : Desc) (v : Value) : Prop :=
+    Program Fixpoint SchemaCorrect (d : Desc) (v : Value) {measure (Desc_size d)} : Prop :=
       match d, v with
       | DESC fs, VALUE vs =>
           (* Every field in the value is in the descriptor *)
@@ -1624,18 +1624,47 @@ Module InterParse.
           (forall k f, fs !! k = Some f -> exists val, vs !! k = Some val) /\
           (* Every field in the value is not V_MISSING *)
           (forall k, vs !! k <> Some V_MISSING) /\
-          map_fold (SchemaCorrectFold fs) True vs
-      end
-    with SchemaCorrectFold (fs : gmap Z Field) (k : Z) (v : Val) (acc : Prop) : Prop :=
-           match fs !! k, v with
-           | Some (F_MSG d), V_MSG val => acc /\ SchemaCorrect d val
-           | Some F_BOOL, V_BOOL _ => acc
-           | Some F_INT, V_INT _ => acc             
-           | _, _ => acc
-           end.
-      
+          (* Nested messages are also correct *)
+          map_Forall (fun k v => let f : option Field := fs !! k in 
+                              match f, v with
+                              | Some (F_MSG d'), V_MSG v' => SchemaCorrect d' v'
+                              | _, _ => True
+                              end) vs
+      end.
+    Next Obligation.
+    Proof.
+      symmetry in Heq_f.
+      apply Field_in_map_smaller in Heq_f.
+      unfold Desc_size.
+      rewrite Desc_size_eq.
+      rewrite Field_size_eq.
+      unfold Field_size at 1 in Heq_f.
+      rewrite Desc_size_eq in Heq_f.
+      lia.
+    Qed.
+
+  Lemma SchemaCorrect_unfold (d : Desc) (v : Value) : 
+    SchemaCorrect d v =
+      match d, v with
+      | DESC fs, VALUE vs =>
+          (* Every field in the value is in the descriptor *)
+          (forall k val, vs !! k = Some val -> exists f, fs !! k = Some f) /\
+          (* Every field in the descriptor is in the value *)
+          (forall k f, fs !! k = Some f -> exists val, vs !! k = Some val) /\
+          (* Every field in the value is not V_MISSING *)
+          (forall k, vs !! k <> Some V_MISSING) /\
+          (* Nested messages are also correct *)
+          map_Forall (fun k v => let f : option Field := fs !! k in 
+                              match f, v with
+                              | Some (F_MSG d'), V_MSG v' => SchemaCorrect d' v'
+                              | _, _ => True
+                              end) vs
+      end.
+  Proof.
+  Admitted.
+
     Definition SchemaCorrect_eq := mk_eq SchemaCorrect.
-    Definition SchemaCorrectFold_eq := mk_eq SchemaCorrectFold.
+    (* Definition SchemaCorrectFold_eq := mk_eq SchemaCorrectFold. *)
 
     (* Use this relation to relate the input value to serialization
        to the output value of parsing. At the moment, we require
@@ -1648,6 +1677,111 @@ Module InterParse.
       
     Notation "⟨ d1 , v1 ⟩ ⪯ ⟨ d2 , v2 ⟩" := (Compatible d1 v1 d2 v2) (at level 70).
 
+    Lemma SchemaCorrect_Drop_Field (ds : gmap Z Field) (vs : gmap Z Val) :
+      forall k v, vs !! k = None ->
+      SchemaCorrect (DESC ds) (VALUE $ <[k := v]> vs) ->
+      SchemaCorrect (DESC $ delete k ds) (VALUE vs).
+    Proof.
+      intros k v Hnone.
+      unfold SchemaCorrect.
+      intros (Hvd & Hdv & Hmissing & Hnest). 
+      split_and!.
+      - intros k' v' Hin.
+        specialize (Hvd k' v').
+        rewrite lookup_insert in Hvd.
+        destruct (k == k') as [Heq | Hneq].
+        + subst k'. rewrite Hin in Hnone. discriminate.
+        + specialize (Hvd Hin).
+          destruct Hvd as [f' Hinf].
+          exists f'. 
+          rewrite lookup_delete_ne by assumption.
+          assumption.
+      - intros k' f' Hin.
+        specialize (Hdv k' f').
+        rewrite lookup_delete in Hin.
+        destruct (k == k') as [Heq | Hneq].
+        + discriminate.
+        + specialize (Hdv Hin).
+          destruct Hdv as [v' Hinv].
+          exists v'. rewrite lookup_insert_ne in Hinv by assumption.
+          assumption.
+      - intros k'.
+        specialize (Hmissing k').
+        rewrite lookup_insert in Hmissing.
+        destruct (k == k').
+        + subst k'. rewrite Hnone. done.
+        + assumption.
+      -
+    Admitted.
+    
+    (*     rewrite map_fold_insert_L in Hnest. *)
+    (*     + destruct v; unfold SchemaCorrectFold in Hnest. *)
+    (*       * rewrite SchemaCorrectFold_eq, SchemaCorrect_eq in Hnest. *)
+            
+    (*     induction vs as [| k' v' vs' Hno_vs Hfst_vs IHvs ] using map_first_key_ind. *)
+    (*     + rewrite delete_empty, map_fold_empty. trivial. *)
+    (*     + rewrite delete_insert. *)
+    (*       destruct (k == k'). *)
+    (*       * apply IHvs. *)
+    (*         -- intros k'' v'' Hin. *)
+    (*            specialize (Hvd k'' v''). *)
+    (*            rewrite lookup_insert in Hvd. *)
+    (*            destruct (k' == k'') as [Heq | Hneq]. *)
+    (*            ++ subst k'. rewrite Hin in Hno_vs. discriminate. *)
+    (*            ++ specialize (Hvd Hin). *)
+    (*               destruct Hvd as [f'' Hinv]. *)
+    (*               exists f''.  *)
+    (*               assumption. *)
+    (*         -- intros k'' v'' Hin. *)
+    (*            specialize (Hdv k'' v''). *)
+    (*            rewrite lookup_insert in Hdv. *)
+    (*            destruct (k == k'') as [Heq | Hneq]. *)
+    (*            ++ subst k''. rewrite lookup_insert_eq in Hin. *)
+    (*               invc Hin. specialize (Hdv eq_refl). *)
+    (*               destruct Hdv as [val Hdv]. *)
+    (*     ++ specialize (Hdv Hin). *)
+    (*       destruct Hdv as [f' Hinv]. *)
+    (*       exists f'. rewrite lookup_delete_ne by assumption. *)
+    (*       assumption. *)
+    (*         -- admit. *)
+    (*         -- admit. *)
+    (*       * rewrite map_fold_insert_first_key. *)
+    (*         -- destruct v'; unfold SchemaCorrectFold; rewrite SchemaCorrectFold_eq. *)
+    (*            ++ rewrite SchemaCorrect_eq. *)
+    (*               destruct (ds !! k') as [f' |] eqn:Hk'. *)
+    (*               ** destruct f'. *)
+    (*                  --- split. *)
+    (*                      +++ apply IHvs. *)
+    (*                          *** intros k'' v'' Hin. *)
+    (*                              specialize (Hvd k'' v''). *)
+    (*                              rewrite lookup_insert in Hvd. *)
+    (*                              destruct (k' == k'') as [Heq | Hneq]. *)
+    (*                              ---- subst k'. rewrite Hin in Hno_vs. discriminate. *)
+    (*                              ---- specialize (Hvd Hin). *)
+    (*                                   destruct Hvd as [f'' Hinv]. *)
+    (*                                   exists f''.  *)
+    (*                                   assumption. *)
+    (*                          ***   *)
+    (*   - induction (delete k vs) as [| k' v' vs' Hno_vs Hfst_vs IHvs ] using map_first_key_ind. *)
+    (*     + rewrite map_fold_empty. trivial. *)
+    (*     + rewrite map_fold_insert_first_key by assumption.   *)
+    (*       destruct v'; unfold SchemaCorrectFold; rewrite SchemaCorrectFold_eq. *)
+    (*       * rewrite SchemaCorrect_eq. *)
+    (*         destruct (ds !! k'); last assumption. *)
+    (*         destruct f0; try assumption. *)
+    (*         split; first assumption. *)
+    (* Admitted. *)
+
+    Lemma Compatible_Drop_Field (d : gmap Z Field) (v1 v2 : gmap Z Val) :
+      forall k v, ⟨ DESC $ <[k := v]> d, VALUE v1 ⟩ ⪯ ⟨ DESC $ <[k := v]> d, VALUE v2 ⟩ ->
+             ⟨ DESC d, VALUE $ delete k v1 ⟩ ⪯ ⟨ DESC d, VALUE $ delete k v2 ⟩.
+    Proof.
+      intros k v H.
+      inversion H as [d1' v1' d2' v2' Hschema1 Hsechma2]; subst.
+      apply CompatID.
+      - 
+    Admitted.
+
     Theorem Compatible_Identity :
       forall d1 d2 v1 v2,
       d1 = d2 ->
@@ -1659,7 +1793,7 @@ Module InterParse.
       - intros d' v1 v2 Heq Hcompat. 
         inversion Hcompat as [d1' v1' d2' v2' Hschema1 Hschema2]; subst.
         destruct v1 as [vs1]; destruct v2 as [vs2].
-        f_equal. unfold SchemaCorrect in *. rewrite SchemaCorrectFold_eq in *.
+        f_equal. rewrite SchemaCorrect_unfold in *.
         destruct Hschema1 as (Hin_v1 & Hin_d1 & Hmissing1 & Hnested1).
         destruct Hschema2 as (Hin_v2 & Hin_d2 & Hmissing2 & Hnested2).
         destruct vs1 as [| i x m Hnone Hfst _ ] using map_first_key_ind.
@@ -1680,7 +1814,7 @@ Module InterParse.
       - intros d2 v1 v2 Heq_d Hcompat. subst d2.
         inversion Hcompat as [d1' v1' d2' v2' Hschema1 Hschema2]; subst.
         destruct v1 as [vs1]; destruct v2 as [vs2].
-        f_equal. unfold SchemaCorrect in *; rewrite SchemaCorrectFold_eq in *.
+        f_equal. rewrite SchemaCorrect_unfold in *.
         destruct Hschema1 as (Hin_v1 & Hin_d1 & Hmissing1 & Hnested1).
         destruct Hschema2 as (Hin_v2 & Hin_d2 & Hmissing2 & Hnested2).
         destruct vs1 as [| k1 v1 m1 Hnone1 Hfst1 _ ] using map_first_key_ind.
@@ -1705,7 +1839,7 @@ Module InterParse.
             discriminate.
           * assert (⟨ DESC ds, VALUE m1 ⟩ ⪯ ⟨ DESC ds, VALUE m2 ⟩).
             {
-              apply CompatID; unfold SchemaCorrect; rewrite SchemaCorrectFold_eq.
+              apply CompatID; rewrite SchemaCorrect_unfold.
               - split.
                 + intros k' v' Hin.
                   specialize Hin_v1 with (k := k') (val := v').
