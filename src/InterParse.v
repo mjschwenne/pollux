@@ -1654,7 +1654,7 @@ Module InterParse.
       (forall d' v', f = F_MSG d' -> v = V_MSG v' -> ⟨ v' ∷ d' ⟩) ->
       ds !! k = None ->
       vs !! k = None ->
-      ⟨ (VALUE vs) ∷  (DESC ds) ⟩ ->
+      ⟨ (VALUE vs) ∷ (DESC ds) ⟩ ->
       ⟨ (VALUE (<[k := v]> vs)) ∷ (DESC (<[k := f]> ds)) ⟩.
     Proof.
       intros. apply SC_Insert; assumption.
@@ -1697,6 +1697,28 @@ Module InterParse.
           assumption.
     Qed.
 
+    Lemma SC_implies_val_in_desc_typed : forall d v,
+      ⟨ v ∷ d ⟩ ->
+      forall k val, Vals v !! k = Some val -> exists f, Fields d !! k = Some f /\ field_val_type_match f val.
+    Proof.
+      intros d v H.
+      induction H as [| k f v ds vs Htype HnestedC Hnested Hds_none Hvs_none H' IH]; intros k' val' Hlookup.
+      - (* Empty case *)
+        simpl in Hlookup. rewrite lookup_empty in Hlookup. discriminate.
+      - (* Insert case - straightforward by case analysis on k = k' *)
+        unfold Vals in Hlookup. destruct (k == k') as [Heq | Hneq].
+        + subst k'. exists f. unfold Fields. rewrite lookup_insert_eq.
+          split; first reflexivity.
+          rewrite lookup_insert_eq in Hlookup. invc Hlookup.
+          assumption.
+        + rewrite lookup_insert_ne in Hlookup by assumption.
+          specialize (IH k' val' Hlookup).
+          destruct IH as [f' Hsome].
+          unfold Fields in *. exists f'.
+          rewrite lookup_insert_ne by assumption.
+          assumption.
+    Qed.
+
     (** Property 2: Every field in descriptor exists in value *)
     Lemma SC_implies_desc_in_val : forall d v,
       ⟨ v ∷ d ⟩ ->
@@ -1708,6 +1730,27 @@ Module InterParse.
       - simpl in Hlookup. destruct (k == k') as [Heq | Hneq].
         + subst k'. exists v. simpl. rewrite lookup_insert_eq.
           reflexivity.
+        + rewrite lookup_insert_ne in Hlookup by assumption.
+          specialize (IH k' f' Hlookup).
+          destruct IH as [v' Hsome].
+          exists v'.
+          simpl in Hsome; simpl.
+          rewrite lookup_insert_ne by assumption.
+          assumption.
+    Qed.
+
+    Lemma SC_implies_desc_in_val_typed : forall d v,
+      ⟨ v ∷ d ⟩ ->
+      forall k f, Fields d !! k = Some f -> exists val, Vals v !! k = Some val /\ field_val_type_match f val.
+    Proof.
+      intros d v H.
+      induction H as [| k f v ds vs Htype HnestedC Hnested Hds_none Hvs_none H' IH]; intros k' f' Hlookup.
+      - simpl in Hlookup. rewrite lookup_empty in Hlookup. discriminate.
+      - simpl in Hlookup. destruct (k == k') as [Heq | Hneq].
+        + subst k'. exists v. simpl. rewrite lookup_insert_eq.
+          split; first reflexivity.
+          rewrite lookup_insert_eq in Hlookup. invc Hlookup.
+          assumption.
         + rewrite lookup_insert_ne in Hlookup by assumption.
           specialize (IH k' f' Hlookup).
           destruct IH as [v' Hsome].
@@ -1803,46 +1846,152 @@ Module InterParse.
        to the output value of parsing. At the moment, we require
        that each value be fully described by the linked descriptor. *)
     (* Naturally, for the moment we're doing to have d1 = d2 which should
-       imply v1 = v2. *)
-    Inductive Compatible : Desc -> Value -> Desc -> Value -> Prop :=
-    | CompatID (d1 : Desc) (v1 : Value) (d2 : Desc) (v2 : Value) :
-      ⟨ v1 ∷ d1 ⟩ -> ⟨ v2 ∷ d2 ⟩ -> Compatible d1 v1 d2 v2.
-    
-    Notation "⟨ d1 ∷ v1 ⟩ ≼ ⟨ d2 ∷ v2 ⟩" := (Compatible d1 v1 d2 v2) (at level 70).
+       imply the domains of v1 and v2 are the same and the types line up,
+       but it doesn't give use that v1 = v2 without something more. *)
+    Instance Value_Lookup : Lookup Z Val Value := fun k '(VALUE vs) => vs !! k.
+    Lemma Value_lookup_unfold v k :
+      v !! k = match v with VALUE vs => vs !! k end.
+    Proof. destruct v. reflexivity. Qed.
+    Instance Value_Insert : Insert Z Val Value := fun k v '(VALUE vs) => VALUE $ <[k := v]> vs.
+    Lemma Value_insert_unfold v k v' :
+      <[k := v']> v = match v with VALUE vs => VALUE $ <[k := v']> vs end.
+    Proof. destruct v. reflexivity. Qed.
+    Hint Rewrite Value_lookup_unfold Value_insert_unfold : value_unfold.
+    Instance Desc_Lookup : Lookup Z Field Desc := fun k '(DESC ds) => ds !! k.
+    Lemma Desc_lookup_unfold d k :
+      d !! k = match d with DESC ds => ds !! k end.
+    Proof. destruct d. reflexivity. Qed.
+    Instance Desc_Insert : Insert Z Field Desc := fun k f '(DESC ds) => DESC $ <[k := f]> ds.
+    Lemma Desc_insert_unfold d k f :
+      <[k := f]> d = match d with DESC ds => DESC $ <[k := f]> ds end.
+    Proof. destruct d. reflexivity. Qed.
+    Hint Rewrite Desc_lookup_unfold Desc_insert_unfold : desc_unfold.
 
-    Lemma SC_Desc_inv : forall v d1 d2,
+    Inductive Compatible : Desc -> Value -> Desc -> Value -> Prop :=
+    | CompatRefl (d1 d2 : Desc) (v : Value) :
+      ⟨ v ∷ d1 ⟩ -> ⟨ v ∷ d2 ⟩ -> Compatible d1 v d2 v
+    | CompatAdd (d1 : Desc) (v1 : Value) (d2 : Desc) (v2 : Value) (k : Z)
+        (f1 f2 : Field) (v'1 v'2 : Val) :
+      (* Current descriptors describe the current values *)
+      ⟨ v1 ∷ d1 ⟩ -> ⟨ v2 ∷ d2 ⟩ ->
+      Compatible d1 v1 d2 v2 ->
+      (* New key is actually new *)
+      v1 !! k = None ->
+      v2 !! k = None ->
+      d1 !! k = None ->
+      d2 !! k = None ->
+      (* New values align *)
+      v'1 = v'2 -> f1 = f2 ->
+      Compatible (<[k := f1]> d1) (<[k := v'1]> v1)
+        (<[k := f2]> d2) (<[k := v'2]> v2).
+    
+    Notation "'⟨' v1 '∷' d1 '⟩' '≼' '⟨' v2 '∷' d2 '⟩'" := (Compatible d1 v1 d2 v2) (at level 70).
+
+    Definition SC_D_Inv_Value_P (v : Value) :=
+      forall d1 d2,
       ⟨ v ∷ d1 ⟩ -> ⟨ v ∷ d2 ⟩ -> d1 = d2.
+
+    Definition SC_D_Inv_Val_P (v : Val) :=
+      forall d1 d2 v',
+      v = V_MSG v' -> ⟨ v' ∷ d1 ⟩ -> ⟨ v' ∷ d2 ⟩ -> d1 = d2.
+
+    Lemma SC_Desc_inv : forall v, SC_D_Inv_Value_P v.
     Proof.
-      intros [vs] [ds1] [ds2] Hsc1 Hsc2.
-      f_equal.
-      apply map_eq. intros k.
-      destruct (ds1 !! k) as [f1 |] eqn:Heq1.
-      - destruct (ds2 !! k) as [f2 |] eqn:Heq2.
-        + apply SC_implies_desc_in_val with (k := k) (f := f1) in Hsc1; last done.
-          destruct Hsc1 as [v Hsc1]; simpl in Hsc1.
-          apply SC_implies_val_in_desc with (k := k) (v := VALUE vs) (val := v) in Hsc2; last done.
-          destruct Hsc2 as [f' Hsc2]; simpl in Hsc2.
-          rewrite Hsc2 in Heq2. rewrite <- Heq2.
-          (* TODO: Missing connective bit, that the value returned in SC_implies_desc_in_val is
-             still linked to the input f. *)
-    Abort.
+      induction v as [vs IHv | v__n | b | x |] using Value_ind' with
+        (P_Value := SC_D_Inv_Value_P)
+        (P_Val := SC_D_Inv_Val_P).
+      - intros [ds1] [ds2] Hsc1 Hsc2; f_equal.
+        apply map_eq; intro k.
+        destruct (ds1 !! k) as [f1 |] eqn:Heq1.
+        + destruct (ds2 !! k) as [f2 |] eqn:Heq2.
+          * apply SC_implies_desc_in_val_typed with (k := k) (f := f1) in Hsc1 as Hdv; last done.
+            destruct Hdv as (v & Hdv & Hty1); simpl in Hdv.
+            apply SC_implies_val_in_desc_typed with (k := k) (v := VALUE vs) (val := v) in Hsc2 as Hvd;
+              last done.
+            destruct Hvd as ( f' & Hvd & Hty2 ); simpl in Hvd.
+            rewrite Hvd in Heq2. rewrite <- Heq2. f_equal.
+            destruct v.
+            -- unfold field_val_type_match in *.
+               destruct f1, f'; try contradiction.
+               clear Hty1 Hty2; f_equal.
+               apply SC_implies_nested_correct in Hsc1 as Hn1.
+               apply SC_implies_nested_correct in Hsc2 as Hn2.
+               rewrite map_Forall_lookup in Hn1.
+               rewrite map_Forall_lookup in Hn2.
+               specialize (Hn1 k (V_MSG v) Hdv).
+               specialize (Hn2 k (V_MSG v) Hdv).
+               unfold NestedCorrect in *; simpl in *.
+               rewrite Heq1 in Hn1; rewrite Hvd in Hn2.
+               rewrite map_Forall_lookup in IHv.
+               specialize (IHv k (V_MSG v) Hdv).
+               unfold SC_D_Inv_Val_P in IHv.
+               specialize (IHv d d0 v eq_refl Hn1 Hn2).
+               assumption.
+            -- unfold field_val_type_match in *.
+               destruct f1, f'; (contradiction || reflexivity).
+            -- unfold field_val_type_match in *.
+               destruct f1, f'; (contradiction || reflexivity).
+            -- unfold field_val_type_match in *.
+               destruct f1, f'; contradiction.
+          * apply SC_implies_desc_in_val with (k := k) (f := f1) in Hsc1 as Hdv; last done.
+            destruct Hdv as [v Hdv]; simpl in Hdv.
+            apply SC_implies_val_in_desc with (k := k) (v := VALUE vs) (val := v) in Hsc2 as Hvd; last done.
+            destruct Hvd as [f Hvd]; simpl in Hvd.
+            rewrite Heq2 in Hvd. discriminate.
+        + destruct (ds2 !! k) as [f2 |] eqn:Heq2.
+          * apply SC_implies_desc_in_val with (k := k) (f := f2) in Hsc2 as Hdv; last done.
+            destruct Hdv as [v Hdv]; simpl in Hdv.
+            apply SC_implies_val_in_desc with (k := k) (v := VALUE vs) (val := v) in Hsc1 as Hvd; last done.
+            destruct Hvd as [f Hvd]; simpl in Hvd.
+            rewrite Heq1 in Hvd. discriminate.
+          * reflexivity.
+      - intros d1 d2 v' Heq. invc Heq. apply IHv__n.
+      - intros d1 d2 v' Hcontra. discriminate.
+      - intros d1 d2 v' Hcontra. discriminate.
+      - intros d1 d2 v' Hcontra. discriminate.
+    Qed.
 
     Lemma CompatibleEqual : forall d1 v1 d2 v2,
       ⟨ v1 ∷ d1 ⟩ ≼ ⟨ v2 ∷ d2 ⟩ -> d1 = d2 -> v1 = v2.
     Proof.
       intros d v1 d2 v2 Hcompat.
-      induction Hcompat as [? ? ? ? Hsc1 Hsc2].
-      intros Heq; subst v2. destruct v1 as [vs].
-      induction Hsc1 as [| ? ? ? ? vs' Htype Hnest HnestC Hd_no Hv_no].
-      - inversion Hsc2 as [| ? ? ? ? vs' Htype Hnest Hd_no Hv_no _ Hemp]; subst.
-        + reflexivity.
-        + pose proof (insert_non_empty vs' k v). 
-          contradiction.
-      - apply SC_Insert with (f := f) (k := k) (v := v) in Hsc1; try assumption.
-    Abort.
+      induction Hcompat as [? ? | ? ? ? ? ? ? ? ? ? Hsc1 Hsc2 Hcompat ? Hv1_no Hv2_no Hd1_no Hd2_no Hveq Hfeq].
+      - reflexivity.
+      - subst. intro Hd. f_equal. apply IHHcompat. 
+        destruct d1 as [ds1], d2 as [ds2]; autorewrite with desc_unfold in *.
+        inversion Hd as [Hds]; clear Hd.
+        f_equal.
+        rewrite <- (delete_id ds1 k Hd1_no).
+        rewrite <- (delete_id ds2 k Hd2_no).
+        rewrite <- delete_insert_eq with (m := ds1) (x := f2).
+        rewrite <- delete_insert_eq with (m := ds2) (x := f2).
+        f_equal. assumption.
+    Qed.
 
-    Theorem InterParseOk : forall d, ParseOk (ParseValue d) (SerialValue d).
+    Definition ParseOk_Value_P (v : Value) :=
+      forall d enc rest,
+      Value_wf d v -> ⟨ v ∷ d ⟩ ->
+      SerialValue d v = S.mkSuccess enc ->
+      exists v', ParseValue d (enc ++ rest) = P.R.Success v' rest /\ ⟨ v ∷ d ⟩ ≼ ⟨ v' ∷ d ⟩.
+
+    Definition ParseOk_Val_P (v : Val) :=
+      forall d k enc,
+      Val_wf d (k, v) ->
+      SerialVal SerialValue d (k, v) = S.mkSuccess enc.
+
+    Theorem InterParseOk : forall v, ParseOk_Value_P v.
     Proof.
+      induction v as [vs IHv | v__n | b | x |] using Value_ind' with
+        (P_Value := ParseOk_Value_P)
+        (P_Val := ParseOk_Val_P).
+      - (* Prove the main statement about Values, using nested induction. *)
+        revert IHv. induction vs as [| k v m Hno Hfst ] using map_first_key_ind.
+        + intros _ d enc rest Hvalid Hsc Hser. vm_compute in Hser.
+          invc Hser. exists (VALUE ∅).
+          split.
+          * admit.
+          * constructor; assumption.
+        + 
     Abort.
 
   End Theorems.
