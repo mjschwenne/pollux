@@ -23,13 +23,15 @@ From Pollux.parse Require Import Theorems.
 From Corelib.Program Require Import Basics Tactics.
 From Stdlib.Program Require Import Program.
 
-Module TheoremsRel (InputModule : AbstractInput).
-  Module R := Result(InputModule).
-  Module P := Parsers(InputModule).
-  Module S := Serializers(InputModule).
-  Module T := Theorems(InputModule).
+Module Type TheoremsRel
+  (InputModule : AbstractInput)
+  (Results : Result InputModule)
+  (Parsers : Parser InputModule Results)
+  (Serializers : Serializer InputModule Results)
+  (Theorems : Theorems InputModule Results Parsers Serializers).
   Import InputModule.
-  Import T.
+  Import Results.
+  Import Theorems.
 
   Section TheoremsRel.
     Context `{EqDecision Input}.
@@ -56,7 +58,7 @@ Module TheoremsRel (InputModule : AbstractInput).
       (x : X) (enc rest : Input) :=
       wf x ->
       ser x = S.mkSuccess enc ->
-      exists x', par (App enc rest) = P.R.Success x' rest /\ R x x'.
+      exists x', par (App enc rest) = Success x' rest /\ R x x'.
 
     (** Abstract over rest *)
     Definition ParseOkSimpleRel'' {X : Type} {wf : X -> Prop}
@@ -105,7 +107,7 @@ Module TheoremsRel (InputModule : AbstractInput).
       (d1 d2 : D) (x : X) (enc rest : Input) :=
       wf d1 x ->
       ser d1 x = S.mkSuccess enc ->
-      exists x', par d2 (App enc rest) = P.R.Success x' rest /\ R d1 d2 x x'.
+      exists x', par d2 (App enc rest) = Success x' rest /\ R d1 d2 x x'.
 
     (** Abstract over rest *)
     Definition ParseOkCompat''' {D X : Type} {wf : D -> X -> Prop}
@@ -172,7 +174,7 @@ Module TheoremsRel (InputModule : AbstractInput).
             valid_state st1__n x__n ->
             forall rest__n,
             @S.recur_st _ _ wf ser_underlying depth st1__n x__n = S.mkSuccess inp__n ->
-            exists x'__n, P.recur_st par_underlying st2__n (App inp__n rest__n) = P.R.Success x'__n rest__n /\
+            exists x'__n, P.recur_st par_underlying st2__n (App inp__n rest__n) = Success x'__n rest__n /\
             R st1__n st2__n x__n x'__n) ->
          (* Serialization succeeds *)
          ser_underlying (@S.recur_step_st _ _ wf ser_underlying depth x
@@ -181,7 +183,7 @@ Module TheoremsRel (InputModule : AbstractInput).
          exists x',
            par_underlying (P.recur_step_st par_underlying (App enc rest)
                              (fun st__n inp__n _ => P.recur_st par_underlying st__n inp__n)) st2 (App enc rest) =
-           P.R.Success x' rest /\ R st1 st2 x x') ->
+           Success x' rest /\ R st1 st2 x x') ->
       valid_state st1 x ->
       @ParseOkCompat'' S X wf R
         (P.RecursiveState par_underlying)

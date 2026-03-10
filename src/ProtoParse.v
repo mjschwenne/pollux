@@ -10,15 +10,12 @@ From Pollux Require Import Descriptors.
 From Pollux Require Import Varint.
 From Equations Require Import Equations.
 
-From Pollux Require Import Input.
-From Pollux Require Import Result.
-From Pollux Require Import Parser.
-From Pollux Require Import Serializer.
+From Pollux.parse Require Import Input.
+From Pollux.parse Require Import Castor.
 
 Module ProtoParse.
-  Module P := Parsers(ByteInput).
-  Module S := Serializers(ByteInput).
-  Import ByteInput.
+  Module C := Castor(ByteInput).
+  Import C.
   Import Descriptors.
 
   Notation "x %% y" := (Z.modulo x y) (at level 35) : Z_scope.
@@ -57,8 +54,8 @@ Module ProtoParse.
 
   Definition Byte : P.Parser byte :=
     fun inp => match inp with
-            | byt :: rest => P.R.Success byt rest
-            | [] => P.R.Failure P.R.Recoverable (P.R.mkData "No more data to parse" inp None)
+            | byt :: rest => Success byt rest
+            | [] => Failure Recoverable (mkData "No more data to parse" inp None)
             end.
 
   Definition Unsigned : P.Parser Z := P.Map Byte word.unsigned.   
@@ -75,8 +72,8 @@ Module ProtoParse.
                     P.SucceedWith (transform z)
                   else
                     P.ResultWith
-                      (P.R.Failure P.R.Recoverable
-                         (P.R.mkData msg (App (ToInput [W8 z]) rest) None))).
+                      (Failure Recoverable
+                         (mkData msg (App (ToInput [W8 z]) rest) None))).
                                          
   Definition VarintNonTerm := FilterByte (Z.leb 128%Z) (flip Z.sub 128%Z) "Expected varint non-terminal byte".
 
@@ -157,7 +154,7 @@ Module ProtoParse.
                                                 let (fid, tag_n) := ((z ≫ 3)%Z, (Z.land z 7)%Z) in
                                                 match tag_from_num tag_n with
                                                 | Some tag => P.SucceedWith (fid, tag)
-                                                | None => P.FailWith "Unknown field type" P.R.Recoverable
+                                                | None => P.FailWith "Unknown field type" Recoverable
                                                 end).
 
   Definition TypedFieldHeader (md : MsgDesc) := P.Map FieldHeader
@@ -201,7 +198,7 @@ Module ProtoParse.
   Definition GetFixedParser (w : Width) := match w with
                                            | exist _ 32%Z _ => Z32
                                            | exist _ 64%Z _ => Z64
-                                           | _ => P.FailWith "This is literally impossible." P.R.Fatal
+                                           | _ => P.FailWith "This is literally impossible." Fatal
                                            end.
 
   Definition ParseFixedField (w : Width) (deco : DecoDesc) : P.Parser ValVal :=
@@ -249,12 +246,12 @@ Module ProtoParse.
     | VARINT => underlying
     | I64 => underlying
     | LEN => P.Bind LenBody (fun body => match P.RepFold underlying ValMerger None body with
-                                        | P.R.Success (Some v) rem => P.ResultWith (P.R.Success v rem)
-                                        | P.R.Success None rem => P.ResultWith
-                                                                    (P.R.Failure P.R.Recoverable
-                                                                       (P.R.mkData "Illegal value merger"
+                                        | Success (Some v) rem => P.ResultWith (Success v rem)
+                                        | Success None rem => P.ResultWith
+                                                                    (Failure Recoverable
+                                                                       (mkData "Illegal value merger"
                                                                           body None))
-                                        | P.R.Failure lvl data as f => P.ResultWith (P.R.Propagate f I)
+                                        | Failure lvl data as f => P.ResultWith (Propagate f I)
                                         end)
     | I32 => underlying
     end.
@@ -272,7 +269,7 @@ Module ProtoParse.
     | ((_, tag), Some (D_FIELD name _ (D_BOOL deco))) => WrapPackedField tag name (ParseBoolField deco)
     (* | (name, _, D_STRING deco) => *)
     (* | (name, _, D_Bytes deco) => *)
-    | _ => P.FailWith "Field type unsupported" P.R.Recoverable
+    | _ => P.FailWith "Field type unsupported" Recoverable
     end.
 
   Definition ProtoField (md : MsgDesc) := P.Bind (TypedFieldHeader md) ParseFieldVal.

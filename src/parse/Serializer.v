@@ -6,20 +6,19 @@ From Pollux.parse Require Import Result.
 From Corelib.Program Require Import Basics Tactics.
 From Stdlib.Program Require Import Program.
 
-Module Serializers (InputModule : AbstractInput).
-  Module R := Result(InputModule).
-  Import R.
+Module Type Serializer (InputModule : AbstractInput) (Results : Result InputModule).
   Import InputModule.
+  Import Results.
 
   (* Use Output type for serializers, just to help keep the terminology intuitive. *)
   (* Since results have an result for use in parsers, we'll always use unit for the Serializers *)
   Definition Output := Input.
   Definition Output_default := Input_default.
   Definition mkSuccess enc := Success () enc.
-  Lemma mkSuccess_eq : forall enc, R.Success () enc = mkSuccess enc.
+  Lemma mkSuccess_eq : forall enc, Success () enc = mkSuccess enc.
   Proof. intros. reflexivity. Qed.
   Definition Out := @getEnc unit.
-  Definition Result := @Result unit.
+  #[local] Definition Result := @Result unit.
 
   Section Def.
     Definition Serializer (X : Type) (wf : X -> Prop) := X -> Result. 
@@ -27,7 +26,7 @@ Module Serializers (InputModule : AbstractInput).
     Definition Trivial_wf {X : Type} : X -> Prop := fun _ => True.
   End Def.
 
-  Section Combinators.
+  Section Combinator.
 
     Definition SucceedWith {X : Type} : Serializer X Trivial_wf :=
       fun inp => mkSuccess Output_default.
@@ -272,5 +271,5 @@ Module Serializers (InputModule : AbstractInput).
       (underlying : (forall s : S, Serializer X $ wfx s) -> forall s : S, Serializer X $ wfx s) depth st :
       Serializer X $ wfx st := recur_st underlying depth st.
 
-  End Combinators.
-End Serializers.
+  End Combinator.
+End Serializer.

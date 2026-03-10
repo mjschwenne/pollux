@@ -6,10 +6,9 @@ From Pollux.parse Require Import Result.
 From Corelib.Program Require Import Basics Tactics.
 From Stdlib.Program Require Import Program.
 
-Module Parsers (InputModule : AbstractInput).
-  Module R := Result(InputModule).
-  Import R.
+Module Type Parser (InputModule : AbstractInput) (Results : Result InputModule).
   Import InputModule.
+  Import Results.
 
   Arguments Result X : clear implicits.
   Definition Remaining {X : Type} (pr : Result X) : Input := getEnc pr.
@@ -42,7 +41,7 @@ Module Parsers (InputModule : AbstractInput).
 
   End Def.
 
-  Section Combinators.
+  Section Combinator.
     Context `{EqDecision Input}.
 
     (* This parser does not consume any input and returns the given value *)
@@ -488,5 +487,5 @@ Module Parsers (InputModule : AbstractInput).
       (underlying : (S -> Parser X) -> (S -> Parser X)) (st : S) : Parser X :=
       recur_st underlying st.
     
-  End Combinators.
-End Parsers.
+  End Combinator.
+End Parser.

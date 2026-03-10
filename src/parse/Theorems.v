@@ -8,804 +8,809 @@ From Pollux.parse Require Import Serializer.
 From Corelib.Program Require Import Basics Tactics.
 From Stdlib.Program Require Import Program.
 
-Module Theorems (InputModule : AbstractInput).
-  Module R := Result(InputModule).
-  Module P := Parsers(InputModule).
-  Module S := Serializers(InputModule).
+Module Type Theorems
+  (InputModule : AbstractInput)
+  (Results : Result InputModule)
+  (Parsers : Parser InputModule Results)
+  (Serializers : Serializer InputModule Results).
   Import InputModule.
+  Import Results.
+  Arguments Result X : clear implicits.
+  Module P := Parsers.
+  Module S := Serializers.
 
   Section Theorems.
     Context `{EqDecision Input}.
 
-  Definition Output := Input.
+    Definition Output := Input.
 
-  Definition ParseOk''' {X : Type} {wf : X -> Prop}
-    (par : P.Parser X) (ser : S.Serializer X wf) (x : X) (enc rest : Input) :=
-    wf x -> ser x = S.mkSuccess enc -> par (App enc rest) = P.R.Success x rest.
+    Definition ParseOk''' {X : Type} {wf : X -> Prop}
+      (par : P.Parser X) (ser : S.Serializer X wf) (x : X) (enc rest : Input) :=
+      wf x -> ser x = S.mkSuccess enc -> par (App enc rest) = Success x rest.
 
-  Definition ParseOk'' {X : Type} {wf : X -> Prop}
-    (par : P.Parser X) (ser : S.Serializer X wf) (x : X) (enc : Input) :=
-    forall (rest : Input), ParseOk''' par ser x enc rest.
+    Definition ParseOk'' {X : Type} {wf : X -> Prop}
+      (par : P.Parser X) (ser : S.Serializer X wf) (x : X) (enc : Input) :=
+      forall (rest : Input), ParseOk''' par ser x enc rest.
 
-  Definition ParseOk' {X : Type} {wf : X -> Prop} (par : P.Parser X) (ser : S.Serializer X wf) (x : X) :=
-    forall (enc : Input), ParseOk'' par ser x enc.
+    Definition ParseOk' {X : Type} {wf : X -> Prop} (par : P.Parser X) (ser : S.Serializer X wf) (x : X) :=
+      forall (enc : Input), ParseOk'' par ser x enc.
 
-  Definition ParseOk {X : Type} {wf : X -> Prop} (par : P.Parser X) (ser : S.Serializer X wf) :=
-    forall (x : X), ParseOk' par ser x.
+    Definition ParseOk {X : Type} {wf : X -> Prop} (par : P.Parser X) (ser : S.Serializer X wf) :=
+      forall (x : X), ParseOk' par ser x.
 
-  Lemma SucceedCorrect {X : Type} (x : X) :
-    ParseOk' (P.SucceedWith x) S.SucceedWith x.
-  Proof using Type.
-    intros enc rest wf_ok. 
-    unfold S.SucceedWith.
-    intros Hser_ok. inversion Hser_ok as [Henc].
-    unfold P.SucceedWith.
-    rewrite App_nil_l.
-    reflexivity.
-  Qed.
+    Lemma SucceedCorrect {X : Type} (x : X) :
+      ParseOk' (P.SucceedWith x) S.SucceedWith x.
+    Proof using Type.
+      intros enc rest wf_ok. 
+      unfold S.SucceedWith.
+      intros Hser_ok. inversion Hser_ok as [Henc].
+      unfold P.SucceedWith.
+      rewrite App_nil_l.
+      reflexivity.
+    Qed.
 
-  (* While we couldn't do this for any type (see SucceedCorrect above), we CAN do it with unit
+    (* While we couldn't do this for any type (see SucceedCorrect above), we CAN do it with unit
        since we know statically that there is only one member of type unit, (). *)
-  Lemma EpsilonCorrect : ParseOk P.Epsilon S.Epsilon.
-  Proof using Type.
-    intros x enc rest Hwf Hser_ok.
-    inversion Hser_ok as [Hdefault].
-    subst.
-    unfold P.Epsilon, P.SucceedWith.
-    rewrite App_nil_l.
-    destruct x.
-    reflexivity.
-  Qed.
+    Lemma EpsilonCorrect : ParseOk P.Epsilon S.Epsilon.
+    Proof using Type.
+      intros x enc rest Hwf Hser_ok.
+      inversion Hser_ok as [Hdefault].
+      subst.
+      unfold P.Epsilon, P.SucceedWith.
+      rewrite App_nil_l.
+      destruct x.
+      reflexivity.
+    Qed.
 
-  Lemma BindCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-    (lp : P.Parser L) (ls : R -> S.Serializer L wfl)
-    (rp : L -> P.Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
-    forall r, ParseOk lp (ls r) -> ParseOk (rp (tag r)) rs ->
-         ParseOk' (P.Bind lp rp) (S.Bind tag ls rs) r.
-  Proof using Type.
-    intros x Hleft_ok Hright_ok enc rest wf_ok.
-    unfold S.Bind.
-    destruct (ls x (tag x)) as [[] l_enc|] eqn:Hleft; last discriminate.
-    destruct (rs x) as [[] r_enc|] eqn:Hright; last discriminate.
-    rewrite S.mkSuccess_eq in Hleft, Hright.
-    intro Hser_ok. inversion Hser_ok as [Henc].
-    rewrite App_assoc.
-    unfold P.Bind.
-    destruct wf_ok as [wfl_ok wfr_ok].
-    pose proof Hleft_ok (tag x) l_enc (App r_enc rest) wfl_ok Hleft as Hl_ret.
-    rewrite Hl_ret.
-    pose proof Hright_ok x r_enc rest wfr_ok Hright as Hr_ret.
-    destruct (rp (tag x) (App r_enc rest)); (assumption || discriminate).
-  Qed.
-
-  Definition BindSucceedsRightOk {R L : Type} {wfr : R -> Prop}
-    (rp : L -> Input -> P.Parser R) (rs : S.Serializer R wfr) (tag : R -> L) : Prop := 
-    forall (r : R) (r_enc rest : Input), ParseOk''' (rp (tag r) (App r_enc rest)) rs r r_enc rest.
-
-  Definition BindSucceedsLeftOk {R L : Type} {wfl : L -> Prop}
-    (lp : P.Parser L) (ls : R -> Output -> S.Serializer L wfl) (tag : R -> L) : Prop :=
-    forall (r : R) (l_enc r_enc rest : Input), ParseOk''' lp (ls r r_enc) (tag r) l_enc (App r_enc rest).
-
-  Lemma BindSucceedsCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-    (lp : P.Parser L) (ls : R -> Output -> S.Serializer L wfl)
-    (rp : L -> Input -> P.Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
-    BindSucceedsRightOk rp rs tag -> BindSucceedsLeftOk lp ls tag ->
-    ParseOk (P.BindSucceeds lp rp) (S.BindSucceeds tag ls rs).
-  Proof using Type.
-    intros Hright_ok Hleft_ok x enc rest wf_ok.
-    unfold S.BindSucceeds.
-    destruct (rs x) as [[] r_enc|] eqn:Hright; last discriminate.
-    destruct (ls x r_enc (tag x)) as [[] l_enc|] eqn:Hleft; last discriminate.
-    rewrite S.mkSuccess_eq in Hleft, Hright.
-    intros Hser_ok. inversion Hser_ok as [Henc].
-    destruct wf_ok as [wfl_ok wfr_ok].
-    rewrite App_assoc.
-    unfold P.BindSucceeds.
-    pose proof Hleft_ok x l_enc r_enc rest as Hlp.
-    pose proof wfl_ok as wfl_ok'.
-    apply Hlp in wfl_ok' as _, Hleft as Hl_ret; try assumption.
-    rewrite Hl_ret.
-    pose proof Hright_ok x r_enc rest as Hrp.
-    pose proof wfr_ok as wfr_ok'.
-    apply Hrp in wfr_ok' as _, Hright as Hr_ret; try assumption.
-    destruct (rp (tag x) (App r_enc rest) (App r_enc rest)); (assumption || discriminate).
-  Qed.
-
-  Definition BindResultLeftOk {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-    (lp : P.Parser L) (ls : S.Result -> Output -> S.Serializer L wfl)
-    (rs : S.Serializer R wfr) (tag : R -> L): Prop :=
-    forall (r : R), ParseOk' lp (ls (rs r) (S.Out $ rs r)) (tag r).
-
-  Definition BindResultRightOk {L R : Type} {wfr : R -> Prop}
-    (rp : P.R.Result L -> Input -> P.Parser R) (rs : S.Serializer R wfr)
-    (lp : P.Parser L) (tag : R -> L) : Prop :=
-    forall (r : R) (l_enc r_enc rest: Input),
-    let enc := (App (App l_enc r_enc) rest) in
-    ParseOk''' (rp (lp enc) enc) rs r r_enc rest.
-
-  Lemma BindResultCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-    (lp : P.Parser L) (ls : S.Result -> Output -> S.Serializer L wfl)
-    (rp : P.R.Result L -> Input -> P.Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
-    BindResultLeftOk lp ls rs tag -> BindResultRightOk rp rs lp tag ->
-    ParseOk (P.BindResult lp rp) (S.BindResult tag ls rs).
-  Proof using Type.
-    unfold ParseOk, ParseOk', ParseOk'', ParseOk'''.
-    intros Hleft_ok Hright_ok x enc rest wf_ok.
-    unfold S.BindResult.
-    destruct (rs x) as [[] r_enc|] eqn:Hright.
-    - simpl. symmetry in Hright.
-      intro Hls. unfold S.BindResult_wf in wf_ok.
+    Lemma BindCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (lp : P.Parser L) (ls : R -> S.Serializer L wfl)
+      (rp : L -> P.Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
+      forall r, ParseOk lp (ls r) -> ParseOk (rp (tag r)) rs ->
+           ParseOk' (P.Bind lp rp) (S.Bind tag ls rs) r.
+    Proof using Type.
+      intros x Hleft_ok Hright_ok enc rest wf_ok.
+      unfold S.Bind.
+      destruct (ls x (tag x)) as [[] l_enc|] eqn:Hleft; last discriminate.
+      destruct (rs x) as [[] r_enc|] eqn:Hright; last discriminate.
+      rewrite S.mkSuccess_eq in Hleft, Hright.
+      intro Hser_ok. inversion Hser_ok as [Henc].
+      rewrite App_assoc.
+      unfold P.Bind.
       destruct wf_ok as [wfl_ok wfr_ok].
-      pose proof Hright as Hright'.
-      pose proof Hleft_ok x enc rest as Hlp. 
-      rewrite <- Hright in Hlp. simpl in Hlp.
-      pose proof wfl_ok as wfl_ok'.
-      apply Hlp in wfl_ok' as _, Hls as Hl_ret; try assumption.
-      unfold P.BindResult.
+      pose proof Hleft_ok (tag x) l_enc (App r_enc rest) wfl_ok Hleft as Hl_ret.
       rewrite Hl_ret.
+      pose proof Hright_ok x r_enc rest wfr_ok Hright as Hr_ret.
+      destruct (rp (tag x) (App r_enc rest)); (assumption || discriminate).
+    Qed.
 
-      unfold BindResultRightOk, ParseOk', ParseOk'', ParseOk''' in Hright_ok.
-      pose proof Hright_ok x enc r_enc rest as Hr.
+    Definition BindSucceedsRightOk {R L : Type} {wfr : R -> Prop}
+      (rp : L -> Input -> P.Parser R) (rs : S.Serializer R wfr) (tag : R -> L) : Prop := 
+      forall (r : R) (r_enc rest : Input), ParseOk''' (rp (tag r) (App r_enc rest)) rs r r_enc rest.
+
+    Definition BindSucceedsLeftOk {R L : Type} {wfl : L -> Prop}
+      (lp : P.Parser L) (ls : R -> Output -> S.Serializer L wfl) (tag : R -> L) : Prop :=
+      forall (r : R) (l_enc r_enc rest : Input), ParseOk''' lp (ls r r_enc) (tag r) l_enc (App r_enc rest).
+
+    Lemma BindSucceedsCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (lp : P.Parser L) (ls : R -> Output -> S.Serializer L wfl)
+      (rp : L -> Input -> P.Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
+      BindSucceedsRightOk rp rs tag -> BindSucceedsLeftOk lp ls tag ->
+      ParseOk (P.BindSucceeds lp rp) (S.BindSucceeds tag ls rs).
+    Proof using Type.
+      intros Hright_ok Hleft_ok x enc rest wf_ok.
+      unfold S.BindSucceeds.
+      destruct (rs x) as [[] r_enc|] eqn:Hright; last discriminate.
+      destruct (ls x r_enc (tag x)) as [[] l_enc|] eqn:Hleft; last discriminate.
+      rewrite S.mkSuccess_eq in Hleft, Hright.
+      intros Hser_ok. inversion Hser_ok as [Henc].
+      destruct wf_ok as [wfl_ok wfr_ok].
+      rewrite App_assoc.
+      unfold P.BindSucceeds.
+      pose proof Hleft_ok x l_enc r_enc rest as Hlp.
+      pose proof wfl_ok as wfl_ok'.
+      apply Hlp in wfl_ok' as _, Hleft as Hl_ret; try assumption.
+      rewrite Hl_ret.
+      pose proof Hright_ok x r_enc rest as Hrp.
       pose proof wfr_ok as wfr_ok'.
-      symmetry in Hright'.
-      apply Hr in wfr_ok' as _, Hright' as Hr_ret; try assumption.
-      (* rewrite Hl_ret in Hr_ret. *)
-  Abort.
+      apply Hrp in wfr_ok' as _, Hright as Hr_ret; try assumption.
+      destruct (rp (tag x) (App r_enc rest) (App r_enc rest)); (assumption || discriminate).
+    Qed.
 
-  Lemma SerialConcatInversion {A B : Type} {wf__a : A -> Prop} {wf__b : B -> Prop}
-    (ser__a : S.Serializer A wf__a) (ser__b : S.Serializer B wf__b) : 
-    forall (a : A) (b : B) (enc : Output),
-    S.Concat ser__a ser__b (a, b) = S.mkSuccess enc <->
-                                  exists (enc__a enc__b : Output),
-                                    ser__a a = S.mkSuccess enc__a /\
-                                    ser__b b = S.mkSuccess enc__b /\
-                                    enc = App enc__a enc__b.
-  Proof using Type.
-    intros. split.
-    - unfold S.Concat.
-      destruct (ser__a a) as [[] out__a |] eqn:Ha, (ser__b b) as [[] out__b |] eqn:Hb; try discriminate.
-      intro H; inversion H as [Henc]; clear H.
-      exists out__a, out__b. repeat (split; first reflexivity); reflexivity.
-    - intros (out__a & out__b & Ha & Hb & Henc). unfold S.Concat, S.mkSuccess in *.
-      rewrite Ha, Hb. congruence.
-  Qed.
+    Definition BindResultLeftOk {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (lp : P.Parser L) (ls : S.Result -> Output -> S.Serializer L wfl)
+      (rs : S.Serializer R wfr) (tag : R -> L): Prop :=
+      forall (r : R), ParseOk' lp (ls (rs r) (S.Out $ rs r)) (tag r).
 
-  Theorem ConcatCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-    (lp : P.Parser L) (ls : S.Serializer L wfl)
-    (rp : P.Parser R) (rs : S.Serializer R wfr) :
-    ParseOk lp ls -> ParseOk rp rs -> ParseOk (P.Concat lp rp) (S.Concat ls rs).
-  Proof using Type.
-    intros Hleft_ok Hright_ok.
-    intros [l r] enc rest [Hl_wf Hr_wf] Hconcat.
-    apply SerialConcatInversion in Hconcat.
-    destruct Hconcat as (enc__l & enc__r & Hl & Hr & Henc).
-    subst. rewrite App_assoc.
-    apply (Hleft_ok _ _ (App enc__r rest)) in Hl; last assumption.
-    apply (Hright_ok _ _ rest) in Hr; last assumption.
-    unfold P.Concat.
-    rewrite Hl, Hr.
-    reflexivity.
-  Qed.
+    Definition BindResultRightOk {L R : Type} {wfr : R -> Prop}
+      (rp : Result L -> Input -> P.Parser R) (rs : S.Serializer R wfr)
+      (lp : P.Parser L) (tag : R -> L) : Prop :=
+      forall (r : R) (l_enc r_enc rest: Input),
+      let enc := (App (App l_enc r_enc) rest) in
+      ParseOk''' (rp (lp enc) enc) rs r r_enc rest.
 
-  Definition LengthIf (ss : S.R.Result unit) : nat :=
-    match ss with
-    | S.R.Success () enc => Length enc
-    | S.R.Failure _ _ => 0
-    end.
+    Lemma BindResultCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (lp : P.Parser L) (ls : S.Result -> Output -> S.Serializer L wfl)
+      (rp : Result L -> Input -> P.Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
+      BindResultLeftOk lp ls rs tag -> BindResultRightOk rp rs lp tag ->
+      ParseOk (P.BindResult lp rp) (S.BindResult tag ls rs).
+    Proof using Type.
+      unfold ParseOk, ParseOk', ParseOk'', ParseOk'''.
+      intros Hleft_ok Hright_ok x enc rest wf_ok.
+      unfold S.BindResult.
+      destruct (rs x) as [[] r_enc|] eqn:Hright.
+      - simpl. symmetry in Hright.
+        intro Hls. unfold S.BindResult_wf in wf_ok.
+        destruct wf_ok as [wfl_ok wfr_ok].
+        pose proof Hright as Hright'.
+        pose proof Hleft_ok x enc rest as Hlp. 
+        rewrite <- Hright in Hlp. simpl in Hlp.
+        pose proof wfl_ok as wfl_ok'.
+        apply Hlp in wfl_ok' as _, Hls as Hl_ret; try assumption.
+        unfold P.BindResult.
+        rewrite Hl_ret.
 
-  Lemma Bind'Length {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-    (ls : S.Serializer L wfl) (rs : S.Serializer R wfr) (tag : R -> L):
-    forall r enc,
-      S.Bind' tag ls rs r = S.mkSuccess enc -> Length enc = LengthIf (ls $ tag r) + LengthIf (rs r).
-  Proof using Type.
-    intros r enc Hbind.
-    apply SerialConcatInversion in Hbind.
-    destruct Hbind as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
-    subst. rewrite Hl_ok, Hr_ok.
-    unfold LengthIf, S.mkSuccess.
-    rewrite App_Length. reflexivity.
-  Qed.
+        unfold BindResultRightOk, ParseOk', ParseOk'', ParseOk''' in Hright_ok.
+        pose proof Hright_ok x enc r_enc rest as Hr.
+        pose proof wfr_ok as wfr_ok'.
+        symmetry in Hright'.
+        apply Hr in wfr_ok' as _, Hright' as Hr_ret; try assumption.
+        (* rewrite Hl_ret in Hr_ret. *)
+    Abort.
 
-  Lemma BindCorrect' {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-    (lp : P.Parser L) (ls : S.Serializer L wfl)
-    (rp : L -> P.Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
-    forall r, ParseOk lp ls -> ParseOk' (rp (tag r)) rs r -> ParseOk' (P.Bind lp rp) (S.Bind' tag ls rs) r.
-  Proof using Type.
-    intros r Hleft_ok Hright_ok enc rest [wfl_ok wfr_ok] Hbind.
-    apply SerialConcatInversion in Hbind.
-    destruct Hbind as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
-    rewrite Henc. rewrite App_assoc.
-    unfold P.Bind.
-    apply (Hleft_ok _ _ (App enc__r rest)) in Hl_ok; last assumption.
-    rewrite Hl_ok.
-    destruct (rp (tag r) (App enc__r rest)) eqn:Hrp.
-    - apply (Hright_ok _ rest) in Hr_ok; last assumption.
-      rewrite Hrp in Hr_ok; assumption.
-    - apply (Hright_ok _ rest) in Hr_ok; last assumption.
-      rewrite Hr_ok in Hrp; discriminate.
-  Qed.
+    Lemma SerialConcatInversion {A B : Type} {wf__a : A -> Prop} {wf__b : B -> Prop}
+      (ser__a : S.Serializer A wf__a) (ser__b : S.Serializer B wf__b) : 
+      forall (a : A) (b : B) (enc : Output),
+      S.Concat ser__a ser__b (a, b) = S.mkSuccess enc <->
+                                        exists (enc__a enc__b : Output),
+                                          ser__a a = S.mkSuccess enc__a /\
+                                          ser__b b = S.mkSuccess enc__b /\
+                                          enc = App enc__a enc__b.
+    Proof using Type.
+      intros. split.
+      - unfold S.Concat.
+        destruct (ser__a a) as [[] out__a |] eqn:Ha, (ser__b b) as [[] out__b |] eqn:Hb; try discriminate.
+        intro H; inversion H as [Henc]; clear H.
+        exists out__a, out__b. repeat (split; first reflexivity); reflexivity.
+      - intros (out__a & out__b & Ha & Hb & Henc). unfold S.Concat, S.mkSuccess in *.
+        rewrite Ha, Hb. congruence.
+    Qed.
 
-  (* Relax the rest requirement, since the Limit parser will ensure rest = [] *)
-  Definition LimitParseOk {X : Type} {wf : X -> Prop} (ser : S.Serializer X wf) (par : P.Parser X) := 
-    forall x enc,
-    wf x -> ser x = S.mkSuccess enc -> par enc = P.R.Success x Input_default.
+    Theorem ConcatCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (lp : P.Parser L) (ls : S.Serializer L wfl)
+      (rp : P.Parser R) (rs : S.Serializer R wfr) :
+      ParseOk lp ls -> ParseOk rp rs -> ParseOk (P.Concat lp rp) (S.Concat ls rs).
+    Proof using Type.
+      intros Hleft_ok Hright_ok.
+      intros [l r] enc rest [Hl_wf Hr_wf] Hconcat.
+      apply SerialConcatInversion in Hconcat.
+      destruct Hconcat as (enc__l & enc__r & Hl & Hr & Henc).
+      subst. rewrite App_assoc.
+      apply (Hleft_ok _ _ (App enc__r rest)) in Hl; last assumption.
+      apply (Hright_ok _ _ rest) in Hr; last assumption.
+      unfold P.Concat.
+      rewrite Hl, Hr.
+      reflexivity.
+    Qed.
 
-  Definition LenOk {X : Type} {wf : X -> Prop} (ser : S.Serializer X wf) (len : X -> nat) (x : X) :=
-    forall enc, ser x = S.mkSuccess enc -> len x = Length enc.
-
-  Lemma LimitCorrect {X : Type} {wf : X -> Prop} (len : X -> nat)
-    (underlying__ser : S.Serializer X wf) (underlying__par : P.Parser X) (x : X) :
-    LimitParseOk underlying__ser underlying__par ->
-    LenOk underlying__ser len x ->
-    ParseOk' (P.Limit underlying__par (len x)) (S.Limit underlying__ser len) x.
-  Proof using Type.
-    intros Hlim_ok Hlen_ok enc rest Hwf.
-    unfold S.Limit, P.Limit.
-    intros Hser.
-    unfold LenOk in Hlen_ok.
-    specialize (Hlen_ok enc Hser).
-    rewrite Hlen_ok.
-    rewrite Slice_App.
-    specialize (Hlim_ok x enc Hwf Hser).
-    rewrite Hlim_ok.
-    rewrite Drop_App, App_nil_l.
-    reflexivity.
-  Qed.
-
-  Lemma LenCorrect {X : Type} {wfx : X -> Prop} {wfn : nat -> Prop}
-    (ser__len : S.Serializer nat wfn) (par__len : P.Parser nat) (len : X -> nat)
-    (ser__x : S.Serializer X wfx) (par__x : P.Parser X) (x : X) :
-    ParseOk par__len ser__len ->
-    LimitParseOk ser__x par__x ->
-    LenOk ser__x len x ->
-    ParseOk' (P.Len par__len par__x) (S.Len len ser__len ser__x) x.
-  Proof using Type.
-    intros Hnat_ok Hlim_ok Hlen_ok.
-    unfold P.Len, S.Len.
-    apply BindCorrect'; first assumption.
-    apply LimitCorrect; assumption.
-  Qed.
-
-  Definition LimitParseOkWeak {X : Type} {wf : X -> Prop} (ser : S.Serializer X wf) (par : P.Parser X) (x : X) := 
-    forall enc, wf x -> ser x = S.mkSuccess enc -> par enc = P.R.Success x Input_default.
-
-  Lemma LenCorrect'Weakened {X : Type} {wfx : X -> Prop} {wfn : nat -> Prop}
-    (ser__len : S.Serializer nat wfn) (par__len : P.Parser nat)
-    (ser__x : S.Serializer X wfx) (par__x : P.Parser X) (x : X) :
-    ParseOk par__len ser__len ->
-    LimitParseOkWeak ser__x par__x x ->
-    ParseOk' (P.Len par__len par__x) (S.Len' ser__len ser__x) x.
-  Proof using Type.
-    intros Hnat_ok Hlim_ok enc' rest Hwf.
-    unfold P.Len, S.Len'.
-    destruct (ser__x x) as [[] enc__x |] eqn:Hser__x; last discriminate.
-    destruct (ser__len (Length enc__x)) as [[] enc__len |] eqn:Hser__len; last discriminate.
-    unfold S.Len'_wf in Hwf.
-    rewrite Hser__x in Hwf.
-    rewrite Hser__len in Hwf.
-    destruct Hwf as [Hwf__len Hwf__x].
-    intros Henc. inversion Henc as [Henc__x].
-    unfold P.Bind.
-    rewrite App_assoc.
-    specialize (Hnat_ok (Length enc__x) enc__len (App enc__x rest) Hwf__len Hser__len); rewrite Hnat_ok.
-    unfold P.Limit.
-    rewrite Slice_App.
-    specialize (Hlim_ok enc__x Hwf__x Hser__x); rewrite Hlim_ok.
-    rewrite App_nil_l, Drop_App.
-    reflexivity.
-  Qed.
-  
-  Lemma LenCorrect' {X : Type} {wfx : X -> Prop} {wfn : nat -> Prop}
-    (ser__len : S.Serializer nat wfn) (par__len : P.Parser nat)
-    (ser__x : S.Serializer X wfx) (par__x : P.Parser X) :
-    ParseOk par__len ser__len ->
-    LimitParseOk ser__x par__x ->
-    ParseOk (P.Len par__len par__x) (S.Len' ser__len ser__x).
-  Proof using Type.
-    intros Hnat_ok Hlim_ok x enc rest Hwf.
-    unfold P.Len, S.Len'.
-    destruct (ser__x x) as [[] enc__x |] eqn:Hser__x; last discriminate.
-    destruct (ser__len (Length enc__x)) as [[] enc__len |] eqn:Hser__len; last discriminate.
-    unfold S.Len'_wf in Hwf.
-    rewrite Hser__x in Hwf.
-    rewrite Hser__len in Hwf.
-    destruct Hwf as [Hwf__len Hwf__x].
-    intros H; inversion H as [Henc]; clear H.
-    unfold P.Bind.
-    rewrite App_assoc.
-    specialize (Hnat_ok (Length enc__x) enc__len (App enc__x rest) Hwf__len Hser__len); rewrite Hnat_ok.
-    unfold P.Limit.
-    rewrite Slice_App.
-    specialize (Hlim_ok x enc__x Hwf__x Hser__x); rewrite Hlim_ok.
-    rewrite App_nil_l, Drop_App.
-    reflexivity.
-  Qed.
-
-  Lemma SerialLen'Inversion {X : Type} {wfn : nat -> Prop} {wfx : X -> Prop}
-    (ser__n : S.Serializer nat wfn) (ser__x : S.Serializer X wfx) :
-    forall (x : X) (enc : Output),
-    S.Len' ser__n ser__x x = S.mkSuccess enc <->
-                           exists (enc__n enc__x : Output),
-                             ser__n (Length enc__x) = S.mkSuccess enc__n /\
-                             ser__x x = S.mkSuccess enc__x /\
-                             enc = App enc__n enc__x.
-  Proof using Type.
-    intros. split.
-    - unfold S.Len'.
-      destruct (ser__x x) as [[] out__x |] eqn:Hx; last discriminate.
-      destruct (ser__n (Length out__x)) as [[] out__n |] eqn:Hn; last discriminate.
-      rewrite S.mkSuccess_eq in *.
-      intro H; inversion H as [Henc]; clear H.
-      exists out__n, out__x. repeat (split; done).
-    - intros (out__n & out__x & Hn & Hx & Henc). unfold S.Len', S.mkSuccess in *.
-      rewrite Hx, Hn, Henc. reflexivity.
-  Qed.
-
-  Lemma par_rep'_unfold {X : Type} (underlying : P.Parser X) (inp : Input) :
-    P.rep' underlying inp =
-        match underlying inp with
-        | P.R.Success x rem => if decide (Length rem < Length inp) then
-                            match P.rep' underlying rem with
-                            | P.R.Success xs rest => P.R.Success (x :: xs) rest
-                            | P.R.Failure P.R.Recoverable data => P.R.Success [x] rem
-                            | P.R.Failure P.R.Fatal data => P.R.Failure P.R.Fatal data
-                            end
-                          else
-                            P.R.Failure P.R.Fatal $ P.R.mkData
-                              "Parser.Rep underlying increased input length" rem None
-        | P.R.Failure P.R.Recoverable (P.R.mkData _ rem _) => P.R.Success [] rem
-        | P.R.Failure P.R.Fatal data => P.R.Failure P.R.Fatal data
-        end.
-  Proof using Type.
-    unfold P.rep'. unfold P.rep'_func.
-    rewrite WfExtensionality.fix_sub_eq_ext; program_simpl.
-    destruct (underlying inp); program_simpl.
-    - destruct (decide (Length enc < Length inp)); last reflexivity.
-      destruct (Fix_sub _); first reflexivity.
-      destruct lvl; reflexivity.
-    - destruct lvl; first reflexivity.
-      destruct data; reflexivity.
-  Qed.
-
-  Lemma par_rep_fold'_unfold {A B : Type} (underlying : P.Parser B) (combine : A -> B -> A)
-    (acc : A) (inp : Input) :
-    P.rep_fold' underlying combine acc inp =
-      match underlying inp with
-      | P.R.Success ret rem => if decide (Length rem < Length inp) then
-                            P.rep_fold' underlying combine (combine acc ret) rem
-                          else
-                            P.R.Success acc inp
-      | P.R.Failure lvl data as f => if P.R.NeedsAlternative f inp then
-                                  P.R.Success acc inp
-                                else
-                                  @P.R.Propagate A _ (P.R.Failure lvl data) I
+    Definition LengthIf (ss : Result unit) : nat :=
+      match ss with
+      | Success () enc => Length enc
+      | Failure _ _ => 0
       end.
-  Proof using Type.
-    unfold P.rep_fold', P.rep_fold'_func.
-    rewrite WfExtensionality.fix_sub_eq_ext; program_simpl.
-    destruct (underlying inp); last reflexivity. f_equal.
-  Qed.
 
-  Lemma ser_rep'_unfold {X : Type} {wfx : X -> Prop}
-    (underlying : S.Serializer X wfx) (xs : list X):
-    S.rep' underlying xs = 
-    match xs with
-    | [] => S.mkSuccess S.Output_default
-    | x :: xs' => match underlying x, S.rep' underlying xs' with
-                 | S.R.Success _ x_enc, S.R.Success _ rest_enc => S.mkSuccess $ App x_enc rest_enc
-                 | S.R.Failure lvl data as f, S.R.Success _ rest_enc => f
-                 | S.R.Success _ x_enc, S.R.Failure lvl data as f => f
-                 | S.R.Failure lvl__x data__x, S.R.Failure lvl__r data__r =>
-                     S.R.Failure (S.R.maxLevel lvl__x lvl__r) $ S.R.ConcatData data__x data__r
-                 end
-    end.
-  Proof using Type.
-    destruct xs; reflexivity.
-  Qed.
+    Lemma Bind'Length {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (ls : S.Serializer L wfl) (rs : S.Serializer R wfr) (tag : R -> L):
+      forall r enc,
+      S.Bind' tag ls rs r = S.mkSuccess enc -> Length enc = LengthIf (ls $ tag r) + LengthIf (rs r).
+    Proof using Type.
+      intros r enc Hbind.
+      apply SerialConcatInversion in Hbind.
+      destruct Hbind as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
+      subst. rewrite Hl_ok, Hr_ok.
+      unfold LengthIf, S.mkSuccess.
+      rewrite App_Length. reflexivity.
+    Qed.
 
-  Lemma ser_rep_unfold {X : Type} {wfx : X -> Prop}
-    (underlying : S.Serializer X wfx) (xs : list X):
-    S.Rep underlying xs = 
-    match xs with
-    | [] => S.mkSuccess S.Output_default
-    | x :: xs' => match underlying x, S.rep' underlying xs' with
-                 | S.R.Success _ x_enc, S.R.Success _ rest_enc => S.mkSuccess $ App x_enc rest_enc
-                 | S.R.Failure lvl data as f, S.R.Success _ rest_enc => f
-                 | S.R.Success _ x_enc, S.R.Failure lvl data as f => f
-                 | S.R.Failure lvl__x data__x, S.R.Failure lvl__r data__r =>
-                     S.R.Failure (S.R.maxLevel lvl__x lvl__r) $ S.R.ConcatData data__x data__r
-                 end
-    end.
-  Proof using Type.
-    destruct xs; reflexivity.
-  Qed.
-  
-  Lemma SerialRepInversion_First {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) :
-    forall (x : X) (xs : list X) (enc : Output),
+    Lemma BindCorrect' {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (lp : P.Parser L) (ls : S.Serializer L wfl)
+      (rp : L -> P.Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
+      forall r, ParseOk lp ls -> ParseOk' (rp (tag r)) rs r -> ParseOk' (P.Bind lp rp) (S.Bind' tag ls rs) r.
+    Proof using Type.
+      intros r Hleft_ok Hright_ok enc rest [wfl_ok wfr_ok] Hbind.
+      apply SerialConcatInversion in Hbind.
+      destruct Hbind as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
+      rewrite Henc. rewrite App_assoc.
+      unfold P.Bind.
+      apply (Hleft_ok _ _ (App enc__r rest)) in Hl_ok; last assumption.
+      rewrite Hl_ok.
+      destruct (rp (tag r) (App enc__r rest)) eqn:Hrp.
+      - apply (Hright_ok _ rest) in Hr_ok; last assumption.
+        rewrite Hrp in Hr_ok; assumption.
+      - apply (Hright_ok _ rest) in Hr_ok; last assumption.
+        rewrite Hr_ok in Hrp; discriminate.
+    Qed.
+
+    (* Relax the rest requirement, since the Limit parser will ensure rest = [] *)
+    Definition LimitParseOk {X : Type} {wf : X -> Prop} (ser : S.Serializer X wf) (par : P.Parser X) := 
+      forall x enc,
+      wf x -> ser x = S.mkSuccess enc -> par enc = Success x Input_default.
+
+    Definition LenOk {X : Type} {wf : X -> Prop} (ser : S.Serializer X wf) (len : X -> nat) (x : X) :=
+      forall enc, ser x = S.mkSuccess enc -> len x = Length enc.
+
+    Lemma LimitCorrect {X : Type} {wf : X -> Prop} (len : X -> nat)
+      (underlying__ser : S.Serializer X wf) (underlying__par : P.Parser X) (x : X) :
+      LimitParseOk underlying__ser underlying__par ->
+      LenOk underlying__ser len x ->
+      ParseOk' (P.Limit underlying__par (len x)) (S.Limit underlying__ser len) x.
+    Proof using Type.
+      intros Hlim_ok Hlen_ok enc rest Hwf.
+      unfold S.Limit, P.Limit.
+      intros Hser.
+      unfold LenOk in Hlen_ok.
+      specialize (Hlen_ok enc Hser).
+      rewrite Hlen_ok.
+      rewrite Slice_App.
+      specialize (Hlim_ok x enc Hwf Hser).
+      rewrite Hlim_ok.
+      rewrite Drop_App, App_nil_l.
+      reflexivity.
+    Qed.
+
+    Lemma LenCorrect {X : Type} {wfx : X -> Prop} {wfn : nat -> Prop}
+      (ser__len : S.Serializer nat wfn) (par__len : P.Parser nat) (len : X -> nat)
+      (ser__x : S.Serializer X wfx) (par__x : P.Parser X) (x : X) :
+      ParseOk par__len ser__len ->
+      LimitParseOk ser__x par__x ->
+      LenOk ser__x len x ->
+      ParseOk' (P.Len par__len par__x) (S.Len len ser__len ser__x) x.
+    Proof using Type.
+      intros Hnat_ok Hlim_ok Hlen_ok.
+      unfold P.Len, S.Len.
+      apply BindCorrect'; first assumption.
+      apply LimitCorrect; assumption.
+    Qed.
+
+    Definition LimitParseOkWeak {X : Type} {wf : X -> Prop} (ser : S.Serializer X wf) (par : P.Parser X) (x : X) := 
+      forall enc, wf x -> ser x = S.mkSuccess enc -> par enc = Success x Input_default.
+
+    Lemma LenCorrect'Weakened {X : Type} {wfx : X -> Prop} {wfn : nat -> Prop}
+      (ser__len : S.Serializer nat wfn) (par__len : P.Parser nat)
+      (ser__x : S.Serializer X wfx) (par__x : P.Parser X) (x : X) :
+      ParseOk par__len ser__len ->
+      LimitParseOkWeak ser__x par__x x ->
+      ParseOk' (P.Len par__len par__x) (S.Len' ser__len ser__x) x.
+    Proof using Type.
+      intros Hnat_ok Hlim_ok enc' rest Hwf.
+      unfold P.Len, S.Len'.
+      destruct (ser__x x) as [[] enc__x |] eqn:Hser__x; last discriminate.
+      destruct (ser__len (Length enc__x)) as [[] enc__len |] eqn:Hser__len; last discriminate.
+      unfold S.Len'_wf in Hwf.
+      rewrite Hser__x in Hwf.
+      rewrite Hser__len in Hwf.
+      destruct Hwf as [Hwf__len Hwf__x].
+      intros Henc. inversion Henc as [Henc__x].
+      unfold P.Bind.
+      rewrite App_assoc.
+      specialize (Hnat_ok (Length enc__x) enc__len (App enc__x rest) Hwf__len Hser__len); rewrite Hnat_ok.
+      unfold P.Limit.
+      rewrite Slice_App.
+      specialize (Hlim_ok enc__x Hwf__x Hser__x); rewrite Hlim_ok.
+      rewrite App_nil_l, Drop_App.
+      reflexivity.
+    Qed.
+    
+    Lemma LenCorrect' {X : Type} {wfx : X -> Prop} {wfn : nat -> Prop}
+      (ser__len : S.Serializer nat wfn) (par__len : P.Parser nat)
+      (ser__x : S.Serializer X wfx) (par__x : P.Parser X) :
+      ParseOk par__len ser__len ->
+      LimitParseOk ser__x par__x ->
+      ParseOk (P.Len par__len par__x) (S.Len' ser__len ser__x).
+    Proof using Type.
+      intros Hnat_ok Hlim_ok x enc rest Hwf.
+      unfold P.Len, S.Len'.
+      destruct (ser__x x) as [[] enc__x |] eqn:Hser__x; last discriminate.
+      destruct (ser__len (Length enc__x)) as [[] enc__len |] eqn:Hser__len; last discriminate.
+      unfold S.Len'_wf in Hwf.
+      rewrite Hser__x in Hwf.
+      rewrite Hser__len in Hwf.
+      destruct Hwf as [Hwf__len Hwf__x].
+      intros H; inversion H as [Henc]; clear H.
+      unfold P.Bind.
+      rewrite App_assoc.
+      specialize (Hnat_ok (Length enc__x) enc__len (App enc__x rest) Hwf__len Hser__len); rewrite Hnat_ok.
+      unfold P.Limit.
+      rewrite Slice_App.
+      specialize (Hlim_ok x enc__x Hwf__x Hser__x); rewrite Hlim_ok.
+      rewrite App_nil_l, Drop_App.
+      reflexivity.
+    Qed.
+
+    Lemma SerialLen'Inversion {X : Type} {wfn : nat -> Prop} {wfx : X -> Prop}
+      (ser__n : S.Serializer nat wfn) (ser__x : S.Serializer X wfx) :
+      forall (x : X) (enc : Output),
+      S.Len' ser__n ser__x x = S.mkSuccess enc <->
+                                 exists (enc__n enc__x : Output),
+                                   ser__n (Length enc__x) = S.mkSuccess enc__n /\
+                                   ser__x x = S.mkSuccess enc__x /\
+                                   enc = App enc__n enc__x.
+    Proof using Type.
+      intros. split.
+      - unfold S.Len'.
+        destruct (ser__x x) as [[] out__x |] eqn:Hx; last discriminate.
+        destruct (ser__n (Length out__x)) as [[] out__n |] eqn:Hn; last discriminate.
+        rewrite S.mkSuccess_eq in *.
+        intro H; inversion H as [Henc]; clear H.
+        exists out__n, out__x. repeat (split; done).
+      - intros (out__n & out__x & Hn & Hx & Henc). unfold S.Len', S.mkSuccess in *.
+        rewrite Hx, Hn, Henc. reflexivity.
+    Qed.
+
+    Lemma par_rep'_unfold {X : Type} (underlying : P.Parser X) (inp : Input) :
+      P.rep' underlying inp =
+      match underlying inp with
+      | Success x rem => if decide (Length rem < Length inp) then
+                               match P.rep' underlying rem with
+                               | Success xs rest => Success (x :: xs) rest
+                               | Failure Recoverable data => Success [x] rem
+                               | Failure Fatal data => Failure Fatal data
+                               end
+                             else
+                               Failure Fatal $ mkData
+                                 "Parser.Rep underlying increased input length" rem None
+      | Failure Recoverable (mkData _ rem _) => Success [] rem
+      | Failure Fatal data => Failure Fatal data
+      end.
+    Proof using Type.
+      unfold P.rep'. unfold P.rep'_func.
+      rewrite WfExtensionality.fix_sub_eq_ext; program_simpl.
+      destruct (underlying inp); program_simpl.
+      - destruct (decide (Length enc < Length inp)); last reflexivity.
+        destruct (Fix_sub _); first reflexivity.
+        destruct lvl; reflexivity.
+      - destruct lvl; first reflexivity.
+        destruct data; reflexivity.
+    Qed.
+
+    Lemma par_rep_fold'_unfold {A B : Type} (underlying : P.Parser B) (combine : A -> B -> A)
+      (acc : A) (inp : Input) :
+      P.rep_fold' underlying combine acc inp =
+      match underlying inp with
+      | Success ret rem => if decide (Length rem < Length inp) then
+                                 P.rep_fold' underlying combine (combine acc ret) rem
+                               else
+                                 Success acc inp
+      | Failure lvl data as f => if NeedsAlternative f inp then
+                                       Success acc inp
+                                     else
+                                       @Propagate A _ (Failure lvl data) I
+      end.
+    Proof using Type.
+      unfold P.rep_fold', P.rep_fold'_func.
+      rewrite WfExtensionality.fix_sub_eq_ext; program_simpl.
+      destruct (underlying inp); last reflexivity. f_equal.
+    Qed.
+
+    Lemma ser_rep'_unfold {X : Type} {wfx : X -> Prop}
+      (underlying : S.Serializer X wfx) (xs : list X):
+      S.rep' underlying xs = 
+      match xs with
+      | [] => S.mkSuccess S.Output_default
+      | x :: xs' => match underlying x, S.rep' underlying xs' with
+                    | Success _ x_enc, Success _ rest_enc => S.mkSuccess $ App x_enc rest_enc
+                    | Failure lvl data as f, Success _ rest_enc => f
+                    | Success _ x_enc, Failure lvl data as f => f
+                    | Failure lvl__x data__x, Failure lvl__r data__r =>
+                        Failure (maxLevel lvl__x lvl__r) $ ConcatData data__x data__r
+                    end
+      end.
+    Proof using Type.
+      destruct xs; reflexivity.
+    Qed.
+
+    Lemma ser_rep_unfold {X : Type} {wfx : X -> Prop}
+      (underlying : S.Serializer X wfx) (xs : list X):
+      S.Rep underlying xs = 
+      match xs with
+      | [] => S.mkSuccess S.Output_default
+      | x :: xs' => match underlying x, S.rep' underlying xs' with
+                    | Success _ x_enc, Success _ rest_enc => S.mkSuccess $ App x_enc rest_enc
+                    | Failure lvl data as f, Success _ rest_enc => f
+                    | Success _ x_enc, Failure lvl data as f => f
+                    | Failure lvl__x data__x, Failure lvl__r data__r =>
+                        Failure (maxLevel lvl__x lvl__r) $ ConcatData data__x data__r
+                    end
+      end.
+    Proof using Type.
+      destruct xs; reflexivity.
+    Qed.
+    
+    Lemma SerialRepInversion_First {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) :
+      forall (x : X) (xs : list X) (enc : Output),
       S.Rep ser__x (x :: xs) = S.mkSuccess enc <-> exists enc__x enc__rest,
           ser__x x = S.mkSuccess enc__x /\
           S.Rep ser__x xs = S.mkSuccess enc__rest /\
           enc = (App enc__x enc__rest). 
-  Proof using Type.
-    intros x xs enc. split.
-    - unfold S.Rep. rewrite ser_rep'_unfold.
-      destruct (ser__x x) as [[] out__x |] eqn:Hser__x.
-      * destruct (S.rep' ser__x xs) as [[] out |]; last discriminate.
-        intro Hser. inversion Hser as [Henc].
-        exists out__x, out. done.
-      * destruct (S.rep' ser__x xs); last discriminate.
-        discriminate.
-    - intros (enc__x & enc__rest & Hser__x & Hser__rest & Henc).
-      unfold S.Rep in Hser__rest.
-      rewrite ser_rep'_unfold, Hser__x, Hser__rest, Henc; reflexivity.
-  Qed.
+    Proof using Type.
+      intros x xs enc. split.
+      - unfold S.Rep. rewrite ser_rep'_unfold.
+        destruct (ser__x x) as [[] out__x |] eqn:Hser__x.
+        * destruct (S.rep' ser__x xs) as [[] out |]; last discriminate.
+          intro Hser. inversion Hser as [Henc].
+          exists out__x, out. done.
+        * destruct (S.rep' ser__x xs); last discriminate.
+          discriminate.
+      - intros (enc__x & enc__rest & Hser__x & Hser__rest & Henc).
+        unfold S.Rep in Hser__rest.
+        rewrite ser_rep'_unfold, Hser__x, Hser__rest, Henc; reflexivity.
+    Qed.
 
-  Lemma SerialRepInversion {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) :
-    forall (xs : list X),
+    Lemma SerialRepInversion {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) :
+      forall (xs : list X),
       (exists enc, S.Rep ser__x xs = S.mkSuccess enc) <-> forall x, x ∈ xs -> exists enc__x, ser__x x = S.mkSuccess enc__x.
-  Proof using Type.
-    (* This proof written almost completely by Gemini 3 Pro... *)
-    intros xs.
-    induction xs as [|y ys IH].
-    - split.
-      + intros [enc Hser] x Hx. apply not_elem_of_nil in Hx. contradiction.
-      + intros H. exists S.Output_default. rewrite ser_rep'_unfold. reflexivity.
-    - split.
-      + intros [enc Hser] x Hx.
-        rewrite SerialRepInversion_First in Hser.
-        destruct Hser as (enc__y & enc__rest & Hy_ok & Hrest_ok & Henc).
-        rewrite elem_of_cons in Hx. destruct Hx as [Heq|Hin].
-        * subst. exists enc__y. assumption.
-        * apply (proj1 IH).
-          -- exists enc__rest. assumption.
-          -- assumption.
-      + intros H.
-        assert (exists enc__y, ser__x y = S.mkSuccess enc__y) as [enc__y Henc__y].
-        { destruct (H y) as [ex Hex].
-          - apply list_elem_of_here.
-          - exists ex. assumption. }
-        assert (exists enc__rest, S.Rep ser__x ys = S.mkSuccess enc__rest) as [enc__rest Henc__rest].
-        { apply (proj2 IH). intros z Hz. destruct (H z) as [ez Hez].
-          - simpl; right; assumption.
-          - exists ez. assumption. }
-        exists (App enc__y enc__rest).
-        rewrite SerialRepInversion_First.
-        exists enc__y, enc__rest.
-        repeat split; assumption.
-  Qed.
+    Proof using Type.
+      (* This proof written almost completely by Gemini 3 Pro... *)
+      intros xs.
+      induction xs as [|y ys IH].
+      - split.
+        + intros [enc Hser] x Hx. apply not_elem_of_nil in Hx. contradiction.
+        + intros H. exists S.Output_default. rewrite ser_rep'_unfold. reflexivity.
+      - split.
+        + intros [enc Hser] x Hx.
+          rewrite SerialRepInversion_First in Hser.
+          destruct Hser as (enc__y & enc__rest & Hy_ok & Hrest_ok & Henc).
+          rewrite elem_of_cons in Hx. destruct Hx as [Heq|Hin].
+          * subst. exists enc__y. assumption.
+          * apply (proj1 IH).
+            -- exists enc__rest. assumption.
+            -- assumption.
+        + intros H.
+          assert (exists enc__y, ser__x y = S.mkSuccess enc__y) as [enc__y Henc__y].
+          { destruct (H y) as [ex Hex].
+            - apply list_elem_of_here.
+            - exists ex. assumption. }
+          assert (exists enc__rest, S.Rep ser__x ys = S.mkSuccess enc__rest) as [enc__rest Henc__rest].
+          { apply (proj2 IH). intros z Hz. destruct (H z) as [ez Hez].
+            - simpl; right; assumption.
+            - exists ez. assumption. }
+          exists (App enc__y enc__rest).
+          rewrite SerialRepInversion_First.
+          exists enc__y, enc__rest.
+          repeat split; assumption.
+    Qed.
 
-  Infix "ₛ≡ᵣ" := S.R.result_equiv (at level 70):type_scope.
+    Infix "≡ᵣ" := result_equiv (at level 70):type_scope.
 
-  Instance SerRep_Proper {X : Type} {wfx : X -> Prop} :
-    Proper ((@eq X ==> S.R.result_equiv) ==> eq ==> S.R.result_equiv) (@S.Rep X wfx).
-  Proof using Type. 
-    intros ser1 ser2 H xs ys Heq. subst.
-    induction ys.
-    - unfold S.Rep.
-      rewrite !ser_rep_unfold.
-      unfold S.mkSuccess, S.R.result_equiv.
-      done.
-    - rewrite ser_rep_unfold.
-      rewrite (ser_rep_unfold ser2).
-      assert (ser1 a ₛ≡ᵣ ser2 a) as Hequiv_a by (apply H; reflexivity).
-      destruct (ser1 a) as [[] enc1 | lvl1 data1] eqn:Hser1, (ser2 a) as [[] enc2 | lvl2 data2] eqn:Hser2.
-      + destruct (S.rep' ser1 ys) as [[] enc_ys1 | lvl_ys1 data_ys1] eqn:Hser_ys1,
-                   (S.rep' ser2 ys) as [[] enc_ys2 | lvl_ys2 data_ys2] eqn:Hser_ys2.
-        * unfold S.mkSuccess, S.R.result_equiv. split; first reflexivity.
-          unfold S.Rep in IHys.
-          apply S.R.ResultEquivSuccess with
-            (x1 := ()) (x2 := ())
-            (enc1 := enc_ys1) (enc2 := enc_ys2) in IHys as [[] IHys].
-          -- unfold S.R.result_equiv in Hequiv_a.
-             destruct Hequiv_a as [[] Henc]; congruence.
-          -- rewrite Hser_ys1; reflexivity.
-          -- rewrite Hser_ys2; reflexivity.
-        * unfold S.mkSuccess, S.R.result_equiv.
-          unfold S.Rep, S.R.result_equiv in IHys.
-          rewrite Hser_ys1, Hser_ys2 in IHys.
-          assumption.
-        * unfold S.mkSuccess, S.R.result_equiv.
-          unfold S.Rep, S.R.result_equiv in IHys.
-          rewrite Hser_ys1, Hser_ys2 in IHys.
-          assumption.
-        * unfold S.Rep, S.R.result_equiv in *.
-          rewrite Hser_ys1, Hser_ys2 in IHys.
-          assumption.
-      + unfold S.R.result_equiv in Hequiv_a. contradiction.
-      + unfold S.R.result_equiv in Hequiv_a. contradiction.
-      + unfold S.R.result_equiv in Hequiv_a; subst.
-        destruct (S.rep' ser1 ys) as [[] enc_ys1 | lvl_ys1 data_ys1] eqn:Hser_ys1,
-                   (S.rep' ser2 ys) as [[] enc_ys2 | lvl_ys2 data_ys2] eqn:Hser_ys2.
-        * reflexivity.
-        * unfold S.Rep in IHys.
-          rewrite Hser_ys1, Hser_ys2 in IHys.
-          unfold S.R.result_equiv in IHys.
-          contradiction.
-        * unfold S.Rep in IHys.
-          rewrite Hser_ys1, Hser_ys2 in IHys.
-          unfold S.R.result_equiv in IHys.
-          contradiction.
-        * unfold S.Rep in IHys.
-          rewrite Hser_ys1, Hser_ys2 in IHys.
-          unfold S.R.result_equiv in IHys.
-          congruence.
-  Qed.
+    Instance SerRep_Proper {X : Type} {wfx : X -> Prop} :
+      Proper ((@eq X ==> result_equiv) ==> eq ==> result_equiv) (@S.Rep X wfx).
+    Proof using Type. 
+      intros ser1 ser2 H xs ys Heq. subst.
+      induction ys.
+      - unfold S.Rep.
+        rewrite !ser_rep_unfold.
+        unfold S.mkSuccess, result_equiv.
+        done.
+      - rewrite ser_rep_unfold.
+        rewrite (ser_rep_unfold ser2).
+        assert (ser1 a ≡ᵣ ser2 a) as Hequiv_a by (apply H; reflexivity).
+        destruct (ser1 a) as [[] enc1 | lvl1 data1] eqn:Hser1, (ser2 a) as [[] enc2 | lvl2 data2] eqn:Hser2.
+        + destruct (S.rep' ser1 ys) as [[] enc_ys1 | lvl_ys1 data_ys1] eqn:Hser_ys1,
+                     (S.rep' ser2 ys) as [[] enc_ys2 | lvl_ys2 data_ys2] eqn:Hser_ys2.
+          * unfold S.mkSuccess, result_equiv. split; first reflexivity.
+            unfold S.Rep in IHys.
+            apply ResultEquivSuccess with
+              (x1 := ()) (x2 := ())
+              (enc1 := enc_ys1) (enc2 := enc_ys2) in IHys as [[] IHys].
+            -- unfold result_equiv in Hequiv_a.
+               destruct Hequiv_a as [[] Henc]; congruence.
+            -- rewrite Hser_ys1; reflexivity.
+            -- rewrite Hser_ys2; reflexivity.
+          * unfold S.mkSuccess, result_equiv.
+            unfold S.Rep, result_equiv in IHys.
+            rewrite Hser_ys1, Hser_ys2 in IHys.
+            assumption.
+          * unfold S.mkSuccess, result_equiv.
+            unfold S.Rep, result_equiv in IHys.
+            rewrite Hser_ys1, Hser_ys2 in IHys.
+            assumption.
+          * unfold S.Rep, result_equiv in *.
+            rewrite Hser_ys1, Hser_ys2 in IHys.
+            assumption.
+        + unfold result_equiv in Hequiv_a. contradiction.
+        + unfold result_equiv in Hequiv_a. contradiction.
+        + unfold result_equiv in Hequiv_a; subst.
+          destruct (S.rep' ser1 ys) as [[] enc_ys1 | lvl_ys1 data_ys1] eqn:Hser_ys1,
+                     (S.rep' ser2 ys) as [[] enc_ys2 | lvl_ys2 data_ys2] eqn:Hser_ys2.
+          * reflexivity.
+          * unfold S.Rep in IHys.
+            rewrite Hser_ys1, Hser_ys2 in IHys.
+            unfold result_equiv in IHys.
+            contradiction.
+          * unfold S.Rep in IHys.
+            rewrite Hser_ys1, Hser_ys2 in IHys.
+            unfold result_equiv in IHys.
+            contradiction.
+          * unfold S.Rep in IHys.
+            rewrite Hser_ys1, Hser_ys2 in IHys.
+            unfold result_equiv in IHys.
+            congruence.
+    Qed.
 
-  Lemma SerialRepSubst' {X : Type} {wfx : X -> Prop} (ser1 ser2 : S.Serializer X wfx) :
-    forall xs, (forall x, x ∈ xs -> ser1 x = ser2 x) -> S.Rep ser1 xs = S.Rep ser2 xs.
-  Proof using Type.
-    intros xs Heq.
-    induction xs.
-    - reflexivity.
-    - unfold S.Rep.
-      rewrite ser_rep'_unfold.
-      rewrite Heq by apply list_elem_of_here.
-      rewrite (ser_rep'_unfold ser2).
-      destruct (ser2 a).
-      + unfold S.Rep in IHxs; rewrite IHxs; first reflexivity.
-        intros x Helem.
-        apply list_elem_of_further with (y := a) in Helem.
-        apply Heq. assumption.
-      + unfold S.Rep in IHxs; rewrite IHxs; first reflexivity.
-        intros x Helem.
-        apply list_elem_of_further with (y := a) in Helem.
-        apply Heq. assumption.
-  Qed.
-
-  Lemma SerialRepSubst {X : Type} {wfx : X -> Prop} (ser1 ser2 : S.Serializer X wfx) :
-    forall xs, (forall x, x ∈ xs -> ser1 x ₛ≡ᵣ ser2 x) -> S.Rep ser1 xs ₛ≡ᵣ S.Rep ser2 xs.
-  Proof using Type.
-    intros xs Heq. 
-    induction xs.
-    - done.
-    - rewrite ser_rep_unfold, (ser_rep_unfold ser2).
-      (* Get the equivalence for the head element *)
-      assert (ser1 a ₛ≡ᵣ ser2 a) as Ha by apply Heq, list_elem_of_here.
-      (* Get the equivalence for the tail *)
-      unfold S.Rep in IHxs.
-      (* Now destruct all the results and use the equivalences *)
-      destruct (ser1 a) as [[] enc1 | lvl1 data1] eqn:Hser1,
-               (ser2 a) as [[] enc2 | lvl2 data2] eqn:Hser2;
-        unfold S.R.result_equiv in Ha; try contradiction.
-      + (* Both Success *)
-        destruct Ha as [_ Henc]. subst enc2.
-        destruct (S.rep' ser1 xs) as [[] enc_xs1 | lvl_xs1 data_xs1] eqn:Hser_xs1,
-                 (S.rep' ser2 xs) as [[] enc_xs2 | lvl_xs2 data_xs2] eqn:Hser_xs2;
-          try contradiction.
-        * (* Both rep' Success *)
-          apply S.R.ResultEquivSuccessApp.
-          apply IHxs. intros x Helem. 
+    Lemma SerialRepSubst' {X : Type} {wfx : X -> Prop} (ser1 ser2 : S.Serializer X wfx) :
+      forall xs, (forall x, x ∈ xs -> ser1 x = ser2 x) -> S.Rep ser1 xs = S.Rep ser2 xs.
+    Proof using Type.
+      intros xs Heq.
+      induction xs.
+      - reflexivity.
+      - unfold S.Rep.
+        rewrite ser_rep'_unfold.
+        rewrite Heq by apply list_elem_of_here.
+        rewrite (ser_rep'_unfold ser2).
+        destruct (ser2 a).
+        + unfold S.Rep in IHxs; rewrite IHxs; first reflexivity.
+          intros x Helem.
           apply list_elem_of_further with (y := a) in Helem.
           apply Heq. assumption.
-        * (* ser1 rep' Success, ser2 rep' Failure *)
-          apply IHxs. intros x Helem.
+        + unfold S.Rep in IHxs; rewrite IHxs; first reflexivity.
+          intros x Helem.
           apply list_elem_of_further with (y := a) in Helem.
           apply Heq. assumption.
-        * (* ser1 rep' Failure, ser2 rep' Success *)
-          apply IHxs. intros x Helem.
-          apply list_elem_of_further with (y := a) in Helem.
-          apply Heq. assumption.
-        * (* Both rep' Failure *)
-          apply IHxs. intros x Helem.
-          apply list_elem_of_further with (y := a) in Helem.
-          apply Heq. assumption.
-      + (* Both Failure *)
-        subst lvl2.
-        destruct (S.rep' ser1 xs) as [[] enc_xs1 | lvl_xs1 data_xs1] eqn:Hser_xs1,
-                 (S.rep' ser2 xs) as [[] enc_xs2 | lvl_xs2 data_xs2] eqn:Hser_xs2;
-          try reflexivity; try assumption.
-        * assert (S.rep' ser1 xs ₛ≡ᵣ S.rep' ser2 xs) as Hequiv.
-          {
-            rewrite Hser_xs1, Hser_xs2.
+    Qed.
+
+    Lemma SerialRepSubst {X : Type} {wfx : X -> Prop} (ser1 ser2 : S.Serializer X wfx) :
+      forall xs, (forall x, x ∈ xs -> ser1 x ≡ᵣ ser2 x) -> S.Rep ser1 xs ≡ᵣ S.Rep ser2 xs.
+    Proof using Type.
+      intros xs Heq. 
+      induction xs.
+      - done.
+      - rewrite ser_rep_unfold, (ser_rep_unfold ser2).
+        (* Get the equivalence for the head element *)
+        assert (ser1 a ≡ᵣ ser2 a) as Ha by apply Heq, list_elem_of_here.
+        (* Get the equivalence for the tail *)
+        unfold S.Rep in IHxs.
+        (* Now destruct all the results and use the equivalences *)
+        destruct (ser1 a) as [[] enc1 | lvl1 data1] eqn:Hser1,
+                   (ser2 a) as [[] enc2 | lvl2 data2] eqn:Hser2;
+                   unfold result_equiv in Ha; try contradiction.
+        + (* Both Success *)
+          destruct Ha as [_ Henc]. subst enc2.
+          destruct (S.rep' ser1 xs) as [[] enc_xs1 | lvl_xs1 data_xs1] eqn:Hser_xs1,
+                     (S.rep' ser2 xs) as [[] enc_xs2 | lvl_xs2 data_xs2] eqn:Hser_xs2;
+                     try contradiction.
+          * (* Both rep' Success *)
+            apply ResultEquivSuccessApp.
+            apply IHxs. intros x Helem. 
+            apply list_elem_of_further with (y := a) in Helem.
+            apply Heq. assumption.
+          * (* ser1 rep' Success, ser2 rep' Failure *)
             apply IHxs. intros x Helem.
             apply list_elem_of_further with (y := a) in Helem.
             apply Heq. assumption.
-          }
-          rewrite Hser_xs1, Hser_xs2 in Hequiv.
-          unfold S.R.result_equiv in Hequiv.
-          contradiction.
-        * assert (S.rep' ser1 xs ₛ≡ᵣ S.rep' ser2 xs) as Hequiv.
-          {
-            rewrite Hser_xs1, Hser_xs2.
+          * (* ser1 rep' Failure, ser2 rep' Success *)
             apply IHxs. intros x Helem.
             apply list_elem_of_further with (y := a) in Helem.
             apply Heq. assumption.
-          }
-          rewrite Hser_xs1, Hser_xs2 in Hequiv.
-          unfold S.R.result_equiv in Hequiv.
-          contradiction.
-        * assert (S.rep' ser1 xs ₛ≡ᵣ S.rep' ser2 xs) as Hequiv.
-          {
-            rewrite Hser_xs1, Hser_xs2.
+          * (* Both rep' Failure *)
             apply IHxs. intros x Helem.
             apply list_elem_of_further with (y := a) in Helem.
             apply Heq. assumption.
-          }
-          rewrite Hser_xs1, Hser_xs2 in Hequiv.
-          unfold S.R.result_equiv in Hequiv.
-          subst. done.
-  Qed.
+        + (* Both Failure *)
+          subst lvl2.
+          destruct (S.rep' ser1 xs) as [[] enc_xs1 | lvl_xs1 data_xs1] eqn:Hser_xs1,
+                     (S.rep' ser2 xs) as [[] enc_xs2 | lvl_xs2 data_xs2] eqn:Hser_xs2;
+                     try reflexivity; try assumption.
+          * assert (S.rep' ser1 xs ≡ᵣ S.rep' ser2 xs) as Hequiv.
+            {
+              rewrite Hser_xs1, Hser_xs2.
+              apply IHxs. intros x Helem.
+              apply list_elem_of_further with (y := a) in Helem.
+              apply Heq. assumption.
+            }
+            rewrite Hser_xs1, Hser_xs2 in Hequiv.
+            unfold result_equiv in Hequiv.
+            contradiction.
+          * assert (S.rep' ser1 xs ≡ᵣ S.rep' ser2 xs) as Hequiv.
+            {
+              rewrite Hser_xs1, Hser_xs2.
+              apply IHxs. intros x Helem.
+              apply list_elem_of_further with (y := a) in Helem.
+              apply Heq. assumption.
+            }
+            rewrite Hser_xs1, Hser_xs2 in Hequiv.
+            unfold result_equiv in Hequiv.
+            contradiction.
+          * assert (S.rep' ser1 xs ≡ᵣ S.rep' ser2 xs) as Hequiv.
+            {
+              rewrite Hser_xs1, Hser_xs2.
+              apply IHxs. intros x Helem.
+              apply list_elem_of_further with (y := a) in Helem.
+              apply Heq. assumption.
+            }
+            rewrite Hser_xs1, Hser_xs2 in Hequiv.
+            unfold result_equiv in Hequiv.
+            subst. done.
+    Qed.
 
-  Lemma RepCorrect {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) (par__x : P.Parser X) :
-    (* TODO: Split this into a typeclass. Make one for consuming parsers too. *)
-    (exists msg, par__x Input_default = P.R.Failure P.R.Recoverable $ P.R.mkData msg Input_default None) ->
-    (forall x enc, ser__x x = S.mkSuccess enc -> Length enc > 0) ->
-    ParseOk par__x ser__x ->
-    LimitParseOk (S.Rep ser__x) (P.Rep par__x).
-  Proof using Type.
-    intros HparEmp Hpro HpOk xs.
-    induction xs as [| y ys].
-    - intros enc Hwf Hser. simpl in Hser.
-      inversion Hser as [Henc].
-      rewrite (@par_rep'_unfold X).
-      unfold S.Output_default;
-      rewrite Length_default.
-      destruct HparEmp as [emp_msg HparEmp].
-      rewrite HparEmp.
-      reflexivity.
-    - intros enc Hwf. destruct Hwf as [Hwf__y Hwf__rest].
-      unfold S.Rep, P.Rep.
-      intros Hser. rewrite SerialRepInversion_First in Hser.
-      destruct Hser as (enc__y & enc__rest & Hser__y & Hser__rest & Henc).
-      rewrite (@par_rep'_unfold X), Henc, App_Length.
-      specialize (HpOk y enc__y enc__rest Hwf__y Hser__y) as Hok__y.
-      rewrite Hok__y.
-      pose proof (Hpro y enc__y Hser__y) as Hpro__y.
-      destruct (decide (Length _ < _)); last lia.
-      specialize (IHys enc__rest Hwf__rest Hser__rest); unfold P.Rep in IHys.
-      rewrite IHys. reflexivity.
-  Qed.
+    Lemma RepCorrect {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) (par__x : P.Parser X) :
+      (* TODO: Split this into a typeclass. Make one for consuming parsers too. *)
+      (exists msg, par__x Input_default = Failure Recoverable $ mkData msg Input_default None) ->
+      (forall x enc, ser__x x = S.mkSuccess enc -> Length enc > 0) ->
+      ParseOk par__x ser__x ->
+      LimitParseOk (S.Rep ser__x) (P.Rep par__x).
+    Proof using Type.
+      intros HparEmp Hpro HpOk xs.
+      induction xs as [| y ys].
+      - intros enc Hwf Hser. simpl in Hser.
+        inversion Hser as [Henc].
+        rewrite (@par_rep'_unfold X).
+        unfold S.Output_default;
+          rewrite Length_default.
+        destruct HparEmp as [emp_msg HparEmp].
+        rewrite HparEmp.
+        reflexivity.
+      - intros enc Hwf. destruct Hwf as [Hwf__y Hwf__rest].
+        unfold S.Rep, P.Rep.
+        intros Hser. rewrite SerialRepInversion_First in Hser.
+        destruct Hser as (enc__y & enc__rest & Hser__y & Hser__rest & Henc).
+        rewrite (@par_rep'_unfold X), Henc, App_Length.
+        specialize (HpOk y enc__y enc__rest Hwf__y Hser__y) as Hok__y.
+        rewrite Hok__y.
+        pose proof (Hpro y enc__y Hser__y) as Hpro__y.
+        destruct (decide (Length _ < _)); last lia.
+        specialize (IHys enc__rest Hwf__rest Hser__rest); unfold P.Rep in IHys.
+        rewrite IHys. reflexivity.
+    Qed.
 
-  Lemma par_recur_unfold {X : Type} (underlying : P.Parser X -> P.Parser X) (inp : Input) :
-    P.recur underlying inp =
-    underlying (fun rem => match decide (Length rem < Length inp) with
-                        | left _ => P.recur underlying rem
-                        | right _ => P.RecursiveProgressError "Parser.Recursive" inp rem
-                        end) inp.
-  Proof using Type.
-    unfold P.recur at 1. unfold P.recur_func.
-    rewrite WfExtensionality.fix_sub_eq_ext.
-    f_equal.
-  Qed.
-  
-  Lemma ser_recur_unfold {X : Type} {wfx : X -> Prop} (underlying : S.Serializer X wfx -> S.Serializer X wfx)
-    (depth : X -> nat) (x : X) :
-    S.recur underlying depth x =
-    underlying (fun x__n => match decide (depth x__n < depth x) with
-                       | left _ => S.recur underlying depth x__n
-                       | right _ => S.RecursiveProgressError "Serial.Recursive" depth x x__n
-                       end) x.
-  Proof using Type.
-    unfold S.recur at 1. unfold S.recur_func.
-    rewrite WfExtensionality.fix_sub_eq_ext.
-    f_equal. 
-  Qed.
+    Lemma par_recur_unfold {X : Type} (underlying : P.Parser X -> P.Parser X) (inp : Input) :
+      P.recur underlying inp =
+      underlying (fun rem => match decide (Length rem < Length inp) with
+                             | left _ => P.recur underlying rem
+                             | right _ => P.RecursiveProgressError "Parser.Recursive" inp rem
+                             end) inp.
+    Proof using Type.
+      unfold P.recur at 1. unfold P.recur_func.
+      rewrite WfExtensionality.fix_sub_eq_ext.
+      f_equal.
+    Qed.
+    
+    Lemma ser_recur_unfold {X : Type} {wfx : X -> Prop} (underlying : S.Serializer X wfx -> S.Serializer X wfx)
+      (depth : X -> nat) (x : X) :
+      S.recur underlying depth x =
+      underlying (fun x__n => match decide (depth x__n < depth x) with
+                              | left _ => S.recur underlying depth x__n
+                              | right _ => S.RecursiveProgressError "Serial.Recursive" depth x x__n
+                              end) x.
+    Proof using Type.
+      unfold S.recur at 1. unfold S.recur_func.
+      rewrite WfExtensionality.fix_sub_eq_ext.
+      f_equal. 
+    Qed.
 
-  Theorem RecursiveCorrect {X : Type} {wf : X -> Prop}
-    (par_underlying : P.Parser X -> P.Parser X)
-    (ser_underlying : S.Serializer X wf -> S.Serializer X wf)
-    (depth : X -> nat) :
-    (forall (x : X) (enc rest : Input),
-       wf x ->
-       (forall (inp__n : Input) (x__n : X),
-          Length inp__n < Length (App enc rest) ->
-          depth x__n < depth x ->
-          wf x__n ->
-          forall rest__n,
-          S.recur ser_underlying depth x__n = S.mkSuccess inp__n ->
-          P.recur par_underlying (App inp__n rest__n) = P.R.Success x__n rest__n) ->
-       ser_underlying (S.recur_step ser_underlying depth x
-                         (fun x__n _ => S.recur ser_underlying depth x__n)) x = S.mkSuccess enc ->
-       par_underlying (P.recur_step par_underlying (App enc rest)
-                         (fun inp__n _ => P.recur par_underlying inp__n)) (App enc rest) =
-       P.R.Success x rest) ->
-    ParseOk (P.Recursive par_underlying) (S.Recursive ser_underlying depth).
-  Proof using Type.
-    intros H_underlying_ok.
-    unfold ParseOk, ParseOk', ParseOk'', ParseOk''', P.Recursive, S.Recursive.
-    intros x enc rest Hwf Hser.
-    
-    (* The proof proceeds by well-founded induction on depth x *)
-    remember (depth x) as d eqn:Heq.
-    revert x enc rest Hwf Hser Heq.
-    induction d as [d IH] using lt_wf_ind.
-    intros x enc rest Hwf Hser Heq.
-    
-    rewrite par_recur_unfold.
-    rewrite ser_recur_unfold in Hser.
-    
-    unfold P.recur_step in H_underlying_ok.
-    eapply H_underlying_ok; eauto.
-    
-    intros inp__n r__n Hlen__n Hdepth__n Hwf__n rest__n Hser__n.
-    
-    eapply IH.
-    - subst d. exact Hdepth__n.
-    - exact Hwf__n.
-    - exact Hser__n.
-    - reflexivity.
-  Qed.
+    Theorem RecursiveCorrect {X : Type} {wf : X -> Prop}
+      (par_underlying : P.Parser X -> P.Parser X)
+      (ser_underlying : S.Serializer X wf -> S.Serializer X wf)
+      (depth : X -> nat) :
+      (forall (x : X) (enc rest : Input),
+         wf x ->
+         (forall (inp__n : Input) (x__n : X),
+            Length inp__n < Length (App enc rest) ->
+            depth x__n < depth x ->
+            wf x__n ->
+            forall rest__n,
+            S.recur ser_underlying depth x__n = S.mkSuccess inp__n ->
+            P.recur par_underlying (App inp__n rest__n) = Success x__n rest__n) ->
+         ser_underlying (S.recur_step ser_underlying depth x
+                           (fun x__n _ => S.recur ser_underlying depth x__n)) x = S.mkSuccess enc ->
+         par_underlying (P.recur_step par_underlying (App enc rest)
+                           (fun inp__n _ => P.recur par_underlying inp__n)) (App enc rest) =
+         Success x rest) ->
+      ParseOk (P.Recursive par_underlying) (S.Recursive ser_underlying depth).
+    Proof using Type.
+      intros H_underlying_ok.
+      unfold ParseOk, ParseOk', ParseOk'', ParseOk''', P.Recursive, S.Recursive.
+      intros x enc rest Hwf Hser.
+      
+      (* The proof proceeds by well-founded induction on depth x *)
+      remember (depth x) as d eqn:Heq.
+      revert x enc rest Hwf Hser Heq.
+      induction d as [d IH] using lt_wf_ind.
+      intros x enc rest Hwf Hser Heq.
+      
+      rewrite par_recur_unfold.
+      rewrite ser_recur_unfold in Hser.
+      
+      unfold P.recur_step in H_underlying_ok.
+      eapply H_underlying_ok; eauto.
+      
+      intros inp__n r__n Hlen__n Hdepth__n Hwf__n rest__n Hser__n.
+      
+      eapply IH.
+      - subst d. exact Hdepth__n.
+      - exact Hwf__n.
+      - exact Hser__n.
+      - reflexivity.
+    Qed.
 
-  Lemma par_recur_st_unfold {X S : Type}
-    (underlying : (S -> P.Parser X) -> (S -> P.Parser X))
-    (st : S)
-    (inp : Input) :
-    P.recur_st underlying st inp =
-    underlying (fun st__n rem => if decide (Length rem < Length inp) then
-                              P.recur_st underlying st__n rem
-                            else
-                              P.RecursiveProgressError "Parser.RecursiveState" inp rem
-      ) st inp.
-  Proof using Type.
-    unfold P.recur_st at 1. unfold P.recur_st_func.
-    rewrite WfExtensionality.fix_sub_eq_ext.
-    f_equal.
-  Qed.
+    Lemma par_recur_st_unfold {X S : Type}
+      (underlying : (S -> P.Parser X) -> (S -> P.Parser X))
+      (st : S)
+      (inp : Input) :
+      P.recur_st underlying st inp =
+      underlying (fun st__n rem => if decide (Length rem < Length inp) then
+                                     P.recur_st underlying st__n rem
+                                   else
+                                     P.RecursiveProgressError "Parser.RecursiveState" inp rem
+        ) st inp.
+    Proof using Type.
+      unfold P.recur_st at 1. unfold P.recur_st_func.
+      rewrite WfExtensionality.fix_sub_eq_ext.
+      f_equal.
+    Qed.
 
-  Lemma ser_recur_st_unfold {X S : Type} {wfx : S -> X -> Prop}
-    (underlying : (forall s : S, S.Serializer X $ wfx s) -> forall s : S, S.Serializer X $ wfx s)
-    (depth : X -> nat) (st : S) (x : X) :
-    @S.recur_st _ _ wfx underlying depth st x =
-    underlying (fun st__n x__n => if decide (depth x__n < depth x) then
-                             @S.recur_st _ _ wfx underlying depth st__n x__n
-                           else
-                             S.RecursiveProgressError "Serial.RecursiveState" depth x x__n
-      ) st x.
-  Proof using Type.
-    unfold S.recur_st at 1. unfold S.recur_st_func.
-    rewrite WfExtensionality.fix_sub_eq_ext.
-    f_equal. 
-  Qed.
+    Lemma ser_recur_st_unfold {X S : Type} {wfx : S -> X -> Prop}
+      (underlying : (forall s : S, S.Serializer X $ wfx s) -> forall s : S, S.Serializer X $ wfx s)
+      (depth : X -> nat) (st : S) (x : X) :
+      @S.recur_st _ _ wfx underlying depth st x =
+      underlying (fun st__n x__n => if decide (depth x__n < depth x) then
+                                      @S.recur_st _ _ wfx underlying depth st__n x__n
+                                    else
+                                      S.RecursiveProgressError "Serial.RecursiveState" depth x x__n
+        ) st x.
+    Proof using Type.
+      unfold S.recur_st at 1. unfold S.recur_st_func.
+      rewrite WfExtensionality.fix_sub_eq_ext.
+      f_equal. 
+    Qed.
 
-  Theorem RecursiveStateCorrect {X S : Type} {wf : X -> Prop}
-    (par_underlying : (S -> P.Parser X) -> S -> P.Parser X)
-    (ser_underlying : (S -> S.Serializer X wf) -> S -> S.Serializer X wf)
-    (valid_state : S -> X -> Prop)
-    (depth : X -> nat)
-    (st : S)
-    (x : X) :
-    (forall (st : S) (x : X) (enc rest : Input),
-       wf x -> valid_state st x ->
-       (forall (inp__n : Input) (st__n : S) (x__n : X),
-          Length inp__n < Length (App enc rest) ->
-          depth x__n < depth x ->
-          wf x__n ->
-          valid_state st__n x__n ->
-          forall rest__n,
-          S.recur_st ser_underlying depth st__n x__n = S.mkSuccess inp__n ->
-          P.recur_st par_underlying st__n (App inp__n rest__n) = P.R.Success x__n rest__n) ->
-       ser_underlying (S.recur_step_st ser_underlying depth x
-                         (fun st__n x__n _ => S.recur_st ser_underlying depth st__n x__n)) st x = S.mkSuccess enc ->
-       par_underlying (P.recur_step_st par_underlying (App enc rest)
-                         (fun st__n inp__n _ => P.recur_st par_underlying st__n inp__n)) st (App enc rest) =
-       P.R.Success x rest) ->
-    valid_state st x ->
-    ParseOk' (P.RecursiveState par_underlying st)
-      (S.RecursiveState ser_underlying depth st) x.
-  Proof using Type.
-    unfold ParseOk, ParseOk', ParseOk'', ParseOk''', P.RecursiveState, S.RecursiveState.
-    intros H_underlying_ok Hstate_valid enc rest Hwf Hser.
-    
-    (* The proof proceeds by well-founded induction on depth x *)
-    remember (depth x) as d eqn:Heq.
-    revert st x Hstate_valid enc rest Hwf Hser Heq.
-    induction d as [d IH] using lt_wf_ind.
-    intros st x Hstate enc rest Hwf Hser Heq.
-    
-    rewrite par_recur_st_unfold.
-    rewrite ser_recur_st_unfold in Hser.
-    
-    unfold P.recur_step_st in H_underlying_ok.
-    eapply H_underlying_ok; eauto.
-    
-    intros inp__n st__n r__n Hlen__n Hdepth__n Hwf__n Hstate__n rest__n Hser__n.
-    
-    eapply IH.
-    - subst d. exact Hdepth__n.
-    - exact Hstate__n.
-    - exact Hwf__n.
-    - exact Hser__n.
-    - reflexivity.
-  Qed.
+    Theorem RecursiveStateCorrect {X S : Type} {wf : X -> Prop}
+      (par_underlying : (S -> P.Parser X) -> S -> P.Parser X)
+      (ser_underlying : (S -> S.Serializer X wf) -> S -> S.Serializer X wf)
+      (valid_state : S -> X -> Prop)
+      (depth : X -> nat)
+      (st : S)
+      (x : X) :
+      (forall (st : S) (x : X) (enc rest : Input),
+         wf x -> valid_state st x ->
+         (forall (inp__n : Input) (st__n : S) (x__n : X),
+            Length inp__n < Length (App enc rest) ->
+            depth x__n < depth x ->
+            wf x__n ->
+            valid_state st__n x__n ->
+            forall rest__n,
+            S.recur_st ser_underlying depth st__n x__n = S.mkSuccess inp__n ->
+            P.recur_st par_underlying st__n (App inp__n rest__n) = Success x__n rest__n) ->
+         ser_underlying (S.recur_step_st ser_underlying depth x
+                           (fun st__n x__n _ => S.recur_st ser_underlying depth st__n x__n)) st x = S.mkSuccess enc ->
+         par_underlying (P.recur_step_st par_underlying (App enc rest)
+                           (fun st__n inp__n _ => P.recur_st par_underlying st__n inp__n)) st (App enc rest) =
+         Success x rest) ->
+      valid_state st x ->
+      ParseOk' (P.RecursiveState par_underlying st)
+        (S.RecursiveState ser_underlying depth st) x.
+    Proof using Type.
+      unfold ParseOk, ParseOk', ParseOk'', ParseOk''', P.RecursiveState, S.RecursiveState.
+      intros H_underlying_ok Hstate_valid enc rest Hwf Hser.
+      
+      (* The proof proceeds by well-founded induction on depth x *)
+      remember (depth x) as d eqn:Heq.
+      revert st x Hstate_valid enc rest Hwf Hser Heq.
+      induction d as [d IH] using lt_wf_ind.
+      intros st x Hstate enc rest Hwf Hser Heq.
+      
+      rewrite par_recur_st_unfold.
+      rewrite ser_recur_st_unfold in Hser.
+      
+      unfold P.recur_step_st in H_underlying_ok.
+      eapply H_underlying_ok; eauto.
+      
+      intros inp__n st__n r__n Hlen__n Hdepth__n Hwf__n Hstate__n rest__n Hser__n.
+      
+      eapply IH.
+      - subst d. exact Hdepth__n.
+      - exact Hstate__n.
+      - exact Hwf__n.
+      - exact Hser__n.
+      - reflexivity.
+    Qed.
   End Theorems.
 End Theorems.

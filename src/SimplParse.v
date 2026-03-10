@@ -5,21 +5,14 @@ From Perennial Require Import Helpers.Word.LittleEndian.
 From Perennial Require Import Helpers.Word.Automation.
 From Stdlib Require Import Structures.Equalities.
 
-From Pollux Require Import Input.
-From Pollux Require Import Result.
-From Pollux Require Import Parser.
-From Pollux Require Import Serializer.
-From Pollux Require Import Theorems.
+From Pollux.parse Require Import Input.
+From Pollux.parse Require Import Castor.
 
 Open Scope Z_scope.
 
 Module SimplParser.
-  Module R := Result(ByteInput).
-  Module P := Parsers(ByteInput).
-  Module S := Serializers(ByteInput).
-  Module T := Theorems(ByteInput).
-  Import ByteInput.
-  Import T.
+  Module C := Castor(ByteInput).
+  Import C.
 
   Section Desc.
 
@@ -77,13 +70,13 @@ Module SimplParser.
 
     Definition ParseByte : P.Parser byte :=
       fun inp => match inp with
-              | byt :: rest => P.R.Success byt rest
-              | [] => P.R.Failure P.R.Recoverable (P.R.mkData "No more data to parse" inp None)
+              | byt :: rest => Success byt rest
+              | [] => Failure Recoverable (mkData "No more data to parse" inp None)
               end.
 
     Definition ParseUnsigned : P.Parser Z := P.Map ParseByte word.unsigned.
 
-    Definition ParseNat : Parser nat := P.Map ParseByte (fun b => Z.to_nat $ word.unsigned b).
+    Definition ParseNat : P.Parser nat := P.Map ParseByte (fun b => Z.to_nat $ word.unsigned b).
 
     (* Parse n bytes into an unsigned integer *)
     Definition ParseZN (n : nat) := P.Map (P.RepN ParseUnsigned
@@ -94,30 +87,30 @@ Module SimplParser.
 
     Definition ParseZ32 := ParseZN 4%nat.
 
-    Definition ParseBool : Parser bool := P.Map ParseUnsigned (fun z => z >? 0).
+    Definition ParseBool : P.Parser bool := P.Map ParseUnsigned (fun z => z >? 0).
 
-    Definition ParseBaseDesc : Parser Val :=
+    Definition ParseBaseDesc : P.Parser Val :=
         P.Bind ParseUnsigned
           (fun z => match z with
                  | 0 => P.Map ParseZ32 (fun z => V_INT z)
                  | 1 => P.Map ParseBool (fun b => V_BOOL b)
-                 | _ => P.FailWith "Unknown field tag" P.R.Recoverable
+                 | _ => P.FailWith "Unknown field tag" Recoverable
                  end).
 
     Compute ParseBaseDesc [W8 1; W8 32; W8 0; W8 0; W8 0].
     Compute ParseBaseDesc [W8 0; W8 32; W8 0; W8 0; W8 0].
 
-    Definition ParseVal' (pd : Parser Val) : Parser Val :=
+    Definition ParseVal' (pd : P.Parser Val) : P.Parser Val :=
       P.Bind ParseUnsigned
         (fun z => 
            match z with
            | 0 => ParseBaseDesc
            | 1 => P.Map (P.Len ParseNat (P.Concat pd pd))
                    (fun vs => let (v1, v2) := vs in V_NEST v1 v2)
-           | _ => P.FailWith "Unknown tag" P.R.Recoverable
+           | _ => P.FailWith "Unknown tag" Recoverable
            end).
 
-    Definition ParseVal : Parser Val :=
+    Definition ParseVal : P.Parser Val :=
       P.Recursive ParseVal'.
 
     Definition to_enc (l : list Z) : list byte := map (fun n => W8 n) l.
@@ -193,11 +186,6 @@ Module SimplParser.
     Definition SerialNat : S.Serializer nat (fun n => (0 <= n < 256)%nat) :=
       fun n => SerialByte $ W8 (Z.of_nat n).
 
-    Definition mkSerializer {X : Type} (s : X -> S.Result) (wf : X -> Prop) : Serializer X wf := s.
-
-    Definition Restrict {X : Type} {wf : X -> Prop} (ser : Serializer X wf) (new : X -> Prop) :
-      S.Serializer X (fun x => new x /\ wf x) := ser.
-
     Fixpoint ValEncLen (v : Val) : nat :=
       match v with
       | V_BOOL _ => 3 (* Two header bytes, one payload byte *)
@@ -246,8 +234,8 @@ Module SimplParser.
 
     Definition enc_eq (v : Val) (e : Output) : bool :=
       match SerialVal v with
-      | S.R.Success _ enc => if decide (enc = e) then true else false
-      | S.R.Failure _ _ => false
+      | Success _ enc => if decide (enc = e) then true else false
+      | Failure _ _ => false
       end.
 
     Definition test_val1 := V_INT 32.

@@ -6,7 +6,7 @@ From Corelib.Program Require Import Basics Tactics.
 From Stdlib.Program Require Import Program.
 From Corelib Require Import Morphisms.
 
-Module Result (InputModule : AbstractInput).
+Module Type Result (InputModule : AbstractInput).
   Section Failure.
     Import InputModule.
 
