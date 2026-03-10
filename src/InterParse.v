@@ -173,7 +173,7 @@ Module InterParse.
                                   (2, V_INT 0)
                          ]).
 
-    Lemma test_valid1 : Valid desc1 val1.
+    Example test_valid1 : Valid desc1 val1.
     Proof.
       vm_compute. rewrite ?Logic.and_assoc.
       split; first trivial.
@@ -181,7 +181,9 @@ Module InterParse.
       exists 0; reflexivity.
     Qed.
 
-    Compute Init desc1.
+    Definition init1 := VALUE $ list_to_map [(1, V_MISSING); (2, V_MISSING)].
+    Example test_init1 : Init desc1 = init1.
+    Proof. vm_compute; reflexivity. Qed.
 
     Definition desc2 := DESC (list_to_map [
                                   (1, F_MSG desc1);
@@ -191,7 +193,7 @@ Module InterParse.
                                 (1, V_MSG val1);
                                 (2, V_BOOL false)
                          ]).
-    Lemma test_valid2 : Valid desc2 val2.
+    Example test_valid2 : Valid desc2 val2.
     Proof.
       vm_compute.
       rewrite ?Logic.and_assoc.
@@ -201,7 +203,9 @@ Module InterParse.
       apply test_valid1.
     Qed.
 
-    Compute Init desc2.
+    Definition init2 := VALUE $ list_to_map [(1, V_MSG init1); (2, V_MISSING)].
+    Example test_init2 : Init desc2 = init2.
+    Proof. vm_compute; reflexivity. Qed.
 
   End Desc.
 
@@ -677,13 +681,18 @@ Module InterParse.
     Definition dummy_msg_parser := fun _ : Desc => P.SucceedWith (VALUE $ gmap_empty).
 
     Definition fenc1 := to_enc [1; 0; 0; 0; 0].
-    Compute ParseVal dummy_msg_parser desc1 fenc1.
+    Example parse_val1 : ParseVal dummy_msg_parser desc1 fenc1 = Success (1, V_BOOL false) [].
+    Proof. vm_compute; reflexivity. Qed.
 
     Definition fenc2 := to_enc [2; 255; 255; 255; 0].
-    Compute ParseVal dummy_msg_parser desc1 fenc2.
+    Example parse_val2 : ParseVal dummy_msg_parser desc1 fenc2 = Success (2, V_INT 16777215) [].
+    Proof. vm_compute; reflexivity. Qed.
 
     Definition fenc3 := to_enc [1; 8; 0; 0; 0; 0; 0; 0; 0; 0].
-    Compute ParseVal dummy_msg_parser desc2 fenc3.
+    Example parse_val3 : ParseVal dummy_msg_parser desc2 fenc3 =
+                         Success (1, V_MSG (VALUE ∅)) $
+                           ToInput $ to_enc [0; 0; 0; 0; 0; 0; 0; 0].
+    Proof. vm_compute; reflexivity. Qed.
 
     Definition Merge (acc : Value) (new : Z * Val) : Value :=
       let (id, val) := new in
@@ -705,18 +714,19 @@ Module InterParse.
 
     Definition enc2 := to_enc [1; 10;
                                     1; 0; 0; 0; 0; 2; 0; 0; 0; 0;
-                               2; 0; 0; 0; 1].
+                               2; 0; 0; 0; 0].
     Definition enc2' := to_enc [1; 10;
                                     1; 0; 0; 0; 0; 2; 0; 0; 0; 0;
-                               2; 0; 0; 0; 1;
+                               2; 0; 0; 0; 0;
                                (* Extra field, which is dropped *)
                                3; 0; 0; 0; 0].
-    Compute ParseValue desc2 enc2.
-    Compute ParseValue desc2 enc2'.
-    Compute match ParseValue desc2 enc2, ParseValue desc2 enc2' with
-            | Success v2 _, Success v2' _ => Eqb v2 v2'
-            | _, _ => false
-            end.
+
+    Example parse_value1 : ParseValue desc2 enc2 = Success val2 [].
+    Proof. vm_compute; reflexivity. Qed.
+    Example parse_value2 : ParseValue desc2 enc2' = Success val2 [].
+    Proof. vm_compute; reflexivity. Qed.
+    Example parse_value3 : ParseValue desc2 enc2' = ParseValue desc2 enc2.
+    Proof. vm_compute; reflexivity. Qed.
 
     Definition desc3 := DESC (list_to_map [
                                   (1, F_INT);
@@ -748,7 +758,9 @@ Module InterParse.
                                 2; 0; 0; 0; 1
                          ].
     Definition result3 := fst $ (Extract (ParseValue desc3 enc3) I).
-    Compute Eqb result3 val3.
+    Example parse_value4 : result3 = val3.
+    Proof. vm_compute; reflexivity. Qed.
+
     Definition val3' := VALUE (list_to_map [
                                   (1, V_INT 16777215);
                                   (2, V_MISSING);
@@ -771,7 +783,8 @@ Module InterParse.
                                 2; 0; 0; 0; 1
                          ].
     Definition result3' := fst $ (Extract (ParseValue desc3 enc3') I).
-    Compute Eqb result3' val3'.
+    Example parse_value5 : result3' = val3'.
+    Proof. vm_compute; reflexivity. Qed.
   End Parse.
 
   Section Serial.
@@ -826,9 +839,12 @@ Module InterParse.
     Definition ValueDepth_eq := mk_eq ValueDepth.
     Definition ValueDepthFold_eq := mk_eq ValueDepthFold.
 
-    Compute ValueDepth val1. 
-    Compute ValueDepth val2.
-    Compute ValueDepth val3.
+    Example depth1 : ValueDepth val1 = 0%nat. 
+    Proof. vm_compute; reflexivity. Qed.
+    Example depth2 : ValueDepth val2 = 1%nat.
+    Proof. vm_compute; reflexivity. Qed.
+    Example depth3 : ValueDepth val3 = 2%nat.
+    Proof. vm_compute; reflexivity. Qed.
 
     Fixpoint ValueEncLen (v : Value) : nat :=
       match v with
@@ -861,19 +877,15 @@ Module InterParse.
     Definition ValueEncLen'_eq := mk_eq ValueEncLen'.
     Definition ValueEncLen'Fold_eq := mk_eq ValueEncLen'Fold.
 
-    Compute ValueEncLen val1.
     Example Length1 : ValueEncLen val1 = length fenc3.
     Proof. reflexivity. Qed.
 
-    Compute ValueEncLen val2.
     Example Length2 : ValueEncLen val2 = length enc2.
     Proof. reflexivity. Qed.
 
-    Compute ValueEncLen val3.
     Example Length3 : ValueEncLen val3 = length enc3.
     Proof. reflexivity. Qed.
 
-    Compute ValueEncLen val3'.
     Example Length3' : ValueEncLen val3' = length enc3'.
     Proof. reflexivity. Qed.
 
@@ -985,35 +997,54 @@ Module InterParse.
       | Failure _ _ => false
       end.
 
-    Definition round_trip (d : Desc) (v : Value) : bool :=
+    Definition round_trip (d : Desc) (v : Value) : Prop :=
       match SerialValue d v with
       | Success _ enc => match ParseValue d enc with
-                        | Success v' _ => Eqb v v'
-                        | Failure _ _ => false
+                        | Success v' _ => v = v'
+                        | Failure _ _ => False
                         end
-      | Failure _ _ => false
+      | Failure _ _ => False
       end.
 
-    Definition check_multi_enc (d : Desc) (enc1 enc2 : Input) : bool :=
+    Definition check_multi_enc (d : Desc) (enc1 enc2 : Input) : Prop :=
       match ParseValue d enc1, ParseValue d enc2 with
-      | Success v1 _, Success v2 _ => Eqb v1 v2
-      | _, _ => false
+      | Success v1 _, Success v2 _ => v1 = v2
+      | _, _ => False
       end.
 
-    Compute SerialValue desc1 val1.
-    Compute round_trip desc1 val1.
-    Compute check_multi_enc desc1
+    Example serial_value1 : SerialValue desc1 val1 = S.mkSuccess $ to_enc [2; 0; 0; 0; 0; 1; 0; 0; 0; 0].
+    Proof. reflexivity. Qed.
+    Example serial_value_rt1 : round_trip desc1 val1.
+    Proof. vm_compute; reflexivity. Qed.
+    Example serial_value_me1 : check_multi_enc desc1
       (to_enc [1; 0; 0; 0; 0; 2; 0; 0; 0; 0])
       (to_enc [2; 0; 0; 0; 0; 1; 0; 0; 0; 0]).
+    Proof. vm_compute; reflexivity. Qed.
 
-    Compute SerialValue desc2 val2.
-    Compute round_trip desc2 val2.
+    Example serial_value2 : SerialValue desc2 val2 =
+                            S.mkSuccess $ to_enc
+                              [2; 0; 0; 0; 0; 1; 10; 2; 0; 0; 0; 0; 1; 0; 0 ; 0; 0].
+    Proof. vm_compute; reflexivity. Qed.
+    Example serial_value_rt2 : round_trip desc2 val2.
+    Proof. vm_compute; reflexivity. Qed.
 
-    Compute SerialValue desc3 val3.
-    Compute round_trip desc3 val3.
+    Example serial_value3 : SerialValue desc3 val3 =
+                            S.mkSuccess $ to_enc
+                              [3; 10; 2; 84; 14; 0; 0; 1; 1; 0; 0; 0; 4;
+                               17; 2; 1; 0; 0; 0; 1; 10; 2; 0; 0; 0; 0;
+                               1; 0; 0; 0; 0; 2; 0; 0; 0; 0; 1; 255; 255; 255; 0].
+    Proof. vm_compute; reflexivity. Qed.
+    Example serial_value_rt3 : round_trip desc3 val3.
+    Proof. vm_compute; reflexivity. Qed.
 
-    Compute SerialValue desc3 val3'.
-    Compute round_trip desc3 val3'.
+    Example serial_value4 : SerialValue desc3 val3' =
+                            S.mkSuccess $ to_enc
+                              [3; 5; 1; 1; 0; 0; 0; 4; 17; 2; 1; 0; 0; 0;
+                               1; 10; 2; 0; 0; 0; 0; 1; 0; 0; 0; 0; 1;
+                               255; 255; 255; 0].
+    Proof. vm_compute; reflexivity. Qed.
+    Example serial_value_rt4 : round_trip desc3 val3'.
+    Proof. vm_compute; reflexivity. Qed.
     
     Example LengthOk1 :
       forall enc, SerialValue desc1 val1 = S.mkSuccess enc -> ValueEncLen val1 = Length enc.
