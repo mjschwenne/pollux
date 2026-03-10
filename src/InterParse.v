@@ -5,11 +5,8 @@ From Perennial Require Import Helpers.Word.LittleEndian.
 From Perennial Require Import Helpers.Word.Automation.
 From Stdlib Require Import Structures.Equalities.
 
-From Pollux Require Import Input.
-From Pollux Require Import Result.
-From Pollux Require Import Parser.
-From Pollux Require Import Serializer.
-From Pollux Require Import Theorems.
+From Pollux.parse Require Import Input.
+From Pollux.parse Require Import TheoremsRel.
 
 Require Import Stdlib.Arith.Wf_nat.
 Require Import Stdlib.Program.Wf.
@@ -19,12 +16,9 @@ From Stdlib.Program Require Import Program.
 Open Scope Z_scope.
 
 Module InterParse.
-  Module R := Result(ByteInput).
-  Module P := Parsers(ByteInput).
-  Module S := Serializers(ByteInput).
-  Module T := Theorems(ByteInput).
+  Module TR := TheoremsRel(ByteInput).
+  Import TR.
   Import ByteInput.
-  Import T.
 
   (*** Intermediate Complexity Format *)
 
@@ -656,7 +650,7 @@ Module InterParse.
 
     Definition ParseUnsigned : P.Parser Z := P.Map ParseByte word.unsigned.
 
-    Definition ParseNat : Parser nat := P.Map ParseByte (fun b => Z.to_nat $ word.unsigned b).
+    Definition ParseNat : P.Parser nat := P.Map ParseByte (fun b => Z.to_nat $ word.unsigned b).
 
     (* Parse n bytes into an unsigned integer *)
     Definition ParseZN (n : nat) := P.Map (P.RepN ParseUnsigned
@@ -667,9 +661,9 @@ Module InterParse.
 
     Definition ParseZ32 := ParseZN 4%nat.
 
-    Definition ParseBool : Parser bool := P.Map ParseZ32 (fun z => z >? 0).
+    Definition ParseBool : P.Parser bool := P.Map ParseZ32 (fun z => z >? 0).
 
-    Definition ParseVal (parse__msg : Desc -> Parser Value) (d : Desc) : Parser (Z * Val) :=
+    Definition ParseVal (parse__msg : Desc -> P.Parser Value) (d : Desc) : P.Parser (Z * Val) :=
       P.Bind ParseUnsigned
         (fun z =>
            match (Fields d) !! z with
@@ -704,10 +698,10 @@ Module InterParse.
       foldl Merge (Init d) vs.
 
     (* TODO: Rewrite to use list_to_map after filtering. Still won't add defaults... *)
-    Definition ParseValue' (self : Desc -> P.Parser Value) (d : Desc) : Parser Value :=
+    Definition ParseValue' (self : Desc -> P.Parser Value) (d : Desc) : P.Parser Value :=
       P.Map (P.Rep (ParseVal self d)) (fun vs => list_to_value d vs).
 
-    Definition ParseValue (d : Desc) : Parser Value :=
+    Definition ParseValue (d : Desc) : P.Parser Value :=
       P.RecursiveState ParseValue' d.
 
     Definition enc2 := to_enc [1; 10;
@@ -922,7 +916,7 @@ Module InterParse.
       Val_wf_fold (Fields d) key val True.
 
     Definition SerialVal (serial__msg : forall d : Desc, S.Serializer Value $ Value_wf d) (d : Desc) :
-      Serializer (Z * Val) (Val_wf d) := 
+      S.Serializer (Z * Val) (Val_wf d) := 
       fun val => let (id, v) := val in
               match (Fields d) !! id with
               | Some F_BOOL => match v with
@@ -979,11 +973,11 @@ Module InterParse.
     Definition SerialValueList_wf (d : Desc) (vs : list (Z * Val)) : Prop :=
       Forall (WillEncode d) vs.
 
-    Definition SerialValue' (self : forall d : Desc, Serializer Value $ Value_wf d) (d : Desc) :
-      Serializer Value $ Value_wf d :=
+    Definition SerialValue' (self : forall d : Desc, S.Serializer Value $ Value_wf d) (d : Desc) :
+      S.Serializer Value $ Value_wf d :=
       S.Map (S.Rep (SerialVal self d : S.Serializer _ (WillEncode d))) (ValList d).
 
-    Definition SerialValue (d : Desc) : Serializer Value $ Value_wf d :=
+    Definition SerialValue (d : Desc) : S.Serializer Value $ Value_wf d :=
       S.RecursiveState SerialValue' ValueDepth d.
 
     Definition enc_eq (d : Desc) (v : Value) (e : Input) : bool :=
@@ -1867,14 +1861,14 @@ Module InterParse.
     Proof. destruct d. reflexivity. Qed.
     Hint Rewrite Desc_lookup_unfold Desc_insert_unfold : desc_unfold.
 
-    Inductive Compatible : Desc -> Value -> Desc -> Value -> Prop :=
+    Inductive Compatible : Desc -> Desc -> Value -> Value -> Prop :=
     | CompatRefl (d1 d2 : Desc) (v : Value) :
-      ⟨ v ∷ d1 ⟩ -> ⟨ v ∷ d2 ⟩ -> Compatible d1 v d2 v
+      ⟨ v ∷ d1 ⟩ -> ⟨ v ∷ d2 ⟩ -> Compatible d1 d2 v v
     | CompatAdd (d1 : Desc) (v1 : Value) (d2 : Desc) (v2 : Value) (k : Z)
         (f1 f2 : Field) (v'1 v'2 : Val) :
       (* Current descriptors describe the current values *)
       ⟨ v1 ∷ d1 ⟩ -> ⟨ v2 ∷ d2 ⟩ ->
-      Compatible d1 v1 d2 v2 ->
+      Compatible d1 d2 v1 v2 ->
       (* New key is actually new *)
       v1 !! k = None ->
       v2 !! k = None ->
@@ -1882,10 +1876,10 @@ Module InterParse.
       d2 !! k = None ->
       (* New values align *)
       v'1 = v'2 -> f1 = f2 ->
-      Compatible (<[k := f1]> d1) (<[k := v'1]> v1)
-        (<[k := f2]> d2) (<[k := v'2]> v2).
+      Compatible (<[k := f1]> d1) (<[k := f2]> d2)
+        (<[k := v'1]> v1) (<[k := v'2]> v2).
     
-    Notation "'⟨' v1 '∷' d1 '⟩' '≼' '⟨' v2 '∷' d2 '⟩'" := (Compatible d1 v1 d2 v2) (at level 70).
+    Notation "'⟨' v1 '∷' d1 '⟩' '≼' '⟨' v2 '∷' d2 '⟩'" := (Compatible d1 d2 v1 v2) (at level 70).
 
     Definition SC_D_Inv_Value_P (v : Value) :=
       forall d1 d2,
@@ -1969,10 +1963,7 @@ Module InterParse.
     Qed.
 
     Definition ParseOk_Value_P (v : Value) :=
-      forall d enc rest,
-      Value_wf d v -> ⟨ v ∷ d ⟩ ->
-      SerialValue d v = S.mkSuccess enc ->
-      exists v', ParseValue d (enc ++ rest) = P.R.Success v' rest /\ ⟨ v ∷ d ⟩ ≼ ⟨ v' ∷ d ⟩.
+      forall d, ⟨ v ∷ d ⟩ -> TR.ParseOkCompat' Compatible ParseValue SerialValue d d.
 
     Definition ParseOk_Val_P (v : Val) :=
       forall d k enc,

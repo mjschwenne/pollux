@@ -18,21 +18,19 @@ Module Theorems (InputModule : AbstractInput).
     Context `{EqDecision Input}.
 
   Definition Output := Input.
-  Definition Parser (X : Type) := P.Parser X.
-  Definition Serializer (X : Type) (wf : X -> Prop) := S.Serializer X wf.
 
   Definition ParseOk''' {X : Type} {wf : X -> Prop}
-    (par : Parser X) (ser : Serializer X wf) (x : X) (enc rest : Input) :=
+    (par : P.Parser X) (ser : S.Serializer X wf) (x : X) (enc rest : Input) :=
     wf x -> ser x = S.mkSuccess enc -> par (App enc rest) = P.R.Success x rest.
 
   Definition ParseOk'' {X : Type} {wf : X -> Prop}
-    (par : Parser X) (ser : Serializer X wf) (x : X) (enc : Input) :=
+    (par : P.Parser X) (ser : S.Serializer X wf) (x : X) (enc : Input) :=
     forall (rest : Input), ParseOk''' par ser x enc rest.
 
-  Definition ParseOk' {X : Type} {wf : X -> Prop} (par : Parser X) (ser : Serializer X wf) (x : X) :=
+  Definition ParseOk' {X : Type} {wf : X -> Prop} (par : P.Parser X) (ser : S.Serializer X wf) (x : X) :=
     forall (enc : Input), ParseOk'' par ser x enc.
 
-  Definition ParseOk {X : Type} {wf : X -> Prop} (par : Parser X) (ser : Serializer X wf) :=
+  Definition ParseOk {X : Type} {wf : X -> Prop} (par : P.Parser X) (ser : S.Serializer X wf) :=
     forall (x : X), ParseOk' par ser x.
 
   Lemma SucceedCorrect {X : Type} (x : X) :
@@ -60,8 +58,8 @@ Module Theorems (InputModule : AbstractInput).
   Qed.
 
   Lemma BindCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-    (lp : Parser L) (ls : R -> S.Serializer L wfl)
-    (rp : L -> Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
+    (lp : P.Parser L) (ls : R -> S.Serializer L wfl)
+    (rp : L -> P.Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
     forall r, ParseOk lp (ls r) -> ParseOk (rp (tag r)) rs ->
          ParseOk' (P.Bind lp rp) (S.Bind tag ls rs) r.
   Proof using Type.
@@ -81,16 +79,16 @@ Module Theorems (InputModule : AbstractInput).
   Qed.
 
   Definition BindSucceedsRightOk {R L : Type} {wfr : R -> Prop}
-    (rp : L -> Input -> Parser R) (rs : Serializer R wfr) (tag : R -> L) : Prop := 
+    (rp : L -> Input -> P.Parser R) (rs : S.Serializer R wfr) (tag : R -> L) : Prop := 
     forall (r : R) (r_enc rest : Input), ParseOk''' (rp (tag r) (App r_enc rest)) rs r r_enc rest.
 
   Definition BindSucceedsLeftOk {R L : Type} {wfl : L -> Prop}
-    (lp : Parser L) (ls : R -> Output -> Serializer L wfl) (tag : R -> L) : Prop :=
+    (lp : P.Parser L) (ls : R -> Output -> S.Serializer L wfl) (tag : R -> L) : Prop :=
     forall (r : R) (l_enc r_enc rest : Input), ParseOk''' lp (ls r r_enc) (tag r) l_enc (App r_enc rest).
 
   Lemma BindSucceedsCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-    (lp : Parser L) (ls : R -> Output -> S.Serializer L wfl)
-    (rp : L -> Input -> Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
+    (lp : P.Parser L) (ls : R -> Output -> S.Serializer L wfl)
+    (rp : L -> Input -> P.Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
     BindSucceedsRightOk rp rs tag -> BindSucceedsLeftOk lp ls tag ->
     ParseOk (P.BindSucceeds lp rp) (S.BindSucceeds tag ls rs).
   Proof using Type.
@@ -114,20 +112,20 @@ Module Theorems (InputModule : AbstractInput).
   Qed.
 
   Definition BindResultLeftOk {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-    (lp : Parser L) (ls : S.Result -> Output -> Serializer L wfl)
-    (rs : Serializer R wfr) (tag : R -> L): Prop :=
+    (lp : P.Parser L) (ls : S.Result -> Output -> S.Serializer L wfl)
+    (rs : S.Serializer R wfr) (tag : R -> L): Prop :=
     forall (r : R), ParseOk' lp (ls (rs r) (S.Out $ rs r)) (tag r).
 
   Definition BindResultRightOk {L R : Type} {wfr : R -> Prop}
-    (rp : P.R.Result L -> Input -> Parser R) (rs : Serializer R wfr)
-    (lp : Parser L) (tag : R -> L) : Prop :=
+    (rp : P.R.Result L -> Input -> P.Parser R) (rs : S.Serializer R wfr)
+    (lp : P.Parser L) (tag : R -> L) : Prop :=
     forall (r : R) (l_enc r_enc rest: Input),
     let enc := (App (App l_enc r_enc) rest) in
     ParseOk''' (rp (lp enc) enc) rs r r_enc rest.
 
   Lemma BindResultCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-    (lp : Parser L) (ls : S.Result -> Output -> S.Serializer L wfl)
-    (rp : P.R.Result L -> Input -> Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
+    (lp : P.Parser L) (ls : S.Result -> Output -> S.Serializer L wfl)
+    (rp : P.R.Result L -> Input -> P.Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
     BindResultLeftOk lp ls rs tag -> BindResultRightOk rp rs lp tag ->
     ParseOk (P.BindResult lp rp) (S.BindResult tag ls rs).
   Proof using Type.
@@ -173,8 +171,8 @@ Module Theorems (InputModule : AbstractInput).
   Qed.
 
   Theorem ConcatCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-    (lp : Parser L) (ls : S.Serializer L wfl)
-    (rp : Parser R) (rs : S.Serializer R wfr) :
+    (lp : P.Parser L) (ls : S.Serializer L wfl)
+    (rp : P.Parser R) (rs : S.Serializer R wfr) :
     ParseOk lp ls -> ParseOk rp rs -> ParseOk (P.Concat lp rp) (S.Concat ls rs).
   Proof using Type.
     intros Hleft_ok Hright_ok.
@@ -209,8 +207,8 @@ Module Theorems (InputModule : AbstractInput).
   Qed.
 
   Lemma BindCorrect' {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
-    (lp : Parser L) (ls : S.Serializer L wfl)
-    (rp : L -> Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
+    (lp : P.Parser L) (ls : S.Serializer L wfl)
+    (rp : L -> P.Parser R) (rs : S.Serializer R wfr) (tag : R -> L) :
     forall r, ParseOk lp ls -> ParseOk' (rp (tag r)) rs r -> ParseOk' (P.Bind lp rp) (S.Bind' tag ls rs) r.
   Proof using Type.
     intros r Hleft_ok Hright_ok enc rest [wfl_ok wfr_ok] Hbind.
@@ -228,15 +226,15 @@ Module Theorems (InputModule : AbstractInput).
   Qed.
 
   (* Relax the rest requirement, since the Limit parser will ensure rest = [] *)
-  Definition LimitParseOk {X : Type} {wf : X -> Prop} (ser : Serializer X wf) (par : Parser X) := 
+  Definition LimitParseOk {X : Type} {wf : X -> Prop} (ser : S.Serializer X wf) (par : P.Parser X) := 
     forall x enc,
     wf x -> ser x = S.mkSuccess enc -> par enc = P.R.Success x Input_default.
 
-  Definition LenOk {X : Type} {wf : X -> Prop} (ser : Serializer X wf) (len : X -> nat) (x : X) :=
+  Definition LenOk {X : Type} {wf : X -> Prop} (ser : S.Serializer X wf) (len : X -> nat) (x : X) :=
     forall enc, ser x = S.mkSuccess enc -> len x = Length enc.
 
   Lemma LimitCorrect {X : Type} {wf : X -> Prop} (len : X -> nat)
-    (underlying__ser : S.Serializer X wf) (underlying__par : Parser X) (x : X) :
+    (underlying__ser : S.Serializer X wf) (underlying__par : P.Parser X) (x : X) :
     LimitParseOk underlying__ser underlying__par ->
     LenOk underlying__ser len x ->
     ParseOk' (P.Limit underlying__par (len x)) (S.Limit underlying__ser len) x.
@@ -255,8 +253,8 @@ Module Theorems (InputModule : AbstractInput).
   Qed.
 
   Lemma LenCorrect {X : Type} {wfx : X -> Prop} {wfn : nat -> Prop}
-    (ser__len : S.Serializer nat wfn) (par__len : Parser nat) (len : X -> nat)
-    (ser__x : S.Serializer X wfx) (par__x : Parser X) (x : X) :
+    (ser__len : S.Serializer nat wfn) (par__len : P.Parser nat) (len : X -> nat)
+    (ser__x : S.Serializer X wfx) (par__x : P.Parser X) (x : X) :
     ParseOk par__len ser__len ->
     LimitParseOk ser__x par__x ->
     LenOk ser__x len x ->
@@ -268,12 +266,12 @@ Module Theorems (InputModule : AbstractInput).
     apply LimitCorrect; assumption.
   Qed.
 
-  Definition LimitParseOkWeak {X : Type} {wf : X -> Prop} (ser : Serializer X wf) (par : Parser X) (x : X) := 
+  Definition LimitParseOkWeak {X : Type} {wf : X -> Prop} (ser : S.Serializer X wf) (par : P.Parser X) (x : X) := 
     forall enc, wf x -> ser x = S.mkSuccess enc -> par enc = P.R.Success x Input_default.
 
   Lemma LenCorrect'Weakened {X : Type} {wfx : X -> Prop} {wfn : nat -> Prop}
-    (ser__len : S.Serializer nat wfn) (par__len : Parser nat)
-    (ser__x : S.Serializer X wfx) (par__x : Parser X) (x : X) :
+    (ser__len : S.Serializer nat wfn) (par__len : P.Parser nat)
+    (ser__x : S.Serializer X wfx) (par__x : P.Parser X) (x : X) :
     ParseOk par__len ser__len ->
     LimitParseOkWeak ser__x par__x x ->
     ParseOk' (P.Len par__len par__x) (S.Len' ser__len ser__x) x.
@@ -298,8 +296,8 @@ Module Theorems (InputModule : AbstractInput).
   Qed.
   
   Lemma LenCorrect' {X : Type} {wfx : X -> Prop} {wfn : nat -> Prop}
-    (ser__len : S.Serializer nat wfn) (par__len : Parser nat)
-    (ser__x : S.Serializer X wfx) (par__x : Parser X) :
+    (ser__len : S.Serializer nat wfn) (par__len : P.Parser nat)
+    (ser__x : S.Serializer X wfx) (par__x : P.Parser X) :
     ParseOk par__len ser__len ->
     LimitParseOk ser__x par__x ->
     ParseOk (P.Len par__len par__x) (S.Len' ser__len ser__x).
@@ -343,7 +341,7 @@ Module Theorems (InputModule : AbstractInput).
       rewrite Hx, Hn, Henc. reflexivity.
   Qed.
 
-  Lemma par_rep'_unfold {X : Type} (underlying : Parser X) (inp : Input) :
+  Lemma par_rep'_unfold {X : Type} (underlying : P.Parser X) (inp : Input) :
     P.rep' underlying inp =
         match underlying inp with
         | P.R.Success x rem => if decide (Length rem < Length inp) then
@@ -369,7 +367,7 @@ Module Theorems (InputModule : AbstractInput).
       destruct data; reflexivity.
   Qed.
 
-  Lemma par_rep_fold'_unfold {A B : Type} (underlying : Parser B) (combine : A -> B -> A)
+  Lemma par_rep_fold'_unfold {A B : Type} (underlying : P.Parser B) (combine : A -> B -> A)
     (acc : A) (inp : Input) :
     P.rep_fold' underlying combine acc inp =
       match underlying inp with
@@ -628,7 +626,7 @@ Module Theorems (InputModule : AbstractInput).
           subst. done.
   Qed.
 
-  Lemma RepCorrect {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) (par__x : Parser X) :
+  Lemma RepCorrect {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) (par__x : P.Parser X) :
     (* TODO: Split this into a typeclass. Make one for consuming parsers too. *)
     (exists msg, par__x Input_default = P.R.Failure P.R.Recoverable $ P.R.mkData msg Input_default None) ->
     (forall x enc, ser__x x = S.mkSuccess enc -> Length enc > 0) ->
@@ -658,7 +656,7 @@ Module Theorems (InputModule : AbstractInput).
       rewrite IHys. reflexivity.
   Qed.
 
-  Lemma par_recur_unfold {X : Type} (underlying : Parser X -> Parser X) (inp : Input) :
+  Lemma par_recur_unfold {X : Type} (underlying : P.Parser X -> P.Parser X) (inp : Input) :
     P.recur underlying inp =
     underlying (fun rem => match decide (Length rem < Length inp) with
                         | left _ => P.recur underlying rem
@@ -684,7 +682,7 @@ Module Theorems (InputModule : AbstractInput).
   Qed.
 
   Theorem RecursiveCorrect {X : Type} {wf : X -> Prop}
-    (par_underlying : Parser X -> Parser X)
+    (par_underlying : P.Parser X -> P.Parser X)
     (ser_underlying : S.Serializer X wf -> S.Serializer X wf)
     (depth : X -> nat) :
     (forall (x : X) (enc rest : Input),
@@ -729,7 +727,7 @@ Module Theorems (InputModule : AbstractInput).
   Qed.
 
   Lemma par_recur_st_unfold {X S : Type}
-    (underlying : (S -> Parser X) -> (S -> Parser X))
+    (underlying : (S -> P.Parser X) -> (S -> P.Parser X))
     (st : S)
     (inp : Input) :
     P.recur_st underlying st inp =
@@ -745,7 +743,7 @@ Module Theorems (InputModule : AbstractInput).
   Qed.
 
   Lemma ser_recur_st_unfold {X S : Type} {wfx : S -> X -> Prop}
-    (underlying : (forall s : S, Serializer X $ wfx s) -> forall s : S, Serializer X $ wfx s)
+    (underlying : (forall s : S, S.Serializer X $ wfx s) -> forall s : S, S.Serializer X $ wfx s)
     (depth : X -> nat) (st : S) (x : X) :
     @S.recur_st _ _ wfx underlying depth st x =
     underlying (fun st__n x__n => if decide (depth x__n < depth x) then
@@ -760,7 +758,7 @@ Module Theorems (InputModule : AbstractInput).
   Qed.
 
   Theorem RecursiveStateCorrect {X S : Type} {wf : X -> Prop}
-    (par_underlying : (S -> Parser X) -> S -> Parser X)
+    (par_underlying : (S -> P.Parser X) -> S -> P.Parser X)
     (ser_underlying : (S -> S.Serializer X wf) -> S -> S.Serializer X wf)
     (valid_state : S -> X -> Prop)
     (depth : X -> nat)
