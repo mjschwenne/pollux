@@ -1953,19 +1953,42 @@ Module InterParse.
       Val_wf d (k, v) ->
       SerialVal SerialValue d (k, v) = S.mkSuccess enc.
 
+    Lemma SC_filter : forall vs d, ⟨ VALUE vs ∷ d ⟩ -> ValList d (VALUE vs) = map_to_list vs.
+    Proof.
+      intros vs.
+      unfold ValList, Vals.
+      intros d Hsc.
+      inversion Hsc as [| ? ? ? ? vs' Htype Hnest Hd_none Hv_none Hsc__n]; subst.
+      - rewrite map_to_list_empty, filter_nil. reflexivity.
+      -
+    Admitted.
+      (* induction vs using map_first_key_ind. *)
+      (* - intros d Hsc. rewrite map_to_list_empty, filter_nil. *)
+      (*   reflexivity. *)
+      (* - intros [ds] Hsc. rewrite map_to_list_insert_first_key by assumption. *)
+      (*   assert (ValList_filter_p (DESC ds) (i, x)). *)
+      (*   + unfold ValList_filter_p, Fields; simpl. *)
+      (*     apply SC_implies_val_in_desc with (k := i) (val := x) in Hsc as Hvd . *)
+      (*     * destruct Hvd as [f Hvd]; simpl in Hvd. *)
+      (*       rewrite Hvd. *)
+      (*       apply SC_implies_no_missing with (k := i) in Hsc as Hm; simpl in Hm. *)
+      (*       rewrite lookup_insert_eq in Hm. *)
+      (*       destruct x; (trivial || contradiction). *)
+      (*     * simpl. rewrite lookup_insert_eq by assumption. reflexivity. *)
+      (*   + rewrite filter_cons_True by assumption. f_equal. *)
+      (*     apply IHvs. *)
+
+
     Theorem InterParseOk : forall v, ParseOk_Value_P v.
     Proof.
-      induction v as [vs IHv | v__n | b | x |] using Value_ind' with
-        (P_Value := ParseOk_Value_P)
-        (P_Val := ParseOk_Val_P).
-      - (* Prove the main statement about Values, using nested induction. *)
-        revert IHv. induction vs as [| k v m Hno Hfst ] using map_first_key_ind.
-        + intros _ d Hsc enc rest Hvalid Hser. vm_compute in Hser.
-          invc Hser. exists (VALUE ∅).
-          split.
-          * admit.
-          * constructor; assumption.
-        + 
+      intros v d Hsc.
+      apply RecursiveStateCompatCorrect with (valid_state := fun d v => ⟨ v ∷ d ⟩); last assumption.
+      intros st1 st2 x enc rest Hwf__x Hsc__x IH.
+      (* Since this relation is designed for equality, it's OK to use exists x'. *)
+      unfold SerialValue', ParseValue', S.Map.
+      intros Hser. exists x.
+      (* TODO: Prove ⟨ VALUE xs ∷ st__1 ⟩ -> ValList st__1 (VALUE xs) = map_to_list xs *)
+      destruct x as [xs] eqn:Hx.
     Abort.
 
   End Theorems.
