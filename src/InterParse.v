@@ -1773,6 +1773,17 @@ Module InterParse.
       apply Hm; assumption.
     Qed.
 
+    Lemma list_filter_iff_local:
+      ∀ {A : Type} (P1 P2 : A → Prop) {H : ∀ x : A, Decision (P1 x)} {H0 : ∀ x : A, Decision (P2 x)} (l : list A),
+        (∀ x : A, x ∈ l -> (P1 x ↔ P2 x)) → filter P1 l = filter P2 l.
+    Proof.
+      intros. rename H1 into HPdiff. induction l as [|a l IH]; [done|].
+      destruct (decide (P1 a)).
+      (* TODO: reduce HPdiff down to P1 x <-> P2 x *)
+      (* - rewrite !filter_cons_True by naive_solver. by rewrite IH. *)
+      (* - rewrite !filter_cons_False by naive_solver. by rewrite IH. *)
+    Abort.
+
     (** Property 4: Nested messages are correct *)
     Lemma SC_implies_nested_correct : forall d v,
       ⟨ v ∷ d ⟩ ->
@@ -1817,6 +1828,142 @@ Module InterParse.
       - apply SC_implies_desc_in_val. assumption.
       - apply SC_implies_no_missing with (d := d). assumption.
       - apply SC_implies_nested_correct. assumption.
+    Qed.
+
+    Lemma SC_delete_key : forall d v k, ⟨ v ∷ d ⟩ -> ⟨ VALUE (delete k (Vals v)) ∷ DESC (delete k (Fields d))⟩.
+    Proof.
+      intros d v k H.
+      induction H.
+      - simpl. rewrite !delete_empty. apply SC_empty.
+      - simpl. rewrite !delete_insert.
+        destruct (k == k0).
+        + apply IHSchemaCorrect.
+        + simpl in IHSchemaCorrect.
+          apply SC_insert_field; try assumption.
+          * rewrite lookup_delete_None. right; assumption.
+          * rewrite lookup_delete_None. right; assumption.
+    Qed.
+
+    Lemma SC_dom_eq : forall ds vs, ⟨ VALUE vs ∷ DESC ds ⟩ -> dom vs ≡ dom ds.
+    Proof.
+      intros ds vs Hsc.
+      rewrite set_equiv.
+      intros k. split.
+      - intros Hdom.
+        rewrite elem_of_dom in Hdom.
+        destruct Hdom as [v Hv].
+        apply SC_implies_val_in_desc with (k := k) (val := v) in Hsc as Hvd; last done.
+        destruct Hvd as [f Hf]; simpl in Hf.
+        rewrite elem_of_dom. exists f. exact Hf.
+      - intro Hdom.
+        rewrite elem_of_dom in Hdom.
+        destruct Hdom as [f Hf].
+        apply SC_implies_desc_in_val with (k := k) (f := f) in Hsc as Hdv; last done.
+        destruct Hdv as [v Hv]; simpl in Hv.
+        rewrite elem_of_dom. exists v. exact Hv.
+    Qed.
+
+    Inductive SchemaCorrectOrdered : Desc -> Value -> Prop :=
+    | SCO_Empty :
+      SchemaCorrectOrdered (DESC ∅) (VALUE ∅)
+
+    | SCO_Insert : forall k f v ds vs,
+      field_val_type_match f v ->
+      (forall d' v', f = F_MSG d' -> v = V_MSG v' -> SchemaCorrectOrdered d' v') ->
+
+      (* Key is fresh *)
+      ds !! k = None ->
+      vs !! k = None ->
+
+      (* NEW: k is the first key in the result *)
+      map_first_key (<[k := f]> ds) k ->
+      map_first_key (<[k := v]> vs) k ->
+
+      (* Recursive correctness *)
+      SchemaCorrectOrdered (DESC ds) (VALUE vs) ->
+
+      SchemaCorrectOrdered (DESC (<[k := f]> ds)) (VALUE (<[k := v]> vs)).
+
+    Notation "'⟪' v '∷' d '⟫'" := (SchemaCorrectOrdered d v) (at level 70).
+
+    (** Insert field lemma - direct by constructor *)
+    Lemma SCO_insert_field : forall k f v ds vs,
+      field_val_type_match f v ->
+      (forall d' v', f = F_MSG d' -> v = V_MSG v' -> ⟪ v' ∷ d' ⟫) ->
+      ds !! k = None ->
+      vs !! k = None ->
+      map_first_key (<[k := f]> ds) k ->
+      map_first_key (<[k := v]> vs) k ->
+      ⟪ (VALUE vs) ∷ (DESC ds) ⟫ ->
+      ⟪ (VALUE (<[k := v]> vs)) ∷ (DESC (<[k := f]> ds)) ⟫.
+    Proof.
+      intros. apply SCO_Insert; assumption.
+    Qed.
+
+    (** Empty case lemma *)
+    Lemma SCO_empty : ⟪ (VALUE ∅) ∷ (DESC ∅) ⟫.
+    Proof.
+      constructor.
+    Qed.
+
+    Definition SC_SCO_Value_P (v : Value) :=
+      forall d,
+      ⟨ v ∷ d ⟩ <-> ⟪ v ∷ d ⟫.
+
+    Definition SC_SCO_Val_P (v : Val) :=
+      forall d' v',
+      v = V_MSG v' -> ⟨ v' ∷ d' ⟩ <-> ⟪ v' ∷ d' ⟫.
+
+    Lemma SC_SCO : forall v, SC_SCO_Value_P v.
+    Proof.
+      intros v.
+      induction v as [vs IHv | v__n | b | x |] using Value_ind' with
+          (P_Value := SC_SCO_Value_P)
+          (P_Val := SC_SCO_Val_P).
+      - intros d.
+        split.
+        + revert d.
+          induction vs as [| k val vs' Hno_vs Hfst_vs] using map_first_key_ind.
+          * intros [ds] Hsc. destruct ds using map_first_key_ind.
+            -- constructor.
+            -- apply SC_implies_desc_in_val with (k := i) (f := x) in Hsc.
+               ++ destruct Hsc as [v Hcontra]; simpl in Hcontra.
+                  rewrite lookup_empty in Hcontra. discriminate.
+               ++ simpl; rewrite lookup_insert_eq. reflexivity.
+          * intros [ds] Hsc. apply SC_implies_val_in_desc_typed with (k := k) (val := val) in Hsc as Hvd.  
+            -- destruct Hvd as (f & Hvd & Hty); simpl in Hvd.
+               set (ds' := delete k ds). assert (ds = <[k := f]> ds') as Hds_eq.
+               { unfold ds'. symmetry. apply insert_delete_id. assumption. }
+               rewrite Hds_eq in *. clear Hds_eq.
+               apply SC_delete_key with (k := k) in Hsc as Hsc'; simpl in Hsc'.
+               apply delete_insert_id with (x := val) in Hno_vs as Hdel_vs.
+               rewrite Hdel_vs in Hsc'.
+               assert (ds' !! k = None) as Hno_ds.
+               { unfold ds'. apply lookup_delete_eq. }
+               apply delete_insert_id with (x := f) in Hno_ds as Hdel_ds.
+               rewrite Hdel_ds in Hsc'.
+               assert (map_first_key (<[k:=f]> ds') k) as Hfst_ds.
+               {
+                 pose proof (SC_dom_eq (<[k:=f]> ds') (<[k:=val]> vs') Hsc) as Hdom.
+                 rewrite map_first_key_dom with (m2 := <[k:=f]> ds') in Hfst_vs; assumption.
+               }
+               rewrite map_Forall_insert in IHv by assumption.
+               destruct IHv as [IHval IHv].
+               specialize (IHvs IHv _ Hsc'). apply SCO_insert_field; try assumption.
+               intros d' v' Hf Hval; subst.
+               apply SC_implies_nested_correct in Hsc as Hn; simpl in Hn.
+               rewrite map_Forall_insert in Hn by assumption.
+               destruct Hn as [Hcor Hn].
+               unfold NestedCorrect in Hcor; simpl in Hcor.
+               rewrite lookup_insert_eq in Hcor.
+               apply IHval in Hcor; last reflexivity.
+               exact Hcor.
+            -- simpl; rewrite lookup_insert_eq. reflexivity.
+        + intros Hsco. induction Hsco; (constructor; assumption).
+      - intros d' v' Heq. invc Heq. apply IHv__n.
+      - discriminate.
+      - discriminate.
+      - discriminate.
     Qed.
 
     (* Use this relation to relate the input value to serialization
@@ -1955,29 +2102,26 @@ Module InterParse.
 
     Lemma SC_filter : forall vs d, ⟨ VALUE vs ∷ d ⟩ -> ValList d (VALUE vs) = map_to_list vs.
     Proof.
-      intros vs.
+      intros vs'.
       unfold ValList, Vals.
-      intros d Hsc.
-      inversion Hsc as [| ? ? ? ? vs' Htype Hnest Hd_none Hv_none Hsc__n]; subst.
+      intros d Hsc. apply SC_SCO in Hsc.
+      dependent induction Hsc.
       - rewrite map_to_list_empty, filter_nil. reflexivity.
-      -
+      - rename H into Hty,
+                 H0 into Hnest,
+                   H1 into HnestC,
+                     H2 into Hds_no,
+                       H3 into Hvs_no,
+                         H4 into Hds_fst,
+                           H5 into Hvs_fst.
+        rewrite map_to_list_insert_first_key by assumption.
+        rewrite filter_cons_True.
+        + f_equal. admit.
+        + unfold ValList_filter_p; simpl.
+          rewrite lookup_insert_eq.
+          destruct v; try trivial.
+          destruct f; unfold field_val_type_match in Hty; assumption.
     Admitted.
-      (* induction vs using map_first_key_ind. *)
-      (* - intros d Hsc. rewrite map_to_list_empty, filter_nil. *)
-      (*   reflexivity. *)
-      (* - intros [ds] Hsc. rewrite map_to_list_insert_first_key by assumption. *)
-      (*   assert (ValList_filter_p (DESC ds) (i, x)). *)
-      (*   + unfold ValList_filter_p, Fields; simpl. *)
-      (*     apply SC_implies_val_in_desc with (k := i) (val := x) in Hsc as Hvd . *)
-      (*     * destruct Hvd as [f Hvd]; simpl in Hvd. *)
-      (*       rewrite Hvd. *)
-      (*       apply SC_implies_no_missing with (k := i) in Hsc as Hm; simpl in Hm. *)
-      (*       rewrite lookup_insert_eq in Hm. *)
-      (*       destruct x; (trivial || contradiction). *)
-      (*     * simpl. rewrite lookup_insert_eq by assumption. reflexivity. *)
-      (*   + rewrite filter_cons_True by assumption. f_equal. *)
-      (*     apply IHvs. *)
-
 
     Theorem InterParseOk : forall v, ParseOk_Value_P v.
     Proof.

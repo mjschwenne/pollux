@@ -38,38 +38,6 @@ make vok
 make clean
 ```
 
-### Testing and Linting (Protobuf)
-
-Using `just` for protobuf-related tasks:
-
-```bash
-# Lint a specific proto version
-just buf-lint 5
-
-# Check breaking changes between versions
-just buf-breaking 5 4
-```
-
-### Go Implementation
-
-The `pollux-go` directory contains a Go reference implementation:
-
-```bash
-cd pollux-go
-go build ./...
-go test ./...
-```
-
-### OCaml Extracted Code
-
-The `ocaml` directory contains OCaml code extracted from the Rocq proofs:
-
-```bash
-cd ocaml
-dune build
-dune test
-```
-
 ## Architecture
 
 ### Rocq/Coq Proof Structure (`src/`)
@@ -90,7 +58,6 @@ The formal verification is organized into layers of abstraction:
 
 3. **Protocol Buffers Implementation**
    - `ProtoParse.v`: Main protobuf parser using the abstract parser framework, instantiated with `ByteInput`
-   - `Parse.v`: Earlier/alternative parsing implementation
    - `SimplParse.v`: Simplified parsing examples
    - `InterParse.v`: Intermediate parsing layer
 
