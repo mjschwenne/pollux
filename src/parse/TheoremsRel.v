@@ -33,7 +33,7 @@ Module Type TheoremsRel
   Import Results.
   Import Theorems.
 
-  Section TheoremsRel.
+  Section DefRel.
     Context `{EqDecision Input}.
 
     (** ** Type Aliases *)
@@ -52,13 +52,17 @@ Module Type TheoremsRel
     *)
 
     (** Most specific: includes all parameters *)
+    Definition ParseOkSimpleRel'''' {X : Type} {wf : X -> Prop}
+      (R : X -> X -> Prop)
+      (par : P.Parser X) (ser : S.Serializer X wf)
+      (x x' : X) (enc rest : Input) := 
+      wf x -> ser x = S.mkSuccess enc -> par (App enc rest) = Success x' rest /\ R x x'.
+    
     Definition ParseOkSimpleRel''' {X : Type} {wf : X -> Prop}
       (R : X -> X -> Prop)
       (par : P.Parser X) (ser : S.Serializer X wf)
       (x : X) (enc rest : Input) :=
-      wf x ->
-      ser x = S.mkSuccess enc ->
-      exists x', par (App enc rest) = Success x' rest /\ R x x'.
+      exists x', ParseOkSimpleRel'''' R par ser x x' enc rest.
 
     (** Abstract over rest *)
     Definition ParseOkSimpleRel'' {X : Type} {wf : X -> Prop}
@@ -100,14 +104,19 @@ Module Type TheoremsRel
     *)
 
     (** Most specific: includes all parameters *)
+    Definition ParseOkCompatSpecific {D X : Type} {wf : D -> X -> Prop}
+      (R : D -> D -> X -> X -> Prop)
+      (par : D -> P.Parser X)
+      (ser : forall d, S.Serializer X (wf d))
+      (d1 d2 : D) (x x' : X) (enc rest : Input) :=
+      wf d1 x -> ser d1 x = S.mkSuccess enc -> par d2 (App enc rest) = Success x' rest /\ R d1 d2 x x'.
+    
     Definition ParseOkCompat'''' {D X : Type} {wf : D -> X -> Prop}
       (R : D -> D -> X -> X -> Prop)
       (par : D -> P.Parser X)
       (ser : forall d, S.Serializer X (wf d))
       (d1 d2 : D) (x : X) (enc rest : Input) :=
-      wf d1 x ->
-      ser d1 x = S.mkSuccess enc ->
-      exists x', par d2 (App enc rest) = Success x' rest /\ R d1 d2 x x'.
+      wf d1 x -> ser d1 x = S.mkSuccess enc -> exists x', par d2 (App enc rest) = Success x' rest /\ R d1 d2 x x'.
 
     (** Abstract over rest *)
     Definition ParseOkCompat''' {D X : Type} {wf : D -> X -> Prop}
@@ -140,6 +149,27 @@ Module Type TheoremsRel
       (ser : forall d, S.Serializer X (wf d)) :=
       forall (d1 d2 : D), ParseOkCompat' R par ser d1 d2.
 
+  End DefRel.
+
+  Section TheoremsRel.
+    Context `{EqDecision Input}.
+
+    Theorem MapCompatCorrect {A B : Type} {wf : B -> Prop}
+      (R : A -> A -> Prop)
+      (ser : S.Serializer B wf) (to : A -> B)
+      (par : P.Parser B) (from : B -> A) :
+      forall x enc rest,
+      R x (from $ to x) ->
+      ParseOk par ser ->
+      ParseOkSimpleRel'''' R (P.Map par from) (S.Map ser to) x (from $ to x) enc rest.
+    Proof using Type.
+      intros x enc rest Hcompat Hunder Hwf.
+      unfold S.Map; intros Hser.
+      specialize (Hunder (to x) enc rest Hwf Hser).
+      unfold P.Map; rewrite Hunder.
+      split; done.
+    Qed.
+      
     (** ** RecursiveStateCompatCorrect: Correctness for Recursive State Parsers with Relations
 
         This theorem generalizes RecursiveStateCorrect from Theorems.v to handle
@@ -161,17 +191,19 @@ Module Type TheoremsRel
       (par_underlying : (S -> P.Parser X) -> S -> P.Parser X)
       (ser_underlying : (forall s : S, S.Serializer X (wf s)) -> forall s : S, S.Serializer X (wf s))
       (valid_state : S -> X -> Prop)
+      (linked_state : S -> S -> Prop)
       (depth : X -> nat)
       (st1 st2 : S)
       (x : X) :
       (forall (st1 st2 : S) (x : X) (enc rest : Input),
-         wf st1 x -> valid_state st1 x ->
+         wf st1 x -> valid_state st1 x -> linked_state st1 st2 ->
          (* Inductive hypothesis: recursive calls satisfy the relation *)
          (forall (inp__n : Input) (st1__n st2__n : S) (x__n : X),
             Length inp__n < Length (App enc rest) ->
             depth x__n < depth x ->
             wf st1__n x__n ->
             valid_state st1__n x__n ->
+            linked_state st1__n st2__n ->
             forall rest__n,
             @S.recur_st _ _ wf ser_underlying depth st1__n x__n = S.mkSuccess inp__n ->
             exists x'__n, P.recur_st par_underlying st2__n (App inp__n rest__n) = Success x'__n rest__n /\
@@ -185,6 +217,7 @@ Module Type TheoremsRel
                              (fun st__n inp__n _ => P.recur_st par_underlying st__n inp__n)) st2 (App enc rest) =
            Success x' rest /\ R st1 st2 x x') ->
       valid_state st1 x ->
+      linked_state st1 st2 ->
       @ParseOkCompat'' S X wf R
         (P.RecursiveState par_underlying)
         (S.RecursiveState ser_underlying depth)
@@ -192,13 +225,13 @@ Module Type TheoremsRel
     Proof using Type.
       unfold ParseOkCompat', ParseOkCompat'', ParseOkCompat''', ParseOkCompat'''',
                P.RecursiveState, S.RecursiveState.
-      intros H_underlying_ok Hstate_valid enc rest Hwf Hser.
+      intros H_underlying_ok Hstate_valid Hstate_linked enc rest Hwf Hser.
     
       (* The proof proceeds by well-founded induction on depth x *)
       remember (depth x) as d eqn:Heq.
-      revert st1 st2 x Hstate_valid enc rest Hwf Hser Heq.
+      revert st1 st2 x Hstate_valid Hstate_linked enc rest Hwf Hser Heq.
       induction d as [d IH] using lt_wf_ind.
-      intros st1 st2 x Hstate enc rest Hwf Hser Heq.
+      intros st1 st2 x Hstate_valid Hstate_linked enc rest Hwf Hser Heq.
       
       rewrite par_recur_st_unfold.
       rewrite ser_recur_st_unfold in Hser.
@@ -206,11 +239,12 @@ Module Type TheoremsRel
       unfold P.recur_step_st in H_underlying_ok.
       eapply H_underlying_ok; eauto.
       
-      intros inp__n st__n1 st__n2 r__n Hlen__n Hdepth__n Hwf__n Hstate__n rest__n Hser__n.
+      intros inp__n st__n1 st__n2 r__n Hlen__n Hdepth__n Hwf__n Hstate_valid__n Hstate_linked__n rest__n Hser__n.
       
       eapply IH.
       - subst d. exact Hdepth__n.
-      - exact Hstate__n.
+      - exact Hstate_valid__n.
+      - exact Hstate_linked__n.
       - exact Hwf__n.
       - exact Hser__n.
       - reflexivity.

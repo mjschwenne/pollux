@@ -2117,18 +2117,10 @@ Module InterParse.
         + subst k. rewrite Hin in Hnone. discriminate.
         + rewrite lookup_insert_ne by done. done.
     Qed.
-      
-    Definition ParseOk_Value_P (v : Value) :=
-      forall d, ⟨ v ∷ d ⟩ -> ParseOkCompat'' Compatible ParseValue SerialValue d d v.
 
-    Definition ParseOk_Val_P (v : Val) :=
-      forall d k enc,
-      Val_wf d (k, v) ->
-      SerialVal SerialValue d (k, v) = S.mkSuccess enc.
-
-    Lemma SC_filter : forall vs d, ⟨ VALUE vs ∷ d ⟩ -> ValList d (VALUE vs) = map_to_list vs.
+    Lemma SC_filter : forall v d, ⟨ v ∷ d ⟩ -> ValList d v = map_to_list (Vals v).
     Proof.
-      intros vs'.
+      intros [vs].
       unfold ValList, Vals.
       intros d Hsc. apply SC_SCO in Hsc.
       dependent induction Hsc.
@@ -2139,7 +2131,8 @@ Module InterParse.
                      H2 into Hds_no,
                        H3 into Hvs_no,
                          H4 into Hds_fst,
-                           H5 into Hvs_fst.
+                           H5 into Hvs_fst,
+                             vs0 into vs.
         rewrite map_to_list_insert_first_key by assumption.
         rewrite filter_cons_True.
         + f_equal. specialize (IHHsc vs eq_refl).
@@ -2153,16 +2146,44 @@ Module InterParse.
           destruct f; unfold field_val_type_match in Hty; assumption.
     Qed.
 
+    Lemma FullDescriptor_RoundTrip : forall v d, ⟨ v ∷ d ⟩ -> ⟨ v ∷ d ⟩ ≼ ⟨ list_to_value d (ValList d v) ∷ d ⟩.
+    Proof.
+    Admitted.
+
+    Definition ParseOk_Value_P (v : Value) :=
+      forall d, ⟨ v ∷ d ⟩ -> ParseOkCompat'' Compatible ParseValue SerialValue d d v.
+
+    Definition ParseOk_Val_P (v : Val) :=
+      forall d k enc,
+      Val_wf d (k, v) ->
+      SerialVal SerialValue d (k, v) = S.mkSuccess enc.
+
     Theorem InterParseOk : forall v, ParseOk_Value_P v.
     Proof.
-      intros v d Hsc.
-      apply RecursiveStateCompatCorrect with (valid_state := fun d v => ⟨ v ∷ d ⟩); last assumption.
-      intros st1 st2 x enc rest Hwf__x Hsc__x IH.
-      (* Since this relation is designed for equality, it's OK to use exists x'. *)
-      unfold SerialValue', ParseValue', S.Map.
-      intros Hser. exists x.
-      destruct x as [xs] eqn:Hx.
-      rewrite SC_filter in Hser by assumption.
+      induction v as [vs IHv | v__n | b | z |] using Value_ind' with
+        (P_Value := ParseOk_Value_P)
+        (P_Val := ParseOk_Val_P).
+      - (* VALUE case *)
+        intros d Hsc.
+        apply RecursiveStateCompatCorrect with
+          (valid_state := fun d v => ⟨ v ∷ d ⟩)
+          (linked_state := fun d1 d2 => d1 = d2); try done.
+        intros st1 st2 x enc rest Hwf__x Hsc__x Hlinked IH. subst st2.
+        unfold SerialValue', ParseValue'.
+        intros Hser. exists (list_to_value st1 (ValList st1 x)).
+        revert Hser.
+        apply MapCompatCorrect.
+        + apply (FullDescriptor_RoundTrip _ _ Hsc__x).
+        + (* TODO: This should be a separate lemma *)
+        admit.
+        + admit.
+      - admit.
+      - (* V_BOOL *)
+        admit.
+      - (* V_INT *)
+        admit.
+      - (* V_MISSING *)
+        admit.
     Abort.
 
   End Theorems.
