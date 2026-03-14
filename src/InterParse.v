@@ -1778,11 +1778,17 @@ Module InterParse.
         (∀ x : A, x ∈ l -> (P1 x ↔ P2 x)) → filter P1 l = filter P2 l.
     Proof.
       intros. rename H1 into HPdiff. induction l as [|a l IH]; [done|].
-      destruct (decide (P1 a)).
-      (* TODO: reduce HPdiff down to P1 x <-> P2 x *)
-      (* - rewrite !filter_cons_True by naive_solver. by rewrite IH. *)
-      (* - rewrite !filter_cons_False by naive_solver. by rewrite IH. *)
-    Abort.
+      rewrite !filter_cons by naive_solver.
+      destruct (decide (P1 a)), (decide (P2 a)).
+      - f_equal. apply IH. intros x Hin. apply HPdiff.
+        apply list_elem_of_further. exact Hin.
+      - specialize (HPdiff a $ list_elem_of_here a l).
+        rewrite HPdiff in p. contradiction.
+      - specialize (HPdiff a $ list_elem_of_here a l).
+        rewrite <- HPdiff in p. contradiction.
+      - apply IH. intros x Hin. apply HPdiff.
+        apply list_elem_of_further. exact Hin.
+    Qed.
 
     (** Property 4: Nested messages are correct *)
     Lemma SC_implies_nested_correct : forall d v,
@@ -2092,6 +2098,26 @@ Module InterParse.
         f_equal. assumption.
     Qed.
 
+    Lemma ValList_drop_ok (vs : gmap Z Val) (k : Z) (ds : gmap Z Field) :
+      forall f, vs !! k = None -> ValList (DESC (<[k := f]> ds)) (VALUE vs) = ValList (DESC ds) (VALUE vs).
+    Proof.
+      intros f Hnone.
+      unfold ValList, Vals.
+      apply list_filter_iff_local.
+      intros [k' v'] Hin.
+      split.
+      - unfold ValList_filter_p; simpl.
+        rewrite elem_of_map_to_list in Hin.
+        destruct (k' == k).
+        + subst k. rewrite Hin in Hnone. discriminate.
+        + rewrite lookup_insert_ne by done. done.
+      - unfold ValList_filter_p; simpl.
+        rewrite elem_of_map_to_list in Hin.
+        destruct (k' == k).
+        + subst k. rewrite Hin in Hnone. discriminate.
+        + rewrite lookup_insert_ne by done. done.
+    Qed.
+      
     Definition ParseOk_Value_P (v : Value) :=
       forall d, ⟨ v ∷ d ⟩ -> ParseOkCompat'' Compatible ParseValue SerialValue d d v.
 
@@ -2106,7 +2132,7 @@ Module InterParse.
       unfold ValList, Vals.
       intros d Hsc. apply SC_SCO in Hsc.
       dependent induction Hsc.
-      - rewrite map_to_list_empty, filter_nil. reflexivity.
+      - by rewrite map_to_list_empty, filter_nil.
       - rename H into Hty,
                  H0 into Hnest,
                    H1 into HnestC,
@@ -2116,12 +2142,16 @@ Module InterParse.
                            H5 into Hvs_fst.
         rewrite map_to_list_insert_first_key by assumption.
         rewrite filter_cons_True.
-        + f_equal. admit.
+        + f_equal. specialize (IHHsc vs eq_refl).
+          fold (Vals (VALUE vs)). fold (ValList (DESC (<[k:=f]> ds)) (VALUE vs)).
+          fold (Vals (VALUE vs)) in IHHsc. fold (ValList (DESC ds) (VALUE vs)) in IHHsc.
+          rewrite <- IHHsc.
+          by rewrite ValList_drop_ok by assumption.
         + unfold ValList_filter_p; simpl.
           rewrite lookup_insert_eq.
           destruct v; try trivial.
           destruct f; unfold field_val_type_match in Hty; assumption.
-    Admitted.
+    Qed.
 
     Theorem InterParseOk : forall v, ParseOk_Value_P v.
     Proof.
@@ -2131,8 +2161,8 @@ Module InterParse.
       (* Since this relation is designed for equality, it's OK to use exists x'. *)
       unfold SerialValue', ParseValue', S.Map.
       intros Hser. exists x.
-      (* TODO: Prove ⟨ VALUE xs ∷ st__1 ⟩ -> ValList st__1 (VALUE xs) = map_to_list xs *)
       destruct x as [xs] eqn:Hx.
+      rewrite SC_filter in Hser by assumption.
     Abort.
 
   End Theorems.
