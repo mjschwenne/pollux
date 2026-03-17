@@ -2175,6 +2175,32 @@ Module InterParse.
         + rewrite lookup_insert_ne by done. done.
     Qed.
 
+    Lemma ValList_drop_ok' (vs : gmap Z Val) (k : Z) (ds :gmap Z Field) :
+      vs !! k = None -> ValList (DESC ds) (VALUE vs) = ValList (DESC $ delete k ds) (VALUE vs).
+    intros Hnone.
+    unfold ValList; simpl.
+    apply list_filter_iff_local.
+    intros [k' v'] Hin.
+    split.
+    - unfold ValList_filter_p; simpl.
+      rewrite elem_of_map_to_list in Hin.
+      assert (k <> k') as Hkneq.
+      { intro H. subst. rewrite Hnone in Hin. discriminate. }
+      rewrite lookup_delete_ne by assumption.
+      destruct (ds !! k'); last done.
+      destruct v'; done.
+    - unfold ValList_filter_p; simpl.
+      rewrite elem_of_map_to_list in Hin.
+      assert (k <> k') as Hkneq.
+      { intro H. subst. rewrite Hnone in Hin. discriminate. }
+      rewrite lookup_delete_ne by assumption.
+      destruct (ds !! k'); last done.
+      destruct v'; done.
+    Qed.
+
+    Lemma Fields_idep : forall d, DESC (Fields d) = d.
+    Proof. intros [ds]; reflexivity. Qed.
+
     Lemma SC_filter : forall v d, ⟨ v ∷ d ⟩ -> ValList d v = map_to_list (Vals v).
     Proof.
       intros [vs].
@@ -2212,51 +2238,118 @@ Module InterParse.
       discriminate.
     Qed.
 
+    Lemma ValList_not_in : forall d vs k, vs !! k = None -> k ∉ (ValList d (VALUE vs)).*1.
+    Proof.
+      intros d vs k Hnone.
+      rewrite not_elem_of_list_to_map.
+      unfold ValList; simpl.
+      induction vs using map_first_key_ind.
+      - by rewrite map_to_list_empty, filter_nil, list_to_map_nil, lookup_empty.
+      - rewrite map_to_list_insert_first_key by assumption.
+        rewrite filter_cons. destruct (decide (ValList_filter_p d (i, x))).
+        + rewrite list_to_map_cons. destruct (i == k).
+          * subst. rewrite lookup_insert_eq in Hnone. discriminate.
+          * rewrite lookup_insert_ne by assumption. apply IHvs.
+            rewrite lookup_insert_ne in Hnone by assumption.
+            exact Hnone.
+        + apply IHvs. destruct (i == k).
+          * subst. rewrite lookup_insert_eq in Hnone. discriminate.
+          * rewrite lookup_insert_ne in Hnone by assumption.
+            exact Hnone.
+    Qed.
+
+    (* FIXME: Proving Value a finite map would let me use insert_insert_eq directly. *)
+    Lemma insert_insert_value_eq : forall k v1 v2 (v : Value), <[k := v1]> $ <[k := v2]> v = <[k := v1]> v.
+    Proof.
+      intros k v1 v2 [vs].
+      rewrite !Value_insert_unfold.
+      rewrite insert_insert_eq.
+      reflexivity.
+    Qed.
+
+    Lemma insert_insert_value_ne : forall k1 k2 v1 v2 (v : Value),
+      k1 <> k2 -> <[k1 := v1]> $ <[k2 := v2]> v = <[k2 := v2]> $ <[k1 := v1]> v.
+    Proof.
+      intros k1 k2 v1 v2 [vs] Hneq.
+      rewrite !Value_insert_unfold.
+      f_equal.
+      by apply insert_insert_ne.
+    Qed.
+
+    Lemma merge_insert_eliminated_r `{FinMap K M} {A B C}
+      (f : option A → option B → option C) (m1 : M A) (m2 : M B) (i : K) (z : B) :
+      f (m1 !! i) (Some z) = None →
+      f (m1 !! i) (m2 !! i) = None →  (* also None without z *)
+      merge f m1 (<[i:=z]> m2) = merge f m1 m2.
+    Proof.
+      intros Hfz Hf.
+      apply map_eq. intros j.
+      rewrite !lookup_merge.
+      destruct (decide (i = j)) as [->|Hne].
+      - rewrite lookup_insert. destruct (j == j); last reflexivity.
+        unfold diag_None. destruct (m1 !! j).
+        + by rewrite Hf, Hfz.
+        + destruct (m2 !! j); last assumption.
+          by rewrite Hf, Hfz.
+      - rewrite lookup_insert_ne; auto.
+    Qed.
+
+    (* When the merge produces None, the insertion is eliminated *)
+    Lemma merge_insert_none_r `{FinMap K M} {A B C}
+      (f : option A → option B → option C) (m1 : M A) (m2 : M B) (i : K) (z : B) :
+      f (m1 !! i) (Some z) = None →
+      merge f m1 (<[i:=z]> m2) = delete i (merge f m1 m2).
+    Proof.
+      intros Hf.
+      apply map_eq. intros j.
+      destruct (decide (i = j)) as [->|Hne].
+      - (* j = i: the key is deleted *)
+        rewrite lookup_delete.
+        rewrite lookup_merge.
+        rewrite lookup_insert.
+        destruct (j == j).
+        + unfold diag_None.
+          rewrite Hf.
+          by destruct (m1 !! j).
+        + by rewrite lookup_merge.
+      - (* j ≠ i: other keys unchanged *)
+        rewrite lookup_delete_ne; auto.
+        rewrite !lookup_merge.
+        rewrite lookup_insert_ne; auto.
+    Qed.
+
     Lemma list_to_value_id : forall v d,
       ⟨ v ∷ d ⟩ -> v = list_to_value d (ValList d v).
     Proof.
-      intros [vs].
-      induction vs as [| k v vs Hnone Hfst] using map_first_key_ind.
-      - intros d Hsc. unfold ValList; simpl.
-        apply SC_Empty_Desc in Hsc. subst. simpl.
-        rewrite map_to_list_empty, filter_nil.
-        unfold list_to_value. done.
-      - intros d Hsc.
-        unfold ValList; simpl.
-        rewrite map_to_list_insert_first_key by assumption.
-        rewrite filter_cons_True.
-        + unfold list_to_value; simpl.
-          assert (exists v', Vals (Init d) !! k = Some v') as Hdom. { admit. }
-          destruct Hdom as [v' Hdom]. 
-    Abort.
-
-    Lemma SC_filter_self : forall d v, ⟨ v ∷ d ⟩ -> ⟨ list_to_value d (ValList d v) ∷ d⟩.
-    Proof.
-      intros d v Hsc. apply SC_SCO in Hsc.
+      intros v d Hsc. apply SC_SCO in Hsc.
       induction Hsc as [| ? ? ? ? ? Hty Hnest HnestC Hds_no Hvs_no Hds_fst Hvs_fst].
       - unfold ValList; simpl.
         rewrite map_to_list_empty, filter_nil.
-        unfold list_to_value, foldl, Init.
-        simpl. rewrite merge_empty.
-        apply SC_Empty.
-      - rewrite Desc_insert_fold, Value_insert_fold. apply SC_SCO in Hsc.
-        apply SC_insert_field with (k := k) (f := f) (v := v) in Hsc; try done.
-        + rewrite Value_insert_fold, Desc_insert_fold in Hsc.
-          rewrite SC_filter by assumption.
-          rewrite Value_insert_unfold; simpl.
-          rewrite map_to_list_insert_first_key by assumption.
-          unfold list_to_value; simpl.
-          (*
-          rewrite map_fold_insert_first_key by assumption.
-          assert (exists v', (InitFold k f (map_fold InitFold gmap_empty ds)) !! k = Some v').
-          * destruct f.
-            -- unfold InitFold. rewrite lookup_insert_eq. rewrite Init_eq.
-               exists (V_MSG (Init d)). reflexivity.
-            -- unfold InitFold. rewrite lookup_insert_eq. exists V_MISSING. reflexivity.
-            -- unfold InitFold. rewrite lookup_insert_eq. exists V_MISSING. reflexivity.
-          * destruct H as [v' H]. rewrite H. 
-          *)
-    Abort.
+        unfold list_to_value; simpl.
+        by rewrite merge_empty.
+      - unfold ValList; simpl.
+        rewrite map_to_list_insert_first_key by assumption.
+        rewrite filter_cons_True.
+        + unfold list_to_value.
+          rewrite list_to_map_cons.
+          fold (Vals $ VALUE vs);
+            fold (ValList (DESC (<[k := f]> ds)) (VALUE vs)); simpl.
+          rewrite <- insert_merge with (x := v).
+          * rewrite !Value_insert_fold.
+            fold (Fields (DESC ds)).
+            fold (list_to_value (DESC ds) (ValList (DESC (<[k:=f]> (Fields $ DESC ds))) (VALUE vs))).
+            simpl. rewrite ValList_drop_ok by assumption.
+            by rewrite IHHsc at 1.
+          * unfold Merge. destruct f; destruct v; unfold field_val_type_match; (contradiction || reflexivity).
+        + unfold ValList_filter_p; simpl.
+          rewrite lookup_insert_eq.
+          destruct f; destruct v; unfold field_val_type_match; (contradiction || reflexivity).
+    Qed.
+
+    Lemma SC_filter_self : forall d v, ⟨ v ∷ d ⟩ -> ⟨ list_to_value d (ValList d v) ∷ d⟩.
+    Proof.
+      intros d v Hsc. by rewrite <- list_to_value_id.
+    Qed.
 
     Lemma FullDescriptor_RoundTrip : forall v d, ⟨ v ∷ d ⟩ -> ⟨ v ∷ d ⟩ ≼ ⟨ list_to_value d (ValList d v) ∷ d ⟩.
     Proof.
@@ -2264,23 +2357,41 @@ Module InterParse.
       induction Hsc as [| ? ? ? ? ? Hty Hnest HnestC Hds_no Hvs_no Hds_fst Hvs_fst].
       - unfold ValList; simpl.
         rewrite map_to_list_empty, filter_nil.
-        unfold list_to_value, foldl, Init.
-        (* rewrite InitFold_eq. *)
-        (* rewrite map_fold_empty. *)
-        (* apply CompatRefl; apply SC_Empty. *)
-        admit.
+        unfold list_to_value; simpl.
+        rewrite merge_empty.
+        apply CompatRefl; apply SC_Empty.
       - apply CompatibleEqual in IHHsc; last done.
         unfold ValList; simpl.
         rewrite map_to_list_insert_first_key by assumption.
         rewrite filter_cons_True. 
         + unfold list_to_value.
-          admit.
+          rewrite list_to_map_cons; simpl.
+          rewrite <- insert_merge with (x := v).
+          * rewrite !Value_insert_fold, !Desc_insert_fold.
+            apply CompatAdd; try done.
+            -- by apply SC_SCO in Hsc.
+            -- fold (Vals (VALUE vs)); fold (ValList (<[k:=f]> (DESC ds)) (VALUE vs)).
+               rewrite Desc_insert_unfold. rewrite ValList_drop_ok by assumption.
+               fold (Fields $ DESC ds).
+               fold (list_to_value (DESC ds) (ValList (DESC (Fields $ DESC ds)) (VALUE vs))); simpl.
+               rewrite <- IHHsc. by apply SC_SCO in Hsc.
+            -- fold (Vals (VALUE vs)); fold (ValList (<[k:=f]> (DESC ds)) (VALUE vs)).
+               rewrite Desc_insert_unfold. rewrite ValList_drop_ok by assumption.
+               fold (Fields $ DESC ds).
+               fold (list_to_value (DESC ds) (ValList (DESC (Fields $ DESC ds)) (VALUE vs))); simpl.
+               rewrite <- IHHsc. apply SC_SCO in Hsc. by apply CompatRefl.
+            -- fold (Vals (VALUE vs)); fold (ValList (<[k:=f]> (DESC ds)) (VALUE vs)).
+               rewrite Desc_insert_unfold. rewrite ValList_drop_ok by assumption.
+               fold (Fields $ DESC ds).
+               fold (list_to_value (DESC ds) (ValList (DESC (Fields $ DESC ds)) (VALUE vs))); simpl.
+               rewrite <- IHHsc. by rewrite Value_lookup_unfold.
+          * unfold Merge. destruct f; destruct v; unfold field_val_type_match; (contradiction || reflexivity).
         + unfold ValList_filter_p; simpl.
           rewrite lookup_insert_eq.
           destruct v; try trivial.
           unfold field_val_type_match in Hty.
           destruct f; contradiction.
-    Admitted.
+    Qed.
 
     Definition ParseOk_Value_P (v : Value) :=
       forall d, ⟨ v ∷ d ⟩ -> ParseOkCompat'' Compatible ParseValue SerialValue d d v.
