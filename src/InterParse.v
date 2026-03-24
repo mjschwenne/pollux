@@ -342,7 +342,7 @@ Section Theorems.
           -- intros Hdep _. pose proof (lookup_insert_eq vs k (V_MSG v)) as Hlookup.
              pose proof (Val_in_map_smaller_depth (<[k := V_MSG v]> $ VALUE vs) k v Hlookup).
              contradiction.
-      + destruct (filter (ValList_filter_p d) (map_to_list m)) eqn:Hlst.
+      + destruct (filter (ValList_filter_p d) (map_to_list vs)) eqn:Hlst.
         * rewrite ser_rep_unfold. intros Hser. invc Hser.
           exists S.Output_default, S.Output_default.
           split.
@@ -365,6 +365,7 @@ Section Theorems.
              rewrite <- Hser.
              rewrite SerialRepSubst; first reflexivity.
              symmetry.
+             rewrite Value_insert_fold.
              apply SerialValWeakenDepth; assumption.
           -- split; last (rewrite App_nil_l; reflexivity).
              unfold ValList_filter_p, fst, snd in Hfilter_out.
@@ -398,10 +399,10 @@ Section Theorems.
           destruct f; try reflexivity.
           destruct v; try reflexivity.
           unfold S.Bind', S.Concat, S.Len'.
-          case_eq (decide (ValueDepth v < ValueDepth (VALUE (<[k:=V_MSG v]> m)))%nat).
+          case_eq (decide (ValueDepth v < ValueDepth (VALUE (<[k:=V_MSG v]> vs)))%nat).
           -- intros Hdep _. unfold SerialValue, S.RecursiveState. reflexivity.
-          -- intros Hdep _. pose proof (lookup_insert_eq m k (V_MSG v)) as Hlookup.
-             pose proof (Val_in_map_smaller_depth (<[k := V_MSG v]> m) k v Hlookup).
+          -- intros Hdep _. pose proof (lookup_insert_eq vs k (V_MSG v)) as Hlookup.
+             pose proof (Val_in_map_smaller_depth (<[k := V_MSG v]> $ VALUE vs) k v Hlookup).
              contradiction.
         * split; last reflexivity. revert Hrest_ok.
           unfold SerialValue, S.RecursiveState.
@@ -418,6 +419,8 @@ Section Theorems.
           rewrite <- ResultEquivSuccessIff with (r := S.Rep _ _).
           rewrite <- Hrest_ok.
           rewrite SerialRepSubst; first reflexivity.
+          rewrite Value_insert_fold.
+          fold (Vals $ VALUE vs); fold (ValList d $ VALUE vs).
           apply SerialValWeakenDepth; assumption.
       + unfold ValList_filter_p, fst, snd in Hfilter_out.
         unfold SerialVal in Hv_ok.
@@ -431,11 +434,17 @@ Section Theorems.
                                                                                              rewrite <- ResultEquivSuccessIff with (r := S.Rep _ _);
                                                                                              rewrite <- Hrest_ok;
                                                                                              rewrite SerialRepSubst; first reflexivity.
-          -- apply SerialValWeakenDepth; assumption.
+          -- rewrite Value_insert_fold.
+             fold (Vals $ VALUE vs); fold (ValList d $ VALUE vs).
+             apply SerialValWeakenDepth; assumption.
           -- reflexivity.
-          -- apply SerialValWeakenDepth; assumption.
+          -- rewrite Value_insert_fold.
+             fold (Vals $ VALUE vs); fold (ValList d $ VALUE vs).
+             apply SerialValWeakenDepth; assumption.
           -- reflexivity.
-          -- apply SerialValWeakenDepth; assumption.
+          -- rewrite Value_insert_fold.
+             fold (Vals $ VALUE vs); fold (ValList d $ VALUE vs).
+             apply SerialValWeakenDepth; assumption.
         * (* v dropped for being unknown *)
           unfold S.mkSuccess in *.
           invc Hv_ok. rewrite App_nil_l.
@@ -443,6 +452,8 @@ Section Theorems.
           rewrite <- Hrest_ok.
           unfold SerialValue', S.Map, ValList, Vals.
           rewrite SerialRepSubst; first reflexivity.
+          rewrite Value_insert_fold.
+          fold (Vals $ VALUE vs); fold (ValList d $ VALUE vs).
           apply SerialValWeakenDepth; assumption.
   Qed.
 
@@ -469,6 +480,7 @@ Section Theorems.
         vm_compute in Hser.
         inversion Hser. destruct d; reflexivity.
       + intros IHv d enc Hvalid Hser; unfold S.Output in *. 
+        rewrite Value_insert_fold in *.
         apply SerialValueInversion in Hser; try assumption.
         destruct Hser as (enc__v & enc__rest & Hrest_ok & Hv_ok & Henc).
         rewrite ValidInsert in Hvalid by assumption.
@@ -619,80 +631,80 @@ Section Theorems.
     vs !! k = None ->
 
     (* The remaining descriptor/value must be correct *)
-    SchemaCorrect (DESC ds) (VALUE vs) ->
+    SchemaCorrect ds vs ->
 
     (* Then we can insert the new field/value pair *)
-    SchemaCorrect (DESC (<[k := f]> ds)) (VALUE (<[k := v]> vs)).
+    SchemaCorrect (<[k := f]> ds) (<[k := v]> vs).
 
   Notation "'⟨' v '∷' d '⟩'" := (SchemaCorrect d v) (at level 70).
 
   (** Insert field lemma - direct by constructor *)
-  Lemma SC_insert_field : forall k f v ds vs,
-    field_val_type_match f v ->
-    (forall d' v', f = F_MSG d' -> v = V_MSG v' -> ⟨ v' ∷ d' ⟩) ->
-    ds !! k = None ->
-    vs !! k = None ->
-    ⟨ (VALUE vs) ∷ (DESC ds) ⟩ ->
-    ⟨ (VALUE (<[k := v]> vs)) ∷ (DESC (<[k := f]> ds)) ⟩.
+  Lemma SC_insert_field : forall k f val d v,
+    field_val_type_match f val ->
+    (forall d' v', f = F_MSG d' -> val = V_MSG v' -> ⟨ v' ∷ d' ⟩) ->
+    d !! k = None ->
+    v !! k = None ->
+    ⟨ v ∷ d ⟩ ->
+    ⟨ <[k := val]> v ∷ <[k := f]> d ⟩.
   Proof.
     intros. apply SC_Insert; assumption.
   Qed.
 
   (** Empty case lemma *)
-  Lemma SC_empty : ⟨ (VALUE ∅) ∷ (DESC ∅) ⟩.
+  Lemma SC_empty : ⟨ ∅ ∷ ∅ ⟩.
   Proof.
     constructor.
   Qed.
 
   (* Add some lemmas about the constructor *)
-  Lemma SC_Insert_comm : forall k1 k2 f1 f2 v1 v2 ds vs,
+  Lemma SC_Insert_comm : forall k1 k2 f1 f2 v1 v2 d v,
     k1 ≠ k2 ->
-    ⟨ (VALUE (<[k1 := v1]> (<[k2 := v2]> vs))) ∷ (DESC (<[k1 := f1]> (<[k2 := f2]> ds))) ⟩ ->
-    ⟨ (VALUE (<[k2 := v2]> (<[k1 := v1]> vs))) ∷ (DESC (<[k2 := f2]> (<[k1 := f1]> ds))) ⟩.
+    ⟨ <[k1 := v1]> (<[k2 := v2]> v) ∷ <[k1 := f1]> (<[k2 := f2]> d) ⟩ ->
+    ⟨ <[k2 := v2]> (<[k1 := v1]> v) ∷ <[k2 := f2]> (<[k1 := f1]> d) ⟩.
   Proof.
-    intros k1 k2 f1 f2 v1 v2 ds vs Hneq H.
+    intros k1 k2 f1 f2 v1 v2 d v Hneq H. map_unfold.
     rewrite insert_insert_ne, (insert_insert_ne vs); (assumption || symmetry; assumption).
   Qed.
 
   (** Property 1: Every field in value exists in descriptor *)
   Lemma SC_implies_val_in_desc : forall d v,
     ⟨ v ∷ d ⟩ ->
-    forall k val, Vals v !! k = Some val -> exists f, Fields d !! k = Some f.
+    forall k val, v !! k = Some val -> exists f, d !! k = Some f.
   Proof.
     intros d v H.
     induction H as [| k f v ds vs Htype HnestedC Hnested Hds_none Hvs_none H' IH]; intros k' val' Hlookup.
     - (* Empty case *)
-      simpl in Hlookup. rewrite lookup_empty in Hlookup. discriminate.
+      simpl in Hlookup. value_unfold. rewrite lookup_empty in Hlookup. discriminate.
     - (* Insert case - straightforward by case analysis on k = k' *)
-      unfold Vals in Hlookup. destruct (k == k') as [Heq | Hneq].
-      + subst k'. exists f. unfold Fields. rewrite lookup_insert_eq.
+      destruct (k == k') as [Heq | Hneq].
+      + subst k'. exists f. desc_unfold. rewrite lookup_insert_eq.
         reflexivity.
-      + rewrite lookup_insert_ne in Hlookup by assumption.
+      + value_unfold. rewrite lookup_insert_ne in Hlookup by assumption.
         specialize (IH k' val' Hlookup).
         destruct IH as [f' Hsome].
-        unfold Fields in *. exists f'.
+        exists f'. desc_unfold.
         rewrite lookup_insert_ne by assumption.
         assumption.
   Qed.
 
   Lemma SC_implies_val_in_desc_typed : forall d v,
     ⟨ v ∷ d ⟩ ->
-    forall k val, Vals v !! k = Some val -> exists f, Fields d !! k = Some f /\ field_val_type_match f val.
+    forall k val, v !! k = Some val -> exists f, d !! k = Some f /\ field_val_type_match f val.
   Proof.
     intros d v H.
     induction H as [| k f v ds vs Htype HnestedC Hnested Hds_none Hvs_none H' IH]; intros k' val' Hlookup.
     - (* Empty case *)
-      simpl in Hlookup. rewrite lookup_empty in Hlookup. discriminate.
+      simpl in Hlookup. value_unfold. rewrite lookup_empty in Hlookup. discriminate.
     - (* Insert case - straightforward by case analysis on k = k' *)
-      unfold Vals in Hlookup. destruct (k == k') as [Heq | Hneq].
-      + subst k'. exists f. unfold Fields. rewrite lookup_insert_eq.
+      destruct (k == k') as [Heq | Hneq].
+      + subst k'. exists f. desc_unfold. rewrite lookup_insert_eq.
         split; first reflexivity.
-        rewrite lookup_insert_eq in Hlookup. invc Hlookup.
+        value_unfold. rewrite lookup_insert_eq in Hlookup. invc Hlookup.
         assumption.
-      + rewrite lookup_insert_ne in Hlookup by assumption.
+      + value_unfold. rewrite lookup_insert_ne in Hlookup by assumption.
         specialize (IH k' val' Hlookup).
         destruct IH as [f' Hsome].
-        unfold Fields in *. exists f'.
+        exists f'. desc_unfold.
         rewrite lookup_insert_ne by assumption.
         assumption.
   Qed.
@@ -700,40 +712,38 @@ Section Theorems.
   (** Property 2: Every field in descriptor exists in value *)
   Lemma SC_implies_desc_in_val : forall d v,
     ⟨ v ∷ d ⟩ ->
-    forall k f, Fields d !! k = Some f -> exists val, Vals v !! k = Some val.
+    forall k f, d !! k = Some f -> exists val, v !! k = Some val.
   Proof.
     intros d v H.
     induction H as [| k f v ds vs Htype HnestedC Hnested Hds_none Hvs_none H' IH]; intros k' f' Hlookup.
-    - simpl in Hlookup. rewrite lookup_empty in Hlookup. discriminate.
-    - simpl in Hlookup. destruct (k == k') as [Heq | Hneq].
-      + subst k'. exists v. simpl. rewrite lookup_insert_eq.
-        reflexivity.
-      + rewrite lookup_insert_ne in Hlookup by assumption.
+    - desc_unfold. rewrite lookup_empty in Hlookup. discriminate.
+    - desc_unfold. destruct (k == k') as [Heq | Hneq].
+      + subst k'. exists v. value_unfold. by rewrite lookup_insert_eq.
+      + desc_unfold. rewrite lookup_insert_ne in Hlookup by assumption.
         specialize (IH k' f' Hlookup).
         destruct IH as [v' Hsome].
-        exists v'.
-        simpl in Hsome; simpl.
+        exists v'. value_unfold.
         rewrite lookup_insert_ne by assumption.
         assumption.
   Qed.
 
   Lemma SC_implies_desc_in_val_typed : forall d v,
     ⟨ v ∷ d ⟩ ->
-    forall k f, Fields d !! k = Some f -> exists val, Vals v !! k = Some val /\ field_val_type_match f val.
+    forall k f, d !! k = Some f -> exists val, v !! k = Some val /\ field_val_type_match f val.
   Proof.
     intros d v H.
-    induction H as [| k f v ds vs Htype HnestedC Hnested Hds_none Hvs_none H' IH]; intros k' f' Hlookup.
-    - simpl in Hlookup. rewrite lookup_empty in Hlookup. discriminate.
-    - simpl in Hlookup. destruct (k == k') as [Heq | Hneq].
-      + subst k'. exists v. simpl. rewrite lookup_insert_eq.
+    induction H as [| k f v ds vs Htype HnestedC Hnested Hds_none Hvs_none H' IH];
+      intros k' f' Hlookup; desc_unfold.
+    - by rewrite lookup_empty in Hlookup. 
+    - destruct (k == k') as [Heq | Hneq].
+      + subst k'. exists v. value_unfold. rewrite lookup_insert_eq.
         split; first reflexivity.
         rewrite lookup_insert_eq in Hlookup. invc Hlookup.
         assumption.
       + rewrite lookup_insert_ne in Hlookup by assumption.
         specialize (IH k' f' Hlookup).
         destruct IH as [v' Hsome].
-        exists v'.
-        simpl in Hsome; simpl.
+        exists v'. value_unfold.
         rewrite lookup_insert_ne by assumption.
         assumption.
   Qed.
@@ -741,12 +751,12 @@ Section Theorems.
   (** Property 3: No V_MISSING values *)
   Lemma SC_implies_no_missing : forall d v,
     ⟨ v ∷ d ⟩ ->
-    forall k, Vals v !! k ≠ Some V_MISSING.
+    forall k, v !! k ≠ Some V_MISSING.
   Proof.
     intros d v H.
     induction H as [| k f v ds vs Htype HnestedC Hnested Hds_none Hv_none H' IH]; intros k'.
-    - simpl. rewrite lookup_empty. done.
-    - simpl. destruct (k == k') as [Heq | Hneq].
+    - value_unfold. rewrite lookup_empty. done.
+    - destruct (k == k') as [Heq | Hneq]; value_unfold.
       + subst k'. rewrite lookup_insert_eq.
         destruct v; try done.
         unfold field_val_type_match in Htype.
@@ -794,25 +804,26 @@ Section Theorems.
   (** Property 4: Nested messages are correct *)
   Lemma SC_implies_nested_correct : forall d v,
     ⟨ v ∷ d ⟩ ->
-    map_Forall (NestedCorrect d) (Vals v).
+    (* Can't remove this Vals call and still have access to the required map_Forall lemmas *)
+    map_Forall (NestedCorrect d) $ Vals v.
   Proof.
     intros d v H.
     induction H as [| k f v ds vs Htype HnestedC Hnested Hds_none Hv_none H' IH].
     - apply map_Forall_empty. 
-    - simpl. rewrite map_Forall_insert by assumption.
+    - value_unfold; simpl. rewrite map_Forall_insert by assumption.
       split.
-      + unfold NestedCorrect; simpl.
-        destruct (<[k:=f]> ds !! k) as [f' |] eqn:Hfeq; last trivial.
+      + unfold NestedCorrect; desc_unfold; simpl.
+        destruct (<[k:=f]> fs !! k) as [f' |] eqn:Hfeq; last trivial.
         destruct f' as [d' | |]; try trivial.
         rewrite lookup_insert_eq in Hfeq. inversion Hfeq as [Hf].
         destruct v; try trivial.
         apply HnestedC; done.
-      + simpl in IH. apply map_Forall_impl_local with (P := NestedCorrect (DESC ds)). 
+      + simpl in IH. apply map_Forall_impl_local with (P := NestedCorrect ds). 
         * assumption.
         * intros i x.
-          unfold NestedCorrect; simpl.
+          unfold NestedCorrect; desc_unfold; simpl.
           intros H.
-          destruct (<[k:=f]> ds !! i) as [f' |] eqn:Hdeq; last trivial.
+          destruct (<[k:=f]> fs !! i) as [f' |] eqn:Hdeq; last trivial.
           destruct f' as [d' | |]; try trivial.
           destruct x; try trivial.
           destruct (k == i) as [Heq | Hneq].
@@ -824,9 +835,9 @@ Section Theorems.
   (** Combined theorem: inductive implies all four properties *)
   Theorem SC_implies_properties : forall d v,
     ⟨ v ∷ d ⟩ ->
-    (forall k val, Vals v !! k = Some val -> exists f, Fields d !! k = Some f) /\
-    (forall k f, Fields d !! k = Some f -> exists val, Vals v !! k = Some val) /\
-    (forall k, Vals v !! k ≠ Some V_MISSING) /\
+    (forall k val, v !! k = Some val -> exists f, d !! k = Some f) /\
+    (forall k f, d !! k = Some f -> exists val, v !! k = Some val) /\
+    (forall k, v !! k ≠ Some V_MISSING) /\
     map_Forall (NestedCorrect d) (Vals v).
   Proof.
     intros d v H.
@@ -837,32 +848,32 @@ Section Theorems.
     - apply SC_implies_nested_correct. assumption.
   Qed.
 
-  Lemma SC_delete_key : forall d v k, ⟨ v ∷ d ⟩ -> ⟨ VALUE (delete k (Vals v)) ∷ DESC (delete k (Fields d))⟩.
+  Lemma SC_delete_key : forall d v k, ⟨ v ∷ d ⟩ -> ⟨ delete k v ∷ delete k d ⟩.
   Proof.
     intros d v k H.
     induction H.
-    - simpl. rewrite !delete_empty. apply SC_empty.
-    - simpl. rewrite !delete_insert.
+    - simpl. map_unfold. rewrite !delete_empty. apply SC_empty.
+    - simpl. map_unfold. rewrite !delete_insert.
       destruct (k == k0).
       + apply IHSchemaCorrect.
       + simpl in IHSchemaCorrect.
-        apply SC_insert_field; try assumption.
-        * rewrite lookup_delete_None. right; assumption.
-        * rewrite lookup_delete_None. right; assumption.
+        rewrite Value_insert_fold, Desc_insert_fold.
+        apply SC_insert_field; try assumption; desc_unfold; value_unfold;
+          rewrite lookup_delete_None; right; assumption.
   Qed.
 
-  Lemma SC_dom_eq : forall ds vs, ⟨ VALUE vs ∷ DESC ds ⟩ -> dom vs ≡ dom ds.
+  Lemma SC_dom_eq : forall d v, ⟨ v ∷ d ⟩ -> dom v ≡ dom d.
   Proof.
-    intros ds vs Hsc.
+    intros d v Hsc.
     rewrite set_equiv.
     intros k. split.
-    - intros Hdom.
+    - intros Hdom. value_unfold; desc_unfold.
       rewrite elem_of_dom in Hdom.
       destruct Hdom as [v Hv].
       apply SC_implies_val_in_desc with (k := k) (val := v) in Hsc as Hvd; last done.
       destruct Hvd as [f Hf]; simpl in Hf.
       rewrite elem_of_dom. exists f. exact Hf.
-    - intro Hdom.
+    - intro Hdom. value_unfold; desc_unfold.
       rewrite elem_of_dom in Hdom.
       destruct Hdom as [f Hf].
       apply SC_implies_desc_in_val with (k := k) (f := f) in Hsc as Hdv; last done.
@@ -874,53 +885,53 @@ Section Theorems.
   | SCO_Empty :
     SchemaCorrectOrdered (DESC ∅) (VALUE ∅)
 
-  | SCO_Insert : forall k f v ds vs,
-    field_val_type_match f v ->
-    (forall d' v', f = F_MSG d' -> v = V_MSG v' -> SchemaCorrectOrdered d' v') ->
+  | SCO_Insert : forall k f val d v,
+    field_val_type_match f val ->
+    (forall d' v', f = F_MSG d' -> val = V_MSG v' -> SchemaCorrectOrdered d' v') ->
 
     (* Key is fresh *)
-    ds !! k = None ->
-    vs !! k = None ->
+    d !! k = None ->
+    v !! k = None ->
 
     (* NEW: k is the first key in the result *)
-    map_first_key (<[k := f]> ds) k ->
-    map_first_key (<[k := v]> vs) k ->
+    map_first_key (<[k := f]> d) k ->
+    map_first_key (<[k := val]> v) k ->
 
     (* Recursive correctness *)
-    SchemaCorrectOrdered (DESC ds) (VALUE vs) ->
+    SchemaCorrectOrdered d v ->
 
-    SchemaCorrectOrdered (DESC (<[k := f]> ds)) (VALUE (<[k := v]> vs)).
+    SchemaCorrectOrdered (<[k := f]> d) (<[k := val]> v).
 
   Notation "'⟪' v '∷' d '⟫'" := (SchemaCorrectOrdered d v) (at level 70).
 
   (** Insert field lemma - direct by constructor *)
-  Lemma SCO_insert_field : forall k f v ds vs,
-    field_val_type_match f v ->
-    (forall d' v', f = F_MSG d' -> v = V_MSG v' -> ⟪ v' ∷ d' ⟫) ->
-    ds !! k = None ->
-    vs !! k = None ->
-    map_first_key (<[k := f]> ds) k ->
-    map_first_key (<[k := v]> vs) k ->
-    ⟪ (VALUE vs) ∷ (DESC ds) ⟫ ->
-    ⟪ (VALUE (<[k := v]> vs)) ∷ (DESC (<[k := f]> ds)) ⟫.
+  Lemma SCO_insert_field : forall k f val d v,
+    field_val_type_match f val ->
+    (forall d' v', f = F_MSG d' -> val = V_MSG v' -> ⟪ v' ∷ d' ⟫) ->
+    d !! k = None ->
+    v !! k = None ->
+    map_first_key (<[k := f]> d) k ->
+    map_first_key (<[k := val]> v) k ->
+    ⟪ v ∷ d ⟫ ->
+    ⟪ <[k := val]> v ∷ <[k := f]> d ⟫.
   Proof.
     intros. apply SCO_Insert; assumption.
   Qed.
 
-  Lemma SCO_insert_underlying : forall k f v ds vs,
-    ⟪ (VALUE (<[k := v]> vs)) ∷ (DESC (<[k := f]> ds))⟫ ->
-    ⟪ VALUE vs ∷ DESC ds ⟫.
+  Lemma SCO_insert_underlying : forall k f val d v,
+    ⟪ <[k := val]> v ∷ <[k := f]> d ⟫ ->
+    ⟪ v ∷ d ⟫.
   Proof.
-    intros k f v ds vs Hsco.
+    intros k f val d v Hsco.
     dependent induction Hsco.
-    - pose proof (insert_non_empty vs k v).
-      symmetry in x. contradiction.
-    - apply IHHsco with (k := k) (f := f) (v := v).
-      + f_equal. apply map_eq. intros i.
+    - desc_unfold. pose proof (insert_non_empty fs k f).
+      inversion x0. symmetry in H1. contradiction.
+    - apply IHHsco with (k := k) (f := f) (val := val).
+      + desc_unfold. f_equal. apply map_eq. intros i.
   Abort.
 
   (** Empty case lemma *)
-  Lemma SCO_empty : ⟪ (VALUE ∅) ∷ (DESC ∅) ⟫.
+  Lemma SCO_empty : ⟪ ∅ ∷ ∅ ⟫.
   Proof.
     constructor.
   Qed.
@@ -947,8 +958,8 @@ Section Theorems.
           -- constructor.
           -- apply SC_implies_desc_in_val with (k := i) (f := x) in Hsc.
              ++ destruct Hsc as [v Hcontra]; simpl in Hcontra.
-                rewrite lookup_empty in Hcontra. discriminate.
-             ++ simpl; rewrite lookup_insert_eq. reflexivity.
+                value_unfold. rewrite lookup_empty in Hcontra. discriminate.
+             ++ simpl; value_unfold; desc_unfold; by rewrite lookup_insert_eq. 
         * intros [ds] Hsc. apply SC_implies_val_in_desc_typed with (k := k) (val := val) in Hsc as Hvd.  
           -- destruct Hvd as (f & Hvd & Hty); simpl in Hvd.
              set (ds' := delete k ds). assert (ds = <[k := f]> ds') as Hds_eq.
@@ -956,19 +967,20 @@ Section Theorems.
              rewrite Hds_eq in *. clear Hds_eq.
              apply SC_delete_key with (k := k) in Hsc as Hsc'; simpl in Hsc'.
              apply delete_insert_id with (x := val) in Hno_vs as Hdel_vs.
-             rewrite Hdel_vs in Hsc'.
+             map_unfold. rewrite Hdel_vs in Hsc'.
              assert (ds' !! k = None) as Hno_ds.
              { unfold ds'. apply lookup_delete_eq. }
              apply delete_insert_id with (x := f) in Hno_ds as Hdel_ds.
              rewrite Hdel_ds in Hsc'.
              assert (map_first_key (<[k:=f]> ds') k) as Hfst_ds.
              {
-               pose proof (SC_dom_eq (<[k:=f]> ds') (<[k:=val]> vs') Hsc) as Hdom.
+               pose proof (SC_dom_eq (<[k:=f]> $ DESC ds') (<[k:=val]> $ VALUE vs') Hsc) as Hdom.
                rewrite map_first_key_dom with (m2 := <[k:=f]> ds') in Hfst_vs; assumption.
              }
              rewrite map_Forall_insert in IHv by assumption.
              destruct IHv as [IHval IHv].
-             specialize (IHvs IHv _ Hsc'). apply SCO_insert_field; try assumption.
+             specialize (IHvs IHv _ Hsc'). rewrite Value_insert_fold, Desc_insert_fold.
+             apply SCO_insert_field; try assumption.
              intros d' v' Hf Hval; subst.
              apply SC_implies_nested_correct in Hsc as Hn; simpl in Hn.
              rewrite map_Forall_insert in Hn by assumption.
@@ -977,7 +989,7 @@ Section Theorems.
              rewrite lookup_insert_eq in Hcor.
              apply IHval in Hcor; last reflexivity.
              exact Hcor.
-          -- simpl; rewrite lookup_insert_eq. reflexivity.
+          -- value_unfold; rewrite lookup_insert_eq. reflexivity.
       + intros Hsco. induction Hsco; (constructor; assumption).
     - intros d' v' Heq. invc Heq. apply IHv__n.
     - discriminate.
@@ -1033,6 +1045,7 @@ Section Theorems.
           apply SC_implies_val_in_desc_typed with (k := k) (v := VALUE vs) (val := v) in Hsc2 as Hvd;
             last done.
           destruct Hvd as ( f' & Hvd & Hty2 ); simpl in Hvd.
+          map_unfold.
           rewrite Hvd in Heq2. rewrite <- Heq2. f_equal.
           destruct v.
           -- unfold field_val_type_match in *.
@@ -1060,13 +1073,13 @@ Section Theorems.
         * apply SC_implies_desc_in_val with (k := k) (f := f1) in Hsc1 as Hdv; last done.
           destruct Hdv as [v Hdv]; simpl in Hdv.
           apply SC_implies_val_in_desc with (k := k) (v := VALUE vs) (val := v) in Hsc2 as Hvd; last done.
-          destruct Hvd as [f Hvd]; simpl in Hvd.
+          destruct Hvd as [f Hvd]; simpl in Hvd. map_unfold.
           rewrite Heq2 in Hvd. discriminate.
       + destruct (ds2 !! k) as [f2 |] eqn:Heq2.
         * apply SC_implies_desc_in_val with (k := k) (f := f2) in Hsc2 as Hdv; last done.
           destruct Hdv as [v Hdv]; simpl in Hdv.
           apply SC_implies_val_in_desc with (k := k) (v := VALUE vs) (val := v) in Hsc1 as Hvd; last done.
-          destruct Hvd as [f Hvd]; simpl in Hvd.
+          destruct Hvd as [f Hvd]; simpl in Hvd. map_unfold.
           rewrite Heq1 in Hvd. discriminate.
         * reflexivity.
     - intros d1 d2 v' Heq. invc Heq. apply IHv__n.
@@ -1092,30 +1105,31 @@ Section Theorems.
       f_equal. assumption.
   Qed.
 
-  Lemma ValList_drop_ok (vs : gmap Z Val) (k : Z) (ds : gmap Z Field) :
-    forall f, vs !! k = None -> ValList (DESC (<[k := f]> ds)) (VALUE vs) = ValList (DESC ds) (VALUE vs).
+  Lemma ValList_drop_ok (v : Value) (k : Z) (d : Desc) :
+    forall f, v !! k = None -> ValList (<[k := f]> d) v = ValList d v.
   Proof.
     intros f Hnone.
-    unfold ValList, Vals.
+    unfold ValList.
     apply list_filter_iff_local.
     intros [k' v'] Hin.
     split.
-    - unfold ValList_filter_p; simpl.
+    - unfold ValList_filter_p; unfold Fields; map_unfold.
       rewrite elem_of_map_to_list in Hin.
       destruct (k' == k).
       + subst k. rewrite Hin in Hnone. discriminate.
       + rewrite lookup_insert_ne by done. done.
     - unfold ValList_filter_p; simpl.
       rewrite elem_of_map_to_list in Hin.
-      destruct (k' == k).
+      destruct (k' == k); unfold Fields; map_unfold. 
       + subst k. rewrite Hin in Hnone. discriminate.
       + rewrite lookup_insert_ne by done. done.
   Qed.
 
-  Lemma ValList_drop_ok' (vs : gmap Z Val) (k : Z) (ds :gmap Z Field) :
-    vs !! k = None -> ValList (DESC ds) (VALUE vs) = ValList (DESC $ delete k ds) (VALUE vs).
+  Lemma ValList_drop_ok' (v : Value) (k : Z) (d : Desc) :
+    v !! k = None -> ValList d v = ValList (delete k d) v.
+  Proof.
     intros Hnone.
-    unfold ValList; simpl.
+    unfold ValList; map_unfold.
     apply list_filter_iff_local.
     intros [k' v'] Hin.
     split.
@@ -1124,20 +1138,21 @@ Section Theorems.
       assert (k <> k') as Hkneq.
       { intro H. subst. rewrite Hnone in Hin. discriminate. }
       rewrite lookup_delete_ne by assumption.
-      destruct (ds !! k'); last done.
+      destruct (fs !! k'); last done.
       destruct v'; done.
     - unfold ValList_filter_p; simpl.
       rewrite elem_of_map_to_list in Hin.
       assert (k <> k') as Hkneq.
       { intro H. subst. rewrite Hnone in Hin. discriminate. }
       rewrite lookup_delete_ne by assumption.
-      destruct (ds !! k'); last done.
+      destruct (fs !! k'); last done.
       destruct v'; done.
   Qed.
 
   Lemma Fields_idep : forall d, DESC (Fields d) = d.
   Proof. intros [ds]; reflexivity. Qed.
 
+  (* Keeping Vals to match underlying syntax, could state lemma without it though *)
   Lemma SC_filter : forall v d, ⟨ v ∷ d ⟩ -> ValList d v = map_to_list (Vals v).
   Proof.
     intros [vs].
@@ -1151,35 +1166,35 @@ Section Theorems.
                    H2 into Hds_no,
                      H3 into Hvs_no,
                        H4 into Hds_fst,
-                         H5 into Hvs_fst,
-                           vs0 into vs.
+                         H5 into Hvs_fst; map_unfold.
+      invc x.
       rewrite map_to_list_insert_first_key by assumption.
       simpl. rewrite filter_cons_True.
-      + f_equal. specialize (IHHsc vs eq_refl).
-        fold (Vals (VALUE vs)). fold (ValList (DESC (<[k:=f]> ds)) (VALUE vs)).
-        fold (Vals (VALUE vs)) in IHHsc. fold (ValList (DESC ds) (VALUE vs)) in IHHsc.
-        rewrite <- IHHsc.
+      + f_equal. specialize (IHHsc vs0 eq_refl).
+        fold (Vals (VALUE vs0)). fold (ValList (DESC (<[k:=f]> fs)) (VALUE vs0)).
+        fold (Vals (VALUE vs0)) in IHHsc. fold (ValList (DESC fs) (VALUE vs0)) in IHHsc.
+        rewrite <- IHHsc. rewrite Desc_insert_fold.
         by rewrite ValList_drop_ok by assumption.
       + unfold ValList_filter_p; simpl.
         rewrite lookup_insert_eq.
-        destruct v; try trivial.
+        destruct val; try trivial.
         destruct f; unfold field_val_type_match in Hty; assumption.
   Qed.
 
-  Lemma SC_Empty_Desc : forall d, ⟨ VALUE ∅ ∷ d ⟩ -> d = DESC ∅.
+  Lemma SC_Empty_Desc : forall d, ⟨ ∅ ∷ d ⟩ -> d = ∅.
   Proof.
-    intros [ds] H. f_equal. apply map_eq. intros i. rewrite lookup_empty.
+    intros [ds] H. f_equal. desc_unfold; f_equal. apply map_eq. intros i. rewrite lookup_empty.
     destruct (ds !! i) eqn:Heq; last reflexivity.
     apply SC_implies_desc_in_val with (k := i) (f := f) in H; last done.
-    destruct H as [v H]; simpl in H. rewrite lookup_empty in H.
+    destruct H as [v H]; simpl in H. map_unfold. rewrite lookup_empty in H.
     discriminate.
   Qed.
 
-  Lemma ValList_not_in : forall d vs k, vs !! k = None -> k ∉ (ValList d (VALUE vs)).*1.
+  Lemma ValList_not_in : forall d v k, v !! k = None -> k ∉ (ValList d v).*1.
   Proof.
-    intros d vs k Hnone.
+    intros d v k Hnone.
     rewrite not_elem_of_list_to_map.
-    unfold ValList; simpl.
+    unfold ValList; simpl; value_unfold.
     induction vs using map_first_key_ind.
     - by rewrite map_to_list_empty, filter_nil, list_to_map_nil, lookup_empty.
     - rewrite map_to_list_insert_first_key by assumption.
@@ -1193,24 +1208,6 @@ Section Theorems.
         * subst. rewrite lookup_insert_eq in Hnone. discriminate.
         * rewrite lookup_insert_ne in Hnone by assumption.
           exact Hnone.
-  Qed.
-
-  (* FIXME: Proving Value a finite map would let me use insert_insert_eq directly. *)
-  Lemma insert_insert_value_eq : forall k v1 v2 (v : Value), <[k := v1]> $ <[k := v2]> v = <[k := v1]> v.
-  Proof.
-    intros k v1 v2 [vs].
-    rewrite !Value_insert_unfold.
-    rewrite insert_insert_eq.
-    reflexivity.
-  Qed.
-
-  Lemma insert_insert_value_ne : forall k1 k2 v1 v2 (v : Value),
-    k1 <> k2 -> <[k1 := v1]> $ <[k2 := v2]> v = <[k2 := v2]> $ <[k1 := v1]> v.
-  Proof.
-    intros k1 k2 v1 v2 [vs] Hneq.
-    rewrite !Value_insert_unfold.
-    f_equal.
-    by apply insert_insert_ne.
   Qed.
 
   Lemma merge_insert_eliminated_r `{FinMap K M} {A B C}
@@ -1264,23 +1261,23 @@ Section Theorems.
       rewrite map_to_list_empty, filter_nil.
       unfold list_to_value; simpl.
       by rewrite merge_empty.
-    - unfold ValList; simpl.
+    - unfold ValList; simpl; map_unfold.
       rewrite map_to_list_insert_first_key by assumption.
       rewrite filter_cons_True.
       + unfold list_to_value.
         rewrite list_to_map_cons.
         fold (Vals $ VALUE vs);
-          fold (ValList (DESC (<[k := f]> ds)) (VALUE vs)); simpl.
-        rewrite <- insert_merge with (x := v).
+          fold (ValList (DESC (<[k := f]> fs)) (VALUE vs)); simpl.
+        rewrite <- insert_merge with (x := val).
         * rewrite !Value_insert_fold.
-          fold (Fields (DESC ds)).
-          fold (list_to_value (DESC ds) (ValList (DESC (<[k:=f]> (Fields $ DESC ds))) (VALUE vs))).
-          simpl. rewrite ValList_drop_ok by assumption.
+          fold (Fields (DESC fs)).
+          fold (list_to_value (DESC fs) (ValList (DESC (<[k:=f]> (Fields $ DESC fs))) (VALUE vs))).
+          simpl. rewrite Desc_insert_fold, ValList_drop_ok by assumption.
           by rewrite IHHsc at 1.
-        * unfold Merge. destruct f; destruct v; unfold field_val_type_match; (contradiction || reflexivity).
+        * unfold Merge. destruct f; destruct val; unfold field_val_type_match; (contradiction || reflexivity).
       + unfold ValList_filter_p; simpl.
         rewrite lookup_insert_eq.
-        destruct f; destruct v; unfold field_val_type_match; (contradiction || reflexivity).
+        destruct f; destruct val; unfold field_val_type_match; (contradiction || reflexivity).
   Qed.
 
   Lemma SC_filter_self : forall d v, ⟨ v ∷ d ⟩ -> ⟨ list_to_value d (ValList d v) ∷ d⟩.
@@ -1298,34 +1295,34 @@ Section Theorems.
       rewrite merge_empty.
       apply CompatRefl; apply SC_Empty.
     - apply CompatibleEqual in IHHsc; last done.
-      unfold ValList; simpl.
+      unfold ValList; simpl; map_unfold.
       rewrite map_to_list_insert_first_key by assumption.
       rewrite filter_cons_True. 
       + unfold list_to_value.
         rewrite list_to_map_cons; simpl.
-        rewrite <- insert_merge with (x := v).
+        rewrite <- insert_merge with (x := val).
         * rewrite !Value_insert_fold, !Desc_insert_fold.
           apply CompatAdd; try done.
           -- by apply SC_SCO in Hsc.
-          -- fold (Vals (VALUE vs)); fold (ValList (<[k:=f]> (DESC ds)) (VALUE vs)).
-             rewrite Desc_insert_unfold. rewrite ValList_drop_ok by assumption.
-             fold (Fields $ DESC ds).
-             fold (list_to_value (DESC ds) (ValList (DESC (Fields $ DESC ds)) (VALUE vs))); simpl.
+          -- fold (Vals (VALUE vs)); fold (ValList (<[k:=f]> (DESC fs)) (VALUE vs)).
+             rewrite Desc_insert_unfold. rewrite Desc_insert_fold, ValList_drop_ok by assumption.
+             fold (Fields $ DESC fs).
+             fold (list_to_value (DESC fs) (ValList (DESC (Fields $ DESC fs)) (VALUE vs))); simpl.
              rewrite <- IHHsc. by apply SC_SCO in Hsc.
-          -- fold (Vals (VALUE vs)); fold (ValList (<[k:=f]> (DESC ds)) (VALUE vs)).
-             rewrite Desc_insert_unfold. rewrite ValList_drop_ok by assumption.
-             fold (Fields $ DESC ds).
-             fold (list_to_value (DESC ds) (ValList (DESC (Fields $ DESC ds)) (VALUE vs))); simpl.
+          -- fold (Vals (VALUE vs)); fold (ValList (<[k:=f]> (DESC fs)) (VALUE vs)).
+             rewrite Desc_insert_unfold. rewrite Desc_insert_fold, ValList_drop_ok by assumption.
+             fold (Fields $ DESC fs).
+             fold (list_to_value (DESC fs) (ValList (DESC (Fields $ DESC fs)) (VALUE vs))); simpl.
              rewrite <- IHHsc. apply SC_SCO in Hsc. by apply CompatRefl.
-          -- fold (Vals (VALUE vs)); fold (ValList (<[k:=f]> (DESC ds)) (VALUE vs)).
-             rewrite Desc_insert_unfold. rewrite ValList_drop_ok by assumption.
-             fold (Fields $ DESC ds).
-             fold (list_to_value (DESC ds) (ValList (DESC (Fields $ DESC ds)) (VALUE vs))); simpl.
+          -- fold (Vals (VALUE vs)); fold (ValList (<[k:=f]> (DESC fs)) (VALUE vs)).
+             rewrite Desc_insert_unfold. rewrite Desc_insert_fold, ValList_drop_ok by assumption.
+             fold (Fields $ DESC fs).
+             fold (list_to_value (DESC fs) (ValList (DESC (Fields $ DESC fs)) (VALUE vs))); simpl.
              rewrite <- IHHsc. by rewrite Value_lookup_unfold.
-        * unfold Merge. destruct f; destruct v; unfold field_val_type_match; (contradiction || reflexivity).
+        * unfold Merge. destruct f; destruct val; unfold field_val_type_match; (contradiction || reflexivity).
       + unfold ValList_filter_p; simpl.
         rewrite lookup_insert_eq.
-        destruct v; try trivial.
+        destruct val; try trivial.
         unfold field_val_type_match in Hty.
         destruct f; contradiction.
   Qed.

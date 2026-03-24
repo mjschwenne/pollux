@@ -853,6 +853,22 @@ Section Value_lemmas.
       VALUE (filter P vs) = filter P (VALUE vs).
     Proof. reflexivity. Qed.
 
+    Lemma insert_insert_value_eq : forall k v1 v2 (v : Value), <[k := v1]> $ <[k := v2]> v = <[k := v1]> v.
+    Proof.
+      intros k v1 v2 [vs].
+      rewrite !Value_insert_unfold.
+      rewrite insert_insert_eq.
+      reflexivity.
+    Qed.
+
+    Lemma insert_insert_value_ne : forall k1 k2 v1 v2 (v : Value),
+      k1 <> k2 -> <[k1 := v1]> $ <[k2 := v2]> v = <[k2 := v2]> $ <[k1 := v1]> v.
+    Proof.
+      intros k1 k2 v1 v2 [vs] Hneq.
+      rewrite !Value_insert_unfold.
+      f_equal.
+      by apply insert_insert_ne.
+    Qed.
   End Value_lemmas.
 
   (* ==================== HINT DATABASES ==================== *)
@@ -956,6 +972,8 @@ Section Value_lemmas.
           | apply lookup_singleton_ne; [lia || done |]
           | apply insert_empty
           | apply delete_empty
+          | rewrite insert_insert_value_eq 
+          | rewrite insert_insert_value_ne
           | done
           | eauto ].
 
