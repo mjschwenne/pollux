@@ -231,7 +231,7 @@ Module Type Theorems
     Qed.
 
     (* Relax the rest requirement, since the Limit parser will ensure rest = [] *)
-    Definition LimitParseOk {X : Type} {wf : X -> Prop} (ser : S.Serializer X wf) (par : P.Parser X) := 
+    Definition LimitParseOk {X : Type} {wf : X -> Prop} (par : P.Parser X) (ser : S.Serializer X wf) := 
       forall x enc,
       wf x -> ser x = S.mkSuccess enc -> par enc = Success x Input_default.
 
@@ -240,7 +240,7 @@ Module Type Theorems
 
     Lemma LimitCorrect {X : Type} {wf : X -> Prop} (len : X -> nat)
       (underlying__ser : S.Serializer X wf) (underlying__par : P.Parser X) (x : X) :
-      LimitParseOk underlying__ser underlying__par ->
+      LimitParseOk underlying__par underlying__ser ->
       LenOk underlying__ser len x ->
       ParseOk' (P.Limit underlying__par (len x)) (S.Limit underlying__ser len) x.
     Proof using Type.
@@ -261,7 +261,7 @@ Module Type Theorems
       (ser__len : S.Serializer nat wfn) (par__len : P.Parser nat) (len : X -> nat)
       (ser__x : S.Serializer X wfx) (par__x : P.Parser X) (x : X) :
       ParseOk par__len ser__len ->
-      LimitParseOk ser__x par__x ->
+      LimitParseOk par__x ser__x ->
       LenOk ser__x len x ->
       ParseOk' (P.Len par__len par__x) (S.Len len ser__len ser__x) x.
     Proof using Type.
@@ -271,14 +271,14 @@ Module Type Theorems
       apply LimitCorrect; assumption.
     Qed.
 
-    Definition LimitParseOkWeak {X : Type} {wf : X -> Prop} (ser : S.Serializer X wf) (par : P.Parser X) (x : X) := 
+    Definition LimitParseOkWeak {X : Type} {wf : X -> Prop} (par : P.Parser X) (ser : S.Serializer X wf) (x : X) := 
       forall enc, wf x -> ser x = S.mkSuccess enc -> par enc = Success x Input_default.
 
     Lemma LenCorrect'Weakened {X : Type} {wfx : X -> Prop} {wfn : nat -> Prop}
       (ser__len : S.Serializer nat wfn) (par__len : P.Parser nat)
       (ser__x : S.Serializer X wfx) (par__x : P.Parser X) (x : X) :
       ParseOk par__len ser__len ->
-      LimitParseOkWeak ser__x par__x x ->
+      LimitParseOkWeak par__x ser__x x ->
       ParseOk' (P.Len par__len par__x) (S.Len' ser__len ser__x) x.
     Proof using Type.
       intros Hnat_ok Hlim_ok enc' rest Hwf.
@@ -304,7 +304,7 @@ Module Type Theorems
       (ser__len : S.Serializer nat wfn) (par__len : P.Parser nat)
       (ser__x : S.Serializer X wfx) (par__x : P.Parser X) :
       ParseOk par__len ser__len ->
-      LimitParseOk ser__x par__x ->
+      LimitParseOk par__x ser__x ->
       ParseOk (P.Len par__len par__x) (S.Len' ser__len ser__x).
     Proof using Type.
       intros Hnat_ok Hlim_ok x enc rest Hwf.
@@ -633,10 +633,10 @@ Module Type Theorems
 
     Lemma RepCorrect {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) (par__x : P.Parser X) :
       (* TODO: Split this into a typeclass. Make one for consuming parsers too. *)
-      (exists msg, par__x Input_default = Failure Recoverable $ mkData msg Input_default None) ->
-      (forall x enc, ser__x x = S.mkSuccess enc -> Length enc > 0) ->
+      (exists msg data, par__x Input_default = Failure Recoverable $ mkData msg Input_default data) ->
+      (forall x enc, wfx x -> ser__x x = S.mkSuccess enc -> Length enc > 0) ->
       ParseOk par__x ser__x ->
-      LimitParseOk (S.Rep ser__x) (P.Rep par__x).
+      LimitParseOk (P.Rep par__x) (S.Rep ser__x).
     Proof using Type.
       intros HparEmp Hpro HpOk xs.
       induction xs as [| y ys].
@@ -645,9 +645,8 @@ Module Type Theorems
         rewrite (@par_rep'_unfold X).
         unfold S.Output_default;
           rewrite Length_default.
-        destruct HparEmp as [emp_msg HparEmp].
-        rewrite HparEmp.
-        reflexivity.
+        destruct HparEmp as (emp_msg & emp_data & HparEmp).
+        by rewrite HparEmp.
       - intros enc Hwf. destruct Hwf as [Hwf__y Hwf__rest].
         unfold S.Rep, P.Rep.
         intros Hser. rewrite SerialRepInversion_First in Hser.
@@ -655,7 +654,7 @@ Module Type Theorems
         rewrite (@par_rep'_unfold X), Henc, App_Length.
         specialize (HpOk y enc__y enc__rest Hwf__y Hser__y) as Hok__y.
         rewrite Hok__y.
-        pose proof (Hpro y enc__y Hser__y) as Hpro__y.
+        pose proof (Hpro y enc__y Hwf__y Hser__y) as Hpro__y.
         destruct (decide (Length _ < _)); last lia.
         specialize (IHys enc__rest Hwf__rest Hser__rest); unfold P.Rep in IHys.
         rewrite IHys. reflexivity.

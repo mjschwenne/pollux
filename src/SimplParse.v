@@ -495,7 +495,7 @@ Module SimplParser.
         pose proof (@LenCorrect'Weakened _ (S.Concat_wf val_wf val_wf) _ SerialNat ParseNat
                       (S.Concat s s)
                       (P.Concat p p) (v1, v2) NatParseOk) as Hser_len.
-        assert (LimitParseOkWeak (@S.Concat _ _ val_wf val_wf s s) (P.Concat p p) (v1, v2))
+        assert (LimitParseOkWeak (P.Concat p p) (@S.Concat _ _ val_wf val_wf s s) (v1, v2))
           as Hps_ok.
         {
           unfold LimitParseOkWeak.

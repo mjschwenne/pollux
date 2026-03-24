@@ -884,15 +884,10 @@ Section Value_lemmas.
        Desc_partial_alter_unfold Desc_filter_unfold Desc_dom_unfold
        Desc_map_to_list_unfold : desc_unfold.
 
-  (* Desc folding - each needs its own Hint Rewrite <- *)
-  Hint Rewrite <- Desc_lookup_fold : desc_fold.
-  Hint Rewrite <- Desc_insert_fold : desc_fold.
-  Hint Rewrite <- Desc_empty_fold : desc_fold.
-  Hint Rewrite <- Desc_singleton_fold : desc_fold.
-  Hint Rewrite <- Desc_delete_fold : desc_fold.
-  Hint Rewrite <- Desc_alter_fold : desc_fold.
-  Hint Rewrite <- Desc_partial_alter_fold : desc_fold.
-  Hint Rewrite <- Desc_filter_fold : desc_fold.
+  (* Desc folding *)
+  Hint Rewrite Desc_lookup_fold Desc_empty_fold Desc_singleton_fold
+    Desc_delete_fold Desc_alter_fold Desc_partial_alter_fold
+    Desc_filter_fold Desc_insert_fold : desc_fold.
 
   (* Value unfolding *)
   Hint Rewrite Value_lookup_unfold Value_insert_unfold Value_empty_unfold
@@ -901,14 +896,9 @@ Section Value_lemmas.
        Value_map_to_list_unfold : value_unfold.
 
   (* Value folding *)
-  Hint Rewrite <- Value_lookup_fold : value_fold.
-  Hint Rewrite <- Value_insert_fold : value_fold.
-  Hint Rewrite <- Value_empty_fold : value_fold.
-  Hint Rewrite <- Value_singleton_fold : value_fold.
-  Hint Rewrite <- Value_delete_fold : value_fold.
-  Hint Rewrite <- Value_alter_fold : value_fold.
-  Hint Rewrite <- Value_partial_alter_fold : value_fold.
-  Hint Rewrite <- Value_filter_fold : value_fold.
+  Hint Rewrite Value_lookup_fold Value_insert_fold Value_empty_fold
+    Value_singleton_fold Value_delete_fold Value_alter_fold
+    Value_partial_alter_fold Value_filter_fold : value_fold.
 
   (* ==================== TACTICS ==================== *)
 

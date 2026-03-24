@@ -280,7 +280,6 @@ Section Theorems.
                    (ValueDepth val == ValueDepth (VALUE (<[k := v]> vs))); value_solve.
   Qed.
 
-  (* FIXME: Rewrite theorems / proofs with new value / desc automation *)
   Lemma SerialValueInversion (d : Desc) :
     forall k v (m : Value) enc,
     m !! k = None -> map_first_key (<[k := v]> m) k ->
@@ -1173,7 +1172,7 @@ Section Theorems.
       + f_equal. specialize (IHHsc vs0 eq_refl).
         fold (Vals (VALUE vs0)). fold (ValList (DESC (<[k:=f]> fs)) (VALUE vs0)).
         fold (Vals (VALUE vs0)) in IHHsc. fold (ValList (DESC fs) (VALUE vs0)) in IHHsc.
-        rewrite <- IHHsc. rewrite Desc_insert_fold.
+        rewrite <- IHHsc. desc_fold.
         by rewrite ValList_drop_ok by assumption.
       + unfold ValList_filter_p; simpl.
         rewrite lookup_insert_eq.
@@ -1328,39 +1327,62 @@ Section Theorems.
   Qed.
 
   Definition ParseOk_Value_P (v : Value) :=
-    forall d, ⟨ v ∷ d ⟩ -> ParseOkCompat'' Compatible ParseValue SerialValue d d v.
+    forall d, ⟨ v ∷ d ⟩ -> LimitParseOkCompat'' Compatible ParseValue SerialValue d d v.
 
   Definition ParseOk_Val_P (v : Val) :=
     forall d k enc,
     Val_wf d (k, v) ->
     SerialVal SerialValue d (k, v) = S.mkSuccess enc.
 
-  Theorem InterParseOk : forall v, ParseOk_Value_P v.
+  (* Theorem InterParseOk : forall v, ParseOk_Value_P v. *)
+  Theorem InterParseOk : forall v d, ⟨ v ∷ d ⟩ -> LimitParseOkCompat'' Compatible ParseValue SerialValue d d v.
   Proof.
-    induction v as [vs IHv | v__n | b | z |] using Value_ind' with
-        (P_Value := ParseOk_Value_P)
-        (P_Val := ParseOk_Val_P).
-    - (* VALUE case *)
-      intros d Hsc.
-      apply RecursiveStateCompatCorrect with
-        (valid_state := fun d v => ⟨ v ∷ d ⟩)
-        (linked_state := fun d1 d2 => d1 = d2); try done.
-      intros st1 st2 x enc rest Hwf__x Hsc__x Hlinked IH. subst st2.
-      unfold SerialValue', ParseValue'.
-      intros Hser. exists (list_to_value st1 (ValList st1 x)).
-      revert Hser.
-      apply MapCompatCorrect.
-      + apply (FullDescriptor_RoundTrip _ _ Hsc__x).
-      + (* TODO: This should be a separate lemma *)
-        admit.
-      + admit.
-    - admit.
-    - (* V_BOOL *)
-      admit.
-    - (* V_INT *)
-      admit.
-    - (* V_MISSING *)
-      admit.
+    intros v d Hsc.
+    apply LimitRecursiveStateCompatCorrect with
+      (valid_state := fun d v => ⟨ v ∷ d ⟩)
+      (linked_state := fun d1 d2 => d1 = d2); try done.
+    intros d' d2 x enc Hwf Hsc__n Hdeq IH. subst d2.
+    intros Hser. exists (list_to_value d' (ValList d' x)). revert Hser.
+    unfold SerialValue', ParseValue'.
+    apply LimitMapCompatCorrect.
+    + apply (FullDescriptor_RoundTrip _ _ Hsc__n).
+    + apply RepCorrect.
+      * vm_compute. exists "Bind left failed"%string.
+        exists (Some (mkData "Map underlying failed" []
+                   (Some (mkData "No more data to parse" [] None)))).
+        reflexivity.
+      * intros [z val] enc__n Hwf__val.
+        fold (SerialValue'). unfold S.recur_step_st. 
+        unfold SerialVal. desc_unfold. unfold WillEncode in Hwf.
+        destruct Hwf__val as (f & Hin & Hval_wf). simpl in Hin. rewrite Hin.
+        destruct f.
+        -- destruct val; simpl in *; try done.
+           ++ rewrite Hin in Hval_wf. intros Hser.
+              apply SerialConcatInversion in Hser.
+              destruct Hser as ( enc__t & enc__b & Ht_ok & Hb_ok & Henc ).
+              rewrite Henc, App_Length. apply UnsignedLength in Ht_ok. 
+              lia.
+           ++ rewrite Hin in Hval_wf. contradiction.
+        -- destruct val; simpl in *; try done.
+           ++ rewrite Hin in Hval_wf. intros Hser.
+              apply SerialConcatInversion in Hser.
+              destruct Hser as ( enc__t & enc__b & Ht_ok & Hb_ok & Henc ).
+              rewrite Henc, App_Length. apply UnsignedLength in Ht_ok. 
+              lia.
+           ++ rewrite Hin in Hval_wf. contradiction.
+        -- destruct val; simpl in *; try done.
+           ++ rewrite Hin in Hval_wf. intros Hser.
+              apply SerialConcatInversion in Hser.
+              destruct Hser as ( enc__t & enc__b & Ht_ok & Hb_ok & Henc ).
+              rewrite Henc, App_Length. apply UnsignedLength in Ht_ok. 
+              lia.
+           ++ rewrite Hin in Hval_wf. contradiction.
+      * clear v d Hsc. intros [z v] enc__n rest Hwf__n.
+        unfold SerialVal, ParseVal.
+        destruct Hwf__n as (f & Hin & Hval_wf); simpl in Hin. rewrite Hin.
+        destruct f.
+        -- destruct v; fold (SerialValue').
+           (* ++ apply BindCorrect'. *)
   Abort.
 
 End Theorems.

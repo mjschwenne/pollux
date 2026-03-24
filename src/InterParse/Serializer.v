@@ -122,9 +122,10 @@ Section Serializer.
   with Val_wf_fold (ds : gmap Z Field) (k : Z) (v : Val) (acc : Prop) : Prop :=
          match ds !! k, v with
          | None, _ => acc (* Skip fields that will be dropped *)
-         | Some F_BOOL, V_BOOL _ => acc (* All Booleans are intrinsically well-formed *)
-         | Some F_INT, V_INT z => acc /\ 0 <= z < 2^32 (* Integer fits in bounds *)
-         | Some (F_MSG d), V_MSG val => acc /\ Value_wf d val (* Nested message is also well-formed *)
+         (* Still have to restrict the value of the key... *)
+         | Some F_BOOL, V_BOOL _ => 0 <= k < 256 /\ acc (* All Booleans are intrinsically well-formed *)
+         | Some F_INT, V_INT z => acc /\ 0 <= k < 256 /\ 0 <= z < 2^32 (* Integer fits in bounds *)
+         | Some (F_MSG d), V_MSG val => acc /\ 0 <= k < 256 /\ Value_wf d val (* Nested message is also well-formed *)
          | _, _ => False
          end.
         
@@ -136,9 +137,9 @@ Section Serializer.
     Val_wf_fold (Fields d) key val True =
     match (Fields d) !! key, val with
     | None, _ => True (* Skip fields that will be dropped *)
-    | Some F_BOOL, V_BOOL _ => True (* All Booleans are intrinsically well-formed *)
-    | Some F_INT, V_INT z => True /\ 0 <= z < 2^32 (* Integer fits in bounds *)
-    | Some (F_MSG d), V_MSG val => True /\ Value_wf d val (* Nested message is also well-formed *)
+    | Some F_BOOL, V_BOOL _ => 0 <= key < 256 /\ True (* All Booleans are intrinsically well-formed *)
+    | Some F_INT, V_INT z => True /\ 0 <= key < 256 /\ 0 <= z < 2^32 (* Integer fits in bounds *)
+    | Some (F_MSG d), V_MSG val => True /\ 0 <= key < 256 /\ Value_wf d val (* Nested message is also well-formed *)
     | _, _ => False
     end.
   Proof using Type.
