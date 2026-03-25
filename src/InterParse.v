@@ -1346,7 +1346,7 @@ Section Theorems.
     unfold SerialValue', ParseValue'.
     apply LimitMapCompatCorrect.
     + apply (FullDescriptor_RoundTrip _ _ Hsc__n).
-    + apply RepCorrect.
+    + apply RepCorrectWeak.
       * vm_compute. exists "Bind left failed"%string.
         exists (Some (mkData "Map underlying failed" []
                    (Some (mkData "No more data to parse" [] None)))).
@@ -1377,9 +1377,9 @@ Section Theorems.
               rewrite Henc, App_Length. apply UnsignedLength in Ht_ok. 
               lia.
            ++ rewrite Hin in Hval_wf. contradiction.
-      * clear v d Hsc. intros [z v] enc__n rest Hwf__n.
-        unfold SerialVal, ParseVal.
-        destruct Hwf__n as (f & Hin & Hval_wf); simpl in Hin. rewrite Hin.
+      * clear v d Hsc. intros [z v] Hin enc__n rest Hwf__n.
+        unfold SerialVal at 1. unfold ParseVal at 1.
+        destruct Hwf__n as (f & Hin__d & Hval_wf); simpl in Hin__d. rewrite Hin__d.
         destruct f.
         -- destruct v; fold (SerialValue').
            ++ 
