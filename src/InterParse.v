@@ -1382,6 +1382,7 @@ Section Theorems.
         destruct Hwf__n as (f & Hin & Hval_wf); simpl in Hin. rewrite Hin.
         destruct f.
         -- destruct v; fold (SerialValue').
+           ++ 
            (* ++ apply BindCorrect'. *)
   Abort.
 

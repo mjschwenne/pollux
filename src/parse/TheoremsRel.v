@@ -266,12 +266,12 @@ Module Type TheoremsRel
       (par : P.Parser B) (from : B -> A) :
       forall x enc,
       R x (from $ to x) ->
-      LimitParseOk par ser ->
+      LimitParseOkWeak par ser (to x) ->
       LimitParseOkSimpleRel''' R (P.Map par from) (S.Map ser to) x (from $ to x) enc.
     Proof using Type.
       intros x enc Hcompat Hunder Hwf.
       unfold S.Map; intros Hser.
-      specialize (Hunder (to x) enc Hwf Hser).
+      specialize (Hunder enc Hwf Hser).
       unfold P.Map; rewrite Hunder.
       split; done.
     Qed.
