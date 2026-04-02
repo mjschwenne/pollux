@@ -14,7 +14,7 @@ Module Type Serializer (InputModule : AbstractInput) (Results : Result InputModu
   (* Since results have an result for use in parsers, we'll always use unit for the Serializers *)
   Definition Output := Input.
   Definition Output_default := Input_default.
-  Definition mkSuccess enc := Success () enc.
+  Notation mkSuccess enc := (Success () enc).
   Lemma mkSuccess_eq : forall enc, Success () enc = mkSuccess enc.
   Proof. intros. reflexivity. Qed.
   Definition Out := @getEnc unit.
@@ -205,7 +205,7 @@ Module Type Serializer (InputModule : AbstractInput) (Results : Result InputModu
       match xs with
       | [] => mkSuccess Output_default
       | x :: xs' => match underlying x, rep' underlying xs' with
-                   | Success _ x_enc, Success _ rest_enc => mkSuccess $ App x_enc rest_enc
+                   | Success _ x_enc, Success _ rest_enc => mkSuccess (App x_enc rest_enc)
                    | Failure lvl data as f, Success _ rest_enc => f
                    | Success _ x_enc, Failure lvl data as f => f
                    | Failure lvl__x data__x, Failure lvl__r data__r =>

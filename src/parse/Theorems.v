@@ -72,7 +72,6 @@ Module Type Theorems
       unfold S.Bind.
       destruct (ls x (tag x)) as [[] l_enc|] eqn:Hleft; last discriminate.
       destruct (rs x) as [[] r_enc|] eqn:Hright; last discriminate.
-      rewrite S.mkSuccess_eq in Hleft, Hright.
       intro Hser_ok. inversion Hser_ok as [Henc].
       rewrite App_assoc.
       unfold P.Bind.
@@ -101,7 +100,6 @@ Module Type Theorems
       unfold S.BindSucceeds.
       destruct (rs x) as [[] r_enc|] eqn:Hright; last discriminate.
       destruct (ls x r_enc (tag x)) as [[] l_enc|] eqn:Hleft; last discriminate.
-      rewrite S.mkSuccess_eq in Hleft, Hright.
       intros Hser_ok. inversion Hser_ok as [Henc].
       destruct wf_ok as [wfl_ok wfr_ok].
       rewrite App_assoc.
@@ -171,7 +169,7 @@ Module Type Theorems
         destruct (ser__a a) as [[] out__a |] eqn:Ha, (ser__b b) as [[] out__b |] eqn:Hb; try discriminate.
         intro H; inversion H as [Henc]; clear H.
         exists out__a, out__b. repeat (split; first reflexivity); reflexivity.
-      - intros (out__a & out__b & Ha & Hb & Henc). unfold S.Concat, S.mkSuccess in *.
+      - intros (out__a & out__b & Ha & Hb & Henc). unfold S.Concat in *.
         rewrite Ha, Hb. congruence.
     Qed.
 
@@ -207,7 +205,7 @@ Module Type Theorems
       apply SerialConcatInversion in Hbind.
       destruct Hbind as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
       subst. rewrite Hl_ok, Hr_ok.
-      unfold LengthIf, S.mkSuccess.
+      unfold LengthIf.
       rewrite App_Length. reflexivity.
     Qed.
 
@@ -338,10 +336,9 @@ Module Type Theorems
       - unfold S.Len'.
         destruct (ser__x x) as [[] out__x |] eqn:Hx; last discriminate.
         destruct (ser__n (Length out__x)) as [[] out__n |] eqn:Hn; last discriminate.
-        rewrite S.mkSuccess_eq in *.
         intro H; inversion H as [Henc]; clear H.
         exists out__n, out__x. repeat (split; done).
-      - intros (out__n & out__x & Hn & Hx & Henc). unfold S.Len', S.mkSuccess in *.
+      - intros (out__n & out__x & Hn & Hx & Henc). unfold S.Len' in *.
         rewrite Hx, Hn, Henc. reflexivity.
     Qed.
 
@@ -396,7 +393,7 @@ Module Type Theorems
       match xs with
       | [] => S.mkSuccess S.Output_default
       | x :: xs' => match underlying x, S.rep' underlying xs' with
-                    | Success _ x_enc, Success _ rest_enc => S.mkSuccess $ App x_enc rest_enc
+                    | Success _ x_enc, Success _ rest_enc => S.mkSuccess (App x_enc rest_enc)
                     | Failure lvl data as f, Success _ rest_enc => f
                     | Success _ x_enc, Failure lvl data as f => f
                     | Failure lvl__x data__x, Failure lvl__r data__r =>
@@ -413,7 +410,7 @@ Module Type Theorems
       match xs with
       | [] => S.mkSuccess S.Output_default
       | x :: xs' => match underlying x, S.rep' underlying xs' with
-                    | Success _ x_enc, Success _ rest_enc => S.mkSuccess $ App x_enc rest_enc
+                    | Success _ x_enc, Success _ rest_enc => S.mkSuccess (App x_enc rest_enc)
                     | Failure lvl data as f, Success _ rest_enc => f
                     | Success _ x_enc, Failure lvl data as f => f
                     | Failure lvl__x data__x, Failure lvl__r data__r =>
@@ -487,7 +484,7 @@ Module Type Theorems
       induction ys.
       - unfold S.Rep.
         rewrite !ser_rep_unfold.
-        unfold S.mkSuccess, result_equiv.
+        unfold result_equiv.
         done.
       - rewrite ser_rep_unfold.
         rewrite (ser_rep_unfold ser2).
@@ -495,7 +492,7 @@ Module Type Theorems
         destruct (ser1 a) as [[] enc1 | lvl1 data1] eqn:Hser1, (ser2 a) as [[] enc2 | lvl2 data2] eqn:Hser2.
         + destruct (S.rep' ser1 ys) as [[] enc_ys1 | lvl_ys1 data_ys1] eqn:Hser_ys1,
                      (S.rep' ser2 ys) as [[] enc_ys2 | lvl_ys2 data_ys2] eqn:Hser_ys2.
-          * unfold S.mkSuccess, result_equiv. split; first reflexivity.
+          * unfold result_equiv. split; first reflexivity.
             unfold S.Rep in IHys.
             apply ResultEquivSuccess with
               (x1 := ()) (x2 := ())
@@ -504,11 +501,11 @@ Module Type Theorems
                destruct Hequiv_a as [[] Henc]; congruence.
             -- rewrite Hser_ys1; reflexivity.
             -- rewrite Hser_ys2; reflexivity.
-          * unfold S.mkSuccess, result_equiv.
+          * unfold result_equiv.
             unfold S.Rep, result_equiv in IHys.
             rewrite Hser_ys1, Hser_ys2 in IHys.
             assumption.
-          * unfold S.mkSuccess, result_equiv.
+          * unfold result_equiv.
             unfold S.Rep, result_equiv in IHys.
             rewrite Hser_ys1, Hser_ys2 in IHys.
             assumption.

@@ -550,7 +550,7 @@ Module SimplParser.
         + unfold P.Map. rewrite Hser_ok. reflexivity.
         + unfold S.Len'_wf.
           apply SerialLen'Inversion in Hrest_ok as (enc__len & enc__pay & Hlen_ok & Hpay_ok & Henc__rest).
-          rewrite Hpay_ok. unfold S.mkSuccess. rewrite Hlen_ok.
+          rewrite Hpay_ok. rewrite Hlen_ok.
           split; last done.
           apply SerialConcatInversion in Hpay_ok as (enc__v1 & enc__v2 & Hv1_ok & Hv2_ok & Henc__pay).
           rewrite Heqs in Hv1_ok, Hv2_ok.

@@ -207,7 +207,7 @@ Section SerializerTests.
     | _, _ => False
     end.
 
-  Example serial_value1 : SerialValue desc1 val1 = S.mkSuccess $ to_enc [2; 0; 0; 0; 0; 1; 0; 0; 0; 0].
+  Example serial_value1 : SerialValue desc1 val1 = S.mkSuccess (to_enc [2; 0; 0; 0; 0; 1; 0; 0; 0; 0]).
   Proof. reflexivity. Qed.
   Example serial_value_rt1 : round_trip desc1 val1.
   Proof. vm_compute; reflexivity. Qed.
@@ -217,26 +217,26 @@ Section SerializerTests.
   Proof. vm_compute; reflexivity. Qed.
 
   Example serial_value2 : SerialValue desc2 val2 =
-                          S.mkSuccess $ to_enc
-                            [2; 0; 0; 0; 0; 1; 10; 2; 0; 0; 0; 0; 1; 0; 0 ; 0; 0].
+                          S.mkSuccess (to_enc
+                            [2; 0; 0; 0; 0; 1; 10; 2; 0; 0; 0; 0; 1; 0; 0 ; 0; 0]).
   Proof. vm_compute; reflexivity. Qed.
   Example serial_value_rt2 : round_trip desc2 val2.
   Proof. vm_compute; reflexivity. Qed.
 
   Example serial_value3 : SerialValue desc3 val3 =
-                          S.mkSuccess $ to_enc
+                          S.mkSuccess (to_enc
                             [3; 10; 2; 84; 14; 0; 0; 1; 1; 0; 0; 0; 4;
                              17; 2; 1; 0; 0; 0; 1; 10; 2; 0; 0; 0; 0;
-                             1; 0; 0; 0; 0; 2; 0; 0; 0; 0; 1; 255; 255; 255; 0].
+                             1; 0; 0; 0; 0; 2; 0; 0; 0; 0; 1; 255; 255; 255; 0]).
   Proof. vm_compute; reflexivity. Qed.
   Example serial_value_rt3 : round_trip desc3 val3.
   Proof. vm_compute; reflexivity. Qed.
 
   Example serial_value4 : SerialValue desc3 val3' =
-                          S.mkSuccess $ to_enc
+                          S.mkSuccess (to_enc
                             [3; 5; 1; 1; 0; 0; 0; 4; 17; 2; 1; 0; 0; 0;
                              1; 10; 2; 0; 0; 0; 0; 1; 0; 0; 0; 0; 1;
-                             255; 255; 255; 0].
+                             255; 255; 255; 0]).
   Proof. vm_compute; reflexivity. Qed.
   Example serial_value_rt4 : round_trip desc3 val3'.
   Proof. vm_compute; reflexivity. Qed.

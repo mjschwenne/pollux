@@ -302,9 +302,8 @@ Section Theorems.
         split.
         * unfold SerialValue, S.RecursiveState.
           rewrite ser_recur_st_unfold.
-          unfold SerialValue', S.Map, ValList, Vals, S.mkSuccess.
+          unfold SerialValue', S.Map, ValList, Vals.
           rewrite <- ResultEquivSuccessIff with (r := S.Rep _ _).
-          unfold S.mkSuccess in Hrest_ok.
           rewrite <- Hrest_ok.
           (* Need to show that the depth bound difference doesn't matter *)
           (* because all elements in map_to_list m have depth < ValueDepth (VALUE m) *)
@@ -357,10 +356,9 @@ Section Theorems.
           split.
           -- unfold SerialValue, S.RecursiveState.
              rewrite ser_recur_st_unfold.
-             unfold SerialValue', S.Map, ValList, Vals, S.mkSuccess.
+             unfold SerialValue', S.Map, ValList, Vals.
              rewrite <- Hlst in Hser. 
              rewrite <- ResultEquivSuccessIff with (r := S.Rep _ _).
-             unfold S.mkSuccess in Hser.
              rewrite <- Hser.
              rewrite SerialRepSubst; first reflexivity.
              symmetry.
@@ -406,7 +404,7 @@ Section Theorems.
         * split; last reflexivity. revert Hrest_ok.
           unfold SerialValue, S.RecursiveState.
           rewrite ser_recur_st_unfold. 
-          unfold SerialValue', S.Map, ValList, Vals, S.mkSuccess.
+          unfold SerialValue', S.Map, ValList, Vals.
           change (
               (λ (self : ∀ d0 : Desc, S.Serializer Value (Value_wf d0)) (d0 : Desc) (a : Value),
                  S.Rep (SerialVal self d0)
@@ -429,10 +427,11 @@ Section Theorems.
         * (* v was dropped for being V_MISSING *) 
           destruct v; try (reflexivity || specialize (Hfilter_out I); contradiction).
           destruct f;
-            invc Hv_ok; rewrite App_nil_l; unfold S.mkSuccess, SerialValue', S.Map, ValList, Vals in *;
-                                                                                             rewrite <- ResultEquivSuccessIff with (r := S.Rep _ _);
-                                                                                             rewrite <- Hrest_ok;
-                                                                                             rewrite SerialRepSubst; first reflexivity.
+            invc Hv_ok; rewrite App_nil_l;
+            unfold SerialValue', S.Map, ValList, Vals in *;
+                                                 rewrite <- ResultEquivSuccessIff with (r := S.Rep _ _);
+                                                 rewrite <- Hrest_ok;
+                                                 rewrite SerialRepSubst; first reflexivity.
           -- rewrite Value_insert_fold.
              fold (Vals $ VALUE vs); fold (ValList d $ VALUE vs).
              apply SerialValWeakenDepth; assumption.
@@ -445,7 +444,6 @@ Section Theorems.
              fold (Vals $ VALUE vs); fold (ValList d $ VALUE vs).
              apply SerialValWeakenDepth; assumption.
         * (* v dropped for being unknown *)
-          unfold S.mkSuccess in *.
           invc Hv_ok. rewrite App_nil_l.
           rewrite <- ResultEquivSuccessIff with (r := S.Rep _ _).
           rewrite <- Hrest_ok.
@@ -1381,9 +1379,26 @@ Section Theorems.
         unfold SerialVal at 1. unfold ParseVal at 1.
         destruct Hwf__n as (f & Hin__d & Hval_wf); simpl in Hin__d. rewrite Hin__d.
         destruct f.
-        -- destruct v; fold (SerialValue').
-           ++ 
-           (* ++ apply BindCorrect'. *)
+        -- destruct v; fold (SerialValue'); try done.
+           ++ admit.
+           ++ unfold Val_wf, Val_wf_fold in Hval_wf.
+              rewrite Hin__d in Hval_wf. contradiction.
+        -- destruct v; fold (SerialValue'); try done.
+           ++ admit.
+           ++ unfold Val_wf, Val_wf_fold in Hval_wf.
+              rewrite Hin__d in Hval_wf. contradiction.
+        -- destruct v; fold (SerialValue'); try done.
+           ++ admit.
+           ++ unfold Val_wf, Val_wf_fold in Hval_wf.
+              rewrite Hin__d in Hval_wf. contradiction.
+    + unfold S.Map_wf.
+      apply SC_implies_properties in Hsc__n as Hsc__prop.
+      value_unfold. induction vs using map_first_key_ind.
+      * done.
+      * unfold ValList; simpl.
+        rewrite map_to_list_insert_first_key by assumption.
+        (* TODO: show ValList_filter_p for first key-value pair. *)
+        (* TODO: Extract that to secondary lemma, this isn't the first time I've encountered this...  *)
   Abort.
 
 End Theorems.
