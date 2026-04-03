@@ -845,6 +845,22 @@ Section Theorems.
     - apply SC_implies_nested_correct. assumption.
   Qed.
 
+  (** Combined theorem: inductive implies all four properties *)
+  Theorem SC_implies_properties_typed : forall d v,
+    ⟨ v ∷ d ⟩ ->
+    (forall k val, v !! k = Some val -> exists f, d !! k = Some f /\ field_val_type_match f val) /\
+    (forall k f, d !! k = Some f -> exists val, v !! k = Some val /\ field_val_type_match f val) /\
+    (forall k, v !! k ≠ Some V_MISSING) /\
+    map_Forall (NestedCorrect d) (Vals v).
+  Proof.
+    intros d v H.
+    split_and!.
+    - apply SC_implies_val_in_desc_typed. assumption.
+    - apply SC_implies_desc_in_val_typed. assumption.
+    - apply SC_implies_no_missing with (d := d). assumption.
+    - apply SC_implies_nested_correct. assumption.
+  Qed.
+
   Lemma SC_delete_key : forall d v k, ⟨ v ∷ d ⟩ -> ⟨ delete k v ∷ delete k d ⟩.
   Proof.
     intros d v k H.
@@ -1324,6 +1340,211 @@ Section Theorems.
         destruct f; contradiction.
   Qed.
 
+  Lemma Value_wf_weaken : forall v d k, v !! k = None -> Value_wf d v <-> Value_wf (delete k d) v.
+  Proof.
+    intros v. value_unfold.
+    induction vs as [|k val vs' Hno Hfst] using map_first_key_ind.
+    - intros d k _. desc_unfold. by rewrite !map_fold_empty.
+    - intros d k' Hno'. desc_unfold.
+      split.
+      + rewrite !map_fold_insert_first_key by assumption.
+        destruct val; unfold Val_wf_fold; rewrite ?Val_wf_fold_eq, ?Value_wf_eq.
+        * destruct (k' == k).
+          -- by rewrite Value_lookup_unfold, e, lookup_insert_eq in Hno'.
+          -- rewrite lookup_delete_ne by assumption.
+             destruct (fs !! k).
+             ++ destruct f; try done.
+                intros (Hwf & Hkey & Hwf_nest).
+                split_and!; try (assumption || lia).
+                rewrite Value_lookup_unfold, lookup_insert_ne, Value_lookup_fold in Hno' by done.
+                specialize (IHvs (DESC fs) k' Hno'); simpl in IHvs.
+                by rewrite <- IHvs.
+             ++ rewrite Value_lookup_unfold, lookup_insert_ne, Value_lookup_fold in Hno' by done.
+                specialize (IHvs (DESC fs) k' Hno'); simpl in IHvs.
+                by rewrite <- IHvs.
+        * destruct (k' == k).
+          -- by rewrite Value_lookup_unfold, e, lookup_insert_eq in Hno'.
+          -- rewrite lookup_delete_ne by assumption.
+             destruct (fs !! k).
+             ++ destruct f; try done.
+                intros (Hkey & Hwf_nest).
+                split_and!; try (assumption || lia).
+                rewrite Value_lookup_unfold, lookup_insert_ne, Value_lookup_fold in Hno' by done.
+                specialize (IHvs (DESC fs) k' Hno'); simpl in IHvs.
+                by rewrite <- IHvs.
+             ++ rewrite Value_lookup_unfold, lookup_insert_ne, Value_lookup_fold in Hno' by done.
+                specialize (IHvs (DESC fs) k' Hno'); simpl in IHvs.
+                by rewrite <- IHvs.
+        * destruct (k' == k).
+          -- by rewrite Value_lookup_unfold, e, lookup_insert_eq in Hno'.
+          -- rewrite lookup_delete_ne by assumption.
+             destruct (fs !! k).
+             ++ destruct f; try done.
+                intros (Hwf_nest & Hkey & Hwf).
+                split_and!; try (assumption || lia).
+                rewrite Value_lookup_unfold, lookup_insert_ne, Value_lookup_fold in Hno' by done.
+                specialize (IHvs (DESC fs) k' Hno'); simpl in IHvs.
+                by rewrite <- IHvs.
+             ++ rewrite Value_lookup_unfold, lookup_insert_ne, Value_lookup_fold in Hno' by done.
+                specialize (IHvs (DESC fs) k' Hno'); simpl in IHvs.
+                by rewrite <- IHvs.
+        * destruct (k' == k).
+          -- by rewrite Value_lookup_unfold, e, lookup_insert_eq in Hno'.
+          -- rewrite lookup_delete_ne by assumption.
+             destruct (fs !! k).
+             ++ destruct f; done.
+             ++ rewrite Value_lookup_unfold, lookup_insert_ne, Value_lookup_fold in Hno' by done.
+                specialize (IHvs (DESC fs) k' Hno'); simpl in IHvs.
+                by rewrite <- IHvs.
+      + rewrite !map_fold_insert_first_key by assumption.
+        destruct val; unfold Val_wf_fold; rewrite ?Val_wf_fold_eq, ?Value_wf_eq; destruct (k' == k).
+        * by rewrite Value_lookup_unfold, e, lookup_insert_eq in Hno'.
+        * rewrite lookup_delete_ne by assumption.
+          destruct (fs !! k).
+          -- destruct f; try done.
+             intros (Hwf & Hkey & Hwf_nest).
+             split_and!; try (assumption || lia).
+             rewrite Value_lookup_unfold, lookup_insert_ne, Value_lookup_fold in Hno' by done.
+             specialize (IHvs (DESC fs) k' Hno'); simpl in IHvs.
+             by rewrite IHvs.
+          -- rewrite Value_lookup_unfold, lookup_insert_ne, Value_lookup_fold in Hno' by done.
+             specialize (IHvs (DESC fs) k' Hno'); simpl in IHvs.
+             by rewrite IHvs.
+        * by rewrite Value_lookup_unfold, e, lookup_insert_eq in Hno'.
+        * rewrite lookup_delete_ne by assumption.
+          destruct (fs !! k).
+          -- destruct f; try done.
+             intros (Hkey & Hwf_nest).
+             split_and!; try (assumption || lia).
+             rewrite Value_lookup_unfold, lookup_insert_ne, Value_lookup_fold in Hno' by done.
+             specialize (IHvs (DESC fs) k' Hno'); simpl in IHvs.
+             by rewrite IHvs.
+          -- rewrite Value_lookup_unfold, lookup_insert_ne, Value_lookup_fold in Hno' by done.
+             specialize (IHvs (DESC fs) k' Hno'); simpl in IHvs.
+             by rewrite IHvs.
+        * by rewrite Value_lookup_unfold, e, lookup_insert_eq in Hno'.
+        * rewrite lookup_delete_ne by assumption.
+          destruct (fs !! k).
+          -- destruct f; try done.
+             intros (Hwf_nest & Hkey & Hwf).
+             split_and!; try (assumption || lia).
+             rewrite Value_lookup_unfold, lookup_insert_ne, Value_lookup_fold in Hno' by done.
+             specialize (IHvs (DESC fs) k' Hno'); simpl in IHvs.
+             by rewrite IHvs.
+          -- rewrite Value_lookup_unfold, lookup_insert_ne, Value_lookup_fold in Hno' by done.
+             specialize (IHvs (DESC fs) k' Hno'); simpl in IHvs.
+             by rewrite IHvs.
+        * by rewrite Value_lookup_unfold, e, lookup_insert_eq in Hno'.
+        * rewrite lookup_delete_ne by assumption.
+          destruct (fs !! k).
+          -- destruct f; done.
+          -- rewrite Value_lookup_unfold, lookup_insert_ne, Value_lookup_fold in Hno' by done.
+             specialize (IHvs (DESC fs) k' Hno'); simpl in IHvs.
+             by rewrite IHvs.
+  Qed.
+
+  Lemma WillEncode_weaken : forall kv d k v,
+    kv ∈ ValList (delete k d) v -> WillEncode d kv <-> WillEncode (delete k d) kv.
+  Proof.
+    intros [k val] d k' v Hin.
+    split.
+    - unfold WillEncode; simpl. intros (f & Hsome & Hfold).
+      map_unfold. unfold ValList in Hin. simpl in Hin.
+      apply list_elem_of_filter in Hin as [Hfil Hin].
+      unfold ValList_filter_p in Hfil; simpl in *.
+      destruct (k' == k).
+      + by rewrite e, lookup_delete_eq in Hfil.
+      + rewrite lookup_delete_ne, Hsome in Hfil by assumption.
+        exists f. rewrite lookup_delete_ne by assumption.
+        split; first exact Hsome.
+        destruct val; unfold Val_wf_fold in *;
+          rewrite ?Val_wf_fold_eq, ?Value_wf_eq, lookup_delete_ne, Hsome in * by assumption;
+                                                                   destruct f; done.
+    - unfold WillEncode; simpl. intros (f & Hsome & Hfold).
+      map_unfold. unfold ValList in Hin; simpl in Hin.
+      apply list_elem_of_filter in Hin as [Hfil Hin].
+      unfold ValList_filter_p in Hfil; simpl in *.
+      destruct (k' == k).
+      + by rewrite e, lookup_delete_eq in Hfil.
+      + rewrite Hsome in Hfil by assumption.
+        exists f. rewrite lookup_delete_ne in Hsome by assumption.
+        split; first exact Hsome.
+        destruct val; unfold Val_wf_fold in *;
+          rewrite ?Val_wf_fold_eq, ?Value_wf_eq, lookup_delete_ne, Hsome in * by assumption;
+                                                                   destruct f; done.
+  Qed.
+  
+  Lemma ParseOk_wf : forall v d, 
+    (* FIXME: ⟨ v ∷ d ⟩ is likely optional, replace filter_cons_True with filter_cons... *)
+    ⟨ v ∷ d ⟩ -> Value_wf d v -> S.Rep_wf (WillEncode d) (ValList d v).
+  Proof.
+    intros v. value_unfold.
+    induction vs as [|k val vs' Hno Hfst] using map_first_key_ind; first done.
+    intros d Hsc. desc_unfold.
+    pose proof (SC_delete_key _ _ k Hsc) as Hdel. 
+    apply SC_implies_properties_typed in Hsc as (Hvd & Hdv & Hmissing & Hnest).
+    specialize (Hvd k val) as Hval_in_d.
+    rewrite Value_lookup_unfold in Hval_in_d.
+    rewrite lookup_insert_eq in Hval_in_d.
+    specialize (Hval_in_d eq_refl).
+    destruct Hval_in_d as (f & Hd_in & Hty).
+    rewrite map_fold_insert_first_key by assumption.
+    unfold ValList; simpl.
+    rewrite map_to_list_insert_first_key by assumption.
+    rewrite filter_cons_True.
+    - fold (Vals (VALUE vs')).
+      fold (ValList (DESC fs) (VALUE vs')); simpl.
+      rewrite Desc_lookup_unfold in Hd_in.
+      destruct val; unfold Val_wf_fold;
+        rewrite ?Val_wf_fold_eq, ?Value_wf_eq, Hd_in;
+                                               destruct f; try done.
+      + intros (Hfold & Hkey & Hval_wf). 
+        split.
+        * unfold WillEncode; simpl. exists (F_MSG d).
+          rewrite Hd_in. split_and!; (done || lia).
+        * rewrite ValList_drop_ok' with (k := k) by assumption.
+          rewrite S.Rep_wf_iff_local with (wf2 := WillEncode (delete k (DESC fs))).
+          -- apply IHvs.
+             ++ by rewrite Value_delete_unfold, delete_insert_id in Hdel by assumption.
+             ++ rewrite Desc_delete_unfold.
+                change _ with (Value_wf (DESC $ delete k fs) (VALUE vs')).
+                change _ with (Value_wf (DESC fs) (VALUE vs')) in Hfold.
+                rewrite Value_wf_weaken with (k := k) in Hfold; done.
+          -- intros kv Hin. by apply WillEncode_weaken with (v := VALUE vs').  
+      + intros (Hkey & Hfold). 
+        split.
+        * unfold WillEncode; simpl. exists F_BOOL.
+          rewrite Hd_in. split_and!; (done || lia).
+        * rewrite ValList_drop_ok' with (k := k) by assumption.
+          rewrite S.Rep_wf_iff_local with (wf2 := WillEncode (delete k (DESC fs))).
+          -- apply IHvs.
+             ++ by rewrite Value_delete_unfold, delete_insert_id in Hdel by assumption.
+             ++ rewrite Desc_delete_unfold.
+                change _ with (Value_wf (DESC $ delete k fs) (VALUE vs')).
+                change _ with (Value_wf (DESC fs) (VALUE vs')) in Hfold.
+                rewrite Value_wf_weaken with (k := k) in Hfold; done.
+          -- intros kv Hin. by apply WillEncode_weaken with (v := VALUE vs').  
+      + intros (Hfold & Hkey & Hwf). 
+        split.
+        * unfold WillEncode; simpl. exists F_INT.
+          rewrite Hd_in. split_and!; (done || lia).
+        * rewrite ValList_drop_ok' with (k := k) by assumption.
+          rewrite S.Rep_wf_iff_local with (wf2 := WillEncode (delete k (DESC fs))).
+          -- apply IHvs.
+             ++ by rewrite Value_delete_unfold, delete_insert_id in Hdel by assumption.
+             ++ rewrite Desc_delete_unfold.
+                change _ with (Value_wf (DESC $ delete k fs) (VALUE vs')).
+                change _ with (Value_wf (DESC fs) (VALUE vs')) in Hfold.
+                rewrite Value_wf_weaken with (k := k) in Hfold; done.
+          -- intros kv Hin. by apply WillEncode_weaken with (v := VALUE vs').  
+    - unfold ValList_filter_p; simpl.
+      desc_unfold. rewrite Hd_in.
+      specialize (Hmissing k).
+      rewrite Value_lookup_unfold in Hmissing.
+      rewrite lookup_insert_eq in Hmissing.
+      destruct val; done.
+  Qed.
+
   Definition ParseOk_Value_P (v : Value) :=
     forall d, ⟨ v ∷ d ⟩ -> LimitParseOkCompat'' Compatible ParseValue SerialValue d d v.
 
@@ -1332,7 +1553,6 @@ Section Theorems.
     Val_wf d (k, v) ->
     SerialVal SerialValue d (k, v) = S.mkSuccess enc.
 
-  (* Theorem InterParseOk : forall v, ParseOk_Value_P v. *)
   Theorem InterParseOk : forall v d, ⟨ v ∷ d ⟩ -> LimitParseOkCompat'' Compatible ParseValue SerialValue d d v.
   Proof.
     intros v d Hsc.
@@ -1392,13 +1612,7 @@ Section Theorems.
            ++ unfold Val_wf, Val_wf_fold in Hval_wf.
               rewrite Hin__d in Hval_wf. contradiction.
     + unfold S.Map_wf.
-      apply SC_implies_properties in Hsc__n as Hsc__prop.
-      value_unfold. induction vs using map_first_key_ind.
-      * done.
-      * unfold ValList; simpl.
-        rewrite map_to_list_insert_first_key by assumption.
-        (* TODO: show ValList_filter_p for first key-value pair. *)
-        (* TODO: Extract that to secondary lemma, this isn't the first time I've encountered this...  *)
+      apply ParseOk_wf; assumption.
   Abort.
 
 End Theorems.

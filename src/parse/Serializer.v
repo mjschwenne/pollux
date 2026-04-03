@@ -200,6 +200,42 @@ Module Type Serializer (InputModule : AbstractInput) (Results : Result InputModu
       | x :: ls' => wf x /\ Rep_wf wf ls'
       end.
 
+  Lemma list_filter_iff_local:
+    ∀ {A : Type} (P1 P2 : A → Prop) {H : ∀ x : A, Decision (P1 x)} {H0 : ∀ x : A, Decision (P2 x)} (l : list A),
+    (∀ x : A, x ∈ l -> (P1 x ↔ P2 x)) → filter P1 l = filter P2 l.
+  Proof.
+    intros. rename H1 into HPdiff. induction l as [|a l IH]; [done|].
+    rewrite !filter_cons by naive_solver.
+    destruct (decide (P1 a)), (decide (P2 a)).
+    - f_equal. apply IH. intros x Hin. apply HPdiff.
+      apply list_elem_of_further. exact Hin.
+    - specialize (HPdiff a $ list_elem_of_here a l).
+      rewrite HPdiff in p. contradiction.
+    - specialize (HPdiff a $ list_elem_of_here a l).
+      rewrite <- HPdiff in p. contradiction.
+    - apply IH. intros x Hin. apply HPdiff.
+      apply list_elem_of_further. exact Hin.
+  Qed.
+
+    Lemma Rep_wf_iff_local {X : Type} (wf1 wf2 : X -> Prop) (l : list X):
+      (forall x : X, x ∈ l -> (wf1 x <-> wf2 x)) -> Rep_wf wf1 l <-> Rep_wf wf2 l.
+    Proof.
+      intros. induction l as [|x l IH]; [done|].
+      unfold Rep_wf. fold (Rep_wf wf1 l). fold (Rep_wf wf2 l).
+      specialize (H x $ list_elem_of_here x l) as Hwf.
+      rewrite Hwf. split.
+      - intros [Hwf2 Hrep_wf1]. split; first exact Hwf2.
+        apply IH; last exact Hrep_wf1.
+        intros y Hin.
+        apply list_elem_of_further with (y := x) in Hin.
+        specialize (H y Hin). exact H.
+      - intros [Hwf2 Hrep_wf2]. split; first exact Hwf2.
+        apply IH; last exact Hrep_wf2.
+        intros y Hin.
+        apply list_elem_of_further with (y := x) in Hin.
+        specialize (H y Hin). exact H.
+    Qed.
+      
     Fixpoint rep' {X : Type} {wfx : X -> Prop}
       (underlying : Serializer X wfx) (xs : list X) : Result :=
       match xs with
