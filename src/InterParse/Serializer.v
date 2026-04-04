@@ -155,29 +155,43 @@ Section Serializer.
 
   Definition SerialVal (serial__msg : forall d : Desc, S.Serializer Value $ Value_wf d) (d : Desc) :
     S.Serializer (Z * Val) (Val_wf d) := 
-    fun val => let (id, v) := val in
-               match (Fields d) !! id with
-               | Some F_BOOL => match v with
-                                | V_BOOL b => S.Bind' (fun _ => id) SerialUnsigned SerialBool b
-                                | V_MISSING => S.mkSuccess []
-                                | _ => Failure Recoverable
-                                         (mkData "Expected Boolean" Input_default None)
-                                end
-               | Some F_INT => match v with
-                              | V_INT z => S.Bind' (fun _ => id) SerialUnsigned SerialZ32 z
-                              | V_MISSING => S.mkSuccess []
-                              | _ => Failure Recoverable
-                                      (mkData "Expected Integer" Input_default None)
-                              end
-               | Some (F_MSG d') => match v with
-                                   | V_MSG z => S.Bind' (fun _ => id) SerialUnsigned
-                                                 (S.Len' SerialNat (serial__msg d')) z
-                                   | V_MISSING => S.mkSuccess []
-                                   | _ => Failure Recoverable
-                                           (mkData "Expected nested message" Input_default None)
-                                   end
-               | None => S.mkSuccess Input_default
-               end.
+    fun val =>  match (Fields d) !! val.1 with
+             | Some F_BOOL => S.Map (
+                                 S.Opt (S.Concat SerialUnsigned
+                                          (S.PartMap SerialBool
+                                             (fun v => match v with
+                                                    | V_BOOL b => Some b
+                                                    | _ => None (* Error on non-boolean values *)
+                                                    end
+                                             ) "Expected Boolean"))
+                               ) (fun '(k, v) => match v with
+                                              | V_MISSING => None (* Skip V_MISSING values *)
+                                              | _ => Some (k, v)
+                                              end) val
+             | Some F_INT => S.Map (
+                                S.Opt (S.Concat SerialUnsigned
+                                         (S.PartMap SerialZ32
+                                            (fun v => match v with
+                                                   | V_INT z => Some z
+                                                   | _ => None
+                                                   end) "Expected Integer"))
+                              ) (fun '(k, v) => match v with
+                                             | V_MISSING => None
+                                             | _ => Some (k, v)
+                                             end) val
+             | Some (F_MSG d') => S.Map (
+                                     S.Opt (S.Concat SerialUnsigned
+                                              (S.PartMap (S.Len' SerialNat (serial__msg d'))
+                                                 (fun v => match v with
+                                                        | V_MSG x => Some x
+                                                        | _ => None
+                                                        end) "Expected nested message"))
+                                   ) (fun '(k, v) => match v with
+                                                  | V_MISSING => None
+                                                  | _ => Some (k, v)
+                                                  end) val
+             | None => S.mkSuccess Input_default
+             end.
 
   Definition Filter (f : option Field) (v : option Val) : option Val := 
     match f, v with

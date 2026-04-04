@@ -59,15 +59,13 @@ Section Parse.
   Definition ParseBool : P.Parser bool := P.Map ParseZ32 (fun z => z >? 0).
 
   Definition ParseVal (parse__msg : Desc -> P.Parser Value) (d : Desc) : P.Parser (Z * Val) :=
-    P.Bind ParseUnsigned
+    P.DepConcat ParseUnsigned
       (fun z =>
          match (Fields d) !! z with
-         | Some f => match f with
-                    | F_BOOL => P.Map ParseBool (fun b => (z, V_BOOL b))
-                    | F_INT => P.Map ParseZ32 (fun z' => (z, V_INT z'))
-                    | F_MSG d' => P.Map (P.Len ParseNat $ parse__msg d') (fun v => (z, V_MSG v))
-                    end
-         | None => P.SucceedWith (z, V_MISSING)
+         | Some F_BOOL => P.Map ParseBool (fun b => V_BOOL b)
+         | Some F_INT => P.Map ParseZ32 (fun z' => V_INT z')
+         | Some (F_MSG d') => P.Map (P.Len ParseNat $ parse__msg d') (fun v => V_MSG v)
+         | None => P.SucceedWith V_MISSING
          end).
 
   Definition Merge (f : option Field) (v : option Val) : option Val :=

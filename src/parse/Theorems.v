@@ -190,6 +190,21 @@ Module Type Theorems
       reflexivity.
     Qed.
 
+    Theorem DepConcatCorrect {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (lp : P.Parser L) (ls : S.Serializer L wfl)
+      (rp : L -> P.Parser R) (rs : S.Serializer R wfr) (l : L) (r : R) :
+      ParseOk lp ls -> ParseOk' (rp l) rs r -> ParseOk' (P.DepConcat lp rp) (S.Concat ls rs) (l, r).
+    Proof using Type.
+      intros Hleft_ok Hright_ok.
+      intros enc rest [Hl_wf Hr_wf] Hconcat.
+      apply SerialConcatInversion in Hconcat as (enc__l & enc__r & Hl & Hr & Henc).
+      subst. rewrite App_assoc.
+      apply (Hleft_ok _ _ (App enc__r rest)) in Hl; last assumption.
+      apply (Hright_ok _ rest) in Hr; last assumption.
+      unfold P.DepConcat.
+      by rewrite Hl, Hr.
+    Qed.
+
     Definition LengthIf (ss : Result unit) : nat :=
       match ss with
       | Success () enc => Length enc
@@ -228,9 +243,12 @@ Module Type Theorems
         rewrite Hr_ok in Hrp; discriminate.
     Qed.
 
+    Definition LimitParseOkFull {X : Type} {wf : X -> Prop} (par : P.Parser X) (ser : S.Serializer X wf) (x : X)
+      (enc : Input) := wf x -> ser x = S.mkSuccess enc -> par enc = Success x Input_default.
+
     (* Relax the rest requirement, since the Limit parser will ensure rest = [] *)
     Definition LimitParseOkWeak {X : Type} {wf : X -> Prop} (par : P.Parser X) (ser : S.Serializer X wf) (x : X) := 
-      forall enc, wf x -> ser x = S.mkSuccess enc -> par enc = Success x Input_default.
+      forall enc, LimitParseOkFull par ser x enc.
 
     Definition LimitParseOk {X : Type} {wf : X -> Prop} (par : P.Parser X) (ser : S.Serializer X wf) := 
       forall x, LimitParseOkWeak par ser x.
@@ -684,6 +702,43 @@ Module Type Theorems
         pose proof (Hpro y enc__y Hwf__y Hser__y) as Hpro__y.
         destruct (decide (Length _ < _)); last lia.
         specialize (IHys (fun x Hx => HpOk x ltac:(set_solver)) enc__rest Hwf__rest Hser__rest);
+          unfold P.Rep in IHys.
+        by rewrite IHys.
+    Qed.
+
+  Lemma RepCorrectWeakFull {X : Type} {wfx : X -> Prop} (ser__x : S.Serializer X wfx) (par__x : P.Parser X)
+    (l : list X) (bound : nat) :
+    (exists msg data, par__x Input_default = Failure Recoverable $ mkData msg Input_default data) ->
+    (forall x enc, wfx x -> ser__x x = S.mkSuccess enc -> Length enc > 0) ->
+    (forall x enc__elem, x ∈ l -> ser__x x = S.mkSuccess enc__elem ->
+       Length enc__elem <= bound ->
+       ParseOk'' par__x ser__x x enc__elem) ->
+    forall enc, S.Rep_wf wfx l -> S.Rep ser__x l = S.mkSuccess enc -> Length enc <= bound ->
+       P.Rep par__x enc = Success l Input_default.
+    Proof using Type.
+      intros HparEmp Hpro HpOk.
+      induction l as [| y ys].
+      - intros enc Hwf Hser Hbound. simpl in Hser.
+        inversion Hser as [Henc].
+        rewrite (@par_rep'_unfold X).
+        unfold S.Output_default; rewrite Length_default.
+        destruct HparEmp as (emp_msg & emp_data & HparEmp).
+        by rewrite HparEmp.
+      - intros enc Hwf Hser Hbound. revert Hser.
+        destruct Hwf as [Hwf__y Hwf__rest].
+        unfold S.Rep, P.Rep.
+        intros Hser. rewrite SerialRepInversion_First in Hser.
+        destruct Hser as (enc__y & enc__rest & Hser__y & Hser__rest & Henc).
+        rewrite (@par_rep'_unfold X), Henc, App_Length.
+        assert (Length enc__y <= bound) as Hlen.
+        { subst. rewrite App_Length in Hbound. lia. }
+        specialize (HpOk y enc__y (list_elem_of_here y ys) Hser__y Hlen enc__rest Hwf__y Hser__y) as Hok__y.
+        rewrite Hok__y.
+        pose proof (Hpro y enc__y Hwf__y Hser__y) as Hpro__y.
+        destruct (decide (Length _ < _)); last lia.
+        assert (Length enc__rest <= bound) as Hlen__rest.
+        { subst. rewrite App_Length in Hbound. lia. }
+        specialize (IHys (fun x enc__y Hx => HpOk x enc__y ltac:(set_solver)) enc__rest Hwf__rest Hser__rest Hlen__rest);
           unfold P.Rep in IHys.
         by rewrite IHys.
     Qed.

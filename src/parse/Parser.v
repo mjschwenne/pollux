@@ -134,6 +134,24 @@ Module Type Parser (InputModule : AbstractInput) (Results : Result InputModule).
                                (Some data)
         end.
 
+    Definition DepConcat {L R : Type} (left : Parser L) (right : L -> Parser R) : Parser (L * R) :=
+      fun inp =>
+        match left inp with
+        | Success l_result l_rem => match right l_result l_rem with
+                                   | Success r_result r_rem => Success (l_result, r_result) r_rem
+                                   | Failure lvl data => Failure lvl $
+                                                          mkData
+                                                          "Bind right failed"
+                                                          l_rem
+                                                          (Some data)
+                                   end
+        | Failure lvl data => Failure lvl $
+                               mkData
+                               "Bind left failed"
+                               inp
+                               (Some data)
+        end.
+
     (* Apply two consecutive parsers consecutively. If both succeed, apply the mapper to the results
      and return it *)
     Definition ConcatMap {L R T : Type} (left : Parser L) (right : Parser R) (mapper : L -> R -> T) : Parser T :=

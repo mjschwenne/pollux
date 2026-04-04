@@ -194,6 +194,33 @@ Module Type Serializer (InputModule : AbstractInput) (Results : Result InputModu
       Serializer A $ Map_wf wf f := 
       fun a => underlying (f a).
 
+    Definition PartMap_wf {A B : Type} (wf : B -> Prop) (f : A -> option B) : A -> Prop :=
+      fun a => match f a with
+            | Some b => wf b
+            | None => True
+            end.
+
+    Definition PartMap {A B : Type} {wf : B -> Prop} (underlying : Serializer B wf)
+      (f : A -> option B) (msg : string) : Serializer A $ PartMap_wf wf f :=
+      fun a => match f a with
+            | Some b => underlying b
+            | None => Failure Recoverable (mkData msg Output_default None)
+            end.
+
+    Definition Opt_wf {A : Type} (wf : A -> Prop) : option A -> Prop :=
+      fun opt => match opt with
+              | Some a => wf a
+              | None => True
+              end.
+
+    (* Skips a None, encodes a Some *)
+    Definition Opt {A : Type} {wf : A -> Prop} (underlying : Serializer A wf) :
+      Serializer (option A) $ Opt_wf wf :=
+      fun opt => match opt with
+              | Some a => underlying a
+              | None => mkSuccess Output_default
+              end.
+
     Fixpoint Rep_wf {X : Type} (wf : X -> Prop) (ls : list X) : Prop :=
       match ls with
       | [] => True

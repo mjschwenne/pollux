@@ -257,7 +257,8 @@ Section Theorems.
     intros Hnone Hfst [key val] Hin.
     value_unfold.
     (* The serializers only differ in recursive calls on V_MSG values *)
-    destruct ((Fields d) !! key); try done.
+    unfold SerialVal.
+    destruct ((Fields d) !! (key, val).1); try done.
     destruct f; try reflexivity.
     (* For F_MSG, we need to show the depth checks evaluate the same *)
     destruct val as [val | z | b |]; try reflexivity.
@@ -270,14 +271,15 @@ Section Theorems.
     (* apply kv_in_Filter in Hin. *)
     rewrite elem_of_map_to_list in Hin.
     pose proof (ValueDepthDropFirst k v (VALUE vs) Hnone Hfst) as Hdepth. 
-    destruct (decide (ValueDepth val < map_fold ValueDepthFold 0 vs)%nat) eqn:Hm.
-    - destruct (decide (ValueDepth val < map_fold ValueDepthFold 0 (<[k := v]> vs))%nat) eqn:Hn;
-      (reflexivity || value_solve; lia).
+    destruct (decide (ValueDepth val < map_fold ValueDepthFold 0 vs)%nat) eqn:Hm; unfold S.PartMap, S.Map, S.Opt.
+    - destruct (decide (ValueDepth val < map_fold ValueDepthFold 0 (<[k := v]> vs))%nat) eqn:Hn.
+      + value_solve. rewrite Hm. reflexivity.
+      + value_solve. lia.
     - destruct (decide (ValueDepth val < map_fold ValueDepthFold 0 (<[k := v]> vs))%nat) eqn:Hn.
       + pose proof (Val_in_map_smaller_depth (VALUE vs) key val Hin). done.
       + unfold S.RecursiveProgressError.
         destruct (ValueDepth val == ValueDepth (VALUE vs)),
-                   (ValueDepth val == ValueDepth (VALUE (<[k := v]> vs))); value_solve.
+                   (ValueDepth val == ValueDepth (VALUE (<[k := v]> vs))); value_solve; by rewrite Hm.
   Qed.
 
   Lemma SerialValueInversion (d : Desc) :
@@ -331,10 +333,10 @@ Section Theorems.
             ) with SerialValue' in Hv_ok.
           rewrite <- Hv_ok.
           unfold SerialVal.
-          destruct (Fields d !! k); last reflexivity.
+          destruct (Fields d !! (k, v).1); last reflexivity.
           destruct f; try reflexivity.
           destruct v; try reflexivity.
-          unfold S.Bind', S.Concat, S.Len'.
+          unfold S.Bind', S.Concat, S.Len', S.PartMap, S.Map, S.Opt.
           case_eq (decide (ValueDepth v < ValueDepth (VALUE (<[k := V_MSG v]> vs))))%nat.
           -- intros Hdep _. unfold SerialValue, S.RecursiveState. reflexivity.
           -- intros Hdep _. pose proof (lookup_insert_eq vs k (V_MSG v)) as Hlookup.
@@ -350,8 +352,9 @@ Section Theorems.
              rewrite Hlst. reflexivity.
           -- split; last (unfold S.Output_default; rewrite App_nil_r; reflexivity).
              unfold ValList_filter_p, fst, snd in Hfilter_out.
-             unfold SerialVal. destruct (Fields d !! k); last reflexivity.
-             destruct f; destruct v; (reflexivity || specialize (Hfilter_out I); contradiction).
+             unfold SerialVal. destruct (Fields d !! (k, v).1) eqn:Hf; last reflexivity.
+             simpl in Hf. rewrite Hf in Hfilter_out.
+             destruct f; destruct v; value_solve.
         * intro Hser. exists Input_default, enc. 
           split.
           -- unfold SerialValue, S.RecursiveState.
@@ -366,8 +369,10 @@ Section Theorems.
              apply SerialValWeakenDepth; assumption.
           -- split; last (rewrite App_nil_l; reflexivity).
              unfold ValList_filter_p, fst, snd in Hfilter_out.
-             unfold SerialVal. destruct (Fields d !! k); last reflexivity.
-             destruct f; destruct v; (reflexivity || specialize (Hfilter_out I); contradiction).
+             unfold SerialVal. destruct (Fields d !! (k, v).1) eqn:Hf; last reflexivity.
+             destruct f; destruct v; simpl in Hf;
+               rewrite Hf in Hfilter_out;
+               (reflexivity || specialize (Hfilter_out I); contradiction).
              
     - (* Reverse direction: <- *)
       intros (enc__v & enc__rest & Hrest_ok & Hv_ok & Henc).
@@ -392,10 +397,10 @@ Section Theorems.
              always made. *)
           rewrite <- Hv_ok.
           unfold SerialVal.
-          destruct (Fields d !! k); last reflexivity.
+          destruct (Fields d !! (k, v).1); last reflexivity.
           destruct f; try reflexivity.
           destruct v; try reflexivity.
-          unfold S.Bind', S.Concat, S.Len'.
+          unfold S.Bind', S.Concat, S.Len', S.Map, S.PartMap, S.Opt.
           case_eq (decide (ValueDepth v < ValueDepth (VALUE (<[k:=V_MSG v]> vs)))%nat).
           -- intros Hdep _. unfold SerialValue, S.RecursiveState. reflexivity.
           -- intros Hdep _. pose proof (lookup_insert_eq vs k (V_MSG v)) as Hlookup.
@@ -423,13 +428,16 @@ Section Theorems.
         unfold SerialVal in Hv_ok.
         unfold SerialValue, S.RecursiveState in Hrest_ok.
         rewrite ser_recur_st_unfold in Hrest_ok.
-        destruct (Fields d !! k) eqn:Hin_d.
+        destruct (Fields d !! k) eqn:Hin_d; simpl in Hv_ok.
         * (* v was dropped for being V_MISSING *) 
           destruct v; try (reflexivity || specialize (Hfilter_out I); contradiction).
           destruct f;
-            invc Hv_ok; rewrite App_nil_l;
+            rewrite Hin_d in Hv_ok;
+            unfold S.Opt in Hv_ok;
+            invc Hv_ok;
             unfold SerialValue', S.Map, ValList, Vals in *;
                                                  rewrite <- ResultEquivSuccessIff with (r := S.Rep _ _);
+                                                 rewrite App_nil_l;
                                                  rewrite <- Hrest_ok;
                                                  rewrite SerialRepSubst; first reflexivity.
           -- rewrite Value_insert_fold.
@@ -444,7 +452,7 @@ Section Theorems.
              fold (Vals $ VALUE vs); fold (ValList d $ VALUE vs).
              apply SerialValWeakenDepth; assumption.
         * (* v dropped for being unknown *)
-          invc Hv_ok. rewrite App_nil_l.
+          rewrite Hin_d in Hv_ok. invc Hv_ok. rewrite App_nil_l.
           rewrite <- ResultEquivSuccessIff with (r := S.Rep _ _).
           rewrite <- Hrest_ok.
           unfold SerialValue', S.Map, ValList, Vals.
@@ -556,50 +564,40 @@ Section Theorems.
     intros [ds] k v enc wf.
     unfold SerialVal.
     destruct wf as [f [Hin_d Hval_wf]].
-    unfold fst in Hin_d. rewrite Hin_d.
-    destruct f.
-    - unfold Val_wf, Val_wf_fold in Hval_wf.
-      rewrite Val_wf_fold_eq in Hval_wf.
-      rewrite Val_wf_fold_unfold in Hval_wf.
-      rewrite Hin_d in Hval_wf.
-      destruct v.
-      + intros Hser.
-        apply SerialConcatInversion in Hser.
-        destruct Hser as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
-        subst. rewrite App_Length.
-        apply UnsignedLength in Hl_ok.
-        lia.
-      + intros Hcontra; contradiction.
-      + intros Hcontra; contradiction.
-      + contradiction.
-    - unfold Val_wf, Val_wf_fold in Hval_wf.
-      rewrite Val_wf_fold_eq in Hval_wf.
-      rewrite Val_wf_fold_unfold in Hval_wf.
-      rewrite Hin_d in Hval_wf.
-      destruct v.
-      + intros Hcontra; contradiction.
-      + intros Hser.
-        apply SerialConcatInversion in Hser.
-        destruct Hser as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
-        subst. rewrite App_Length.
-        apply UnsignedLength in Hl_ok.
-        lia.
-      + intros Hcontra; contradiction.
-      + contradiction.
-    - unfold Val_wf, Val_wf_fold in Hval_wf.
-      rewrite Val_wf_fold_eq in Hval_wf.
-      rewrite Val_wf_fold_unfold in Hval_wf.
-      rewrite Hin_d in Hval_wf.
-      destruct v.
-      + intros Hcontra; contradiction.
-      + intros Hcontra; contradiction.
-      + intros Hser.
-        apply SerialConcatInversion in Hser.
-        destruct Hser as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
-        subst. rewrite App_Length.
-        apply UnsignedLength in Hl_ok.
-        lia.
-      + contradiction.
+    unfold fst in Hin_d. simpl in *; rewrite Hin_d.
+    unfold Val_wf, Val_wf_fold in Hval_wf.
+    rewrite Val_wf_fold_eq in Hval_wf.
+    fold (Fields (DESC ds)) in Hval_wf.
+    rewrite Val_wf_fold_unfold in Hval_wf.
+    simpl in Hval_wf; rewrite Hin_d in Hval_wf.
+    destruct f; destruct v.
+    + intros Hser.
+      apply SerialConcatInversion in Hser.
+      destruct Hser as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
+      subst. rewrite App_Length.
+      apply UnsignedLength in Hl_ok.
+      lia.
+    + intros Hcontra; contradiction.
+    + intros Hcontra; contradiction.
+    + contradiction.
+    + intros Hcontra; contradiction.
+    + intros Hser.
+      apply SerialConcatInversion in Hser.
+      destruct Hser as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
+      subst. rewrite App_Length.
+      apply UnsignedLength in Hl_ok.
+      lia.
+    + intros Hcontra; contradiction.
+    + contradiction.
+    + intros Hcontra; contradiction.
+    + intros Hcontra; contradiction.
+    + intros Hser.
+      apply SerialConcatInversion in Hser.
+      destruct Hser as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
+      subst. rewrite App_Length.
+      apply UnsignedLength in Hl_ok.
+      lia.
+    + contradiction.
   Qed.
 
   (** Helper: Check if a field and value match in type *)
@@ -1560,16 +1558,22 @@ Section Theorems.
       (valid_state := fun d v => ⟨ v ∷ d ⟩)
       (linked_state := fun d1 d2 => d1 = d2); try done.
     intros d' d2 x enc Hwf Hsc__n Hdeq IH. subst d2.
-    intros Hser. exists (list_to_value d' (ValList d' x)). revert Hser.
-    unfold SerialValue', ParseValue'.
-    apply LimitMapCompatCorrect.
+    intros Hser; exists (list_to_value d' (ValList d' x)); revert Hser.
+    unfold SerialValue', ParseValue' at 1.
+    apply LimitMapCompatFullCorrect.
     + apply (FullDescriptor_RoundTrip _ _ Hsc__n).
-    + apply RepCorrectWeak.
+    + intros Hwf_vallist Hser. fold SerialValue' in Hser.
+      apply @RepCorrectWeakFull with (enc := enc) (bound := Length enc)
+      (ser__x := (SerialVal
+         (S.recur_step_st SerialValue' ValueDepth x
+            (λ (st__n : Desc) (x__n : Value) (_ : (ValueDepth x__n < ValueDepth x)%nat),
+               S.recur_st SerialValue' ValueDepth st__n x__n))
+         d')) (wfx := WillEncode d').
       * vm_compute. exists "Bind left failed"%string.
         exists (Some (mkData "Map underlying failed" []
                    (Some (mkData "No more data to parse" [] None)))).
         reflexivity.
-      * intros [z val] enc__n Hwf__val.
+      * intros [z val] enc__n Hwf__val. clear Hser.
         fold (SerialValue'). unfold S.recur_step_st. 
         unfold SerialVal. desc_unfold. unfold WillEncode in Hwf.
         destruct Hwf__val as (f & Hin & Hval_wf). simpl in Hin. rewrite Hin.
@@ -1595,22 +1599,77 @@ Section Theorems.
               rewrite Henc, App_Length. apply UnsignedLength in Ht_ok. 
               lia.
            ++ rewrite Hin in Hval_wf. contradiction.
-      * clear v d Hsc. intros [z v] Hin enc__n rest Hwf__n.
+      * clear v d Hsc Hser. intros [z v] enc__elem Hin Hser Hbound rest Hwf__n _. revert Hser.
         unfold SerialVal at 1. unfold ParseVal at 1.
-        destruct Hwf__n as (f & Hin__d & Hval_wf); simpl in Hin__d. rewrite Hin__d.
+        destruct Hwf__n as (f & Hin__d & Hval_wf); simpl in *. rewrite Hin__d.
         destruct f.
         -- destruct v; fold (SerialValue'); try done.
-           ++ admit.
+           ++ unfold S.Map, S.Opt.
+              (* TODO Create bounded version of DepConcatCorrect *)
+              apply DepConcatCorrect; first apply UnsignedParseOk.
+              ** intros enc__nested rest__nested Hwf_nested Hser.
+                 rewrite Hin__d. unfold P.Map at 1.
+                 unfold S.PartMap in Hser.
+                 unfold S.recur_step_st in Hser.
+                 unfold P.recur_step_st.
+                 apply SerialLen'Inversion in Hser as (enc__len & enc__pay & Hlen_ok & Hpay_ok & Henc).
+                 destruct (decide (_ < ValueDepth x)%nat) eqn:Hdepth in Hpay_ok;
+                   last (
+                       unfold S.RecursiveProgressError in Hpay_ok;
+                       destruct (ValueDepth _ == ValueDepth _) in Hpay_ok; discriminate
+                     ).
+                 unfold P.Len, P.Bind. rewrite Henc, ?App_assoc.
+                 apply (NatParseOk _ _ (App enc__pay rest__nested)) in Hlen_ok.
+                 --- rewrite Hlen_ok. unfold P.Limit. rewrite Slice_App.
+                     admit.
+                 --- unfold S.PartMap_wf, S.Len'_wf, S.recur_step_st in Hwf_nested.
+                     rewrite Hdepth, Hpay_ok, Hlen_ok in Hwf_nested. lia.
+              ** (* Have to show that encoding of nested message is small enough to be tagged correctly *)
+                unfold S.Concat_wf, S.PartMap_wf.
+                unfold Val_wf_fold in Hval_wf; rewrite Hin__d, Value_wf_eq in Hval_wf.
+                destruct Hval_wf as (_ & Hkey_wf & Hnested_val_wf).
+                split; first exact Hkey_wf.
+                unfold S.Len'_wf.
+                destruct (S.recur_step_st _ _ _ _ _ _) eqn:Hser; last trivial.
+                destruct (SerialNat _) eqn:Htag; last trivial.
+                split; last exact Hnested_val_wf.
+                (* NOTE: Make SerialNat fail when larger than 255? *)
+                admit.
            ++ unfold Val_wf, Val_wf_fold in Hval_wf.
               rewrite Hin__d in Hval_wf. contradiction.
         -- destruct v; fold (SerialValue'); try done.
-           ++ admit.
+           ++ unfold S.Map, S.Opt.
+              apply DepConcatCorrect; first apply UnsignedParseOk.
+              ** intros enc__pay rest__pay Hwf_pay Hser.
+                 rewrite Hin__d. unfold P.Map.
+                 unfold S.PartMap in Hser.
+                 apply (BoolParseOk _ _ rest__pay) in Hser.
+                 --- by rewrite Hser.
+                 --- by unfold S.PartMap_wf in Hwf_pay.
+              ** unfold S.Concat_wf, S.PartMap_wf, S.Trivial_wf.
+                 unfold Val_wf_fold in Hval_wf.
+                 rewrite Hin__d in Hval_wf. destruct Hval_wf as [Hval_wf _].
+                 lia.
            ++ unfold Val_wf, Val_wf_fold in Hval_wf.
               rewrite Hin__d in Hval_wf. contradiction.
         -- destruct v; fold (SerialValue'); try done.
-           ++ admit.
+           ++ unfold S.Map, S.Opt.
+              apply DepConcatCorrect; first apply UnsignedParseOk.
+              ** intros enc__pay rest__pay Hwf_pay Hser.
+                 rewrite Hin__d. unfold P.Map.
+                 unfold S.PartMap in Hser.
+                 apply (Z32ParseOk _ _ rest__pay) in Hser.
+                 --- by rewrite Hser.
+                 --- unfold SerialZ_wf, S.PartMap_wf in *. lia.
+              ** unfold S.Concat_wf, S.PartMap_wf, SerialZ_wf.
+                 unfold Val_wf_fold in Hval_wf.
+                 rewrite Hin__d in Hval_wf. destruct Hval_wf as [_ Hval_wf].
+                 lia.
            ++ unfold Val_wf, Val_wf_fold in Hval_wf.
               rewrite Hin__d in Hval_wf. contradiction.
+      * apply ParseOk_wf; assumption.
+      * exact Hser.
+      * lia.
     + unfold S.Map_wf.
       apply ParseOk_wf; assumption.
   Abort.

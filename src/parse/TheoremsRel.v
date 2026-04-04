@@ -276,6 +276,22 @@ Module Type TheoremsRel
       split; done.
     Qed.
     
+    Theorem LimitMapCompatFullCorrect {A B : Type} {wf : B -> Prop}
+      (R : A -> A -> Prop)
+      (ser : S.Serializer B wf) (to : A -> B)
+      (par : P.Parser B) (from : B -> A) :
+      forall x enc,
+      R x (from $ to x) ->
+      LimitParseOkFull par ser (to x) enc ->
+      LimitParseOkSimpleRel''' R (P.Map par from) (S.Map ser to) x (from $ to x) enc.
+    Proof using Type.
+      intros x enc Hcompat Hunder Hwf.
+      unfold S.Map; intros Hser.
+      specialize (Hunder Hwf Hser).
+      unfold P.Map; rewrite Hunder.
+      split; done.
+    Qed.
+
     (** ** RecursiveStateCompatCorrect: Correctness for Recursive State Parsers with Relations
 
         This theorem generalizes RecursiveStateCorrect from Theorems.v to handle
