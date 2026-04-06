@@ -42,6 +42,12 @@ Section Serializer.
   Definition SerialNat : S.Serializer nat (fun n => (0 <= n < 256)%nat) :=
     fun n => SerialByte $ W8 (Z.of_nat n).
 
+  Definition SerialNatStrict : S.Serializer nat (fun n => (0 <= n < 256)%nat) :=
+    fun n => if (n <? 256)%nat then
+            SerialNat n
+          else
+            Failure Recoverable (mkData "Nat too large for one byte" S.Output_default None).
+
   Definition Z__next (z : Z) : Z :=
     z ≫ 8.
 
@@ -181,7 +187,7 @@ Section Serializer.
                                              end) val
              | Some (F_MSG d') => S.Map (
                                      S.Opt (S.Concat SerialUnsigned
-                                              (S.PartMap (S.Len' SerialNat (serial__msg d'))
+                                              (S.PartMap (S.Len' SerialNatStrict (serial__msg d'))
                                                  (fun v => match v with
                                                         | V_MSG x => Some x
                                                         | _ => None

@@ -205,6 +205,23 @@ Module Type Theorems
       by rewrite Hl, Hr.
     Qed.
 
+    Theorem DepConcatCorrect_internal {L R : Type} {wfl : L -> Prop} {wfr : R -> Prop}
+      (lp : P.Parser L) (ls : S.Serializer L wfl)
+      (rp : L -> P.Parser R) (rs : S.Serializer R wfr) (l : L) (r : R) (enc : Input) :
+      (forall l enc, wfl l -> ls l = S.mkSuccess enc -> Length enc > 0) ->
+      ParseOk lp ls -> (forall enc__r, Length enc__r < Length enc -> ParseOk'' (rp l) rs r enc__r) ->
+      ParseOk'' (P.DepConcat lp rp) (S.Concat ls rs) (l, r) enc.
+    Proof using Type.
+      intros Hleft_non Hleft_ok Hright_ok.
+      intros rest [Hl_wf Hr_wf] Hconcat.
+      apply SerialConcatInversion in Hconcat as (enc__l & enc__r & Hl_ok & Hr_ok & Henc).
+      assert (Length enc__r < Length enc) as Hlen.
+      { rewrite Henc, App_Length. specialize (Hleft_non l enc__l Hl_wf Hl_ok). lia. }
+      apply (Hleft_ok _ _ (App enc__r rest)) in Hl_ok; last assumption.
+      apply (Hright_ok _ Hlen rest) in Hr_ok; last assumption.
+      unfold P.DepConcat. by rewrite Henc, App_assoc, Hl_ok, Hr_ok.
+    Qed.
+
     Definition LengthIf (ss : Result unit) : nat :=
       match ss with
       | Success () enc => Length enc

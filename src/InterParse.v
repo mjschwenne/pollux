@@ -74,6 +74,13 @@ Section Theorems.
     reflexivity.
   Qed.
 
+  Lemma UnsignedNonEmpty : forall x enc, SerialUnsigned x = S.mkSuccess enc -> (Length enc > 0)%nat.
+  Proof.
+    intros x enc Hser.
+    apply UnsignedLength in Hser.
+    lia.
+  Qed.
+
   Theorem NatParseOk : ParseOk ParseNat SerialNat.
   Proof.
     intros x enc rest wf.
@@ -81,6 +88,33 @@ Section Theorems.
     intros H. invc H.
     unfold ParseNat, P.Map.
     simpl. f_equal. word.
+  Qed.
+
+  Theorem NatStrictParseOk : ParseOk ParseNat SerialNatStrict.
+  Proof.
+    intros x enc rest [Hlow Hhigh].
+    unfold SerialNatStrict.
+    rewrite <- Nat.ltb_lt in Hhigh.
+    rewrite Hhigh.
+    rewrite Nat.ltb_lt in Hhigh.
+    apply NatParseOk.
+    lia.
+  Qed.
+
+  Lemma NatStrictStrict : forall x enc, SerialNatStrict x = S.mkSuccess enc -> (0 <= x < 256)%nat.
+  Proof.
+    intros x enc.
+    unfold SerialNatStrict.
+    destruct (x <? 256)%nat eqn:Hwf; last discriminate.
+    rewrite Nat.ltb_lt in Hwf. intros Hser. lia.
+  Qed.
+
+  Lemma NatStrictLength : forall x enc, SerialNatStrict x = S.mkSuccess enc -> Length enc = 1%nat.
+  Proof.
+    intros x enc.
+    unfold SerialNatStrict.
+    destruct (x <? 256)%nat; last discriminate.
+    apply UnsignedLength.
   Qed.
 
   Theorem Z32ParseOk : ParseOk ParseZ32 SerialZ32.
@@ -512,7 +546,7 @@ Section Theorems.
         destruct Hrest_ok as (enc__len & enc__pay & Hlen_ok & Hpay_ok & Henc).
         subst. rewrite !App_Length.
         apply UnsignedLength in Htag_ok.
-        apply UnsignedLength in Hlen_ok.
+        apply NatStrictLength in Hlen_ok.
         unfold Valid'Fold in Hvalid.
         destruct Hvalid as [(d__n & Hfound' & Hvalid__n) _].
         unfold Fields in Hfound'. rewrite Hfound' in Hfound.
@@ -1160,6 +1194,14 @@ Section Theorems.
       destruct v'; done.
   Qed.
 
+  Lemma ValList_elem_of (v : Value) (d : Desc) (k : Z) (val : Val) :
+    (k, val) ∈ ValList d v -> v !! k = Some val.
+  Proof.
+    unfold ValList. intros Hfil. rewrite list_elem_of_filter in Hfil.
+    destruct Hfil as [_ Hin]. value_unfold.
+    by rewrite <- elem_of_map_to_list.
+  Qed.
+
   Lemma Fields_idep : forall d, DESC (Fields d) = d.
   Proof. intros [ds]; reflexivity. Qed.
 
@@ -1605,23 +1647,42 @@ Section Theorems.
         destruct f.
         -- destruct v; fold (SerialValue'); try done.
            ++ unfold S.Map, S.Opt.
-              (* TODO Create bounded version of DepConcatCorrect *)
-              apply DepConcatCorrect; first apply UnsignedParseOk.
-              ** intros enc__nested rest__nested Hwf_nested Hser.
+              apply DepConcatCorrect_internal.
+              ** clear; intros. by apply UnsignedNonEmpty with (x := l).
+              ** apply UnsignedParseOk.
+              ** intros enc__nested Hnest_bound rest__nested Hwf_nested Hser.
                  rewrite Hin__d. unfold P.Map at 1.
                  unfold S.PartMap in Hser.
                  unfold S.recur_step_st in Hser.
                  unfold P.recur_step_st.
                  apply SerialLen'Inversion in Hser as (enc__len & enc__pay & Hlen_ok & Hpay_ok & Henc).
-                 destruct (decide (_ < ValueDepth x)%nat) eqn:Hdepth in Hpay_ok;
+                 destruct (decide (_ < ValueDepth x)%nat) as [Hval_depth |] eqn:Hdepth in Hpay_ok;
                    last (
                        unfold S.RecursiveProgressError in Hpay_ok;
                        destruct (ValueDepth _ == ValueDepth _) in Hpay_ok; discriminate
                      ).
                  unfold P.Len, P.Bind. rewrite Henc, ?App_assoc.
-                 apply (NatParseOk _ _ (App enc__pay rest__nested)) in Hlen_ok.
+                 apply (NatStrictParseOk _ _ (App enc__pay rest__nested)) in Hlen_ok.
                  --- rewrite Hlen_ok. unfold P.Limit. rewrite Slice_App.
-                     admit.
+                     rewrite Henc, App_Length in Hnest_bound.
+                     destruct (decide (Length enc__pay < Length enc)%nat) as [Hpay_depth |]; last lia.
+                     unfold Val_wf_fold in Hval_wf;
+                       rewrite Hin__d, Value_wf_eq in Hval_wf.
+                     destruct Hval_wf as (_ & Hkey & Hval_wf). 
+                     assert (⟨ v ∷ d ⟩) as Hsc_nest.
+                     {
+                       apply SC_implies_nested_correct in Hsc__n.
+                       apply ValList_elem_of in Hin.
+                       rewrite map_Forall_lookup in Hsc__n.
+                       replace (x !! z) with (Vals x !! z) in Hin by by value_unfold.
+                       specialize (Hsc__n z (V_MSG v) Hin) as HnestedCorrect.
+                       unfold NestedCorrect in HnestedCorrect.
+                       by rewrite Hin__d in HnestedCorrect.
+                     }
+                     specialize (IH enc__pay d d v Hpay_depth Hval_depth Hval_wf Hsc_nest eq_refl Hpay_ok).
+                     destruct IH as (v' & Hparse_ok & Hcompat).
+                     apply CompatibleEqual in Hcompat; last trivial. subst v'.
+                     by rewrite Hparse_ok, App_nil_l, Drop_App.
                  --- unfold S.PartMap_wf, S.Len'_wf, S.recur_step_st in Hwf_nested.
                      rewrite Hdepth, Hpay_ok, Hlen_ok in Hwf_nested. lia.
               ** (* Have to show that encoding of nested message is small enough to be tagged correctly *)
@@ -1631,10 +1692,9 @@ Section Theorems.
                 split; first exact Hkey_wf.
                 unfold S.Len'_wf.
                 destruct (S.recur_step_st _ _ _ _ _ _) eqn:Hser; last trivial.
-                destruct (SerialNat _) eqn:Htag; last trivial.
-                split; last exact Hnested_val_wf.
-                (* NOTE: Make SerialNat fail when larger than 255? *)
-                admit.
+                destruct (SerialNatStrict _) eqn:Htag; last trivial.
+                split; last exact Hnested_val_wf. rewrite result0 in Htag.
+                by apply NatStrictStrict in Htag.
            ++ unfold Val_wf, Val_wf_fold in Hval_wf.
               rewrite Hin__d in Hval_wf. contradiction.
         -- destruct v; fold (SerialValue'); try done.
@@ -1672,6 +1732,6 @@ Section Theorems.
       * lia.
     + unfold S.Map_wf.
       apply ParseOk_wf; assumption.
-  Abort.
+  Qed.
 
 End Theorems.
