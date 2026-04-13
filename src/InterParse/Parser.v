@@ -65,6 +65,9 @@ Section Parse.
          | Some F_BOOL => P.Map ParseBool (fun b => V_BOOL b)
          | Some F_INT => P.Map ParseZ32 (fun z' => V_INT z')
          | Some (F_MSG d') => P.Map (P.Len ParseNat $ parse__msg d') (fun v => V_MSG v)
+         (* FIXME: Parser doesn't correctly skip missing values. However, the
+         encoding format isn't rich enough to differentiate between INT / BOOL
+         and MSG... *)
          | None => P.SucceedWith V_MISSING
          end).
 
