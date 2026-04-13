@@ -2,7 +2,7 @@
   description = "A Flake for Pollux development in Rocq";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/f61125a668a320878494449750330ca58b78c557";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     perennial.url = "github:mit-pdos/perennial";
     opam-nix.url = "github:tweag/opam-nix";
@@ -34,7 +34,7 @@
             pkg:
             builtins.elem (pkgs.lib.getName pkg) [
               "claude-code"
-              "claude-code-acp"
+              "claude-agent-acp"
             ];
         };
         pollux-go = pkgs.callPackage ./pollux-go { };
@@ -126,6 +126,13 @@
               iris-named-props
               perennial-pkg
               equations
+            ])
+            ++ (with pkgs.leanPackages; [
+              lean4
+              mathlib
+              batteries
+              aesop
+              LeanSearchClient
             ]);
 
             shellHook = ''
