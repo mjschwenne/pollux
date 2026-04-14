@@ -46,6 +46,9 @@ bin/*
 # Sample encoded protobuf messages
 *.bin
 
+# Lean 
+lean/.lake
+
 # OCaml / dune build outputs
 _build
 _log

@@ -14,6 +14,7 @@
       url = "github:rocq-prover/opam";
       flake = false;
     };
+    lean4-nix.url = "github:lenianiva/lean4-nix";
   };
   outputs =
     {
@@ -23,6 +24,7 @@
       opam-nix,
       opam-repository,
       opam-rocq-repo,
+      lean4-nix,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -35,7 +37,9 @@
             builtins.elem (pkgs.lib.getName pkg) [
               "claude-code"
               "claude-agent-acp"
+              "aristotlelib"
             ];
+          overlays = [ (lean4-nix.readToolchainFile ./lean/lean-toolchain) ];
         };
         pollux-go = pkgs.callPackage ./pollux-go { };
         inherit (opam-nix.lib.${system}) queryToScope;
@@ -60,6 +64,7 @@
           inherit equations perennialPkgs;
           perennial = perennial-pkg;
         };
+        aristotle = pkgs.python313Packages.callPackage ./lean/aristotle.nix { };
       in
       {
         packages = {
@@ -104,6 +109,7 @@
                   vl-convert-python
                   requests
                   rich
+                  aristotle
                 ]
               ))
 
@@ -114,7 +120,7 @@
               # nix helpers
               nix-update
               claude-code
-              claude-code-acp
+              claude-agent-acp
             ]
             ++ (with perennialPkgs; [
               rocq-runtime
@@ -127,18 +133,15 @@
               perennial-pkg
               equations
             ])
-            ++ (with pkgs.leanPackages; [
-              lean4
-              mathlib
-              batteries
-              aesop
-              LeanSearchClient
+            ++ (with pkgs.lean; [
+              lean-all
             ]);
 
             shellHook = ''
               export ROCQPATH=$COQPATH:${equations}/lib/ocaml/5.2.1/site-lib/coq/user-contrib/
               unset COQPATH
               export GITHUB_TOKEN=$(cat ../gh_pat.txt)
+              export ARISTOTLE_API_KEY=$(cat ../aristotle.txt)
             '';
           };
       }
