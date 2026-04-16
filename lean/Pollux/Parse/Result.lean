@@ -27,17 +27,17 @@ inductive Data (ι : Type) where
 
 namespace Data
 
-def msg : Data ι → String
+def msg {ι} : Data ι → String
   | .mk m _ _ => m
 
-def remaining : Data ι → ι
+def remaining {ι} : Data ι → ι
   | .mk _ r _ => r
 
-def next : Data ι → Option (Data ι)
+def next {ι} : Data ι → Option (Data ι)
   | .mk _ _ n => n
 
 /-- Append `other` at the end of the error chain. -/
-def concat : Data ι → Data ι → Data ι
+def concat {ι} : Data ι → Data ι → Data ι
   | .mk msg rem .none, other => .mk msg rem (.some other)
   | .mk msg rem (.some n), other => .mk msg rem (.some (n.concat other))
 

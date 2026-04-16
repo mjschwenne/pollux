@@ -117,6 +117,9 @@
               nushell
               nushellPlugins.polars
 
+              # lean proofwidgets dep
+              nodejs-slim
+
               # nix helpers
               nix-update
               claude-code
