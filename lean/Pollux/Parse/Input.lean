@@ -7,6 +7,7 @@
   providing operations (append, drop, slice, etc.) and their algebraic properties.
   `ByteInput` instantiates this with `List UInt8`.
 -/
+import Mathlib
 
 namespace Pollux.Parse
 
@@ -72,7 +73,19 @@ def IsRemaining (input remaining : ι) : Prop :=
 theorem isRemaining_trans (input rem₁ rem₂ : ι)
     (h₁ : IsRemaining input rem₁) (h₂ : IsRemaining rem₁ rem₂) :
     IsRemaining input rem₂ := by
-  sorry
+  have := h₁.2;
+  -- By definition of `IsRemaining`, we know that `rem₂` is a suffix of `rem₁`.
+  have h_suffix : ‹Input ι›.drop rem₁ (‹Input ι›.length rem₁ - ‹Input ι›.length rem₂) = rem₂ := by
+    exact h₂.2;
+  refine' ⟨ _, _ ⟩;
+  · exact h₂.1.trans h₁.1;
+  · convert congr_arg ( fun x => ‹Input ι›.drop x ( ‹Input ι›.length rem₁ - ‹Input ι›.length rem₂ ) ) this using 1;
+    · convert ( ‹Input ι›.drop_drop _ _ _ _ _ ) using 2;
+      · rw [ tsub_add_tsub_cancel h₁.1 h₂.1 ];
+      · exact Nat.sub_le _ _;
+      · rw [ Nat.sub_sub_self ( h₁.1 ) ];
+        exact Nat.sub_le _ _;
+    · exact h_suffix.symm
 
 end Input
 
@@ -101,8 +114,10 @@ instance : Input (List UInt8) where
   drop_view := by intros; rfl
   drop_zero := by simp [List.drop_zero]
   drop_drop := by intros; simp [List.drop_drop]
-  drop_app := by sorry
+  drop_app := by
+    aesop
   slice_view := by intros; rfl
-  slice_app := by sorry
+  slice_app := by
+    aesop
 
 end Pollux.Parse

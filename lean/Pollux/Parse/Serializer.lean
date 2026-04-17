@@ -226,7 +226,9 @@ def repWf (wf : α → Prop) : List α → Prop
 theorem repWf_iff_local {wfα wfβ : α → Prop} {l : List α}
     (h : ∀ x, x ∈ l → (wfα x ↔ wfβ x)) :
     repWf wfα l ↔ repWf wfβ l := by
-  sorry
+  induction' l with x l ih;
+  · exact?;
+  · by_cases hx : wfα x <;> simp_all +decide [ repWf ]
 
 /-- Internal: encode each element and concatenate the results. -/
 def rep' {wfα : α → Prop} (underlying : Serializer ι α wfα) :
