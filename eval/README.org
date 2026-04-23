@@ -68,10 +68,11 @@ python eval.py visualize googleapis-googleapis.parquet samchon-typia.parquet --v
 
 * Repos
 
-Here is a collection of repos we might be interested in, listed in no particular order. Some of the
-repos came from looking at packages which import the =go= protobuf library, but a lot of them are from
-looking at repositories with a high number of stars and the "protobuf" GitHub tag or test suites in
-protobuf language implementations.
+Here is a collection of repos we might be interested in, listed in no particular
+order. Some of the repos came from looking at packages which import the =go=
+protobuf library, but a lot of them are from looking at repositories with a high
+number of stars and the "protobuf" GitHub tag or test suites in protobuf
+language implementations.
 
 - [X] [[https://github.com/googleapis/googleapis][googleapis/googleapis]]
 - [X] [[https://github.com/googleapis/google-cloud-go][googleapis/google-cloud-go]]
@@ -97,8 +98,9 @@ Not GitHub:
 
 ** Observations
 
-With Grackle, we could arbitrarily handled the parts of protobuf we wanted to. That is no longer the
-case. Two syntactic structures we ignored with grackle but would want here are
+With Grackle, we could arbitrarily handled the parts of protobuf we wanted
+to. That is no longer the case. Two syntactic structures we ignored with grackle
+but would want here are
 
 - Nested message definition
 - Defining =grpc= services

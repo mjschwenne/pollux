@@ -19,32 +19,91 @@ open Pollux.Parse.Theorems
 
 /-! ## Roundtrip correctness for primitive parsers/serializers -/
 
-theorem byteParseOk : ParseOk parseByte serialByte := by sorry
+theorem byteParseOk : ParseOk parseByte serialByte := by
+  intro a enc;
+  intro rest;
+  intro _ h;
+  cases h ; tauto
 
-theorem unsignedParseOk : ParseOk parseUnsigned serialUnsigned := by sorry
+theorem unsignedParseOk : ParseOk parseUnsigned serialUnsigned := by
+  intro x
+  generalize_proofs at *;
+  unfold ParseOk';
+  unfold ParseOk'';
+  unfold ParseOk''';
+  unfold serialUnsigned; unfold parseUnsigned; simp +decide [ serialByte, parseByte ] ;
+  rintro enc rest hx₁ hx₂ rfl; interval_cases x <;> trivial;
 
 theorem unsignedLength (x : Int) (enc : List UInt8) :
-    serialUnsigned x = .success () enc → Input.length enc = 1 := by sorry
+    serialUnsigned x = .success () enc → Input.length enc = 1 := by
+      unfold serialUnsigned;
+      unfold serialByte at * ; aesop
 
 theorem unsignedNonEmpty (x : Int) (enc : List UInt8) :
-    serialUnsigned x = .success () enc → Input.length enc > 0 := by sorry
+    serialUnsigned x = .success () enc → Input.length enc > 0 := by
+      exact fun h => by have := unsignedLength x enc h; aesop;
 
-theorem natParseOk : ParseOk parseNat serialNat := by sorry
+theorem natParseOk : ParseOk parseNat serialNat := by
+  intro x;
+  intro enc rest;
+  intro hx hser;
+  cases hser;
+  rcases hx with ⟨ hx₁, hx₂ ⟩ ; interval_cases x <;> rfl
 
-theorem natStrictParseOk : ParseOk parseNat serialNatStrict := by sorry
+theorem natStrictParseOk : ParseOk parseNat serialNatStrict := by
+  have h_nat : ParseOk parseNat serialNat := by
+    exact natParseOk;
+  intro x enc rest;
+  unfold ParseOk''';
+  unfold serialNatStrict;
+  split_ifs <;> aesop
 
 theorem natStrictStrict (x : Nat) (enc : List UInt8) :
-    serialNatStrict x = .success () enc → 0 ≤ x ∧ x < 256 := by sorry
+    serialNatStrict x = .success () enc → 0 ≤ x ∧ x < 256 := by
+      unfold serialNatStrict;
+      grind
 
 theorem natStrictLength (x : Nat) (enc : List UInt8) :
-    serialNatStrict x = .success () enc → Input.length enc = 1 := by sorry
+    serialNatStrict x = .success () enc → Input.length enc = 1 := by
+      intro h
+      unfold serialNatStrict at h
+      simp [serialNat] at h;
+      split_ifs at h ; cases h;
+      rfl
 
-theorem z32ParseOk : ParseOk parseZ32 serialZ32 := by sorry
+private theorem serialZ32_enc (z : Int) :
+    serialZ32 z = .success () (zToList z 4) := by
+      rfl
+
+private theorem parseZ32_roundtrip (z : Int) (rest : List UInt8) :
+    0 ≤ z → z < 2 ^ 32 →
+    parseZ32 (zToList z 4 ++ rest) = .success z rest := by
+      unfold parseZ32 zToList;
+      unfold parseZN; simp +decide [ zNext ] ;
+      unfold parseUnsigned; simp +decide [ zToList ] ;
+      intro hz₁ hz₂; rw [ Parser.map ] ; simp +decide [ Parser.repN ] ;
+      simp +decide [ Parser.map, parseByte ];
+      norm_num [ Int.shiftLeft_eq, zNext ];
+      have h_simp : ∀ n : ℕ, n < 4294967296 → (n >>> 8 >>> 8 >>> 8) % 256 * 16777216 + ((n >>> 8 >>> 8) % 256 * 65536 + ((n >>> 8) % 256 * 256 + n % 256)) = n := by
+        omega;
+      grind +suggestions
+
+theorem z32ParseOk : ParseOk parseZ32 serialZ32 := by
+  intro x enc rest ⟨h1, h2⟩ hser
+  have henc := serialZ32_enc x
+  rw [henc] at hser; cases hser
+  exact parseZ32_roundtrip x rest h1 h2
 
 theorem z32Length (x : Int) (enc : List UInt8) :
-    serialZ32 x = .success () enc → Input.length enc = 4 := by sorry
+    serialZ32 x = .success () enc → Input.length enc = 4 := by
+      intro h;
+      cases h ; exact rfl
 
-theorem boolParseOk : ParseOk parseBool serialBool := by sorry
+theorem boolParseOk : ParseOk parseBool serialBool := by
+  intro b enc rest hwf hser
+  cases b <;> simp [serialBool] at hser <;>
+  · have := z32ParseOk _ enc rest (by constructor <;> omega) hser
+    simp [parseBool, Parser.map, this]
 
 /-! ## Validity lemmas -/
 
@@ -54,7 +113,37 @@ theorem validDropFirst (d : Desc) (z : Int) (val : Val) (v : Value) :
 
 theorem valueDepthDropFirst (z : Int) (val : Val) (v : Value) :
     v.get? z = none →
-    valueDepth v ≤ valueDepth (v.insert z val) := by sorry
+    valueDepth v ≤ valueDepth (v.insert z val) := by
+      -- If `v.get? z = none`, then `v.insert z val` is just `v` with `val` added at `z`. Therefore, the length of the `vals` list increases by 1, but the value depth should not increase.
+      intro h_none
+      simp [Value.insert, Value.get?] at *;
+      have h_sortedInsert : ∀ (l : List (Int × Val)), ∀ (z : Int) (val : Val), (∀ (a : Int) (b : Val), (a, b) ∈ l → ¬z = a) → (z, val) ∉ l → valueDepthList (Value.sortedInsert z val l) ≥ valueDepthList l := by
+        intros l z val h_none h_not_in_l; induction' l with l_head l_tail ih generalizing z val <;> simp_all +decide [ Value.sortedInsert ] ;
+        · simp +decide [ valueDepthList ];
+          exact fun x => by cases val <;> simp +decide [ valueDepthFold ] ;
+        · split_ifs <;> simp_all +decide [ valueDepthList ];
+          · intro x; specialize ih z val ( fun a b hab => h_none a b ( Or.inr hab ) ) h_not_in_l.2; simp_all +decide [ valueDepthList ] ;
+            refine' Nat.le_induction _ _ _ ( show valueDepthFold l_head.2 x ≤ valueDepthFold l_head.2 ( valueDepthFold val x ) from _ );
+            · refine' Nat.le_induction _ _ _ ( show x ≤ valueDepthFold val x from _ );
+              · unfold valueDepthFold; aesop;
+              · rfl;
+              · intro n hn ih; exact le_trans ih ( by
+                  unfold valueDepthFold; simp +decide [ * ] ;
+                  cases l_head.2 <;> simp +decide [ * ];
+                  exact Nat.le_succ_of_le ( Nat.le_max_left _ _ ) ) ;
+            · rfl;
+            · intro n hn hn'; exact le_trans hn' ( by
+                have h_monotone : ∀ (l : List (Int × Val)) (n : Nat), valueDepthList l n ≤ valueDepthList l (n + 1) := by
+                  intros l n; induction' l with l_head l_tail ih generalizing n <;> simp_all +decide [ valueDepthList ] ;
+                  exact monotone_nat_of_le_succ ( fun n => ih n ) ( by exact Nat.le_of_lt_succ ( by
+                    exact Nat.lt_succ_of_le ( by exact Nat.le_induction ( by tauto ) ( fun k hk ih => by exact le_trans ih ( by exact Nat.le_of_lt_succ ( by
+                      cases l_head.2 <;> simp +decide [ valueDepthFold ] at * ; omega ) ) ) _ ( show n ≤ n + 1 from Nat.le_succ _ ) ) ) );
+                exact h_monotone _ _ ) ;
+          · exact False.elim <| h_none _ _ ( Or.inl rfl ) rfl;
+          · intro x; exact (by
+            specialize ih z val (fun a b hab => h_none a b (Or.inr hab)) h_not_in_l.2;
+            exact ih _);
+      cases v ; aesop
 
 theorem validInsert (d : Desc) (k : Int) (val : Val) (v : Value) :
     v.get? k = none →
@@ -70,7 +159,8 @@ theorem valueEncLength_unfold (d : Desc) (k : Int) (val : Val) (v : Value) :
 
 theorem valInMap_smallerDepth' (v : Value) (k : Int) (val : Value) :
     v.get? k = some (.msg val) →
-    valueDepth val < valueDepth v := by sorry
+    valueDepth val < valueDepth v := by
+      exact fun a => valInMap_smallerDepth v k val a
 
 /-! ## SchemaCorrect inductive relation
 
@@ -104,10 +194,36 @@ theorem sc_insert_field (k : Int) (f : Field) (val : Val) (d : Desc) (v : Value)
 theorem sc_empty : ⟨ (∅ : Value) ∷ (∅ : Desc) ⟩ :=
   SchemaCorrect.empty
 
-/-- Every field in the value exists in the descriptor. -/
+/-
+Every field in the value exists in the descriptor.
+-/
 theorem sc_implies_val_in_desc (d : Desc) (v : Value) :
     ⟨ v ∷ d ⟩ →
-    ∀ k val, v.get? k = some val → ∃ f, d.get? k = some f := by sorry
+    ∀ k val, v.get? k = some val → ∃ f, d.get? k = some f := by
+      contrapose!; simp_all +decide [ Value.get? ] ;
+      intro k val h₁ h₂ h₃;
+      induction' h₃ with k' f val' d' v' h₄ h₅ h₆ h₇ h₈;
+      · cases h₁;
+      · by_cases hk : k = k' <;> simp_all +decide [ Value.insert ];
+        · contrapose! h₂; simp_all +decide [ Value.get? ] ;
+          -- By definition of `sortedInsert`, inserting `k'` into `d'.fields` will result in a list where `k'` is the first element.
+          have h_sortedInsert : List.lookup k' (Desc.sortedInsert k' f d'.fields) = some f := by
+            induction' d'.fields with k'' f'' d'' ih <;> simp_all +decide [ Desc.sortedInsert ];
+            grind +qlia;
+          exact ⟨ f, h_sortedInsert ⟩;
+        · -- Since k is not equal to k', the lookup in the sortedInsert is the same as the lookup in the original list.
+          have h_lookup_eq : List.lookup k (Value.sortedInsert k' val' v'.vals) = List.lookup k v'.vals := by
+            have h_lookup_eq : ∀ {l : List (Int × Val)}, k ≠ k' → List.lookup k (Value.sortedInsert k' val' l) = List.lookup k l := by
+              intros l hk; induction' l with hd tl ih <;> simp_all +decide [ Value.sortedInsert ] ;
+              grind;
+            exact h_lookup_eq hk;
+          rename_i h₉ h₁₀;
+          obtain ⟨ x, hx ⟩ := h₁₀ ( h_lookup_eq.symm.trans h₁ );
+          exact h₂ x ( by rw [ show ( d'.insert k' f ).get? k = d'.get? k from by
+                                have h_lookup_eq : ∀ {l : List (Int × Field)}, k ≠ k' → List.lookup k (Desc.sortedInsert k' f l) = List.lookup k l := by
+                                  intros l hk; induction' l with l ih <;> simp +decide [ Desc.sortedInsert, hk ] ;
+                                  grind;
+                                exact h_lookup_eq hk ] ; exact hx )
 
 /-- Every field in the value exists in the descriptor with matching type. -/
 theorem sc_implies_val_in_desc_typed (d : Desc) (v : Value) :
@@ -115,21 +231,50 @@ theorem sc_implies_val_in_desc_typed (d : Desc) (v : Value) :
     ∀ k val, v.get? k = some val →
     ∃ f, d.get? k = some f ∧ fieldValMatch f val := by sorry
 
-/-- Every field in the descriptor exists in the value. -/
+/-
+Every field in the descriptor exists in the value.
+-/
 theorem sc_implies_desc_in_val (d : Desc) (v : Value) :
     ⟨ v ∷ d ⟩ →
-    ∀ k f, d.get? k = some f → ∃ val, v.get? k = some val := by sorry
+    ∀ k f, d.get? k = some f → ∃ val, v.get? k = some val := by
+      intro h k f hf
+      induction' h with d' v' f' k' h_valid h_ind;
+      · cases hf;
+      · have h_lookup_insert : ∀ (l : List (Int × Field)) (k : Int) (d' : Int) (v' : Field), k ≠ d' → (List.lookup k (Desc.sortedInsert d' v' l)) = (List.lookup k l) := by
+          intros l k d' v' hk_ne_d'; induction' l with l ih generalizing k d' v' <;> simp_all +decide [ Desc.sortedInsert ] ;
+          grind;
+        unfold Value.get? at *; by_cases h : k = d' <;> simp_all +decide [ Value.insert ] ;
+        · have h_lookup_insert : ∀ (l : List (Int × Val)) (k : Int) (d' : Int) (v' : Val), k = d' → List.lookup k (Value.sortedInsert d' v' l) = some v' := by
+            intros l k d' v' hk; induction' l with hd tl ih <;> simp_all +decide [ Value.sortedInsert ] ;
+            grind;
+          exact ⟨ _, h_lookup_insert _ _ _ _ rfl ⟩;
+        · have h_lookup_insert : ∀ (l : List (Int × Val)) (k : Int) (d' : Int) (v' : Val), k ≠ d' → (List.lookup k (Value.sortedInsert d' v' l)) = (List.lookup k l) := by
+            intros l k d' v' hk_ne_d'; induction' l with l ih generalizing k d' v' <;> simp_all +decide [ Value.sortedInsert ] ;
+            grind +splitImp;
+          simp_all +decide [ Value.vals ];
+          exact ‹List.lookup k k'.fields = some f → ∃ val, List.lookup k _ = some val› ( by rename_i h₁ h₂ h₃ h₄ h₅ h₆; exact h₆ _ _ _ _ h ▸ hf )
 
-/-- Every field in the descriptor exists in the value with matching type. -/
+/-
+Every field in the descriptor exists in the value with matching type.
+-/
 theorem sc_implies_desc_in_val_typed (d : Desc) (v : Value) :
     ⟨ v ∷ d ⟩ →
     ∀ k f, d.get? k = some f →
-    ∃ val, v.get? k = some val ∧ fieldValMatch f val := by sorry
+    ∃ val, v.get? k = some val ∧ fieldValMatch f val := by
+      intro hd k f hkf
+      obtain ⟨val, hval⟩ : ∃ val, v.get? k = some val := by
+        exact sc_implies_desc_in_val d v hd k f hkf;
+      have := sc_implies_val_in_desc_typed d v hd k val hval; aesop;
 
-/-- No `V_MISSING` values in a schema-correct value. -/
+/-
+No `V_MISSING` values in a schema-correct value.
+-/
 theorem sc_implies_no_missing (d : Desc) (v : Value) :
     ⟨ v ∷ d ⟩ →
-    ∀ k, v.get? k ≠ some .missing := by sorry
+    ∀ k, v.get? k ≠ some .missing := by
+      intros h k;
+      have := sc_implies_desc_in_val_typed d v h k;
+      have := sc_implies_val_in_desc d v h k Val.missing; aesop;
 
 /-- Nested messages are schema-correct with their subdescriptors. -/
 def nestedCorrect (d : Desc) (k : Int) (v : Val) : Prop :=

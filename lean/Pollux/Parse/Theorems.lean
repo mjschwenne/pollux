@@ -593,7 +593,16 @@ theorem recursiveStateCompat_correct {wf : σ → α → Prop}
     ParseOkCompat'' R
       (Parser.recursiveState parU) (Serializer.recursiveState serU depth)
       st₁ st₂ x := by
-  sorry
+  intro h;
+  intro hx₁ hx₂ enc rest;
+  induction' n : depth x using Nat.strong_induction_on with n ih generalizing st₁ st₂ x enc rest;
+  contrapose! h;
+  refine' ⟨ st₁, st₂, x, enc, rest, h.1, hx₁, hx₂, _, _ ⟩;
+  · intro inp' st₁' st₂' x' h₁ h₂ h₃ h₄ h₅ rest' h₆;
+    exact ih _ ( by linarith ) _ _ _ h₄ h₅ _ _ rfl h₃ h₆;
+  · unfold Serializer.recursiveState Parser.recursiveState at h;
+    unfold Serializer.recurSt Parser.recurSt at h;
+    grind
 
 theorem limitRecursiveStateCompat_correct {wf : σ → α → Prop}
     (R : σ → σ → α → α → Prop)
@@ -626,7 +635,13 @@ theorem limitRecursiveStateCompat_correct {wf : σ → α → Prop}
     LimitParseOkCompat'' R
       (Parser.recursiveState parU) (Serializer.recursiveState serU depth)
       st₁ st₂ x := by
-  sorry
+  -- Unfold LimitParseOkCompatible'' and the definitions of Parser.recursiveState and Serializer.recursiveState.
+  unfold LimitParseOkCompat'';
+  unfold Parser.recursiveState Serializer.recursiveState;
+  intro h₁ h₂ h₃ enc h₄;
+  induction' n : depth x using Nat.strong_induction_on with n ih generalizing st₁ st₂ x enc;
+  intro h₅;
+  grind +suggestions
 
 end Relational
 
