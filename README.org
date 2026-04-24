@@ -1,0 +1,135 @@
+#+TITLE: Pollux - Formally Verified Protocol Buffers
+#+AUTHOR: MJS
+#+STARTUP: overview
+
+* Overview
+
+Pollux is a formally verified Protocol Buffers parser/serializer in Rocq. The project proves that parsing inverts serialization using dependent types and the Equations plugin.
+
+*Build:* ~nix develop~ then ~make~
+
+* Directory Structure
+
+#+begin_example
+src/                    Rocq proofs (main development)
+├── parse/              Abstract parser framework (fully proven)
+├── InterParse/         Intermediate format modules
+├── Prelude.v           Common imports
+├── Varint.v            Varint encoding (2 admitted)
+├── Descriptors.v       Protobuf schema types
+├── Parse.v             Low-level encoding functions
+├── SimplParse.v        Simple format (1 admitted)
+├── InterParse.v        Intermediate format (2 admitted, mostly proven)
+└── ProtoParse.v        Full protobuf (stubbed)
+
+ocaml/                  OCaml extraction
+pollux-go/              Go reference implementation
+proto/                  Schema evolution tests (v1-v5)
+equations-tutorial/     Equations plugin examples
+eval/                   Performance evaluation data
+#+end_example
+
+* Proof Status Summary
+
+| File              | Lines | Status        | Admitted |
+|-------------------+-------+---------------+----------|
+| parse/Parser.v    |   509 | Complete      |        0 |
+| parse/Serializer  |   338 | Complete      |        0 |
+| parse/Theorems    |   915 | Complete      |        0 |
+| parse/TheoremsRel |   453 | Complete      |        0 |
+| InterParse.v      | 1,737 | Near complete |        2 |
+| SimplParse.v      |   576 | Partial       |        1 |
+| Varint.v          |   101 | Partial       |        2 |
+| ProtoParse.v      |   293 | Stubbed       |      N/A |
+
+*Total: 5 admitted proofs across ~8k lines*
+
+* Admitted Proofs (What's Blocking)
+
+All 5 admitted proofs relate to *4-byte integer parsing* or *varint encoding*:
+
+1. ~Varint.v:94~ - ~encode_valid~: Encoded varints satisfy validity predicate
+2. ~Varint.v:99~ - ~encode_correct~: decode(encode(x)) = x
+3. ~SimplParse.v:334~ - ~Z32ParseOk~: 4-byte integer roundtrip
+4. ~InterParse.v:122~ - ~Z32ParseOk~: Same in intermediate format
+5. ~InterParse.v:126~ - ~Z32Length~: Encoded length property
+
+* Architecture Notes
+
+** Parser Framework (parse/)
+
+Uses module functors to abstract over input type:
+
+#+begin_src coq
+Module Castor (I : AbstractInput).
+  Module Import R := Results(I).
+  Module Import P := Parsers(I).
+  Module Import S := Serializers(I).
+  ...
+End Castor.
+#+end_src
+
+Key theorem pattern - ~ParseOk~ proves parser inverts serializer:
+#+begin_src coq
+Definition ParseOk {X} (p : P.Parser X) (s : S.Serializer X wf) :=
+  forall x, wf x -> p (s x) = Success x [].
+#+end_src
+
+** Format Progression
+
+1. *SimplParse*: Minimal tagged format - validates framework
+2. *InterParse*: Ordered fields, defaults, no repeats - top-level correctness proven
+3. *ProtoParse*: Full protobuf wire format - field parsing not implemented
+
+** Key Types (Descriptors.v)
+
+Mutually recursive descriptors and values:
+- ~ValDesc~: INT, UINT, SINT, FIXED, SFIXED, BOOL, STRING, BYTES, MSG, ENUM
+- ~DecoDesc~: IMPLICIT, OPTIONAL, REPEATED
+- ~MsgDesc~: Message with reserved IDs and fields
+
+* Where to Resume Work
+
+** Option 1: Complete Admitted Proofs
+
+The Z32/varint proofs are the main blockers. Start at:
+- ~SimplParse.v:334~ for the simplest case
+- Pattern: Need to show 4-byte serialization roundtrips correctly
+
+** Option 2: Implement ProtoParse Field Parsing
+
+~ProtoParse.v:117-125~ has TODO notes:
+- Implement I32 and I64 parsers
+- Implement LEN tag parser
+- Handle mutual recursion with message parser
+
+** Option 3: Extend InterParse
+
+~InterParse.v:1518~ notes a FIXME:
+- Parser doesn't correctly skip missing values
+- Format can't differentiate INT/BOOL vs MSG
+
+* Build Commands
+
+#+begin_src bash
+nix develop           # Enter dev shell
+make vo               # Build all proofs
+make vos              # Quick compile (no proofs)
+make clean            # Clean artifacts
+
+# Single file
+rocq compile -Q src Pollux src/InterParse.v
+#+end_src
+
+* Dependencies
+
+- Perennial: Verification framework (word/integer helpers)
+- Equations: Complex recursive function definitions
+- stdpp: Decidable equality, finite maps
+- Iris: (via stdpp for gmaps/mapsets)
+
+Import pattern:
+#+begin_src coq
+From Pollux Require Import Prelude.
+From Pollux.parse Require Import Parser Serializer Theorems.
+#+end_src

@@ -1,0 +1,126 @@
+#+TITLE: Pollux Lean 4 Port
+#+AUTHOR: Matt Schwennesen
+#+DATE: 2026-04-24
+
+* Overview
+
+This is a port of the Pollux formally verified protobuf parser/serializer from Rocq to Lean 4.
+It targets Lean 4 v4.28.0 with Mathlib v4.28.0 as the only dependency.
+
+The port covers the abstract parser/serializer framework (~Parse~) and the intermediate
+format (~InterParse~). The full protobuf layer (~ProtoParse~, ~Varint~, ~SimplParse~, etc.)
+has *not* been ported.
+
+* Building
+
+#+begin_src sh
+# Inside the lean/ directory:
+lake build
+#+end_src
+
+An ~aristotle.nix~ file is present for use with the Aristotle automated theorem prover
+(used to fill in proof obligations).
+
+* File Structure
+
+The Lean code mirrors the Rocq ~src/~ layout.
+
+** ~Pollux.Parse~ — Abstract parser/serializer framework
+
+Corresponds to ~src/parse/~ in Rocq. All files are *sorry-free*.
+
+| Lean file             | Rocq counterpart                       | Status   | Notes                                                                 |
+|-----------------------+----------------------------------------+----------+-----------------------------------------------------------------------|
+| ~Parse/Input.lean~      | ~parse/Input.v~                          | Complete | ~Input~ typeclass + ~ByteInput~ (= ~List UInt8~) instance                   |
+| ~Parse/Result.lean~     | ~parse/Result.v~                         | Complete | ~Level~, ~Data~, ~Result~, ~resultEquiv~                                      |
+| ~Parse/Parser.lean~     | ~parse/Parser.v~                         | Complete | All combinators: bind, concat, or, rep, recursive, etc.               |
+| ~Parse/Serializer.lean~ | ~parse/Serializer.v~                     | Complete | Dual serializer combinators with ~wf~ predicates                        |
+| ~Parse/Theorems.lean~   | ~parse/Theorems.v~ + ~parse/TheoremsRel.v~ | Complete | ~ParseOk~ roundtrip correctness, relational variants, combinator proofs |
+
+Key design difference from Rocq: Rocq uses module functors (~Parsers(InputModule)~);
+Lean uses a typeclass (~Input ι~).
+
+** ~Pollux.InterParse~ - Intermediate tagged key-value format
+
+Corresponds to ~src/InterParse/~ in Rocq. Definitions are complete; many theorems remain.
+
+| Lean file                  | Rocq counterpart             | Status     | Notes                                                                                     |
+|----------------------------+------------------------------+------------+-------------------------------------------------------------------------------------------|
+| ~InterParse/Descriptor.lean~ | ~InterParse/Descriptor.v~      | Complete   | ~Desc~/~Field~, ~Value~/~Val~, sorted-map ops, extensionality, validity, depth/length metrics |
+| ~InterParse/Parser.lean~     | ~InterParse/Parser.v~          | Complete   | Byte parsers, ~parseValue~ (recursive stateful)                                             |
+| ~InterParse/Serializer.lean~ | ~InterParse/Serializer.v~      | Complete   | Byte serializers, ~serialValue~ (recursive stateful)                                        |
+| ~InterParse/Theorems.lean~   | ~src/InterParse.v~ (§Theorems) | *20 sorry's* | See below                                                                                 |
+
+** Not ported from Rocq
+
+These Rocq files have no Lean counterpart:
+
+- ~Prelude.v~ — not needed (Mathlib replaces Iris/stdpp/Perennial imports)
+- ~Varint.v~ — variable-length integer encoding
+- ~Descriptors.v~ — full protobuf schema descriptors
+- ~ProtoParse.v~ — protobuf wire-format parser
+- ~SimplParse.v~, ~InterParse/Tests.v~ — examples/tests
+- ~parse/Castor.v~, ~parse/Util.v~ — helpers
+
+* State of Proofs in ~InterParse/Theorems.lean~
+
+Primitive roundtrip proofs are done: ~byteParseOk~, ~unsignedParseOk~, ~natParseOk~,
+~natStrictParseOk~, ~z32ParseOk~, ~boolParseOk~, plus length/strictness lemmas.
+
+The following are proven without sorry:
+- ~sc_implies_val_in_desc~ — every value field has a descriptor entry
+- ~sc_implies_desc_in_val~ — every descriptor field has a value entry
+- ~sc_implies_no_missing~ — no ~V_MISSING~ in schema-correct values
+- ~sc_sco~ — ~SchemaCorrect ↔ SchemaCorrectOrdered~
+- ~sc_dom_eq~ — domain equality
+- ~valueDepthDropFirst~ — depth monotonicity under insert
+- ~valueEncLength_unfold~ — encoding length decomposition
+- ~valList_drop_ok~ — filtering invariance
+
+** Remaining sorry's (20 total)
+
+Grouped by difficulty/dependency:
+
+*** Structural lemmas about ~SchemaCorrect~ (likely moderate)
+- ~validDropFirst~ (l.112) — validity preserved when dropping an inserted key
+- ~validInsert~ (l.151) — validity splits into per-field and remainder
+- ~sc_implies_val_in_desc_typed~ (l.287) — typed version of val-in-desc
+- ~sc_implies_nested_correct~ (l.342) — nested messages are schema-correct
+- ~sc_implies_properties~ / ~sc_implies_properties_typed~ (l.350, l.358) — combined property bundles (follow from the above)
+- ~sc_delete_key~ (l.361) — erase preserves schema-correctness
+- ~sc_desc_inv~ (l.406) — schema-correct value determines its descriptor
+
+*** Compatible relation (depends on SchemaCorrect lemmas)
+- ~compatibleEqual~ (l.432) — compatible + same descriptor → same value
+
+*** Serialization correctness (depends on the above)
+- ~willEncode_nonEmpty~ (l.439) — serialized fields produce non-empty output
+- ~valList_elem_of~ (l.468) — filtered list membership implies lookup
+- ~list_to_value_id~ (l.473) — listToValue roundtrips for schema-correct values
+- ~sc_filter_self~ (l.476) — filtering preserves schema-correctness
+- ~fullDescriptor_roundTrip~ (l.479) — full roundtrip gives Compatible
+- ~valueWf_weaken~ (l.484) — wf weakening under erase
+- ~willEncode_weaken~ (l.488) — willEncode weakening under erase
+- ~parseOk_wf~ (l.492) — schema-correct + wf → list wf
+- ~serialValueInversion~ (l.512) — inversion for serialValue on insert
+- ~valueEncLength_length~ (l.518) — encoding length correctness
+- *~interParseOk~* (l.501) — *the top-level correctness theorem*
+
+The dependency order is roughly: structural SC lemmas → Compatible lemmas →
+serialization helpers → ~interParseOk~.
+
+* Design Notes
+
+** Sorted-list maps instead of proper map types
+
+~Desc~ and ~Value~ store fields as ~List (Int × _)~ because Lean's kernel positivity
+checker rejects mutual inductives that go through ~AList~, ~Finmap~, etc. Map
+semantics are recovered via a sorted/no-dup invariant (~WF~) and an extensionality
+theorem (~ext_lookup~). The sorted-insert/erase operations and their correctness
+proofs are in ~Descriptor.lean~.
+
+** Aristotle integration
+
+Some proofs were generated or completed using the [[https://aristotle.harmonic.fun][Aristotle]] automated theorem
+prover. The ~aristotle.nix~ file packages the Python client. Aristotle-generated
+proofs tend to use ~grind~, ~aesop~, ~simp_all +decide~, and ~exact?~ heavily.
