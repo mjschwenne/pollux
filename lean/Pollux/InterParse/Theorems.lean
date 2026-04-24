@@ -155,7 +155,42 @@ theorem validInsert (d : Desc) (k : Int) (val : Val) (v : Value) :
 theorem valueEncLength_unfold (d : Desc) (k : Int) (val : Val) (v : Value) :
     v.get? k = none →
     valueEncLen' d (v.insert k val) =
-    valueEncLen'Fold d.fields k val 0 + valueEncLen' d v := by sorry
+    valueEncLen'Fold d.fields k val 0 + valueEncLen' d v := by
+      intro h;
+      -- By definition of `sortedInsert`, we can split the list into the part before `k` and the part after `k`.
+      have h_split : ∀ (l : List (ℤ × Val)) (k : ℤ) (val : Val), ¬(k ∈ List.map Prod.fst l) → valueEncLen'List d.fields (Value.sortedInsert k val l) 0 = valueEncLen'List d.fields l 0 + valueEncLen'Fold d.fields k val 0 := by
+        intros l k val hk;
+        induction' l with l ih generalizing k val <;> simp_all +decide [ Value.sortedInsert ];
+        · unfold valueEncLen'List; simp +decide [ valueEncLen'List ] ;
+        · split_ifs <;> simp_all +decide [ valueEncLen'List ];
+          · have h_split : ∀ (l : List (ℤ × Val)) (k : ℤ) (val : Val) (acc : Nat), valueEncLen'List d.fields l (valueEncLen'Fold d.fields k val acc) = valueEncLen'List d.fields l acc + valueEncLen'Fold d.fields k val 0 := by
+              intros l k val acc; induction' l with l ih generalizing k val acc <;> simp_all +decide [ valueEncLen'List ] ;
+              · grind +suggestions;
+              · ring;
+            rw [ h_split, h_split ];
+            rw [ h_split ] ; ring;
+          · convert congr_arg ( fun x => x + valueEncLen'Fold d.fields l.1 l.2 0 ) ( ‹∀ ( k : ℤ ) ( val : Val ), ( ∀ x : Val, ( k, x ) ∉ ih ) → valueEncLen'List d.fields ( Value.sortedInsert k val ih ) 0 = valueEncLen'List d.fields ih 0 + valueEncLen'Fold d.fields k val 0› k val hk.2 ) using 1;
+            · have h_split : ∀ (l : List (ℤ × Val)) (k : ℤ) (val : Val) (acc : Nat), valueEncLen'List d.fields l acc = valueEncLen'List d.fields l 0 + acc := by
+                intros l k val acc; induction' l with l ih generalizing k val acc <;> simp_all +decide [ valueEncLen'List ] ;
+                nontriviality;
+                rename_i h₁ h₂ h₃;
+                convert h₂ l.2 ( valueEncLen'Fold d.fields l.1 l.2 acc ) using 1;
+                rw [ h₂ ];
+                · grind +suggestions;
+                · exact Val.missing;
+              exact?;
+            · have h_split : ∀ (l : List (ℤ × Val)) (k : ℤ) (val : Val) (acc : Nat), valueEncLen'List d.fields l (acc + valueEncLen'Fold d.fields k val 0) = valueEncLen'List d.fields l acc + valueEncLen'Fold d.fields k val 0 := by
+                intros l k val acc; induction' l with l ih generalizing k val acc <;> simp_all +decide [ valueEncLen'List ] ;
+                grind +suggestions;
+              rw [ show valueEncLen'List d.fields ih ( valueEncLen'Fold d.fields l.1 l.2 0 ) = valueEncLen'List d.fields ih 0 + valueEncLen'Fold d.fields l.1 l.2 0 from ?_ ] ; ring;
+              convert h_split ih l.1 l.2 0 using 1;
+              norm_num;
+      rw [ add_comm ];
+      unfold Value.get? at h;
+      convert h_split v.vals k val _ using 1;
+      · cases d ; rfl;
+      · cases d ; cases v ; rfl;
+      · grind
 
 theorem valInMap_smallerDepth' (v : Value) (k : Int) (val : Value) :
     v.get? k = some (.msg val) →
@@ -225,7 +260,27 @@ theorem sc_implies_val_in_desc (d : Desc) (v : Value) :
                                   grind;
                                 exact h_lookup_eq hk ] ; exact hx )
 
-/-- Every field in the value exists in the descriptor with matching type. -/
+/-
+Every field in the value exists in the descriptor with matching type.
+-/
+private theorem sortedInsert_lookup_ne_val (k k' : Int) (v : Val) (l : List (Int × Val)) :
+    k ≠ k' → List.lookup k (Value.sortedInsert k' v l) = List.lookup k l := by
+  intro hne; induction l with
+  | nil => simp [Value.sortedInsert, hne]
+  | cons hd tl ih =>
+    unfold Value.sortedInsert; split_ifs <;> simp_all [List.lookup]
+    · rw [show (k == k') = false from by rw [beq_eq_decide]; simp [hne]]
+    · grind
+
+private theorem sortedInsert_lookup_ne_desc (k k' : Int) (f : Field) (l : List (Int × Field)) :
+    k ≠ k' → List.lookup k (Desc.sortedInsert k' f l) = List.lookup k l := by
+  intro hne; induction l with
+  | nil => simp [Desc.sortedInsert, hne]
+  | cons hd tl ih =>
+    unfold Desc.sortedInsert; split_ifs <;> simp_all [List.lookup]
+    · rw [show (k == k') = false from by rw [beq_eq_decide]; simp [hne]]
+    · grind
+
 theorem sc_implies_val_in_desc_typed (d : Desc) (v : Value) :
     ⟨ v ∷ d ⟩ →
     ∀ k val, v.get? k = some val →
@@ -306,7 +361,17 @@ theorem sc_delete_key (d : Desc) (v : Value) (k : Int) :
     ⟨ v ∷ d ⟩ → ⟨ v.erase k ∷ d.erase k ⟩ := by sorry
 
 theorem sc_dom_eq (d : Desc) (v : Value) :
-    ⟨ v ∷ d ⟩ → (v.vals.map Prod.fst) = (d.fields.map Prod.fst) := by sorry
+    ⟨ v ∷ d ⟩ → (v.vals.map Prod.fst) = (d.fields.map Prod.fst) := by
+      -- We'll use induction on the structure of the schema correctness.
+      intro h
+      induction' h with d v h_ind;
+      · native_decide +revert;
+      · rename_i h₁ h₂ h₃ h₄ h₅ h₆;
+        have h_keys_eq : ∀ (l : List (Int × Val)) (l' : List (Int × Field)), List.map Prod.fst l = List.map Prod.fst l' → List.map Prod.fst (Value.sortedInsert d h_ind l) = List.map Prod.fst (Desc.sortedInsert d v l') := by
+          intros l l' h_keys_eq;
+          induction' l with l_head l_tail ih generalizing l' <;> induction' l' with l'_head l'_tail ih' <;> simp_all +decide [ Value.sortedInsert, Desc.sortedInsert ];
+          grind +splitImp;
+        exact h_keys_eq _ _ h₆
 
 /-! ## SchemaCorrectOrdered -/
 
@@ -325,7 +390,14 @@ inductive SchemaCorrectOrdered : Desc → Value → Prop where
 
 notation "⟪ " v " ∷ " d " ⟫" => SchemaCorrectOrdered d v
 
-theorem sc_sco (v : Value) (d : Desc) : ⟨ v ∷ d ⟩ ↔ ⟪ v ∷ d ⟫ := by sorry
+theorem sc_sco (v : Value) (d : Desc) : ⟨ v ∷ d ⟩ ↔ ⟪ v ∷ d ⟫ := by
+  constructor <;> intro h;
+  · induction' h with k f val d v ih;
+    · constructor;
+    · exact SchemaCorrectOrdered.insert k f val d v ih ‹_› ‹_› ‹_› ‹_›;
+  · induction h;
+    · constructor;
+    · constructor <;> assumption
 
 /-! ## Descriptor invariance -/
 
@@ -375,7 +447,22 @@ def fieldValTypeMatch (f : Field) (v : Val) : Prop :=
 /-! ## ValList correctness -/
 
 theorem valList_drop_ok (v : Value) (k : Int) (d : Desc) (f : Field) :
-    v.get? k = none → valList (d.insert k f) v = valList d v := by sorry
+    v.get? k = none → valList (d.insert k f) v = valList d v := by
+      intro h;
+      -- Since `v` does not contain `k`, the filtering condition `valListFilterP (d.insert k f)` is equivalent to `valListFilterP d`.
+      have h_filter : ∀ kv ∈ v.vals, valListFilterP (d.insert k f) kv = valListFilterP d kv := by
+        intro kv hk; by_cases h : kv.1 = k <;> simp +decide [ h, valListFilterP ] ;
+        · have h_filter : ∀ {k : ℤ} {v : Value}, v.get? k = none → ∀ kv ∈ v.vals, kv.1 ≠ k := by
+            intros k v hv kv hk; contrapose! hv; simp_all +decide [ Value.get? ] ;
+            exact ⟨ kv.2, hv ▸ hk ⟩;
+          exact False.elim <| h_filter ‹_› kv hk h;
+        · rw [ show List.lookup kv.1 ( d.insert k f ).fields = List.lookup kv.1 d.fields from by
+                rw [ Desc.insert ];
+                have h_sortedInsert : ∀ (l : List (ℤ × Field)) (k : ℤ) (f : Field), kv.1 ≠ k → List.lookup kv.1 (Desc.sortedInsert k f l) = List.lookup kv.1 l := by
+                  intros l k f hk; induction' l with l ih generalizing k f <;> simp +decide [ *, Desc.sortedInsert ] ;
+                  grind +splitImp;
+                exact h_sortedInsert _ _ _ h ];
+      exact List.filter_congr fun x hx => h_filter x hx
 
 theorem valList_elem_of (v : Value) (d : Desc) (k : Int) (val : Val) :
     (k, val) ∈ valList d v → v.get? k = some val := by sorry
