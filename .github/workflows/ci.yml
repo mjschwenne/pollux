@@ -10,11 +10,11 @@ jobs:
   build-pollux-linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: nixbuild/nix-quick-install-action@v32
+      - uses: actions/checkout@v6
+      - uses: nixbuild/nix-quick-install-action@v34
       - run: nix build --version
       - name: Restore and save Nix store
-        uses: nix-community/cache-nix-action@v6
+        uses: nix-community/cache-nix-action@v7
         with:
           # restore and save a cache using this key
           primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
@@ -42,11 +42,11 @@ jobs:
   build-pollux-macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: nixbuild/nix-quick-install-action@v32
+      - uses: actions/checkout@v6
+      - uses: nixbuild/nix-quick-install-action@v34
       - run: nix build --version
       - name: Restore and save Nix store
-        uses: nix-community/cache-nix-action@v6
+        uses: nix-community/cache-nix-action@v7
         with:
           # restore and save a cache using this key
           primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
