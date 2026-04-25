@@ -8,7 +8,6 @@ From Stdlib Require Import Recdef.
 
 From Pollux Require Import Descriptors.
 From Pollux Require Import Varint.
-From Equations Require Import Equations.
 
 From Pollux.parse Require Import Input.
 From Pollux.parse Require Import Castor.
