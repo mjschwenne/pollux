@@ -5,15 +5,6 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     perennial.url = "github:mit-pdos/perennial";
-    opam-nix.url = "github:tweag/opam-nix";
-    opam-repository = {
-      url = "github:ocaml/opam-repository";
-      flake = false;
-    };
-    opam-rocq-repo = {
-      url = "github:rocq-prover/opam";
-      flake = false;
-    };
     lean4-nix.url = "github:lenianiva/lean4-nix";
   };
   outputs =
@@ -21,9 +12,6 @@
       nixpkgs,
       flake-utils,
       perennial,
-      opam-nix,
-      opam-repository,
-      opam-rocq-repo,
       lean4-nix,
       ...
     }:
@@ -42,33 +30,17 @@
           overlays = [ (lean4-nix.readToolchainFile ./lean/lean-toolchain) ];
         };
         pollux-go = pkgs.callPackage ./pollux-go { };
-        inherit (opam-nix.lib.${system}) queryToScope;
-        scope =
-          queryToScope
-            {
-              repos = [
-                "${opam-repository}"
-                "${opam-rocq-repo}/released"
-              ];
-            }
-            {
-              rocq-equations = "*";
-              ocaml-base-compiler = "5.2.1";
-            };
-        equations = scope.rocq-equations.override {
-          inherit (scope) ocaml-base-compiler;
-        };
         inherit (perennial.packages.${system}) perennialPkgs;
         perennial-pkg = perennial.packages.${system}.default;
         rocq-build = pkgs.callPackage ./nix/pollux-rocq {
-          inherit equations perennialPkgs;
+          inherit perennialPkgs;
           perennial = perennial-pkg;
         };
         aristotle = pkgs.python313Packages.callPackage ./lean/aristotle.nix { };
       in
       {
         packages = {
-          inherit pollux-go rocq-build equations;
+          inherit pollux-go rocq-build;
           default = rocq-build;
         };
         devShells.default =
@@ -134,14 +106,13 @@
               rocq-iris
               iris-named-props
               perennial-pkg
-              equations
             ])
             ++ (with pkgs.lean; [
               lean-all
             ]);
 
             shellHook = ''
-              export ROCQPATH=$COQPATH:${equations}/lib/ocaml/5.2.1/site-lib/coq/user-contrib/
+              export ROCQPATH=$COQPATH
               unset COQPATH
               export GITHUB_TOKEN=$(cat ../gh_pat.txt)
               export ARISTOTLE_API_KEY=$(cat ../aristotle.txt)

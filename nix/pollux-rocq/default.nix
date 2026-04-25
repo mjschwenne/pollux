@@ -2,7 +2,6 @@
   stdenv,
   perennial,
   perennialPkgs,
-  equations,
   ...
 }:
 stdenv.mkDerivation {
@@ -22,13 +21,12 @@ stdenv.mkDerivation {
     rocq-iris
     iris-named-props
     perennial
-    equations
   ];
 
   enableParallelBuilding = true;
 
   buildPhase = ''
-    export ROCQPATH=$COQPATH:${equations}/lib/ocaml/5.2.1/site-lib/coq/user-contrib
+    export ROCQPATH=$COQPATH
     unset COQPATH
     make -j$NIX_BUILD_CORES
   '';
