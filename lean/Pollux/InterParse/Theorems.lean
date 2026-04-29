@@ -284,7 +284,50 @@ private theorem sortedInsert_lookup_ne_desc (k k' : Int) (f : Field) (l : List (
 theorem sc_implies_val_in_desc_typed (d : Desc) (v : Value) :
     ⟨ v ∷ d ⟩ →
     ∀ k val, v.get? k = some val →
-    ∃ f, d.get? k = some f ∧ fieldValMatch f val := by sorry
+    ∃ f, d.get? k = some f ∧ fieldValMatch f val := by
+      intro h
+      induction' h with kk fld val' d' v' h_match h_nested ih_nested h_dnone h_vnone h_sc ih
+      · intro k val hval
+        simp [Value.get?, Value.vals] at hval
+      · intro k val hval
+        by_cases hk : k = kk
+        · subst hk
+          refine ⟨fld, ?_, ?_⟩
+          · unfold Desc.get? Desc.insert
+            cases d'
+            simp +decide [Desc.fields]
+            have h_lookup_insert : ∀ (l : List (Int × Field)),
+                List.lookup k (Desc.sortedInsert k fld l) = some fld := by
+              intros l
+              induction' l with hd tl ih2 <;> simp_all +decide [ Desc.sortedInsert ]
+              grind
+            exact h_lookup_insert _
+          · unfold Value.get? Value.insert at hval
+            cases v'
+            simp +decide [Value.vals] at hval
+            have h_lookup_insert : ∀ (l : List (Int × Val)),
+                List.lookup k (Value.sortedInsert k val' l) = some val' := by
+              intros l
+              induction' l with hd tl ih2 <;> simp_all +decide [ Value.sortedInsert ]
+              grind
+            rw [h_lookup_insert] at hval
+            cases hval
+            exact h_match
+        · have h_lookup_v : v'.get? k = some val := by
+            unfold Value.get? Value.insert at hval
+            cases v'
+            simp +decide [Value.vals] at hval
+            simp [Value.get?, Value.vals]
+            rw [← sortedInsert_lookup_ne_val k kk val' _ hk]
+            exact hval
+          obtain ⟨f', hf', hmatch⟩ := ih k val h_lookup_v
+          refine ⟨f', ?_, hmatch⟩
+          unfold Desc.get? Desc.insert
+          cases d'
+          simp +decide [Desc.fields]
+          rw [sortedInsert_lookup_ne_desc k kk fld _ hk]
+          simp [Desc.get?, Desc.fields] at hf'
+          exact hf'
 
 /-
 Every field in the descriptor exists in the value.
@@ -356,6 +399,29 @@ theorem sc_implies_properties_typed (d : Desc) (v : Value) :
     (∀ k f, d.get? k = some f → ∃ val, v.get? k = some val ∧ fieldValMatch f val) ∧
     (∀ k, v.get? k ≠ some .missing) ∧
     (∀ kv ∈ v.vals, nestedCorrect d kv.1 kv.2) := by sorry
+
+/-- Erasing a key after inserting it (when not previously present) recovers the
+    original descriptor field list. -/
+private theorem desc_sortedErase_sortedInsert (k : Int) (f : Field)
+    (l : List (Int × Field)) (h : List.lookup k l = none) :
+    Desc.sortedErase k (Desc.sortedInsert k f l) = l := by
+  induction' l with hd tl ih
+  · simp [Desc.sortedInsert, Desc.sortedErase]
+  · unfold Desc.sortedInsert
+    by_cases hk1 : k < hd.1
+    · simp [hk1, Desc.sortedErase]
+    · by_cases hk2 : k = hd.1
+      · exfalso
+        rw [show List.lookup k (hd :: tl) = some hd.2 from by simp [List.lookup, hk2]] at h
+        cases h
+      · have hbeq : ¬ (k == hd.1) := by rw [beq_eq_decide]; simp [hk2]
+        simp [hk1, hbeq, Desc.sortedErase]
+        have htl : List.lookup k tl = none := by
+          rw [show List.lookup k (hd :: tl) = List.lookup k tl from by
+            simp [List.lookup]
+            rw [show (k == hd.1) = false from by rw [beq_eq_decide]; simp [hk2]]] at h
+          exact h
+        rw [ih htl]
 
 theorem sc_delete_key (d : Desc) (v : Value) (k : Int) :
     ⟨ v ∷ d ⟩ → ⟨ v.erase k ∷ d.erase k ⟩ := by sorry
@@ -429,7 +495,29 @@ notation "⟨ " v1 " ∷ " d1 " ⟩≼⟨ " v2 " ∷ " d2 " ⟩" =>
   Compatible d1 d2 v1 v2
 
 theorem compatibleEqual (d1 : Desc) (v1 : Value) (d2 : Desc) (v2 : Value) :
-    Compatible d1 d2 v1 v2 → d1 = d2 → v1 = v2 := by sorry
+    Compatible d1 d2 v1 v2 → d1 = d2 → v1 = v2 := by
+      intro hc
+      induction hc with
+      | refl _ _ _ _ _ => intro _; rfl
+      | add d1' v1' d2' v2' k f1 f2 vv1 vv2 _ _ _ hv1n hv2n hd1n hd2n hveq hfeq ih =>
+        intro hd
+        subst hveq; subst hfeq
+        have hd_eq : d1' = d2' := by
+          cases d1' with | mk fs1 =>
+          cases d2' with | mk fs2 =>
+          have hd' : Desc.sortedInsert k f1 fs1 = Desc.sortedInsert k f1 fs2 := by
+            unfold Desc.insert at hd
+            simp [Desc.fields] at hd
+            exact hd
+          have hd1_lookup : List.lookup k fs1 = none := hd1n
+          have hd2_lookup : List.lookup k fs2 = none := hd2n
+          have heq : Desc.sortedErase k (Desc.sortedInsert k f1 fs1)
+                     = Desc.sortedErase k (Desc.sortedInsert k f1 fs2) := by rw [hd']
+          rw [desc_sortedErase_sortedInsert k f1 fs1 hd1_lookup,
+              desc_sortedErase_sortedInsert k f1 fs2 hd2_lookup] at heq
+          exact congrArg Desc.mk heq
+        have hv_eq := ih hd_eq
+        exact congrArg (fun v => v.insert k vv1) hv_eq
 
 /-! ## Serialization correctness helper lemmas -/
 
