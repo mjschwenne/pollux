@@ -380,9 +380,97 @@ def nestedCorrect (d : Desc) (k : Int) (v : Val) : Prop :=
   | some (.msg d'), .msg v' => ⟨ v' ∷ d' ⟩
   | _, _ => True
 
+/-- Membership in a sorted-insert: the inserted pair, or one of the originals. -/
+private theorem mem_value_sortedInsert (k : Int) (v : Val)
+    (l : List (Int × Val)) (kv : Int × Val) :
+    kv ∈ Value.sortedInsert k v l → kv = (k, v) ∨ kv ∈ l := by
+  induction l with
+  | nil => intro h; simp [Value.sortedInsert] at h; exact Or.inl h
+  | cons hd tl ih =>
+    intro h
+    unfold Value.sortedInsert at h
+    split_ifs at h
+    · -- k < hd.1: result is (k, v) :: hd :: tl
+      simp at h
+      rcases h with h | h | h
+      · exact Or.inl h
+      · exact Or.inr (List.mem_cons.mpr (Or.inl h))
+      · exact Or.inr (List.mem_cons.mpr (Or.inr h))
+    · -- k = hd.1: result is (k, v) :: tl
+      simp at h
+      rcases h with h | h
+      · exact Or.inl h
+      · exact Or.inr (List.mem_cons.mpr (Or.inr h))
+    · -- k > hd.1: result is hd :: sortedInsert k v tl
+      simp at h
+      rcases h with h | h
+      · exact Or.inr (List.mem_cons.mpr (Or.inl h))
+      · rcases ih h with h' | h'
+        · exact Or.inl h'
+        · exact Or.inr (List.mem_cons.mpr (Or.inr h'))
+
+/-- If `vs.get? k = none`, then no entry in `vs.vals` has key `k`. -/
+private theorem ne_of_get?_none (v : Value) (k : Int) (kv : Int × Val) :
+    v.get? k = none → kv ∈ v.vals → kv.1 ≠ k := by
+  intro hget hmem heq
+  unfold Value.get? at hget
+  rw [List.lookup_eq_none_iff] at hget
+  have hbne := hget kv hmem
+  rw [heq] at hbne
+  -- hbne : k != k, which is false
+  grind
+
 theorem sc_implies_nested_correct (d : Desc) (v : Value) :
     ⟨ v ∷ d ⟩ →
-    ∀ kv ∈ v.vals, nestedCorrect d kv.1 kv.2 := by sorry
+    ∀ kv ∈ v.vals, nestedCorrect d kv.1 kv.2 := by
+  intro h
+  induction' h with kk f val' d' v' h_match h_nested h_dn h_vn _ ih_nested ih
+  · intro kv hkv
+    -- (∅ : Value).vals = []
+    simp [Value.vals] at hkv
+  · intro kv hkv
+    -- kv is in (v'.insert kk val').vals = sortedInsert kk val' v'.vals
+    have hkv' : kv ∈ Value.sortedInsert kk val' v'.vals := by
+      rcases v' with ⟨vs⟩
+      simp [Value.insert, Value.vals] at hkv
+      exact hkv
+    rcases mem_value_sortedInsert kk val' v'.vals kv hkv' with heq | hmem
+    · -- kv = (kk, val')
+      subst heq
+      -- Need: lookup kk in (d'.insert kk f).fields = some f
+      have hlk : (d'.insert kk f).fields.lookup kk = some f := by
+        unfold Desc.insert
+        cases d'
+        simp +decide [Desc.fields]
+        have h_lookup_insert : ∀ (l : List (Int × Field)),
+            List.lookup kk (Desc.sortedInsert kk f l) = some f := by
+          intros l
+          induction' l with hd tl ih2 <;> simp_all +decide [ Desc.sortedInsert ]
+          grind
+        exact h_lookup_insert _
+      show nestedCorrect (d'.insert kk f) kk val'
+      unfold nestedCorrect
+      rw [hlk]
+      cases f with
+      | msg d'' =>
+        cases val' with
+        | msg v'' => exact h_nested d'' v'' rfl rfl
+        | bool _ => exact trivial
+        | int _ => exact trivial
+        | missing => exact trivial
+      | bool => exact trivial
+      | int => exact trivial
+    · -- kv ∈ v'.vals; kv.1 ≠ kk
+      have hne : kv.1 ≠ kk := ne_of_get?_none v' kk kv h_vn hmem
+      have hnc : nestedCorrect d' kv.1 kv.2 := ih kv hmem
+      have hlk_eq : (d'.insert kk f).fields.lookup kv.1 = d'.fields.lookup kv.1 := by
+        cases d' with | mk fs =>
+        simp [Desc.insert, Desc.fields]
+        exact sortedInsert_lookup_ne_desc kv.1 kk f fs hne
+      show nestedCorrect (d'.insert kk f) kv.1 kv.2
+      unfold nestedCorrect at hnc ⊢
+      rw [hlk_eq]
+      exact hnc
 
 /-- Combined: all four properties of schema correctness. -/
 theorem sc_implies_properties (d : Desc) (v : Value) :
@@ -390,7 +478,12 @@ theorem sc_implies_properties (d : Desc) (v : Value) :
     (∀ k val, v.get? k = some val → ∃ f, d.get? k = some f) ∧
     (∀ k f, d.get? k = some f → ∃ val, v.get? k = some val) ∧
     (∀ k, v.get? k ≠ some .missing) ∧
-    (∀ kv ∈ v.vals, nestedCorrect d kv.1 kv.2) := by sorry
+    (∀ kv ∈ v.vals, nestedCorrect d kv.1 kv.2) := by
+  intro h
+  exact ⟨sc_implies_val_in_desc d v h,
+         sc_implies_desc_in_val d v h,
+         sc_implies_no_missing d v h,
+         sc_implies_nested_correct d v h⟩
 
 /-- Combined with typed witnesses. -/
 theorem sc_implies_properties_typed (d : Desc) (v : Value) :
@@ -398,7 +491,12 @@ theorem sc_implies_properties_typed (d : Desc) (v : Value) :
     (∀ k val, v.get? k = some val → ∃ f, d.get? k = some f ∧ fieldValMatch f val) ∧
     (∀ k f, d.get? k = some f → ∃ val, v.get? k = some val ∧ fieldValMatch f val) ∧
     (∀ k, v.get? k ≠ some .missing) ∧
-    (∀ kv ∈ v.vals, nestedCorrect d kv.1 kv.2) := by sorry
+    (∀ kv ∈ v.vals, nestedCorrect d kv.1 kv.2) := by
+  intro h
+  exact ⟨sc_implies_val_in_desc_typed d v h,
+         sc_implies_desc_in_val_typed d v h,
+         sc_implies_no_missing d v h,
+         sc_implies_nested_correct d v h⟩
 
 /-- Erasing a key after inserting it (when not previously present) recovers the
     original descriptor field list. -/
