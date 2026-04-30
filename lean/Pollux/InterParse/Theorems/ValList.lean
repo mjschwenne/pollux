@@ -67,9 +67,15 @@ theorem list_to_value_id (v : Value) (d : Desc) :
     ⟨ v ∷ d ⟩ → v = listToValue d (valList d v) := by sorry
 
 theorem sc_filter_self (d : Desc) (v : Value) :
-    ⟨ v ∷ d ⟩ → ⟨ listToValue d (valList d v) ∷ d ⟩ := by sorry
+    ⟨ v ∷ d ⟩ → ⟨ listToValue d (valList d v) ∷ d ⟩ := by
+  intro h
+  rw [← list_to_value_id v d h]
+  exact h
 
 theorem fullDescriptor_roundTrip (v : Value) (d : Desc) :
-    ⟨ v ∷ d ⟩ → Compatible d d v (listToValue d (valList d v)) := by sorry
+    ⟨ v ∷ d ⟩ → Compatible d d v (listToValue d (valList d v)) := by
+  intro h
+  rw [← list_to_value_id v d h]
+  exact Compatible.refl d d v h h
 
 end Pollux.InterParse
