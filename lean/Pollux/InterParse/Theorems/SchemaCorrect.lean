@@ -366,8 +366,115 @@ theorem sc_sco (v : Value) (d : Desc) : ⟨ v ∷ d ⟩ ↔ ⟪ v ∷ d ⟫ := b
 
 /-! ## Descriptor invariance -/
 
+/-- Helper: from `v.get? k = some val`, get that `(k, val) ∈ v.vals`. -/
+private theorem mem_of_get? (v : Value) (k : Int) (val : Val) :
+    v.get? k = some val → (k, val) ∈ v.vals := by
+  intro h
+  rcases v with ⟨vs⟩
+  show (k, val) ∈ vs
+  -- `(Value.mk vs).get? k` reduces to `vs.lookup k`.
+  have h' : vs.lookup k = some val := h
+  clear h
+  induction vs with
+  | nil => cases h'
+  | cons hd tl ih =>
+    obtain ⟨k', v'⟩ := hd
+    rw [List.lookup_cons] at h'
+    by_cases hk : k = k'
+    · subst hk
+      have hbeq : (k == k) = true := by simp
+      rw [hbeq] at h'
+      simp at h'
+      subst h'
+      exact List.mem_cons_self
+    · have hkne : (k == k') = false := by simp [hk]
+      rw [hkne] at h'
+      exact List.mem_cons_of_mem _ (ih h')
+
 /-- If a value is schema-correct for two descriptors, the descriptors are equal. -/
 theorem sc_desc_inv (v : Value) (d1 d2 : Desc) :
-    ⟨ v ∷ d1 ⟩ → ⟨ v ∷ d2 ⟩ → d1 = d2 := by sorry
+    ⟨ v ∷ d1 ⟩ → ⟨ v ∷ d2 ⟩ → d1 = d2 := by
+  -- Strong induction on the depth of `v`.
+  -- We strengthen to a form that makes the IH apply naturally.
+  suffices H : ∀ (n : Nat) (v : Value) (d1 d2 : Desc),
+      valueDepth v < n → ⟨ v ∷ d1 ⟩ → ⟨ v ∷ d2 ⟩ → d1 = d2 by
+    intro h1 h2
+    exact H (valueDepth v + 1) v d1 d2 (Nat.lt_succ_self _) h1 h2
+  intro n
+  induction' n with n IH
+  · intro v d1 d2 hle h1 h2
+    -- Impossible: valueDepth v < 0
+    omega
+  intro v d1 d2 hle h1 h2
+  obtain ⟨hd1_wf, hv_wf⟩ := sc_implies_wf _ _ h1
+  obtain ⟨hd2_wf, _⟩ := sc_implies_wf _ _ h2
+  -- Use extensionality of Desc.
+  apply Desc.ext_lookup d1 d2 hd1_wf hd2_wf
+  intro k
+  -- Case on lookup result for both descriptors.
+  rcases hd1k : d1.get? k with _ | f1
+  · rcases hd2k : d2.get? k with _ | f2
+    · rfl
+    · -- d1 has no field k but d2 does → contradiction via val existence in both.
+      exfalso
+      obtain ⟨val, hval⟩ := sc_implies_desc_in_val d2 v h2 k f2 hd2k
+      obtain ⟨f', hf'⟩ := sc_implies_val_in_desc d1 v h1 k val hval
+      rw [hd1k] at hf'
+      cases hf'
+  · rcases hd2k : d2.get? k with _ | f2
+    · exfalso
+      obtain ⟨val, hval⟩ := sc_implies_desc_in_val d1 v h1 k f1 hd1k
+      obtain ⟨f', hf'⟩ := sc_implies_val_in_desc d2 v h2 k val hval
+      rw [hd2k] at hf'
+      cases hf'
+    · -- Both have a field at k. Look at the value type.
+      obtain ⟨val1, hval1, hmatch1⟩ :=
+        sc_implies_desc_in_val_typed d1 v h1 k f1 hd1k
+      obtain ⟨f', hf', hmatch1'⟩ :=
+        sc_implies_val_in_desc_typed d1 v h1 k val1 hval1
+      -- Get val2 = val1 and f2 matches val1.
+      obtain ⟨f2', hf2', hmatch2⟩ :=
+        sc_implies_val_in_desc_typed d2 v h2 k val1 hval1
+      rw [hd2k] at hf2'
+      cases hf2'
+      -- Case on val1 to determine f1, f2.
+      cases val1 with
+      | bool b =>
+        -- f1 = .bool, f2 = .bool
+        unfold fieldValMatch at hmatch1 hmatch2
+        cases f1 <;> cases f2 <;> simp_all
+      | int z =>
+        unfold fieldValMatch at hmatch1 hmatch2
+        cases f1 <;> cases f2 <;> simp_all
+      | missing =>
+        exfalso
+        exact sc_implies_no_missing d1 v h1 k hval1
+      | msg vinner =>
+        -- f1 = .msg d1', f2 = .msg d2'.
+        cases f1 with
+        | bool => unfold fieldValMatch at hmatch1; exact absurd hmatch1 (by simp)
+        | int => unfold fieldValMatch at hmatch1; exact absurd hmatch1 (by simp)
+        | msg d1' =>
+          cases f2 with
+          | bool => unfold fieldValMatch at hmatch2; exact absurd hmatch2 (by simp)
+          | int => unfold fieldValMatch at hmatch2; exact absurd hmatch2 (by simp)
+          | msg d2' =>
+            -- Use sc_implies_nested_correct to recurse.
+            have hmem : (k, Val.msg vinner) ∈ v.vals := mem_of_get? v k _ hval1
+            have hnc1 := sc_implies_nested_correct d1 v h1 (k, Val.msg vinner) hmem
+            have hnc2 := sc_implies_nested_correct d2 v h2 (k, Val.msg vinner) hmem
+            -- nestedCorrect uses d.fields.lookup which equals d.get?.
+            have hf1k : d1.fields.lookup k = some (.msg d1') := hd1k
+            have hf2k : d2.fields.lookup k = some (.msg d2') := hd2k
+            unfold nestedCorrect at hnc1 hnc2
+            rw [hf1k] at hnc1
+            rw [hf2k] at hnc2
+            -- hnc1 : ⟨ vinner ∷ d1' ⟩, hnc2 : ⟨ vinner ∷ d2' ⟩
+            have hdepth : valueDepth vinner < valueDepth v :=
+              valInMap_smallerDepth v k vinner hval1
+            have hdeq : d1' = d2' :=
+              IH vinner d1' d2' (lt_of_lt_of_le hdepth (Nat.lt_succ_iff.mp hle))
+                hnc1 hnc2
+            rw [hdeq]
 
 end Pollux.InterParse
