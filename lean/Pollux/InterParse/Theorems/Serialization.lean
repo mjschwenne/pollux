@@ -157,9 +157,17 @@ theorem willEncode_weaken (kv : Int × Val) (d : Desc) (k : Int) (v : Value) :
 
 /-! ## Serializer inversion lemmas -/
 
+/-- Inversion for `serialValue` of an inserted key.  Requires `k` to be the
+    smallest key in `m` (in the Lean sorted-list representation, this means
+    `(m.insert k v).vals = (k, v) :: m.vals`).  This mirrors Rocq's
+    `SerialValueInversion`, which has the analogous `map_first_key` precondition.
+
+    Without this hypothesis the encoding factors as
+    `encPrefix ++ encV ++ encSuffix`, not `encV ++ encRest`. -/
 theorem serialValueInversion (d : Desc) (k : Int) (v : Val) (m : Value)
     (enc : List UInt8) :
     m.get? k = none →
+    (∀ kv ∈ m.vals, k < kv.1) →
     (serialValue d (m.insert k v) = .success () enc ↔
     ∃ encV encRest,
       serialValue d m = .success () encRest ∧

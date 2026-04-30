@@ -254,7 +254,7 @@ theorem sc_implies_properties_typed (d : Desc) (v : Value) :
 /-! ### Helpers for `sc_delete_key` -/
 
 /-- WF is preserved by SC: every SC-derivable value is well-formed. -/
-private theorem sc_implies_wf (d : Desc) (v : Value) :
+theorem sc_implies_wf (d : Desc) (v : Value) :
     ⟨ v ∷ d ⟩ → d.WF ∧ v.WF := by
   intro h
   induction h with
