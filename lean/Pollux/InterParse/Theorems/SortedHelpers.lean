@@ -126,6 +126,32 @@ theorem value_sortedErase_sortedInsert_same
           exact h
         rw [ih htl]
 
+/-- If `k0` is less than every key in `l`, then `sortedInsert` produces a
+    cons. (Desc version.) -/
+private theorem desc_sortedInsert_cons_of_lt_all (k0 : Int) (f : Field)
+    (l : List (Int × Field)) :
+    (∀ p ∈ l, k0 < p.1) →
+    Desc.sortedInsert k0 f l = (k0, f) :: l := by
+  intro h
+  cases l with
+  | nil => rfl
+  | cons hd tl =>
+    have : k0 < hd.1 := h hd (List.mem_cons_self)
+    simp [Desc.sortedInsert, this]
+
+/-- If `k0` is less than every key in `l`, then `sortedInsert` produces a
+    cons. (Value version.) -/
+private theorem value_sortedInsert_cons_of_lt_all (k0 : Int) (val : Val)
+    (l : List (Int × Val)) :
+    (∀ p ∈ l, k0 < p.1) →
+    Value.sortedInsert k0 val l = (k0, val) :: l := by
+  intro h
+  cases l with
+  | nil => rfl
+  | cons hd tl =>
+    have : k0 < hd.1 := h hd (List.mem_cons_self)
+    simp [Value.sortedInsert, this]
+
 /-- Erasing commutes with inserting a different key, on a sorted list.
     (Desc version.) -/
 theorem desc_sortedErase_sortedInsert_ne
@@ -134,7 +160,93 @@ theorem desc_sortedErase_sortedInsert_ne
     List.Pairwise (fun a b : Int × Field => a.1 < b.1) l →
     Desc.sortedErase k (Desc.sortedInsert k0 f l) =
       Desc.sortedInsert k0 f (Desc.sortedErase k l) := by
-  sorry
+  intro hne hsorted
+  induction l with
+  | nil =>
+    -- sortedInsert k0 f [] = [(k0, f)]; erase by k ≠ k0 leaves it
+    have hk_ne_k0_beq : (k == k0) = false := by
+      rw [beq_eq_decide]; simp [hne]
+    by_cases hk : k < k0
+    · simp [Desc.sortedInsert, Desc.sortedErase, hk_ne_k0_beq, hk]
+    · simp [Desc.sortedInsert, Desc.sortedErase, hk_ne_k0_beq, hk]
+  | cons hd tl ih =>
+    have hsorted_tl : List.Pairwise (fun a b : Int × Field => a.1 < b.1) tl :=
+      hsorted.tail
+    have hk_ne_k0_beq : (k == k0) = false := by
+      rw [beq_eq_decide]; simp [hne]
+    -- Case split on k0 vs hd.1, then on k vs hd.1
+    by_cases hk0_lt : k0 < hd.1
+    · -- sortedInsert k0 f (hd :: tl) = (k0, f) :: hd :: tl
+      by_cases hk_lt_k0 : k < k0
+      · -- k < k0 < hd.1
+        have hk_lt_hd : k < hd.1 := lt_trans hk_lt_k0 hk0_lt
+        have hk_ne_hd : (k == hd.1) = false := by
+          rw [beq_eq_decide]; simp; omega
+        simp [Desc.sortedInsert, Desc.sortedErase, hk0_lt, hk_ne_k0_beq,
+              hk_lt_k0, hk_ne_hd, hk_lt_hd]
+      · by_cases hk_lt_hd : k < hd.1
+        · have hk_ne_hd : (k == hd.1) = false := by
+            rw [beq_eq_decide]; simp; omega
+          simp [Desc.sortedInsert, Desc.sortedErase, hk0_lt, hk_ne_k0_beq,
+                hk_lt_k0, hk_ne_hd, hk_lt_hd]
+        · by_cases hk_eq_hd : k = hd.1
+          · have hk_beq_hd : (k == hd.1) = true := by
+              rw [beq_eq_decide]; simp [hk_eq_hd]
+            -- LHS = (k0, f) :: tl
+            -- RHS = sortedInsert k0 f tl; need k0 < everything in tl
+            have htl_gt_k0 : ∀ p ∈ tl, k0 < p.1 := by
+              intro p hp
+              have := List.rel_of_pairwise_cons hsorted hp
+              omega
+            simp [Desc.sortedInsert, Desc.sortedErase, hk0_lt, hk_ne_k0_beq,
+                  hk_lt_k0, hk_beq_hd,
+                  desc_sortedInsert_cons_of_lt_all k0 f tl htl_gt_k0]
+          · have hk_ne_hd : (k == hd.1) = false := by
+              rw [beq_eq_decide]; simp [hk_eq_hd]
+            simp [Desc.sortedInsert, Desc.sortedErase, hk0_lt, hk_ne_k0_beq,
+                  hk_lt_k0, hk_ne_hd, hk_lt_hd]
+    · by_cases hk0_eq_hd : k0 = hd.1
+      · -- sortedInsert k0 f (hd :: tl) = (k0, f) :: tl
+        have hk0_beq_hd : (k0 == hd.1) = true := by
+          rw [beq_eq_decide]; simp [hk0_eq_hd]
+        by_cases hk_lt_k0 : k < k0
+        · have hk_lt_hd : k < hd.1 := by omega
+          have hk_ne_hd : (k == hd.1) = false := by
+            rw [beq_eq_decide]; simp; omega
+          have hk0_nlt_hd : ¬ k0 < hd.1 := by omega
+          simp [Desc.sortedInsert, Desc.sortedErase, hk0_lt, hk0_beq_hd,
+                hk_ne_k0_beq, hk_lt_k0, hk_ne_hd, hk_lt_hd, hk0_nlt_hd]
+        · have hk_ne_hd : (k == hd.1) = false := by
+            rw [beq_eq_decide]; simp; omega
+          have hk_nlt_hd : ¬ k < hd.1 := by omega
+          simp [Desc.sortedInsert, Desc.sortedErase, hk0_lt, hk0_beq_hd,
+                hk_ne_k0_beq, hk_lt_k0, hk_ne_hd, hk_nlt_hd]
+      · -- k0 > hd.1
+        have hk0_gt_hd : hd.1 < k0 := by
+          have : ¬ (k0 < hd.1 ∨ k0 = hd.1) := by tauto
+          omega
+        have hk0_ne_beq_hd : (k0 == hd.1) = false := by
+          rw [beq_eq_decide]; simp [hk0_eq_hd]
+        by_cases hk_eq_hd : k = hd.1
+        · have hk_beq_hd : (k == hd.1) = true := by
+            rw [beq_eq_decide]; simp [hk_eq_hd]
+          -- LHS: sortedErase k (hd :: sortedInsert k0 f tl) = sortedInsert k0 f tl
+          -- RHS: sortedInsert k0 f (sortedErase k (hd :: tl)) = sortedInsert k0 f tl
+          simp [Desc.sortedInsert, Desc.sortedErase, hk0_lt, hk0_ne_beq_hd, hk_beq_hd]
+        · by_cases hk_lt_hd : k < hd.1
+          · have hk_ne_hd : (k == hd.1) = false := by
+              rw [beq_eq_decide]; simp [hk_eq_hd]
+            -- LHS: hd :: sortedInsert k0 f tl
+            -- RHS: sortedInsert k0 f (hd :: tl)
+            simp [Desc.sortedInsert, Desc.sortedErase, hk0_lt, hk0_ne_beq_hd,
+                  hk_ne_hd, hk_lt_hd]
+          · have hk_ne_hd : (k == hd.1) = false := by
+              rw [beq_eq_decide]; simp [hk_eq_hd]
+            have hk_nlt_hd : ¬ k < hd.1 := hk_lt_hd
+            -- LHS: hd :: sortedErase k (sortedInsert k0 f tl)
+            -- RHS: hd :: sortedInsert k0 f (sortedErase k tl)
+            simp [Desc.sortedInsert, Desc.sortedErase, hk0_lt, hk0_ne_beq_hd,
+                  hk_ne_hd, hk_nlt_hd, ih hsorted_tl]
 
 /-- Erasing commutes with inserting a different key, on a sorted list.
     (Value version.) -/
@@ -144,7 +256,79 @@ theorem value_sortedErase_sortedInsert_ne
     List.Pairwise (fun a b : Int × Val => a.1 < b.1) l →
     Value.sortedErase k (Value.sortedInsert k0 val l) =
       Value.sortedInsert k0 val (Value.sortedErase k l) := by
-  sorry
+  intro hne hsorted
+  induction l with
+  | nil =>
+    have hk_ne_k0_beq : (k == k0) = false := by
+      rw [beq_eq_decide]; simp [hne]
+    by_cases hk : k < k0
+    · simp [Value.sortedInsert, Value.sortedErase, hk_ne_k0_beq, hk]
+    · simp [Value.sortedInsert, Value.sortedErase, hk_ne_k0_beq, hk]
+  | cons hd tl ih =>
+    have hsorted_tl : List.Pairwise (fun a b : Int × Val => a.1 < b.1) tl :=
+      hsorted.tail
+    have hk_ne_k0_beq : (k == k0) = false := by
+      rw [beq_eq_decide]; simp [hne]
+    by_cases hk0_lt : k0 < hd.1
+    · by_cases hk_lt_k0 : k < k0
+      · have hk_lt_hd : k < hd.1 := lt_trans hk_lt_k0 hk0_lt
+        have hk_ne_hd : (k == hd.1) = false := by
+          rw [beq_eq_decide]; simp; omega
+        simp [Value.sortedInsert, Value.sortedErase, hk0_lt, hk_ne_k0_beq,
+              hk_lt_k0, hk_ne_hd, hk_lt_hd]
+      · by_cases hk_lt_hd : k < hd.1
+        · have hk_ne_hd : (k == hd.1) = false := by
+            rw [beq_eq_decide]; simp; omega
+          simp [Value.sortedInsert, Value.sortedErase, hk0_lt, hk_ne_k0_beq,
+                hk_lt_k0, hk_ne_hd, hk_lt_hd]
+        · by_cases hk_eq_hd : k = hd.1
+          · have hk_beq_hd : (k == hd.1) = true := by
+              rw [beq_eq_decide]; simp [hk_eq_hd]
+            have htl_gt_k0 : ∀ p ∈ tl, k0 < p.1 := by
+              intro p hp
+              have := List.rel_of_pairwise_cons hsorted hp
+              omega
+            simp [Value.sortedInsert, Value.sortedErase, hk0_lt, hk_ne_k0_beq,
+                  hk_lt_k0, hk_beq_hd,
+                  value_sortedInsert_cons_of_lt_all k0 val tl htl_gt_k0]
+          · have hk_ne_hd : (k == hd.1) = false := by
+              rw [beq_eq_decide]; simp [hk_eq_hd]
+            simp [Value.sortedInsert, Value.sortedErase, hk0_lt, hk_ne_k0_beq,
+                  hk_lt_k0, hk_ne_hd, hk_lt_hd]
+    · by_cases hk0_eq_hd : k0 = hd.1
+      · have hk0_beq_hd : (k0 == hd.1) = true := by
+          rw [beq_eq_decide]; simp [hk0_eq_hd]
+        by_cases hk_lt_k0 : k < k0
+        · have hk_lt_hd : k < hd.1 := by omega
+          have hk_ne_hd : (k == hd.1) = false := by
+            rw [beq_eq_decide]; simp; omega
+          have hk0_nlt_hd : ¬ k0 < hd.1 := by omega
+          simp [Value.sortedInsert, Value.sortedErase, hk0_lt, hk0_beq_hd,
+                hk_ne_k0_beq, hk_lt_k0, hk_ne_hd, hk_lt_hd, hk0_nlt_hd]
+        · have hk_ne_hd : (k == hd.1) = false := by
+            rw [beq_eq_decide]; simp; omega
+          have hk_nlt_hd : ¬ k < hd.1 := by omega
+          simp [Value.sortedInsert, Value.sortedErase, hk0_lt, hk0_beq_hd,
+                hk_ne_k0_beq, hk_lt_k0, hk_ne_hd, hk_nlt_hd]
+      · have hk0_gt_hd : hd.1 < k0 := by
+          have : ¬ (k0 < hd.1 ∨ k0 = hd.1) := by tauto
+          omega
+        have hk0_ne_beq_hd : (k0 == hd.1) = false := by
+          rw [beq_eq_decide]; simp [hk0_eq_hd]
+        by_cases hk_eq_hd : k = hd.1
+        · have hk_beq_hd : (k == hd.1) = true := by
+            rw [beq_eq_decide]; simp [hk_eq_hd]
+          simp [Value.sortedInsert, Value.sortedErase, hk0_lt, hk0_ne_beq_hd, hk_beq_hd]
+        · by_cases hk_lt_hd : k < hd.1
+          · have hk_ne_hd : (k == hd.1) = false := by
+              rw [beq_eq_decide]; simp [hk_eq_hd]
+            simp [Value.sortedInsert, Value.sortedErase, hk0_lt, hk0_ne_beq_hd,
+                  hk_ne_hd, hk_lt_hd]
+          · have hk_ne_hd : (k == hd.1) = false := by
+              rw [beq_eq_decide]; simp [hk_eq_hd]
+            have hk_nlt_hd : ¬ k < hd.1 := hk_lt_hd
+            simp [Value.sortedInsert, Value.sortedErase, hk0_lt, hk0_ne_beq_hd,
+                  hk_ne_hd, hk_nlt_hd, ih hsorted_tl]
 
 /-- Lookup after `sortedErase` at a different key. (Desc version, no WF.) -/
 theorem desc_lookup_sortedErase_ne
