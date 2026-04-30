@@ -4,20 +4,49 @@
   inversion lemma for insert, and the encoding-length theorem.
 -/
 import Pollux.Parse.Input
+import Pollux.Parse.Theorems
 import Pollux.InterParse.Parser
 import Pollux.InterParse.Serializer
+import Pollux.InterParse.Theorems.Primitives
 import Pollux.InterParse.Theorems.Validity
 
 namespace Pollux.InterParse
 
 open Pollux.Parse
+open Pollux.Parse.Theorems
 
 /-! ## Serialization correctness helper lemmas -/
 
 theorem willEncode_nonEmpty (d : Desc) (k : Int) (v : Val) (enc : List UInt8) :
     willEncode d (k, v) →
     serialVal serialValue d (k, v) = .success () enc →
-    Input.length enc > 0 := by sorry
+    Input.length enc > 0 := by
+  rintro ⟨f, hf, hwfd⟩ hser
+  -- `valWf d (k, v)` reduces to `valWfFold d.fields k v True`.
+  have hwfd : valWfFold d.fields k v True := hwfd
+  unfold valWfFold at hwfd
+  rw [hf] at hwfd
+  -- Unfold the serializer; the body matches on `d.fields.lookup k`.
+  unfold serialVal at hser
+  rw [hf] at hser
+  -- Helper: given `serialVal` reduces to `concat serialUnsigned _`, the encoding
+  -- contributed by `serialUnsigned k` is one byte, so the total is at least 1.
+  have aux : ∀ (β : Type) (wfβ : β → Prop) (b : β) (right : Serializer (List UInt8) β wfβ),
+      Serializer.concat serialUnsigned right (k, b) = .success () enc →
+      Input.length enc > 0 := by
+    intro β wfβ b right h
+    rw [serialConcat_inversion] at h
+    obtain ⟨encL, encR, hL, _hR, henc⟩ := h
+    have hLlen : encL.length = 1 := unsignedLength k encL hL
+    subst henc
+    show (encL ++ encR).length > 0
+    rw [List.length_append, hLlen]; omega
+  -- Case split on f and v.
+  cases f <;> cases v <;>
+    first
+      | exact hwfd.elim
+      | (simp only [Serializer.map, Serializer.opt] at hser
+         exact aux _ _ _ _ hser)
 
 /-- `field_val_type_match` for serializer error data. -/
 def fieldValTypeMatch (f : Field) (v : Val) : Prop :=
