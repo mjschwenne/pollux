@@ -349,6 +349,108 @@ theorem serialValueInversion (d : Desc) (k : Int) (v : Val) (m : Value)
       show Result.success () er = Result.success () enc
       rw [show enc = er from by rw [hen]; rfl]
 
+/-! ## Encoding length lemmas -/
+
+/-- A boolean's serialized length is always 4 bytes. -/
+private theorem boolLength (b : Bool) (enc : List UInt8) :
+    serialBool b = .success () enc → Input.length enc = 4 := by
+  intro h
+  unfold serialBool at h
+  cases b <;> exact z32Length _ enc h
+
+/-- `Serializer.rep` length is the sum of per-element lengths, when each
+    succeeds with a length given by `lenFn`. -/
+private theorem rep_length_eq {α : Type} {wfα : α → Prop}
+    (ser : Serializer (List UInt8) α wfα) (lenFn : α → Nat) :
+    ∀ (xs : List α) (enc : List UInt8),
+    (∀ x ∈ xs, ∀ encX, ser x = .success () encX → Input.length encX = lenFn x) →
+    Serializer.rep ser xs = .success () enc →
+    Input.length enc = (xs.map lenFn).sum := by
+  intro xs
+  induction xs with
+  | nil =>
+    intro enc _ hser
+    have : enc = [] := by
+      show enc = (Input.default : List UInt8)
+      injection hser with _ heq
+      exact heq.symm
+    subst this
+    rfl
+  | cons hd tl ih =>
+    intro enc hper hser
+    rw [serialRep_first_inversion] at hser
+    obtain ⟨encH, encT, hH, hT, henc⟩ := hser
+    have hlenH : Input.length encH = lenFn hd :=
+      hper hd List.mem_cons_self _ hH
+    have hper' : ∀ x ∈ tl, ∀ encX, ser x = .success () encX → Input.length encX = lenFn x :=
+      fun x hx => hper x (List.mem_cons_of_mem _ hx)
+    have hlenT := ih encT hper' hT
+    subst henc
+    show Input.length (Input.app encH encT) = ((hd :: tl).map lenFn).sum
+    rw [Input.app_length]
+    show Input.length encH + Input.length encT = lenFn hd + (tl.map lenFn).sum
+    rw [hlenH, hlenT]
+
+/-- `valueEncLen'List` accumulator linearity. -/
+private theorem valueEncLen'List_linear (ds : List (Int × Field)) :
+    ∀ (vs : List (Int × Val)) (acc : Nat),
+    valueEncLen'List ds vs acc = valueEncLen'List ds vs 0 + acc := by
+  intro vs
+  induction vs with
+  | nil => intro acc; show acc = 0 + acc; omega
+  | cons hd tl ih =>
+    intro acc
+    obtain ⟨k, val⟩ := hd
+    show valueEncLen'List ds tl (valueEncLen'Fold ds k val acc) =
+         valueEncLen'List ds tl (valueEncLen'Fold ds k val 0) + acc
+    rw [ih (valueEncLen'Fold ds k val acc), ih (valueEncLen'Fold ds k val 0)]
+    have h := valueEncLen'Fold_linear ⟨ds⟩ k val acc
+    simp only [Desc.fields] at h
+    omega
+
+/-- `valueEncLen'Fold` is zero on entries that fail the filter. -/
+private theorem valueEncLen'Fold_zero_of_filterP_false
+    (d : Desc) (k : Int) (val : Val) :
+    valListFilterP d (k, val) = false →
+    valueEncLen'Fold d.fields k val 0 = 0 := by
+  intro hf
+  unfold valListFilterP at hf
+  unfold valueEncLen'Fold
+  cases hkf : d.fields.lookup k with
+  | none => rfl
+  | some f =>
+    rw [hkf] at hf
+    cases f <;> cases val <;> simp_all
+
+/-- Predicted-encoding length on a value's entries equals the sum over
+    the *filtered* entries. -/
+private theorem valueEncLen'List_eq_sum_filter (d : Desc) :
+    ∀ (vs : List (Int × Val)),
+    valueEncLen'List d.fields vs 0 =
+      ((vs.filter (valListFilterP d)).map
+        (fun kv => valueEncLen'Fold d.fields kv.1 kv.2 0)).sum := by
+  intro vs
+  induction vs with
+  | nil => rfl
+  | cons hd tl ih =>
+    obtain ⟨k, val⟩ := hd
+    show valueEncLen'List d.fields tl (valueEncLen'Fold d.fields k val 0) = _
+    rw [valueEncLen'List_linear d.fields tl (valueEncLen'Fold d.fields k val 0)]
+    rw [List.filter_cons]
+    by_cases hf : valListFilterP d (k, val) = true
+    · rw [if_pos hf]
+      show valueEncLen'List d.fields tl 0 + valueEncLen'Fold d.fields k val 0 =
+           ((((k, val) :: tl.filter (valListFilterP d)).map _).sum)
+      simp [List.map_cons, List.sum_cons]
+      rw [ih]
+      omega
+    · rw [if_neg hf]
+      show valueEncLen'List d.fields tl 0 + valueEncLen'Fold d.fields k val 0 = _
+      simp only [Bool.not_eq_true] at hf
+      rw [valueEncLen'Fold_zero_of_filterP_false d k val hf]
+      rw [Nat.add_zero]
+      exact ih
+
 /-- Encoding length matches the predicted length. -/
 theorem valueEncLength_length (v : Value) (d : Desc) (enc : List UInt8) :
     valid' d v →
