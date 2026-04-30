@@ -537,8 +537,8 @@ private theorem sc_implies_wf (d : Desc) (v : Value) :
 private theorem desc_sortedErase_sortedInsert_same
     (k : Int) (f : Field) (l : List (Int × Field)) :
     l.lookup k = none →
-    Desc.sortedErase k (Desc.sortedInsert k f l) = l := by
-  sorry
+    Desc.sortedErase k (Desc.sortedInsert k f l) = l :=
+  desc_sortedErase_sortedInsert k f l
 
 /-- Erasing a key after inserting the same key is the identity, when the key
     was not previously present. (Value version.) -/
@@ -546,7 +546,24 @@ private theorem value_sortedErase_sortedInsert_same
     (k : Int) (val : Val) (l : List (Int × Val)) :
     l.lookup k = none →
     Value.sortedErase k (Value.sortedInsert k val l) = l := by
-  sorry
+  intro h
+  induction' l with hd tl ih
+  · simp [Value.sortedInsert, Value.sortedErase]
+  · unfold Value.sortedInsert
+    by_cases hk1 : k < hd.1
+    · simp [hk1, Value.sortedErase]
+    · by_cases hk2 : k = hd.1
+      · exfalso
+        rw [show List.lookup k (hd :: tl) = some hd.2 from by simp [List.lookup, hk2]] at h
+        cases h
+      · have hbeq : ¬ (k == hd.1) := by rw [beq_eq_decide]; simp [hk2]
+        simp [hk1, hbeq, Value.sortedErase]
+        have htl : List.lookup k tl = none := by
+          rw [show List.lookup k (hd :: tl) = List.lookup k tl from by
+            simp [List.lookup]
+            rw [show (k == hd.1) = false from by rw [beq_eq_decide]; simp [hk2]]] at h
+          exact h
+        rw [ih htl]
 
 /-- Erasing commutes with inserting a different key, on a sorted list.
     (Desc version.) -/
