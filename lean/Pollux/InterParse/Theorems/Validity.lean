@@ -9,9 +9,127 @@ namespace Pollux.InterParse
 
 /-! ## Validity lemmas -/
 
+/-- The per-entry validity predicate `P fs k v` extracted from `valid'Fold`.
+    By construction `valid'Fold fs k v acc` is exactly `P fs k v ∧ acc`. -/
+private def vFoldP (fs : List (Int × Field)) (k : Int) (v : Val) : Prop :=
+  match v with
+  | .bool _ => fs.lookup k = some .bool
+  | .int _  => fs.lookup k = some .int
+  | .msg value => ∃ d, fs.lookup k = some (.msg d) ∧ valid' d value
+  | .missing => True
+
+/-- `valid'Fold fs k v acc` decomposes into `vFoldP fs k v ∧ acc`. -/
+private theorem valid'Fold_eq (fs : List (Int × Field)) (k : Int) (v : Val) (acc : Prop) :
+    valid'Fold fs k v acc ↔ vFoldP fs k v ∧ acc := by
+  cases v
+  · exact Iff.rfl
+  · exact Iff.rfl
+  · exact Iff.rfl
+  · exact Iff.rfl
+
+/-- `valid'FoldList` is the conjunction over its entries. -/
+private def vListP (fs : List (Int × Field)) : List (Int × Val) → Prop
+  | [] => True
+  | (k, v) :: rest => vFoldP fs k v ∧ vListP fs rest
+
+/-- `valid'FoldList` decomposes via `vListP` and `acc`. -/
+private theorem valid'FoldList_eq (fs : List (Int × Field)) :
+    ∀ (l : List (Int × Val)) (acc : Prop),
+    valid'FoldList fs l acc ↔ vListP fs l ∧ acc := by
+  intros l
+  induction l with
+  | nil =>
+    intro acc
+    show acc ↔ True ∧ acc
+    exact ⟨fun h => ⟨trivial, h⟩, fun h => h.2⟩
+  | cons hd tl ih =>
+    intro acc
+    obtain ⟨k, v⟩ := hd
+    show valid'FoldList fs tl (valid'Fold fs k v acc) ↔
+         (vFoldP fs k v ∧ vListP fs tl) ∧ acc
+    rw [ih (valid'Fold fs k v acc), valid'Fold_eq fs k v acc]
+    constructor
+    · rintro ⟨htl, hp, hacc⟩; exact ⟨⟨hp, htl⟩, hacc⟩
+    · rintro ⟨⟨hp, htl⟩, hacc⟩; exact ⟨htl, hp, hacc⟩
+
+/-- Decomposition of `vListP` over `sortedInsert` when the key is fresh. -/
+private theorem vListP_sortedInsert
+    (fs : List (Int × Field)) (k : Int) (val : Val) :
+    ∀ (l : List (Int × Val)),
+    (∀ x ∈ l, x.1 ≠ k) →
+    (vListP fs (Value.sortedInsert k val l) ↔
+     vFoldP fs k val ∧ vListP fs l) := by
+  intro l hfresh
+  induction l with
+  | nil =>
+    show vListP fs [(k, val)] ↔ vFoldP fs k val ∧ True
+    exact Iff.rfl
+  | cons hd tl ih =>
+    obtain ⟨k', v'⟩ := hd
+    have hk' : k' ≠ k := by
+      have := hfresh (k', v') (by simp)
+      simpa using this
+    have htl_fresh : ∀ x ∈ tl, x.1 ≠ k := fun x hx => hfresh x (by simp [hx])
+    by_cases h1 : k < k'
+    · show vListP fs (Value.sortedInsert k val ((k', v') :: tl)) ↔
+           vFoldP fs k val ∧ vListP fs ((k', v') :: tl)
+      rw [show Value.sortedInsert k val ((k', v') :: tl) =
+             (k, val) :: (k', v') :: tl from by
+        show (if k < k' then (k, val) :: (k', v') :: tl
+              else if k == k' then (k, val) :: tl
+              else (k', v') :: Value.sortedInsert k val tl) =
+             (k, val) :: (k', v') :: tl
+        simp [h1]]
+      exact Iff.rfl
+    · have hbeq : ¬ (k == k') := by
+        rw [beq_eq_decide]; simp [hk'.symm]
+      show vListP fs (Value.sortedInsert k val ((k', v') :: tl)) ↔
+           vFoldP fs k val ∧ vListP fs ((k', v') :: tl)
+      rw [show Value.sortedInsert k val ((k', v') :: tl) =
+             (k', v') :: Value.sortedInsert k val tl from by
+        show (if k < k' then (k, val) :: (k', v') :: tl
+              else if k == k' then (k, val) :: tl
+              else (k', v') :: Value.sortedInsert k val tl) =
+             (k', v') :: Value.sortedInsert k val tl
+        simp [h1, hbeq]]
+      show vFoldP fs k' v' ∧ vListP fs (Value.sortedInsert k val tl) ↔
+           vFoldP fs k val ∧ vFoldP fs k' v' ∧ vListP fs tl
+      rw [ih htl_fresh]
+      constructor
+      · rintro ⟨h1, h2, h3⟩; exact ⟨h2, h1, h3⟩
+      · rintro ⟨h1, h2, h3⟩; exact ⟨h2, h1, h3⟩
+
+/-- Decomposition of `valid'FoldList` over `sortedInsert` when the key is fresh. -/
+private theorem valid'FoldList_sortedInsert
+    (fs : List (Int × Field)) (k : Int) (val : Val) :
+    ∀ (l : List (Int × Val)),
+    (∀ x ∈ l, x.1 ≠ k) →
+    (valid'FoldList fs (Value.sortedInsert k val l) True ↔
+     valid'Fold fs k val True ∧ valid'FoldList fs l True) := by
+  intro l hfresh
+  rw [valid'FoldList_eq fs (Value.sortedInsert k val l) True,
+      valid'FoldList_eq fs l True,
+      valid'Fold_eq fs k val True,
+      vListP_sortedInsert fs k val l hfresh]
+  constructor
+  · rintro ⟨⟨h1, h2⟩, _⟩; exact ⟨⟨h1, trivial⟩, h2, trivial⟩
+  · rintro ⟨⟨h1, _⟩, h2, _⟩; exact ⟨⟨h1, h2⟩, trivial⟩
+
 theorem validDropFirst (d : Desc) (z : Int) (val : Val) (v : Value) :
     v.get? z = none →
-    valid' d (v.insert z val) → valid' d v := by sorry
+    valid' d (v.insert z val) → valid' d v := by
+  intro hnone hvalid
+  have hfresh : ∀ x ∈ v.vals, x.1 ≠ z := by
+    intro x hx
+    unfold Value.get? at hnone
+    rw [List.lookup_eq_none_iff] at hnone
+    have := hnone x hx
+    grind
+  rcases d with ⟨fs⟩
+  rcases v with ⟨vs⟩
+  have h2 : valid'FoldList fs (Value.sortedInsert z val vs) True := hvalid
+  rw [valid'FoldList_sortedInsert fs z val vs hfresh] at h2
+  exact h2.2
 
 theorem valueDepthDropFirst (z : Int) (val : Val) (v : Value) :
     v.get? z = none →
@@ -50,7 +168,19 @@ theorem valueDepthDropFirst (z : Int) (val : Val) (v : Value) :
 theorem validInsert (d : Desc) (k : Int) (val : Val) (v : Value) :
     v.get? k = none →
     (valid' d (v.insert k val) ↔
-     valid'Fold d.fields k val True ∧ valid' d v) := by sorry
+     valid'Fold d.fields k val True ∧ valid' d v) := by
+  intro hnone
+  have hfresh : ∀ x ∈ v.vals, x.1 ≠ k := by
+    intro x hx
+    unfold Value.get? at hnone
+    rw [List.lookup_eq_none_iff] at hnone
+    have := hnone x hx
+    grind
+  rcases d with ⟨fs⟩
+  rcases v with ⟨vs⟩
+  show valid'FoldList fs (Value.sortedInsert k val vs) True ↔
+       valid'Fold fs k val True ∧ valid'FoldList fs vs True
+  rw [valid'FoldList_sortedInsert fs k val vs hfresh]
 
 /-! ## Encoding length lemmas -/
 
