@@ -521,8 +521,161 @@ private theorem desc_sortedErase_sortedInsert (k : Int) (f : Field)
           exact h
         rw [ih htl]
 
+/-! ### Helpers for `sc_delete_key` -/
+
+/-- WF is preserved by SC: every SC-derivable value is well-formed. -/
+private theorem sc_implies_wf (d : Desc) (v : Value) :
+    ⟨ v ∷ d ⟩ → d.WF ∧ v.WF := by
+  intro h
+  induction h with
+  | empty => exact ⟨Desc.empty_wf, Value.empty_wf⟩
+  | insert _ _ _ _ _ _ _ _ _ _ _ ih =>
+    refine ⟨Desc.insert_wf _ _ _ ih.1, Value.insert_wf _ _ _ ih.2⟩
+
+/-- Erasing a key after inserting the same key is the identity, when the key
+    was not previously present. (Desc version.) -/
+private theorem desc_sortedErase_sortedInsert_same
+    (k : Int) (f : Field) (l : List (Int × Field)) :
+    l.lookup k = none →
+    Desc.sortedErase k (Desc.sortedInsert k f l) = l := by
+  sorry
+
+/-- Erasing a key after inserting the same key is the identity, when the key
+    was not previously present. (Value version.) -/
+private theorem value_sortedErase_sortedInsert_same
+    (k : Int) (val : Val) (l : List (Int × Val)) :
+    l.lookup k = none →
+    Value.sortedErase k (Value.sortedInsert k val l) = l := by
+  sorry
+
+/-- Erasing commutes with inserting a different key, on a sorted list.
+    (Desc version.) -/
+private theorem desc_sortedErase_sortedInsert_ne
+    (k k0 : Int) (f : Field) (l : List (Int × Field)) :
+    k ≠ k0 →
+    List.Pairwise (fun a b : Int × Field => a.1 < b.1) l →
+    Desc.sortedErase k (Desc.sortedInsert k0 f l) =
+      Desc.sortedInsert k0 f (Desc.sortedErase k l) := by
+  sorry
+
+/-- Erasing commutes with inserting a different key, on a sorted list.
+    (Value version.) -/
+private theorem value_sortedErase_sortedInsert_ne
+    (k k0 : Int) (val : Val) (l : List (Int × Val)) :
+    k ≠ k0 →
+    List.Pairwise (fun a b : Int × Val => a.1 < b.1) l →
+    Value.sortedErase k (Value.sortedInsert k0 val l) =
+      Value.sortedInsert k0 val (Value.sortedErase k l) := by
+  sorry
+
+/-- Lookup after sortedErase at a different key. (Desc version, no WF.) -/
+private theorem desc_lookup_sortedErase_ne
+    (k k0 : Int) (l : List (Int × Field)) :
+    k0 ≠ k →
+    List.lookup k0 (Desc.sortedErase k l) = List.lookup k0 l := by
+  intro hne
+  induction l with
+  | nil => simp [Desc.sortedErase]
+  | cons hd tl ih =>
+    unfold Desc.sortedErase
+    by_cases h1 : k == hd.1
+    · rw [if_pos h1]
+      rw [beq_iff_eq] at h1
+      have hk0_ne_hd : (k0 == hd.1) = false := by
+        rw [beq_eq_decide]; simp; rw [← h1]; exact hne
+      simp [List.lookup, hk0_ne_hd]
+    · rw [if_neg h1]
+      split_ifs with h2
+      · rfl
+      · by_cases h3 : k0 == hd.1
+        · simp [List.lookup, h3]
+        · simp [List.lookup, h3]; exact ih
+
+/-- Lookup after sortedErase at a different key. (Value version.) -/
+private theorem value_lookup_sortedErase_ne
+    (k k0 : Int) (l : List (Int × Val)) :
+    k0 ≠ k →
+    List.lookup k0 (Value.sortedErase k l) = List.lookup k0 l := by
+  intro hne
+  induction l with
+  | nil => simp [Value.sortedErase]
+  | cons hd tl ih =>
+    unfold Value.sortedErase
+    by_cases h1 : k == hd.1
+    · rw [if_pos h1]
+      rw [beq_iff_eq] at h1
+      have hk0_ne_hd : (k0 == hd.1) = false := by
+        rw [beq_eq_decide]; simp; rw [← h1]; exact hne
+      simp [List.lookup, hk0_ne_hd]
+    · rw [if_neg h1]
+      split_ifs with h2
+      · rfl
+      · by_cases h3 : k0 == hd.1
+        · simp [List.lookup, h3]
+        · simp [List.lookup, h3]; exact ih
+
 theorem sc_delete_key (d : Desc) (v : Value) (k : Int) :
-    ⟨ v ∷ d ⟩ → ⟨ v.erase k ∷ d.erase k ⟩ := by sorry
+    ⟨ v ∷ d ⟩ → ⟨ v.erase k ∷ d.erase k ⟩ := by
+  intro h
+  induction h with
+  | empty =>
+    -- erase on the empty maps yields empty
+    show ⟨ (∅ : Value).erase k ∷ (∅ : Desc).erase k ⟩
+    have h1 : (∅ : Desc).erase k = (∅ : Desc) := by
+      show Desc.mk (Desc.sortedErase k []) = Desc.mk []
+      rfl
+    have h2 : (∅ : Value).erase k = (∅ : Value) := by
+      show Value.mk (Value.sortedErase k []) = Value.mk []
+      rfl
+    rw [h1, h2]
+    exact SchemaCorrect.empty
+  | insert k0 f val' d' v' h_match h_nested h_dn h_vn h_sc ih_nested ih =>
+    obtain ⟨hd_wf, hv_wf⟩ := sc_implies_wf _ _ h_sc
+    rcases d' with ⟨fs⟩
+    rcases v' with ⟨vs⟩
+    by_cases hk : k = k0
+    · -- erase undoes the insert; result is `⟨ v' ∷ d' ⟩`
+      subst hk
+      have h_d : ((Desc.mk fs).insert k f).erase k = Desc.mk fs := by
+        show Desc.mk (Desc.sortedErase k (Desc.sortedInsert k f fs)) = Desc.mk fs
+        congr 1
+        apply desc_sortedErase_sortedInsert_same
+        exact h_dn
+      have h_v : ((Value.mk vs).insert k val').erase k = Value.mk vs := by
+        show Value.mk (Value.sortedErase k (Value.sortedInsert k val' vs)) = Value.mk vs
+        congr 1
+        apply value_sortedErase_sortedInsert_same
+        exact h_vn
+      rw [h_d, h_v]
+      exact h_sc
+    · -- erase commutes with insert
+      have h_d : ((Desc.mk fs).insert k0 f).erase k =
+          ((Desc.mk fs).erase k).insert k0 f := by
+        show Desc.mk (Desc.sortedErase k (Desc.sortedInsert k0 f fs)) =
+             Desc.mk (Desc.sortedInsert k0 f (Desc.sortedErase k fs))
+        congr 1
+        apply desc_sortedErase_sortedInsert_ne
+        · exact hk
+        · exact hd_wf.1
+      have h_v : ((Value.mk vs).insert k0 val').erase k =
+          ((Value.mk vs).erase k).insert k0 val' := by
+        show Value.mk (Value.sortedErase k (Value.sortedInsert k0 val' vs)) =
+             Value.mk (Value.sortedInsert k0 val' (Value.sortedErase k vs))
+        congr 1
+        apply value_sortedErase_sortedInsert_ne
+        · exact hk
+        · exact hv_wf.1
+      rw [h_d, h_v]
+      have h_d_get : ((Desc.mk fs).erase k).get? k0 = none := by
+        show List.lookup k0 (Desc.sortedErase k fs) = none
+        rw [desc_lookup_sortedErase_ne k k0 fs (Ne.symm hk)]
+        exact h_dn
+      have h_v_get : ((Value.mk vs).erase k).get? k0 = none := by
+        show List.lookup k0 (Value.sortedErase k vs) = none
+        rw [value_lookup_sortedErase_ne k k0 vs (Ne.symm hk)]
+        exact h_vn
+      exact SchemaCorrect.insert k0 f val' ((Desc.mk fs).erase k)
+        ((Value.mk vs).erase k) h_match h_nested h_d_get h_v_get ih
 
 theorem sc_dom_eq (d : Desc) (v : Value) :
     ⟨ v ∷ d ⟩ → (v.vals.map Prod.fst) = (d.fields.map Prod.fst) := by
