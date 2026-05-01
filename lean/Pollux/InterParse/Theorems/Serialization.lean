@@ -200,7 +200,7 @@ private theorem valList_insert_first (d : Desc) (k : Int) (v : Val) (m : Value) 
 
 /-- `serialVal` is invariant under changing the recursive serializer if the
     two serializers agree on the inner `Value` for nested-message entries. -/
-private theorem serialVal_self_eq_pointwise
+theorem serialVal_self_eq_pointwise
     (self1 self2 : ∀ d : Desc, Serializer (List UInt8) Value (valueWf d))
     (d : Desc) (k : Int) (val : Val)
     (h : ∀ d' v', val = Val.msg v' → self1 d' v' = self2 d' v') :
@@ -453,7 +453,7 @@ private theorem valueEncLen'List_eq_sum_filter (d : Desc) :
 
 /-- Depth bound for nested values: `(z, .msg v') ∈ vs` implies
     `valueDepth v' < valueDepthList vs 0`. -/
-private theorem valueDepth_msg_in_list (z : Int) (v' : Value) (vs : List (Int × Val)) :
+theorem valueDepth_msg_in_list (z : Int) (v' : Value) (vs : List (Int × Val)) :
     (z, Val.msg v') ∈ vs → valueDepth v' < valueDepthList vs 0 := by
   intro hin
   have h_mono : ∀ (l : List (Int × Val)) (acc : Nat),
