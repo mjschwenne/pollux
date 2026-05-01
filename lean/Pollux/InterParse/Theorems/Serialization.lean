@@ -451,10 +451,181 @@ private theorem valueEncLen'List_eq_sum_filter (d : Desc) :
       rw [Nat.add_zero]
       exact ih
 
+/-- Depth bound for nested values: `(z, .msg v') ∈ vs` implies
+    `valueDepth v' < valueDepthList vs 0`. -/
+private theorem valueDepth_msg_in_list (z : Int) (v' : Value) (vs : List (Int × Val)) :
+    (z, Val.msg v') ∈ vs → valueDepth v' < valueDepthList vs 0 := by
+  intro hin
+  have h_mono : ∀ (l : List (Int × Val)) (acc : Nat),
+      valueDepthList l acc ≥ acc := by
+    intro l acc
+    induction l generalizing acc with
+    | nil => exact Nat.le_refl _
+    | cons hd tl ih =>
+      show valueDepthList (hd :: tl) acc ≥ acc
+      unfold valueDepthList
+      calc acc ≤ valueDepthFold hd.2 acc := by
+              cases hd.2 <;> simp [valueDepthFold]
+        _ ≤ valueDepthList tl (valueDepthFold hd.2 acc) := ih _
+  have h_depth : ∀ (l : List (Int × Val)) (acc : Nat),
+      (z, Val.msg v') ∈ l →
+      valueDepthList l acc ≥ Nat.max acc (valueDepth v' + 1) := by
+    intro l acc hmem
+    induction l generalizing acc with
+    | nil => exact (List.not_mem_nil hmem).elim
+    | cons hd tl ih =>
+      cases hmem with
+      | head =>
+        show valueDepthList ((z, Val.msg v') :: tl) acc ≥ _
+        unfold valueDepthList valueDepthFold
+        refine Nat.max_le.mpr ⟨?_, ?_⟩
+        · exact le_trans (Nat.le_max_left _ _) (h_mono tl _)
+        · exact lt_of_lt_of_le (Nat.lt_succ_self _)
+            (le_trans (Nat.le_max_right _ _) (h_mono tl _))
+      | tail _ htl =>
+        show valueDepthList (hd :: tl) acc ≥ _
+        unfold valueDepthList
+        exact le_trans (Nat.max_le.mpr
+          ⟨by cases hd.2 <;> simp [valueDepthFold], by
+            cases hd.2 <;> simp [valueDepthFold]⟩)
+          (ih (valueDepthFold hd.2 acc) htl)
+  have := h_depth vs 0 hin
+  exact lt_of_lt_of_le (Nat.lt_succ_self _) (le_trans (Nat.le_max_right _ _) this)
+
 /-- Encoding length matches the predicted length. -/
 theorem valueEncLength_length (v : Value) (d : Desc) (enc : List UInt8) :
     valid' d v →
     serialValue d v = .success () enc →
-    Input.length enc = valueEncLen' d v := by sorry
+    Input.length enc = valueEncLen' d v := by
+  -- Strong induction on `valueDepth v` via an auxiliary form.
+  suffices h : ∀ (n : Nat) (v : Value) (d : Desc) (enc : List UInt8),
+      valueDepth v < n →
+      valid' d v →
+      serialValue d v = .success () enc →
+      Input.length enc = valueEncLen' d v from
+    h (valueDepth v + 1) v d enc (Nat.lt_succ_self _)
+  intro n
+  induction n with
+  | zero =>
+    intro _v _d _enc hdep
+    exact absurd hdep (Nat.not_lt_zero _)
+  | succ k ih =>
+    intro v d enc hdep hvalid hser
+    -- Reduce both sides to forms over `valList d v`.
+    have hencLenEq : valueEncLen' d v = valueEncLen'List d.fields v.vals 0 := by
+      rcases d with ⟨fs⟩; rcases v with ⟨vs⟩; rfl
+    rw [serialValue_eq_rep d v] at hser
+    rw [hencLenEq, valueEncLen'List_eq_sum_filter d v.vals]
+    apply rep_length_eq (serialVal serialValue d)
+      (fun kv => valueEncLen'Fold d.fields kv.1 kv.2 0)
+      (valList d v) enc _ hser
+    -- Per-entry: each filtered entry's encoding has the predicted length.
+    intro x hx encX hencX
+    obtain ⟨z, val⟩ := x
+    have hmem : (z, val) ∈ v.vals := (List.mem_filter.mp hx).1
+    have hfilt : valListFilterP d (z, val) = true := (List.mem_filter.mp hx).2
+    have hvalEntry : valid'Fold d.fields z val True := by
+      rcases d with ⟨fs⟩
+      rcases v with ⟨vs⟩
+      exact valid'FoldList_mem fs vs z val hvalid hmem
+    -- Beta-reduce the goal.
+    change Input.length encX = valueEncLen'Fold d.fields z val 0
+    -- Case split on `val`.
+    cases val with
+    | missing =>
+      exfalso
+      unfold valListFilterP at hfilt
+      cases hf' : d.fields.lookup z with
+      | none => rw [hf'] at hfilt; simp at hfilt
+      | some _ => rw [hf'] at hfilt; simp at hfilt
+    | bool b =>
+      have hlk : d.fields.lookup z = some .bool := by
+        unfold valid'Fold at hvalEntry
+        exact hvalEntry.1
+      have hencX' : Serializer.concat serialUnsigned
+          (Serializer.partMap serialBool
+            (fun v => match v with | .bool b => some b | _ => none)
+            "Expected Boolean") (z, Val.bool b) = .success () encX := by
+        unfold serialVal at hencX
+        rw [hlk] at hencX
+        unfold Serializer.map Serializer.opt at hencX
+        exact hencX
+      rw [serialConcat_inversion] at hencX'
+      obtain ⟨encT, encR, hT, hR, henc⟩ := hencX'
+      have hlenT : encT.length = 1 := unsignedLength _ _ hT
+      have hlenR : encR.length = 4 := by
+        unfold Serializer.partMap at hR
+        simp only at hR
+        exact boolLength _ _ hR
+      subst henc
+      show (encT ++ encR).length = valueEncLen'Fold d.fields z (Val.bool b) 0
+      rw [List.length_append, hlenT, hlenR]
+      unfold valueEncLen'Fold
+      rw [hlk]
+    | int n' =>
+      have hlk : d.fields.lookup z = some .int := by
+        unfold valid'Fold at hvalEntry
+        exact hvalEntry.1
+      have hencX' : Serializer.concat serialUnsigned
+          (Serializer.partMap serialZ32
+            (fun v => match v with | .int z => some z | _ => none)
+            "Expected Integer") (z, Val.int n') = .success () encX := by
+        unfold serialVal at hencX
+        rw [hlk] at hencX
+        unfold Serializer.map Serializer.opt at hencX
+        exact hencX
+      rw [serialConcat_inversion] at hencX'
+      obtain ⟨encT, encR, hT, hR, henc⟩ := hencX'
+      have hlenT : encT.length = 1 := unsignedLength _ _ hT
+      have hlenR : encR.length = 4 := by
+        unfold Serializer.partMap at hR
+        simp only at hR
+        exact z32Length _ _ hR
+      subst henc
+      show (encT ++ encR).length = valueEncLen'Fold d.fields z (Val.int n') 0
+      rw [List.length_append, hlenT, hlenR]
+      unfold valueEncLen'Fold
+      rw [hlk]
+    | msg v' =>
+      have hex : ∃ d', d.fields.lookup z = some (.msg d') ∧ valid' d' v' := by
+        unfold valid'Fold at hvalEntry
+        exact hvalEntry.1
+      obtain ⟨d', hlk, hvalid'⟩ := hex
+      -- `v'` has strictly smaller depth than `v`, so IH applies.
+      have hdepLt : valueDepth v' < valueDepth v := by
+        rcases v with ⟨vs⟩
+        exact valueDepth_msg_in_list z v' vs hmem
+      have hdepLt' : valueDepth v' < k :=
+        lt_of_lt_of_le hdepLt (Nat.le_of_lt_succ hdep)
+      have hencX' : Serializer.concat serialUnsigned
+          (Serializer.partMap (Serializer.len' serialNatStrict (serialValue d'))
+            (fun v => match v with | .msg x => some x | _ => none)
+            "Expected nested message") (z, Val.msg v') = .success () encX := by
+        unfold serialVal at hencX
+        rw [hlk] at hencX
+        unfold Serializer.map Serializer.opt at hencX
+        exact hencX
+      rw [serialConcat_inversion] at hencX'
+      obtain ⟨encT, encR, hT, hR, henc⟩ := hencX'
+      have hlenT : encT.length = 1 := unsignedLength _ _ hT
+      have hR' : Serializer.len' serialNatStrict (serialValue d') v' =
+          .success () encR := by
+        unfold Serializer.partMap at hR
+        simp only at hR
+        exact hR
+      rw [serialLen'_inversion] at hR'
+      obtain ⟨encL, encP, hL, hP, hR_eq⟩ := hR'
+      have hlenL : encL.length = 1 := natStrictLength _ _ hL
+      have hlenP : encP.length = valueEncLen' d' v' :=
+        ih v' d' encP hdepLt' hvalid' hP
+      subst hR_eq
+      subst henc
+      have hRHS : valueEncLen'Fold d.fields z (Val.msg v') 0 =
+          2 + valueEncLen' d' v' := by
+        unfold valueEncLen'Fold; rw [hlk]
+      show (encT ++ (encL ++ encP)).length =
+        valueEncLen'Fold d.fields z (Val.msg v') 0
+      rw [List.length_append, List.length_append, hlenT, hlenL, hlenP, hRHS]
+      omega
 
 end Pollux.InterParse

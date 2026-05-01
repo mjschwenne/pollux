@@ -229,4 +229,28 @@ theorem valInMap_smallerDepth' (v : Value) (k : Int) (val : Value) :
     valueDepth val < valueDepth v := by
       exact fun a => valInMap_smallerDepth v k val a
 
+/-- Per-entry validity extraction: if a list is `valid'`, then each entry
+    in the list satisfies `valid'Fold`. -/
+theorem valid'FoldList_mem (fs : List (Int × Field)) :
+    ∀ (vs : List (Int × Val)) (z : Int) (val : Val),
+    valid'FoldList fs vs True →
+    (z, val) ∈ vs →
+    valid'Fold fs z val True := by
+  intro vs
+  induction vs with
+  | nil => intros z val _ hmem; cases hmem
+  | cons hd tl ih =>
+    intros z val hvalid hmem
+    obtain ⟨k', v'⟩ := hd
+    rw [valid'FoldList_eq fs ((k', v') :: tl) True] at hvalid
+    obtain ⟨⟨hp_hd, hp_tl⟩, _⟩ := hvalid
+    cases hmem with
+    | head =>
+      rw [valid'Fold_eq fs z val True]
+      exact ⟨hp_hd, trivial⟩
+    | tail _ hmem' =>
+      apply ih z val _ hmem'
+      rw [valid'FoldList_eq fs tl True]
+      exact ⟨hp_tl, trivial⟩
+
 end Pollux.InterParse
