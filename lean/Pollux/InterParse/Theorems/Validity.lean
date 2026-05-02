@@ -142,7 +142,7 @@ theorem valueDepthDropFirst (z : Int) (val : Val) (v : Value) :
         · simp +decide [ valueDepthList ];
           exact fun x => by cases val <;> simp +decide [ valueDepthFold ] ;
         · split_ifs <;> simp_all +decide [ valueDepthList ];
-          · intro x; specialize ih z val ( fun a b hab => h_none a b ( Or.inr hab ) ) h_not_in_l.2; simp_all +decide [ valueDepthList ] ;
+          · intro x; specialize ih z val ( fun a b hab => h_none a b ( Or.inr hab ) ) h_not_in_l.2; simp_all +decide ;
             refine' Nat.le_induction _ _ _ ( show valueDepthFold l_head.2 x ≤ valueDepthFold l_head.2 ( valueDepthFold val x ) from _ );
             · refine' Nat.le_induction _ _ _ ( show x ≤ valueDepthFold val x from _ );
               · unfold valueDepthFold; aesop;

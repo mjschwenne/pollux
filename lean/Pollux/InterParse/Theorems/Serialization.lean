@@ -48,12 +48,6 @@ theorem willEncode_nonEmpty (d : Desc) (k : Int) (v : Val) (enc : List UInt8) :
       | (simp only [Serializer.map, Serializer.opt] at hser
          exact aux _ _ _ _ hser)
 
-/-- `field_val_type_match` for serializer error data. -/
-def fieldValTypeMatch (f : Field) (v : Val) : Prop :=
-  match f, v with
-  | .bool, .bool _ | .int, .int _ | .msg _, .msg _ => True
-  | _, _ => False
-
 /-! ## Well-formedness -/
 
 theorem valueWf_weaken (v : Value) (d : Desc) (k : Int) :

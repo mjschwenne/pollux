@@ -90,15 +90,11 @@ def sortedErase (k : Int) : List (Int × Field) → List (Int × Field)
 def erase (d : Desc) (k : Int) : Desc :=
   .mk (sortedErase k d.fields)
 
-/-
-The empty descriptor is well-formed.
--/
-theorem empty_wf : (∅ : Desc).WF := by
-  exact ⟨ List.Pairwise.nil, List.nodup_nil ⟩
+/-- The empty descriptor is well-formed. -/
+theorem empty_wf : (∅ : Desc).WF :=
+  ⟨List.Pairwise.nil, List.nodup_nil⟩
 
-/-
-`insert` preserves well-formedness.
--/
+/-- `insert` preserves well-formedness. -/
 theorem insert_wf (d : Desc) (k : Int) (f : Field) :
     d.WF → (d.insert k f).WF := by
   unfold Desc.insert;
@@ -124,9 +120,7 @@ theorem insert_wf (d : Desc) (k : Int) (f : Field) :
     grind +splitIndPred;
   unfold Desc.Sorted Desc.NodupKeys at *; aesop;
 
-/-
-`erase` preserves well-formedness.
--/
+/-- `erase` preserves well-formedness. -/
 theorem erase_wf (d : Desc) (k : Int) :
     d.WF → (d.erase k).WF := by
   intro hd;
@@ -148,9 +142,7 @@ theorem erase_wf (d : Desc) (k : Int) :
     cases d ; tauto;
   grind +locals
 
-/-
-Lookup after insert (same key).
--/
+/-- Lookup after insert (same key). -/
 theorem get?_insert_same (d : Desc) (k : Int) (f : Field) :
     d.WF → (d.insert k f).get? k = some f := by
   unfold Desc.insert Desc.get?;
@@ -158,12 +150,10 @@ theorem get?_insert_same (d : Desc) (k : Int) (f : Field) :
   · -- In the base case, when the list is empty, inserting k f results in [(k, f)], and looking up k in this list returns some f.
     simp [Desc.fields, sortedInsert];
   · unfold sortedInsert;
-    unfold Desc.fields; simp +decide [ List.lookup_cons ] ;
+    unfold Desc.fields; simp +decide;
     unfold List.lookup; aesop;
 
-/-
-Lookup after insert (different key).
--/
+/-- Lookup after insert (different key). -/
 theorem get?_insert_ne (d : Desc) (k k' : Int) (f : Field) :
     d.WF → k ≠ k' → (d.insert k f).get? k' = d.get? k' := by
   cases d;
@@ -172,25 +162,21 @@ theorem get?_insert_ne (d : Desc) (k k' : Int) (f : Field) :
     tauto;
   · grind +locals
 
-/-
-Lookup after erase (same key).
--/
+/-- Lookup after erase (same key). -/
 theorem get?_erase_same (d : Desc) (k : Int) :
     d.WF → (d.erase k).get? k = none := by
   intro h;
   obtain ⟨h_sorted, h_nodup⟩ := h;
   -- By definition of `sortedErase`, if `k` is in the list, it will be removed.
   have h_erase : ∀ {l : List (Int × Field)}, List.Pairwise (fun a b => a.1 < b.1) l → ∀ k, (sortedErase k l).lookup k = none := by
-    intros l hl k; induction' l with hd tl ih generalizing k <;> simp_all +decide [ List.lookup ] ;
+    intros l hl k; induction' l with hd tl ih generalizing k <;> simp_all +decide ;
     · tauto;
     · intro a b hab; contrapose! ih; simp_all +decide [ sortedErase ] ;
       grind;
   nontriviality;
   cases d ; tauto
 
-/-
-Lookup after erase (different key).
--/
+/-- Lookup after erase (different key). -/
 theorem get?_erase_ne (d : Desc) (k k' : Int) :
     d.WF → k ≠ k' → (d.erase k).get? k' = d.get? k' := by
   rcases d with ⟨ fs ⟩;
@@ -198,11 +184,8 @@ theorem get?_erase_ne (d : Desc) (k k' : Int) :
   · aesop;
   · grind +locals
 
-/-
-**Extensionality**: two well-formed descriptors with the same lookups are
-    equal. This is the main result that makes `Desc` behave like a proper
-    map type.
--/
+/-- **Extensionality**: two well-formed descriptors with the same lookups are
+equal. This is the main result that makes `Desc` behave like a proper map type. -/
 theorem ext_lookup (d₁ d₂ : Desc) :
     d₁.WF → d₂.WF → (∀ k, d₁.get? k = d₂.get? k) → d₁ = d₂ := by
   rintro ⟨ h₁, h₂ ⟩ ⟨ h₃, h₄ ⟩ h₅;
@@ -299,9 +282,7 @@ theorem empty_wf : (∅ : Value).WF := by
   · exact List.Pairwise.nil;
   · exact List.nodup_nil
 
-/-
-`insert` preserves well-formedness.
--/
+/-- `insert` preserves well-formedness. -/
 theorem insert_wf (v : Value) (k : Int) (val : Val) :
     v.WF → (v.insert k val).WF := by
   intro hvWF
@@ -324,9 +305,7 @@ theorem insert_wf (v : Value) (k : Int) (val : Val) :
           grind;
   cases v ; aesop
 
-/-
-`erase` preserves well-formedness.
--/
+/-- `erase` preserves well-formedness. -/
 theorem erase_wf (v : Value) (k : Int) :
     v.WF → (v.erase k).WF := by
   unfold Value.WF;
@@ -343,9 +322,7 @@ theorem erase_wf (v : Value) (k : Int) :
       grind;
     exact ⟨ fun a b hab => h₅ a b ( h_subset _ _ _ hab ), fun x hx => h₇ x ( h_subset _ _ _ hx ) ⟩
 
-/-
-Lookup after insert (same key).
--/
+/-- Lookup after insert (same key). -/
 theorem get?_insert_same (v : Value) (k : Int) (val : Val) :
     v.WF → (v.insert k val).get? k = some val := by
   -- By definition of `sortedInsert`, inserting `k` with value `val` into `v` results in a new value `v'` such that `v'.get? k = some val`.
@@ -357,21 +334,17 @@ theorem get?_insert_same (v : Value) (k : Int) (val : Val) :
     split_ifs <;> simp_all +decide [ Value.vals ];
     rw [ List.lookup_cons ] ; aesop
 
-/-
-Lookup after insert (different key).
--/
+/-- Lookup after insert (different key). -/
 theorem get?_insert_ne (v : Value) (k k' : Int) (val : Val) :
     v.WF → k ≠ k' → (v.insert k val).get? k' = v.get? k' := by
-  intro hv; intro hk; cases v; simp_all +decide [ Value.insert, Value.get? ] ;
+  intro hv hk; cases v; simp_all +decide [ Value.insert, Value.get? ] ;
   have h_sorted_insert : ∀ (k : ℤ) (val : Val) (vs : List (ℤ × Val)), List.Pairwise (fun a b => a.1 < b.1) vs → (k ≠ k' → List.lookup k' (sortedInsert k val vs) = List.lookup k' vs) := by
     intros k val vs hv hk; induction' vs with vs ih <;> simp_all +decide [ sortedInsert ] ;
     · tauto;
     · grind;
   exact h_sorted_insert k val _ hv.1 hk
 
-/-
-Lookup after erase (same key).
--/
+/-- Lookup after erase (same key). -/
 theorem get?_erase_same (v : Value) (k : Int) :
     v.WF → (v.erase k).get? k = none := by
   cases v;
@@ -382,9 +355,7 @@ theorem get?_erase_same (v : Value) (k : Int) :
     unfold sortedErase; simp_all +decide [ Value.Sorted, Value.NodupKeys ] ;
     grind
 
-/-
-Lookup after erase (different key).
--/
+/-- Lookup after erase (different key). -/
 theorem get?_erase_ne (v : Value) (k k' : Int) :
     v.WF → k ≠ k' → (v.erase k).get? k' = v.get? k' := by
   intros hv hk_ne_k';
@@ -393,10 +364,7 @@ theorem get?_erase_ne (v : Value) (k k' : Int) :
   · rfl;
   · grind +locals
 
-/-
-**Extensionality**: two well-formed values with the same lookups are
-    equal.
--/
+/-- **Extensionality**: two well-formed values with the same lookups are equal. -/
 theorem ext_lookup (v₁ v₂ : Value) :
     v₁.WF → v₂.WF → (∀ k, v₁.get? k = v₂.get? k) → v₁ = v₂ := by
   -- By induction on the length of the lists, we can show that if two lists are sorted and have the same lookups, they are equal.
@@ -409,7 +377,7 @@ theorem ext_lookup (v₁ v₂ : Value) :
       · simpa using h_eq a.1;
       · have h_eq_keys : a.1 = b.1 := by
           contrapose! h_eq;
-          cases lt_or_gt_of_ne h_eq <;> simp_all +decide [ List.lookup_cons ];
+          cases lt_or_gt_of_ne h_eq <;> simp_all +decide;
           · use a.1;
             simp +decide [ *, List.lookup ];
             rw [ show List.lookup a.1 l₂ = none from _ ];

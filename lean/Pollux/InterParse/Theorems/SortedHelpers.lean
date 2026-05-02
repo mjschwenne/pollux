@@ -213,9 +213,8 @@ theorem desc_sortedErase_sortedInsert_ne
         · have hk_lt_hd : k < hd.1 := by omega
           have hk_ne_hd : (k == hd.1) = false := by
             rw [beq_eq_decide]; simp; omega
-          have hk0_nlt_hd : ¬ k0 < hd.1 := by omega
           simp [Desc.sortedInsert, Desc.sortedErase, hk0_lt, hk0_beq_hd,
-                hk_ne_k0_beq, hk_lt_k0, hk_ne_hd, hk_lt_hd, hk0_nlt_hd]
+                hk_ne_k0_beq, hk_lt_k0, hk_ne_hd, hk_lt_hd]
         · have hk_ne_hd : (k == hd.1) = false := by
             rw [beq_eq_decide]; simp; omega
           have hk_nlt_hd : ¬ k < hd.1 := by omega
@@ -302,9 +301,8 @@ theorem value_sortedErase_sortedInsert_ne
         · have hk_lt_hd : k < hd.1 := by omega
           have hk_ne_hd : (k == hd.1) = false := by
             rw [beq_eq_decide]; simp; omega
-          have hk0_nlt_hd : ¬ k0 < hd.1 := by omega
           simp [Value.sortedInsert, Value.sortedErase, hk0_lt, hk0_beq_hd,
-                hk_ne_k0_beq, hk_lt_k0, hk_ne_hd, hk_lt_hd, hk0_nlt_hd]
+                hk_ne_k0_beq, hk_lt_k0, hk_ne_hd, hk_lt_hd]
         · have hk_ne_hd : (k == hd.1) = false := by
             rw [beq_eq_decide]; simp; omega
           have hk_nlt_hd : ¬ k < hd.1 := by omega

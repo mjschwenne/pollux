@@ -11,6 +11,8 @@ The port covers the abstract parser/serializer framework (~Parse~) and the inter
 format (~InterParse~). The full protobuf layer (~ProtoParse~, ~Varint~, ~SimplParse~, etc.)
 has *not* been ported.
 
+All ported files are *sorry-free*; the top-level correctness theorem ~interParseOk~ is proven.
+
 * Building
 
 #+begin_src sh
@@ -27,29 +29,37 @@ The Lean code mirrors the Rocq ~src/~ layout.
 
 ** ~Pollux.Parse~ — Abstract parser/serializer framework
 
-Corresponds to ~src/parse/~ in Rocq. All files are *sorry-free*.
+Corresponds to ~src/parse/~ in Rocq.
 
-| Lean file             | Rocq counterpart                       | Status   | Notes                                                                 |
-|-----------------------+----------------------------------------+----------+-----------------------------------------------------------------------|
-| ~Parse/Input.lean~      | ~parse/Input.v~                          | Complete | ~Input~ typeclass + ~ByteInput~ (= ~List UInt8~) instance                   |
-| ~Parse/Result.lean~     | ~parse/Result.v~                         | Complete | ~Level~, ~Data~, ~Result~, ~resultEquiv~                                      |
-| ~Parse/Parser.lean~     | ~parse/Parser.v~                         | Complete | All combinators: bind, concat, or, rep, recursive, etc.               |
-| ~Parse/Serializer.lean~ | ~parse/Serializer.v~                     | Complete | Dual serializer combinators with ~wf~ predicates                        |
-| ~Parse/Theorems.lean~   | ~parse/Theorems.v~ + ~parse/TheoremsRel.v~ | Complete | ~ParseOk~ roundtrip correctness, relational variants, combinator proofs |
+| Lean file               | Rocq counterpart                           | Notes                                                                   |
+|-------------------------+--------------------------------------------+-------------------------------------------------------------------------|
+| ~Parse/Input.lean~      | ~parse/Input.v~                            | ~Input~ typeclass + ~ByteInput~ (= ~List UInt8~) instance               |
+| ~Parse/Result.lean~     | ~parse/Result.v~                           | ~Level~, ~Data~, ~Result~, ~resultEquiv~                                |
+| ~Parse/Parser.lean~     | ~parse/Parser.v~                           | All combinators: bind, concat, or, rep, recursive, etc.                 |
+| ~Parse/Serializer.lean~ | ~parse/Serializer.v~                       | Dual serializer combinators with ~wf~ predicates                        |
+| ~Parse/Theorems.lean~   | ~parse/Theorems.v~ + ~parse/TheoremsRel.v~ | ~ParseOk~ roundtrip correctness, relational variants, combinator proofs |
 
 Key design difference from Rocq: Rocq uses module functors (~Parsers(InputModule)~);
 Lean uses a typeclass (~Input ι~).
 
-** ~Pollux.InterParse~ - Intermediate tagged key-value format
+** ~Pollux.InterParse~ — Intermediate tagged key-value format
 
-Corresponds to ~src/InterParse/~ in Rocq. Definitions are complete; many theorems remain.
+Corresponds to ~src/InterParse/~ in Rocq.
 
-| Lean file                  | Rocq counterpart             | Status     | Notes                                                                                     |
-|----------------------------+------------------------------+------------+-------------------------------------------------------------------------------------------|
-| ~InterParse/Descriptor.lean~ | ~InterParse/Descriptor.v~      | Complete   | ~Desc~/~Field~, ~Value~/~Val~, sorted-map ops, extensionality, validity, depth/length metrics |
-| ~InterParse/Parser.lean~     | ~InterParse/Parser.v~          | Complete   | Byte parsers, ~parseValue~ (recursive stateful)                                             |
-| ~InterParse/Serializer.lean~ | ~InterParse/Serializer.v~      | Complete   | Byte serializers, ~serialValue~ (recursive stateful)                                        |
-| ~InterParse/Theorems.lean~   | ~src/InterParse.v~ (§Theorems) | *20 sorry's* | See below                                                                                 |
+| Lean file                                  | Rocq counterpart               | Notes                                                                                         |
+|--------------------------------------------+--------------------------------+-----------------------------------------------------------------------------------------------|
+| ~InterParse/Descriptor.lean~               | ~InterParse/Descriptor.v~      | ~Desc~/~Field~, ~Value~/~Val~, sorted-map ops, extensionality, validity, depth/length metrics |
+| ~InterParse/Parser.lean~                   | ~InterParse/Parser.v~          | Byte parsers, ~parseValue~ (recursive stateful)                                               |
+| ~InterParse/Serializer.lean~               | ~InterParse/Serializer.v~      | Byte serializers, ~serialValue~ (recursive stateful)                                          |
+| ~InterParse/Theorems.lean~                 | ~src/InterParse.v~ (§Theorems) | Re-exports the ~Theorems/~ subdirectory                                                       |
+| ~InterParse/Theorems/Primitives.lean~      |                                | Primitive roundtrip proofs (byte, unsigned, nat, bool, z32)                                   |
+| ~InterParse/Theorems/SortedHelpers.lean~   |                                | Sorted-insert/erase commutativity helpers                                                     |
+| ~InterParse/Theorems/Validity.lean~        |                                | ~validDropFirst~, ~validInsert~, depth/encoding-length lemmas                                 |
+| ~InterParse/Theorems/SchemaCorrect.lean~   |                                | ~SchemaCorrect~ structural lemmas (~sc_*~)                                                    |
+| ~InterParse/Theorems/Compatible.lean~      |                                | ~Compatible~ relation, ~compatibleEqual~                                                      |
+| ~InterParse/Theorems/ValList.lean~         |                                | ~valList~ helpers, ~listToValue~ roundtrip                                                    |
+| ~InterParse/Theorems/Serialization.lean~   |                                | ~willEncode_nonEmpty~, ~valueWf~/~willEncode~ weakening, ~serialValueInversion~               |
+| ~InterParse/Theorems/InterParseOk.lean~    |                                | ~parseOk_wf~ and the top-level ~interParseOk~ theorem                                         |
 
 ** Not ported from Rocq
 
@@ -61,53 +71,6 @@ These Rocq files have no Lean counterpart:
 - ~ProtoParse.v~ — protobuf wire-format parser
 - ~SimplParse.v~, ~InterParse/Tests.v~ — examples/tests
 - ~parse/Castor.v~, ~parse/Util.v~ — helpers
-
-* State of Proofs in ~InterParse/Theorems.lean~
-
-Primitive roundtrip proofs are done: ~byteParseOk~, ~unsignedParseOk~, ~natParseOk~,
-~natStrictParseOk~, ~z32ParseOk~, ~boolParseOk~, plus length/strictness lemmas.
-
-The following are proven without sorry:
-- ~sc_implies_val_in_desc~ — every value field has a descriptor entry
-- ~sc_implies_desc_in_val~ — every descriptor field has a value entry
-- ~sc_implies_no_missing~ — no ~V_MISSING~ in schema-correct values
-- ~sc_sco~ — ~SchemaCorrect ↔ SchemaCorrectOrdered~
-- ~sc_dom_eq~ — domain equality
-- ~valueDepthDropFirst~ — depth monotonicity under insert
-- ~valueEncLength_unfold~ — encoding length decomposition
-- ~valList_drop_ok~ — filtering invariance
-
-** Remaining sorry's (20 total)
-
-Grouped by difficulty/dependency:
-
-*** Structural lemmas about ~SchemaCorrect~ (likely moderate)
-- ~validDropFirst~ (l.112) — validity preserved when dropping an inserted key
-- ~validInsert~ (l.151) — validity splits into per-field and remainder
-- ~sc_implies_val_in_desc_typed~ (l.287) — typed version of val-in-desc
-- ~sc_implies_nested_correct~ (l.342) — nested messages are schema-correct
-- ~sc_implies_properties~ / ~sc_implies_properties_typed~ (l.350, l.358) — combined property bundles (follow from the above)
-- ~sc_delete_key~ (l.361) — erase preserves schema-correctness
-- ~sc_desc_inv~ (l.406) — schema-correct value determines its descriptor
-
-*** Compatible relation (depends on SchemaCorrect lemmas)
-- ~compatibleEqual~ (l.432) — compatible + same descriptor → same value
-
-*** Serialization correctness (depends on the above)
-- ~willEncode_nonEmpty~ (l.439) — serialized fields produce non-empty output
-- ~valList_elem_of~ (l.468) — filtered list membership implies lookup
-- ~list_to_value_id~ (l.473) — listToValue roundtrips for schema-correct values
-- ~sc_filter_self~ (l.476) — filtering preserves schema-correctness
-- ~fullDescriptor_roundTrip~ (l.479) — full roundtrip gives Compatible
-- ~valueWf_weaken~ (l.484) — wf weakening under erase
-- ~willEncode_weaken~ (l.488) — willEncode weakening under erase
-- ~parseOk_wf~ (l.492) — schema-correct + wf → list wf
-- ~serialValueInversion~ (l.512) — inversion for serialValue on insert
-- ~valueEncLength_length~ (l.518) — encoding length correctness
-- *~interParseOk~* (l.501) — *the top-level correctness theorem*
-
-The dependency order is roughly: structural SC lemmas → Compatible lemmas →
-serialization helpers → ~interParseOk~.
 
 * Design Notes
 

@@ -44,9 +44,8 @@ theorem valList_elem_of (v : Value) (d : Desc) (k : Int) (val : Val) :
     · obtain ⟨k', val'⟩ := hd
       simp only [List.map_cons, List.nodup_cons] at hnd
       rcases List.mem_cons.mp hmem with heq | hin'
-      · -- (k, val) is the head: heq : (k, val) = (k', val')
-        cases heq
-        simp [List.lookup_cons]
+      · cases heq
+        simp
       · -- (k, val) is in the tail
         have hne : k ≠ k' := by
           intro heq
@@ -151,9 +150,8 @@ private theorem lookup_of_mem_nodup_val (l : List (Int × Val)) (k : Int) (val :
     simp only [List.map_cons, List.nodup_cons] at hnd
     obtain ⟨hk_notin, hndtl⟩ := hnd
     rcases List.mem_cons.mp hmem with heq | hin
-    · -- (k, val) = (k', v')
-      cases heq
-      simp [List.lookup_cons]
+    · cases heq
+      simp
     · have hkne : k ≠ k' := by
         intro heq
         exact hk_notin (List.mem_map.mpr ⟨(k, val), hin, heq⟩)

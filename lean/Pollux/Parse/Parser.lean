@@ -329,13 +329,6 @@ def recursiveProgressError (name : String) (inp rem : ι) : Result ι α :=
     .failure .fatal
       ⟨name ++ " fixpoint called with an increasing remaining sequence", rem, .none⟩
 
-/-- Step function for the recursive parser fixpoint (used in theorem statements). -/
-def recurStep (underlying : Parser ι α → Parser ι α) (inp : ι)
-    (recCall : (rem : ι) → Input.length rem < Input.length inp → Result ι α)
-    (rem : ι) : Result ι α :=
-  if h : Input.length rem < Input.length inp then recCall rem h
-  else recursiveProgressError "Parser.Recursive" inp rem
-
 /-- Internal fixpoint for recursive parsers. -/
 def recur (underlying : Parser ι α → Parser ι α) (inp : ι) : Result ι α :=
   underlying (fun rem =>
@@ -348,13 +341,6 @@ termination_by Input.length inp
     input length) is enforced at each recursive call. -/
 def recursive (underlying : Parser ι α → Parser ι α) : Parser ι α :=
   fun inp => recur underlying inp
-
-/-- Step function for stateful recursive parser (used in theorem statements). -/
-def recurStepSt (underlying : (σ → Parser ι α) → σ → Parser ι α) (inp : ι)
-    (recCall : σ → (rem : ι) → Input.length rem < Input.length inp → Result ι α)
-    (st : σ) (rem : ι) : Result ι α :=
-  if h : Input.length rem < Input.length inp then recCall st rem h
-  else recursiveProgressError "Parser.RecursiveState" inp rem
 
 /-- Internal fixpoint for stateful recursive parsers. -/
 def recurSt (underlying : (σ → Parser ι α) → σ → Parser ι α) (st : σ)

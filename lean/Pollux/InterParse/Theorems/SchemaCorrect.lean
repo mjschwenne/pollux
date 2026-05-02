@@ -40,9 +40,7 @@ theorem sc_insert_field (k : Int) (f : Field) (val : Val) (d : Desc) (v : Value)
 theorem sc_empty : ⟨ (∅ : Value) ∷ (∅ : Desc) ⟩ :=
   SchemaCorrect.empty
 
-/-
-Every field in the value exists in the descriptor.
--/
+/-- Every field in the value exists in the descriptor. -/
 theorem sc_implies_val_in_desc (d : Desc) (v : Value) :
     ⟨ v ∷ d ⟩ →
     ∀ k val, v.get? k = some val → ∃ f, d.get? k = some f := by
@@ -71,9 +69,7 @@ theorem sc_implies_val_in_desc (d : Desc) (v : Value) :
                                   grind;
                                 exact h_lookup_eq hk ] ; exact hx )
 
-/-
-Every field in the value exists in the descriptor with matching type.
--/
+/-- Every field in the value exists in the descriptor with matching type. -/
 theorem sc_implies_val_in_desc_typed (d : Desc) (v : Value) :
     ⟨ v ∷ d ⟩ →
     ∀ k val, v.get? k = some val →
@@ -122,9 +118,7 @@ theorem sc_implies_val_in_desc_typed (d : Desc) (v : Value) :
           simp [Desc.get?, Desc.fields] at hf'
           exact hf'
 
-/-
-Every field in the descriptor exists in the value.
--/
+/-- Every field in the descriptor exists in the value. -/
 theorem sc_implies_desc_in_val (d : Desc) (v : Value) :
     ⟨ v ∷ d ⟩ →
     ∀ k f, d.get? k = some f → ∃ val, v.get? k = some val := by
@@ -145,27 +139,25 @@ theorem sc_implies_desc_in_val (d : Desc) (v : Value) :
           simp_all +decide [ Value.vals ];
           exact ‹List.lookup k k'.fields = some f → ∃ val, List.lookup k _ = some val› ( by rename_i h₁ h₂ h₃ h₄ h₅ h₆; exact h₆ _ _ _ _ h ▸ hf )
 
-/-
-Every field in the descriptor exists in the value with matching type.
--/
+/-- Every field in the descriptor exists in the value with matching type. -/
 theorem sc_implies_desc_in_val_typed (d : Desc) (v : Value) :
     ⟨ v ∷ d ⟩ →
     ∀ k f, d.get? k = some f →
     ∃ val, v.get? k = some val ∧ fieldValMatch f val := by
-      intro hd k f hkf
-      obtain ⟨val, hval⟩ : ∃ val, v.get? k = some val := by
-        exact sc_implies_desc_in_val d v hd k f hkf;
-      have := sc_implies_val_in_desc_typed d v hd k val hval; aesop;
+  intro hd k f hkf
+  obtain ⟨val, hval⟩ : ∃ val, v.get? k = some val :=
+    sc_implies_desc_in_val d v hd k f hkf
+  have := sc_implies_val_in_desc_typed d v hd k val hval
+  aesop
 
-/-
-No `V_MISSING` values in a schema-correct value.
--/
+/-- No `V_MISSING` values in a schema-correct value. -/
 theorem sc_implies_no_missing (d : Desc) (v : Value) :
     ⟨ v ∷ d ⟩ →
     ∀ k, v.get? k ≠ some .missing := by
-      intros h k;
-      have := sc_implies_desc_in_val_typed d v h k;
-      have := sc_implies_val_in_desc d v h k Val.missing; aesop;
+  intros h k
+  have := sc_implies_desc_in_val_typed d v h k
+  have := sc_implies_val_in_desc d v h k Val.missing
+  aesop
 
 /-- Nested messages are schema-correct with their subdescriptors. -/
 def nestedCorrect (d : Desc) (k : Int) (v : Val) : Prop :=
@@ -251,7 +243,25 @@ theorem sc_implies_properties_typed (d : Desc) (v : Value) :
          sc_implies_no_missing d v h,
          sc_implies_nested_correct d v h⟩
 
-/-! ### Helpers for `sc_delete_key` -/
+/-- Schema correctness implies the value and descriptor have the same key set. -/
+theorem sc_dom_eq (d : Desc) (v : Value) :
+    ⟨ v ∷ d ⟩ → (v.vals.map Prod.fst) = (d.fields.map Prod.fst) := by
+  intro h
+  induction' h with d v h_ind
+  · native_decide +revert
+  · rename_i h₁ h₂ h₃ h₄ h₅ h₆
+    have h_keys_eq : ∀ (l : List (Int × Val)) (l' : List (Int × Field)),
+        List.map Prod.fst l = List.map Prod.fst l' →
+        List.map Prod.fst (Value.sortedInsert d h_ind l) =
+          List.map Prod.fst (Desc.sortedInsert d v l') := by
+      intros l l' h_keys_eq
+      induction' l with l_head l_tail ih generalizing l' <;>
+        induction' l' with l'_head l'_tail ih' <;>
+        simp_all +decide [Value.sortedInsert, Desc.sortedInsert]
+      grind +splitImp
+    exact h_keys_eq _ _ h₆
+
+/-! ## Well-formedness and erase -/
 
 /-- WF is preserved by SC: every SC-derivable value is well-formed. -/
 theorem sc_implies_wf (d : Desc) (v : Value) :
@@ -325,19 +335,6 @@ theorem sc_delete_key (d : Desc) (v : Value) (k : Int) :
       exact SchemaCorrect.insert k0 f val' ((Desc.mk fs).erase k)
         ((Value.mk vs).erase k) h_match h_nested h_d_get h_v_get ih
 
-theorem sc_dom_eq (d : Desc) (v : Value) :
-    ⟨ v ∷ d ⟩ → (v.vals.map Prod.fst) = (d.fields.map Prod.fst) := by
-      -- We'll use induction on the structure of the schema correctness.
-      intro h
-      induction' h with d v h_ind;
-      · native_decide +revert;
-      · rename_i h₁ h₂ h₃ h₄ h₅ h₆;
-        have h_keys_eq : ∀ (l : List (Int × Val)) (l' : List (Int × Field)), List.map Prod.fst l = List.map Prod.fst l' → List.map Prod.fst (Value.sortedInsert d h_ind l) = List.map Prod.fst (Desc.sortedInsert d v l') := by
-          intros l l' h_keys_eq;
-          induction' l with l_head l_tail ih generalizing l' <;> induction' l' with l'_head l'_tail ih' <;> simp_all +decide [ Value.sortedInsert, Desc.sortedInsert ];
-          grind +splitImp;
-        exact h_keys_eq _ _ h₆
-
 /-! ## SchemaCorrectOrdered -/
 
 /-- Ordered variant of `SchemaCorrect` that additionally requires inserted keys
@@ -356,12 +353,12 @@ inductive SchemaCorrectOrdered : Desc → Value → Prop where
 notation "⟪ " v " ∷ " d " ⟫" => SchemaCorrectOrdered d v
 
 theorem sc_sco (v : Value) (d : Desc) : ⟨ v ∷ d ⟩ ↔ ⟪ v ∷ d ⟫ := by
-  constructor <;> intro h;
-  · induction' h with k f val d v ih;
-    · constructor;
-    · exact SchemaCorrectOrdered.insert k f val d v ih ‹_› ‹_› ‹_› ‹_›;
-  · induction h;
-    · constructor;
+  constructor <;> intro h
+  · induction' h with k f val d v ih
+    · constructor
+    · exact SchemaCorrectOrdered.insert k f val d v ih ‹_› ‹_› ‹_› ‹_›
+  · induction h
+    · constructor
     · constructor <;> assumption
 
 /-! ## Descriptor invariance -/

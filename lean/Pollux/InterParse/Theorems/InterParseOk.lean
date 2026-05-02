@@ -355,30 +355,14 @@ theorem interParseOk (v : Value) (d : Desc) :
   intro hsc
   apply limitRecursiveStateCompat_correct Compatible parseValue' serialValue'
     (fun d v => ⟨ v ∷ d ⟩) (· = ·) valueDepth d d v _ hsc rfl
-  -- The remaining goal: per-step correctness.
+  -- Per-step correctness with `linkedState = (· = ·)`, so st1 = st2.
   intro st1 st2 x enc hwf_x hsc_x hlinked IH hser
-  -- Subst st1 = st2.
   subst hlinked
-  -- The witness is `listToValue st1 (valList st1 x)`.
+  -- The witness is the result of round-tripping through `valList`/`listToValue`.
   refine ⟨listToValue st1 (valList st1 x), ?_, ?_⟩
-  · -- Parser side. The serializer step result is `serialValue' (rec_fun) st1 x`,
-    -- which by definition equals `Serializer.map (Serializer.rep (serialVal (rec_fun) st1)) (valList st1) x`
-    -- = `Serializer.rep (serialVal (rec_fun) st1) (valList st1 x)`.
-    -- And the recurSt-bound version equals serialValue st1 x at the top, so we need to bridge.
-    -- First show that the gated rec_fun produces the same encoding as the ungated serialValue
-    -- on entries of valList. This is the same trick as `serialValue_eq_rep`.
-    -- Since `hser` already gives us success () enc for the gated form, we need to show
-    -- the parser gated form succeeds.
-    -- Approach: Apply repCorrectWeakFull. We need:
-    --   1. par (default) = recoverable failure
-    --   2. ser produces > 0 bytes
-    --   3. per-element ParseOk''
-    -- Then we get Parser.rep par enc = .success (valList st1 x) Input.default.
-    -- And the parser step is Parser.map (Parser.rep par) (listToValue st1) on enc,
-    -- giving us .success (listToValue st1 (valList st1 x)) Input.default.
-    --
-    -- Decompose hser: serialValue' (rec_ser) st1 x = success () enc means
-    -- Serializer.rep (serialVal (rec_ser) st1) (valList st1 x) = success () enc.
+  · -- Strategy: rewrite the gated serializer to `serialValue` on `valList`
+    --   entries (since each entry has strictly smaller depth), then apply
+    --   `repCorrectWeakFull` to lift per-element correctness through `Parser.rep`.
     have hser_unfold : Serializer.rep
         (serialVal (fun d' v' =>
           if valueDepth v' < valueDepth x then
@@ -393,8 +377,8 @@ theorem interParseOk (v : Value) (d : Desc) :
       unfold serialValue' at this
       show Serializer.rep _ _ = _
       exact this
-    -- We need to swap the gated serializer with `serialValue` (ungated) on entries
-    -- of valList st1 x, to apply our existing primitive parse correctness.
+    -- Swap the gated rec for the ungated `serialValue` on `valList` entries:
+    -- nested messages have strictly smaller depth, so the gate is always taken.
     have hpointwise : ∀ kv ∈ valList st1 x,
         serialVal (fun d' v' =>
           if valueDepth v' < valueDepth x then
@@ -407,8 +391,7 @@ theorem interParseOk (v : Value) (d : Desc) :
       apply serialVal_self_eq_pointwise
       intro d' v' heq
       subst heq
-      have hin : (k', Val.msg v') ∈ x.vals :=
-        (List.mem_filter.mp hkv).1
+      have hin : (k', Val.msg v') ∈ x.vals := (List.mem_filter.mp hkv).1
       have hdep : valueDepth v' < valueDepth x := by
         rcases x with ⟨vs⟩
         exact valueDepth_msg_in_list k' v' vs hin
@@ -417,7 +400,8 @@ theorem interParseOk (v : Value) (d : Desc) :
             else _) = serialValue d' v'
       rw [if_pos hdep]
       rfl
-    -- `Serializer.rep ser xs` doesn't depend on the phantom wfα.
+    -- `Serializer.rep'` ignores the phantom `wfα`; bridge between `valWf st1`
+    -- and `willEncode st1`.
     have hser_swap :
         @Serializer.rep' (List UInt8) _ (Int × Val) (willEncode st1)
           (serialVal serialValue st1) (valList st1 x) =
@@ -432,7 +416,6 @@ theorem interParseOk (v : Value) (d : Desc) :
       have h1 : @Serializer.rep' (List UInt8) _ (Int × Val) (valWf st1)
           (serialVal serialValue st1) (valList st1 x) =
           .success () enc := heq.symm.trans hser_unfold
-      -- Bridge phantom wfα: induct on the list to get a true equality.
       have hbridge : ∀ (l : List (Int × Val)),
           @Serializer.rep' (List UInt8) _ (Int × Val) (valWf st1)
             (serialVal serialValue st1) l =
@@ -446,18 +429,9 @@ theorem interParseOk (v : Value) (d : Desc) :
           rw [ih]
       rw [← hbridge]
       exact h1
-    -- Now use repCorrectWeakFull. First establish a few preliminaries:
-    -- (a) parseUnsigned default = recoverable failure
-    -- (b) willEncode-elements produce > 0 bytes
-    -- (c) per-element correctness
     have hbound_le : Input.length enc ≤ Input.length enc := le_refl _
     have hpwf : Serializer.repWf (willEncode st1) (valList st1 x) :=
       parseOk_wf x st1 hsc_x hwf_x
-    -- The parser side: we need to evaluate `parseValue' (rec_par) st2 enc` where
-    -- rec_par is the gated form. parseValue' = Parser.map (Parser.rep (parseVal _ st1)) listToValue.
-    -- After Parser.rep computes the list, Parser.map applies listToValue.
-    -- So the goal reduces to showing Parser.rep _ enc = .success (valList st1 x) Input.default.
-    -- Need: Parser.rep (parseVal (rec_par) st1) enc = .success (valList st1 x) Input.default.
     have hrep : Parser.rep
         (parseVal (fun d' rem =>
           if Input.length rem < Input.length enc then
@@ -465,9 +439,8 @@ theorem interParseOk (v : Value) (d : Desc) :
           else Parser.recursiveProgressError "Parser.RecursiveState" enc rem) st1)
           enc = .success (valList st1 x) Input.default := by
       apply repCorrectWeakFull (willEncode st1) (serialVal serialValue st1)
-      -- (a) par default = recoverable failure
-      · -- parseVal at default: starts with parseUnsigned which fails recoverably on empty input
-        -- Compute parseVal Input.default explicitly.
+      · -- (a) `parseVal` at `Input.default` fails recoverably (parseUnsigned
+        --     fails on empty input), as required by `repCorrectWeakFull`.
         have hpar_def : (parseVal (fun d' rem =>
           if Input.length rem < Input.length enc then
             Parser.recurSt parseValue' d' rem
@@ -479,17 +452,14 @@ theorem interParseOk (v : Value) (d : Desc) :
           unfold parseVal Parser.depConcat parseUnsigned Parser.map parseByte
           rfl
         exact ⟨_, _, hpar_def⟩
-      -- (b) willEncode produces > 0 bytes
-      · intro kv encE hwfE hserE
+      · -- (b) willEncode-satisfying entries produce > 0 bytes.
+        intro kv encE hwfE hserE
         exact willEncode_nonEmpty st1 kv.1 kv.2 encE hwfE hserE
-      -- (c) per-element correctness
-      · intro kv encElem hin hser hbound
-        -- Need: ParseOk'' (parser with ungated rec_par for nested) (serialVal serialValue) kv encElem.
-        -- But we have ParseOk'' relative to the gated serializer-form. Wait — the elements
-        -- of valList come with serialVal _ st1 ... (the swapped one).
-        -- We use parseVal_serialVal_correct. Note: hser : serialVal serialValue st1 kv = .success () encElem.
-        intro rest hwfE hserE
-        -- Establish the IH for parseVal_serialVal_correct: depth-bounded inner correctness.
+      · -- (c) per-element correctness via `parseVal_serialVal_correct`.
+        intro kv encElem hin hser hbound rest hwfE hserE
+        -- Project the outer IH (provided by `limitRecursiveStateCompat_correct`)
+        -- to depth-bounded inner correctness, using `compatibleEqual` to recover
+        -- equality from the `Compatible` relation.
         have IH' : ∀ (d' : Desc) (v' : Value) (encInner : List UInt8),
             Input.length encInner < Input.length enc →
             valueDepth v' < valueDepth x →
@@ -497,18 +467,17 @@ theorem interParseOk (v : Value) (d : Desc) :
             Serializer.recurSt serialValue' valueDepth d' v' = .success () encInner →
             Parser.recurSt parseValue' d' encInner = .success v' Input.default := by
           intro d' v' encInner hlen hdep hwfv' hscv' hserv'
-          -- Apply the original IH from limitRecursiveStateCompat_correct with linked_state = eq.
-          obtain ⟨v'', hpar, hcompat⟩ := IH encInner d' d' v' hlen hdep hwfv' hscv' rfl hserv'
-          -- v'' = v' by compatibleEqual.
+          obtain ⟨v'', hpar, hcompat⟩ :=
+            IH encInner d' d' v' hlen hdep hwfv' hscv' rfl hserv'
           have hv_eq : v' = v'' := compatibleEqual d' v' d' v'' hcompat rfl
           rw [← hv_eq] at hpar
           exact hpar
-        exact parseVal_serialVal_correct st1 x enc hsc_x IH' kv encElem hin hser hbound
-          rest hwfE hserE
+        exact parseVal_serialVal_correct st1 x enc hsc_x IH'
+          kv encElem hin hser hbound rest hwfE hserE
       · exact hpwf
       · exact hser_swap
       · exact hbound_le
-    -- Now use hrep to evaluate the goal.
+    -- Apply `listToValue` to the parsed list via the outer `Parser.map`.
     show parseValue' (fun st' rem =>
       if Input.length rem < Input.length enc then
         Parser.recurSt parseValue' st' rem
@@ -517,7 +486,7 @@ theorem interParseOk (v : Value) (d : Desc) :
     show Parser.map (Parser.rep _) _ enc = _
     unfold Parser.map
     rw [hrep]
-  · -- Compatibility: Compatible st1 st1 x (listToValue st1 (valList st1 x)).
+  · -- Compatibility: full-descriptor roundtrip yields `Compatible`.
     exact fullDescriptor_roundTrip x st1 hsc_x
 
 end Pollux.InterParse
