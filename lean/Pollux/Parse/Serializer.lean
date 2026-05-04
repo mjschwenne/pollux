@@ -261,14 +261,6 @@ def recursiveProgressError (name : String) (depth : α → Nat) (x x' : α) :
       ⟨name ++ " fixpoint called with deeper value to serialize",
        Input.default, .none⟩
 
-/-- Step function for the recursive serializer fixpoint (used in theorem statements). -/
-def recurStep {wf : α → Prop}
-    (underlying : Serializer ι α wf → Serializer ι α wf) (depth : α → Nat)
-    (x : α) (recCall : (x' : α) → depth x' < depth x → Result ι Unit)
-    (x' : α) : Result ι Unit :=
-  if h : depth x' < depth x then recCall x' h
-  else recursiveProgressError "Serial.Recursive" depth x x'
-
 /-- Internal fixpoint for recursive serializers. -/
 def recur {wf : α → Prop}
     (underlying : Serializer ι α wf → Serializer ι α wf) (depth : α → Nat)
@@ -285,15 +277,6 @@ def recursive {wf : α → Prop}
     (underlying : Serializer ι α wf → Serializer ι α wf) (depth : α → Nat) :
     Serializer ι α wf :=
   fun x => recur underlying depth x
-
-/-- Step function for stateful recursive serializer (used in theorem statements). -/
-def recurStepSt {wf : σ → α → Prop}
-    (underlying : (∀ s : σ, Serializer ι α (wf s)) → ∀ s : σ, Serializer ι α (wf s))
-    (depth : α → Nat) (x : α)
-    (recCall : σ → (x' : α) → depth x' < depth x → Result ι Unit)
-    (st : σ) (x' : α) : Result ι Unit :=
-  if h : depth x' < depth x then recCall st x' h
-  else recursiveProgressError "Serial.RecursiveState" depth x x'
 
 /-- Internal fixpoint for stateful recursive serializers. -/
 def recurSt {wf : σ → α → Prop}
