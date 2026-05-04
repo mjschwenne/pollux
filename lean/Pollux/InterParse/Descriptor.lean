@@ -300,7 +300,7 @@ theorem insert_wf (v : Value) (k : Int) (val : Val) :
         · have h_sorted_insert : ∀ (k : Int) (val : Val) (vs : List (Int × Val)), List.Pairwise (fun a b => a.1 < b.1) vs → ∀ (a : Int × Val), a ∈ sortedInsert k val vs → a ∈ vs ∨ a = (k, val) := by
             intros k val vs hvSorted a ha
             induction' vs with vs_head vs_tail ih generalizing k val a;
-            · exact?;
+            · exact Or.symm (List.eq_or_mem_of_mem_cons ha);
             · grind +locals;
           grind;
   cases v ; aesop
