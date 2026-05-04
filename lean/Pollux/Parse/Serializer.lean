@@ -227,7 +227,7 @@ theorem repWf_iff_local {wfα wfβ : α → Prop} {l : List α}
     (h : ∀ x, x ∈ l → (wfα x ↔ wfβ x)) :
     repWf wfα l ↔ repWf wfβ l := by
   induction' l with x l ih;
-  · exact?;
+  · exact Eq.to_iff rfl;
   · by_cases hx : wfα x <;> simp_all +decide [ repWf ]
 
 /-- Internal: encode each element and concatenate the results. -/

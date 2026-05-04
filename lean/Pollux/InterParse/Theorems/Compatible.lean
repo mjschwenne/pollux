@@ -31,7 +31,7 @@ notation "⟨ " v1 " ∷ " d1 " ⟩≼⟨ " v2 " ∷ " d2 " ⟩" =>
   Compatible d1 d2 v1 v2
 
 theorem compatibleEqual (d1 : Desc) (v1 : Value) (d2 : Desc) (v2 : Value) :
-    Compatible d1 d2 v1 v2 → d1 = d2 → v1 = v2 := by
+    ⟨ v1 ∷ d1 ⟩≼⟨ v2 ∷ d2 ⟩ → d1 = d2 → v1 = v2 := by
       intro hc
       induction hc with
       | refl _ _ _ _ _ => intro _; rfl

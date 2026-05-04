@@ -210,7 +210,8 @@ theorem valueEncLength_unfold (d : Desc) (k : Int) (val : Val) (v : Value) :
                 rw [ h₂ ];
                 · grind +suggestions;
                 · exact Val.missing;
-              exact?;
+              (expose_names; exact Nat.succ_inj.mp
+                  (congrArg Nat.succ (h_split (Value.sortedInsert k val ih) k_1 val_1 (valueEncLen'Fold d.fields l.1 l.2 0))));
             · have h_split : ∀ (l : List (ℤ × Val)) (k : ℤ) (val : Val) (acc : Nat), valueEncLen'List d.fields l (acc + valueEncLen'Fold d.fields k val 0) = valueEncLen'List d.fields l acc + valueEncLen'Fold d.fields k val 0 := by
                 intros l k val acc; induction' l with l ih generalizing k val acc <;> simp_all +decide [ valueEncLen'List ] ;
                 grind +suggestions;
