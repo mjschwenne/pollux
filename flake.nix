@@ -36,11 +36,12 @@
           inherit perennialPkgs;
           perennial = perennial-pkg;
         };
+        lean-build = pkgs.callPackage ./nix/pollux-lean { };
         aristotle = pkgs.python313Packages.callPackage ./lean/aristotle.nix { };
       in
       {
         packages = {
-          inherit pollux-go rocq-build;
+          inherit pollux-go rocq-build lean-build;
           default = rocq-build;
         };
         devShells.default =
