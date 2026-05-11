@@ -1,6 +1,6 @@
-SRC_DIRS := 'src'
+SRC_DIRS := 'rocq'
 ALL_VFILES := $(shell find $(SRC_DIRS) -name "*.v")
-PROJ_VFILES := $(shell find 'src' -name "*.v")
+PROJ_VFILES := $(shell find 'rocq' -name "*.v")
 
 # extract any global arguments for Rocq from _RocqProject
 ROCQ_PROJECT_ARGS := $(shell sed -E -e '/^\#/d' -e "s/'([^']*)'/\1/g" -e 's/-arg //g' _RocqProject)
@@ -44,6 +44,9 @@ clean:
 	$(Q)rm -f .timing.sqlite3
 	rm -f .rocqdeps.d
 
-.PHONY: default
+lean:
+	cd ./lean && lake build
+
+.PHONY: default lean
 .DELETE_ON_ERROR:
 
