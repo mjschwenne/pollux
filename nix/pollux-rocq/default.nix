@@ -33,6 +33,6 @@ stdenv.mkDerivation {
 
   installPhase = ''
     mkdir -p $out/lib/coq/9.1.0/user-contrib
-    cp -r src $out/lib/coq/9.1.0/user-contrib/Pollux
+    cp -r rocq $out/lib/coq/9.1.0/user-contrib/Pollux
   '';
 }
