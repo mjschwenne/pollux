@@ -11,7 +11,7 @@ on:
   pull_request:
 
 jobs:
-  build-pollux-linux:
+  build-rocq-linux:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -43,7 +43,7 @@ jobs:
       - name: Build Pollux
         run: nix build -L
 
-  build-pollux-macos:
+  build-rocq-macos:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
