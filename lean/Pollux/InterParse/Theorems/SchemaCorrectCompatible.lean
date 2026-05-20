@@ -1,5 +1,5 @@
 /-
-  Pollux.InterParse.Theorems.Compatible — The `Compatible` relation between
+  Pollux.InterParse.Theorems.SchemaCorrectCompatible — The `SchemaCorrectCompatible` relation between
   descriptor/value pairs (used for schema-evolution correctness).
 -/
 import Pollux.InterParse.Theorems.SortedHelpers
@@ -7,9 +7,9 @@ import Pollux.InterParse.Theorems.SchemaCorrect
 
 namespace Pollux.InterParse
 
-/-! ## Compatible relation
+/-! ## SchemaCorrectCompatible relation
 
-The `Compatible` relation captures when two descriptor/value pairs represent
+The `SchemaCorrectCompatible` relation captures when two descriptor/value pairs represent
 the same information — used for proving schema-evolution correctness. -/
 
 inductive SchemaCorrectCompatible : Desc → Desc → Value → Value → Prop where
