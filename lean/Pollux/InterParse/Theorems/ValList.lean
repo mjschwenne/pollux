@@ -5,7 +5,7 @@
 import Pollux.InterParse.Parser
 import Pollux.InterParse.Serializer
 import Pollux.InterParse.Theorems.SchemaCorrect
-import Pollux.InterParse.Theorems.Compatible
+import Pollux.InterParse.Theorems.SchemaCorrectCompatible
 
 namespace Pollux.InterParse
 
@@ -327,6 +327,6 @@ theorem fullDescriptor_roundTrip (v : Value) (d : Desc) :
     ⟨ v ∷ d ⟩ → ⟨v ∷ d⟩≼⟨(listToValue d (valList d v)) ∷ d⟩  := by
   intro h
   rw [← list_to_value_id v d h]
-  exact Compatible.refl d d v h h
+  exact SchemaCorrectCompatible.refl d d v h h
 
 end Pollux.InterParse

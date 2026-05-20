@@ -12,25 +12,25 @@ namespace Pollux.InterParse
 The `Compatible` relation captures when two descriptor/value pairs represent
 the same information — used for proving schema-evolution correctness. -/
 
-inductive Compatible : Desc → Desc → Value → Value → Prop where
+inductive SchemaCorrectCompatible : Desc → Desc → Value → Value → Prop where
   | refl (d1 d2 : Desc) (v : Value) :
-    ⟨ v ∷ d1 ⟩ → ⟨ v ∷ d2 ⟩ → Compatible d1 d2 v v
+    ⟨ v ∷ d1 ⟩ → ⟨ v ∷ d2 ⟩ → SchemaCorrectCompatible d1 d2 v v
   | add (d1 : Desc) (v1 : Value) (d2 : Desc) (v2 : Value)
     (k : Int) (f1 f2 : Field) (v'1 v'2 : Val) :
     ⟨ v1 ∷ d1 ⟩ → ⟨ v2 ∷ d2 ⟩ →
-    Compatible d1 d2 v1 v2 →
+    SchemaCorrectCompatible d1 d2 v1 v2 →
     v1.get? k = none →
     v2.get? k = none →
     d1.get? k = none →
     d2.get? k = none →
     v'1 = v'2 → f1 = f2 →
-    Compatible (d1.insert k f1) (d2.insert k f2)
+    SchemaCorrectCompatible (d1.insert k f1) (d2.insert k f2)
       (v1.insert k v'1) (v2.insert k v'2)
 
 notation "⟨ " v1 " ∷ " d1 " ⟩≼⟨ " v2 " ∷ " d2 " ⟩" =>
-  Compatible d1 d2 v1 v2
+  SchemaCorrectCompatible d1 d2 v1 v2
 
-theorem compatibleEqual (d1 : Desc) (v1 : Value) (d2 : Desc) (v2 : Value) :
+theorem schemaCorrectCompatibleEqual (d1 : Desc) (v1 : Value) (d2 : Desc) (v2 : Value) :
     ⟨ v1 ∷ d1 ⟩≼⟨ v2 ∷ d2 ⟩ → d1 = d2 → v1 = v2 := by
       intro hc
       induction hc with

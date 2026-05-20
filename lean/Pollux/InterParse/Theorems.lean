@@ -7,20 +7,20 @@
   `Theorems/` subdirectory. Layers (each builds independently for fast
   incremental rebuilds):
 
-  - Primitives    : roundtrip lemmas for byte/unsigned/nat/z32/bool
-  - SortedHelpers : map-on-sorted-list facts about sortedInsert/sortedErase
-  - Validity      : `valid'` decomposition + encoding-length unfold
-  - SchemaCorrect : `SchemaCorrect`/`SchemaCorrectOrdered` + structural lemmas
-  - Compatible    : `Compatible` relation + `compatibleEqual`
-  - Serialization : willEncode + weakening + serializer inversion + length
-  - ValList       : `valList` filtering + listToValue roundtrip
-  - InterParseOk  : `parseOk_wf` + top-level `interParseOk`
+  - Primitives              : roundtrip lemmas for byte/unsigned/nat/z32/bool
+  - SortedHelpers           : map-on-sorted-list facts about sortedInsert/sortedErase
+  - Validity                : `valid'` decomposition + encoding-length unfold
+  - SchemaCorrect           : `SchemaCorrect`/`SchemaCorrectOrdered` + structural lemmas
+  - SchemaCorrectCompatible : `SchemaCorrectCompatible` relation + `schemaCorrectCompatibleEqual`
+  - Serialization           : willEncode + weakening + serializer inversion + length
+  - ValList                 : `valList` filtering + listToValue roundtrip
+  - InterParseOk            : `parseOk_wf` + top-level `interParseOk`
 -/
 import Pollux.InterParse.Theorems.Primitives
 import Pollux.InterParse.Theorems.SortedHelpers
 import Pollux.InterParse.Theorems.Validity
 import Pollux.InterParse.Theorems.SchemaCorrect
-import Pollux.InterParse.Theorems.Compatible
+import Pollux.InterParse.Theorems.SchemaCorrectCompatible
 import Pollux.InterParse.Theorems.Serialization
 import Pollux.InterParse.Theorems.ValList
 import Pollux.InterParse.Theorems.InterParseOk

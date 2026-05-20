@@ -184,11 +184,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1776662973,
-        "narHash": "sha256-ocxEntlEMW+lLIzjK6VirMAAxvRgmYjCIQH/VSAfS3g=",
+        "lastModified": 1777357224,
+        "narHash": "sha256-bNSODbOOy5tb/vNOPGBlGqMrT8yz7Ghlr8VbVcNbNzY=",
         "owner": "lenianiva",
         "repo": "lean4-nix",
-        "rev": "21e98dfb3851af8687f99e9e59a44de0b1ce10ea",
+        "rev": "14326a235621e8f98526daa0974a8a2ad3682d30",
         "type": "github"
       },
       "original": {
@@ -262,11 +262,11 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1776169885,
-        "narHash": "sha256-l/iNYDZ4bGOAFQY2q8y5OAfBBtrDAaPuRQqWaFHVRXM=",
+        "lastModified": 1778869304,
+        "narHash": "sha256-30sZNZoA1cqF5JNO9fVX+wgiQYjB7HJqqJ4ztCDeBZE=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "4bd9165a9165d7b5e33ae57f3eecbcb28fb231c9",
+        "rev": "d233902339c02a9c334e7e593de68855ad26c4cb",
         "type": "github"
       },
       "original": {
@@ -577,11 +577,11 @@
         "opam-rocq-repo": "opam-rocq-repo_2"
       },
       "locked": {
-        "lastModified": 1776343841,
-        "narHash": "sha256-rq6jT7O91BVCOLAF2kWtdgG/5t60deLSRSB7L6W1TMk=",
+        "lastModified": 1778095311,
+        "narHash": "sha256-fLW8g0QSu+wsGABt1i0ffkp5ndeLgEy116SILmX/yaw=",
         "owner": "mit-pdos",
         "repo": "perennial",
-        "rev": "3931bb73f310a726249f49a8a786ec72f69ea887",
+        "rev": "f884a505d89d3f6740f4baec515602494a9bd4cc",
         "type": "github"
       },
       "original": {

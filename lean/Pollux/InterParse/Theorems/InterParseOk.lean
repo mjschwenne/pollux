@@ -6,7 +6,7 @@ import Pollux.Parse.Theorems
 import Pollux.InterParse.Parser
 import Pollux.InterParse.Serializer
 import Pollux.InterParse.Theorems.SchemaCorrect
-import Pollux.InterParse.Theorems.Compatible
+import Pollux.InterParse.Theorems.SchemaCorrectCompatible
 import Pollux.InterParse.Theorems.Serialization
 import Pollux.InterParse.Theorems.ValList
 
@@ -351,9 +351,9 @@ private theorem parseVal_serialVal_correct
 
 theorem interParseOk (v : Value) (d : Desc) :
     ⟨ v ∷ d ⟩ →
-    LimitParseOkCompat'' Compatible parseValue serialValue d d v := by
+    LimitParseOkCompat'' SchemaCorrectCompatible parseValue serialValue d d v := by
   intro hsc
-  apply limitRecursiveStateCompat_correct Compatible parseValue' serialValue'
+  apply limitRecursiveStateCompat_correct SchemaCorrectCompatible parseValue' serialValue'
     (fun d v => ⟨ v ∷ d ⟩) (· = ·) valueDepth d d v _ hsc rfl
   -- Per-step correctness with `linkedState = (· = ·)`, so st1 = st2.
   intro st1 st2 x enc hwf_x hsc_x hlinked IH hser
@@ -469,7 +469,7 @@ theorem interParseOk (v : Value) (d : Desc) :
           intro d' v' encInner hlen hdep hwfv' hscv' hserv'
           obtain ⟨v'', hpar, hcompat⟩ :=
             IH encInner d' d' v' hlen hdep hwfv' hscv' rfl hserv'
-          have hv_eq : v' = v'' := compatibleEqual d' v' d' v'' hcompat rfl
+          have hv_eq : v' = v'' := schemaCorrectCompatibleEqual d' v' d' v'' hcompat rfl
           rw [← hv_eq] at hpar
           exact hpar
         exact parseVal_serialVal_correct st1 x enc hsc_x IH'
