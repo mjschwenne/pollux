@@ -5,6 +5,7 @@
 import Pollux.InterParse.Theorems.SortedHelpers
 import Pollux.InterParse.Parser
 import Pollux.InterParse.Serializer
+import Mathlib
 
 namespace Pollux.InterParse
 
@@ -67,15 +68,595 @@ The transformation `idCompatTransform d v` produces the value that an
 `IdCompatible`-respecting round trip yields from `v` under descriptor `d`:
 - fields of `v` whose key is not in `d` are dropped,
 - fields in `d` with no matching entry in `v` (or with `.missing`) become `.missing`,
-- type-matched entries are preserved unchanged.
+- type-matched entries are preserved unchanged,
+- nested message fields are recursively transformed.
 
-It reuses `listToValue` and `valList` from `InterParse.Descriptor`. -/
+The original non-recursive definition `listToValue d (valList d v)` does not
+handle nested messages correctly (inner values are passed through without
+recursive transformation) and drops type-mismatched entries entirely instead
+of producing `.missing`. The corrected version below is mutually recursive. -/
 
-def idCompatTransform (d : Desc) (v : Value) : Value :=
-  listToValue d (valList d v)
+mutual
+/-- Build the output value for each field in the descriptor. -/
+def idCompatTransformAux : List (Int × Field) → Value → List (Int × Val)
+  | [], _ => []
+  | (k, f) :: rest, v =>
+    let resultVal := match f, v.get? k with
+      | Field.bool, some (Val.bool b) => Val.bool b
+      | Field.int, some (Val.int z) => Val.int z
+      | Field.msg d', some (Val.msg v') => Val.msg (idCompatTransform d' v')
+      | _, _ => Val.missing
+    (k, resultVal) :: idCompatTransformAux rest v
+/-- Recursively transform a value according to a descriptor. -/
+def idCompatTransform : Desc → Value → Value
+  | .mk fs, v => .mk (idCompatTransformAux fs v)
+end
 
-theorem idCompatRoundTrip (v : Value) (d : Desc) :
-    d.WF → v.WF → ⟨ v ≼ idCompatTransform d v ⟩∷ d := by
+/-
+  The original (non-recursive) definition is incorrect for nested messages
+  and type-mismatched entries. It has been replaced by the recursive version above.
+
+  def idCompatTransform (d : Desc) (v : Value) : Value :=
+    listToValue d (valList d v)
+-/
+
+/-! ## Auxiliary lemmas for the round-trip proof -/
+
+/-- The keys of the transform output are exactly the keys of the descriptor. -/
+theorem idCompatTransformAux_keys (fs : List (Int × Field)) (v : Value) :
+    (idCompatTransformAux fs v).map Prod.fst = fs.map Prod.fst := by
+  induction' fs with f fs ih generalizing v <;> simp +decide [*, idCompatTransformAux]
+
+/-- The recursive transform preserves the sorted invariant of the descriptor's keys. -/
+theorem idCompatTransformAux_sorted (fs : List (Int × Field)) (v : Value) :
+    List.Pairwise (fun a b : Int × Field => a.1 < b.1) fs →
+    List.Pairwise (fun a b : Int × Val => a.1 < b.1) (idCompatTransformAux fs v) := by
+  intro h
+  induction fs with
+  | nil => exact List.Pairwise.nil
+  | cons hd tl ih =>
+    unfold idCompatTransformAux; simp only []
+    rw [List.pairwise_cons]
+    exact ⟨fun b hb => by
+      have : b.1 ∈ tl.map Prod.fst := by
+        have := List.mem_map_of_mem (f := Prod.fst) hb
+        rwa [idCompatTransformAux_keys] at this
+      obtain ⟨c, hc, hc_eq⟩ := List.mem_map.mp this
+      rw [← hc_eq]; exact List.rel_of_pairwise_cons h hc, ih h.tail⟩
+
+/-- The recursive transform preserves the no-dup invariant. -/
+theorem idCompatTransformAux_nodup (fs : List (Int × Field)) (v : Value) :
+    (fs.map Prod.fst).Nodup →
+    ((idCompatTransformAux fs v).map Prod.fst).Nodup := by
+  rw [idCompatTransformAux_keys]; exact id
+
+/-- The transformed value is well-formed. -/
+theorem idCompatTransform_wf (d : Desc) (v : Value) :
+    d.WF → (idCompatTransform d v).WF := by
+  intro ⟨hSorted, hNodup⟩
+  cases d with | mk fs =>
+  simp only [idCompatTransform]
+  exact ⟨idCompatTransformAux_sorted fs v hSorted, idCompatTransformAux_nodup fs v hNodup⟩
+
+/-- Lookup in the transformed value at a key NOT in the descriptor. -/
+theorem idCompatTransformAux_lookup_none (fs : List (Int × Field)) (v : Value)
+    (k : Int) :
+    List.lookup k fs = none →
+    List.lookup k (idCompatTransformAux fs v) = none := by
+  induction' fs with hd tl ih generalizing v
+  · intro; rfl
+  · intro hk
+    have hne : k ≠ hd.1 := by
+      intro heq
+      have : List.lookup hd.1 (hd :: tl) = some hd.2 := by
+        show (match hd.1 == hd.1 with | true => some hd.2 | false => _) = _; simp
+      rw [← heq] at this; rw [this] at hk; exact absurd hk (by simp)
+    have htl : List.lookup k tl = none := by
+      have h1 : List.lookup k (hd :: tl) =
+        (match k == hd.1 with | true => some hd.2 | false => List.lookup k tl) := rfl
+      rw [h1, show (k == hd.1) = false from by rw [beq_eq_decide]; simp [hne]] at hk
+      simpa using hk
+    unfold idCompatTransformAux
+    change (match k == hd.1 with | true => _ | false => _) = none
+    rw [show (k == hd.1) = false from by rw [beq_eq_decide]; simp [hne]]
+    exact ih v htl
+
+/-- Lookup in the transformed value at a key in the descriptor. -/
+theorem idCompatTransformAux_lookup (fs : List (Int × Field)) (v : Value)
+    (k : Int) (f : Field) :
+    List.Pairwise (fun a b : Int × Field => a.1 < b.1) fs →
+    List.lookup k fs = some f →
+    List.lookup k (idCompatTransformAux fs v) =
+      some (match f, v.get? k with
+        | Field.bool, some (Val.bool b) => Val.bool b
+        | Field.int, some (Val.int z) => Val.int z
+        | Field.msg d', some (Val.msg v') => Val.msg (idCompatTransform d' v')
+        | _, _ => Val.missing) := by
+  induction' fs with hd tl ih generalizing v k f
+  · intro _ h; cases h
+  · intro hSorted hLookup
+    by_cases hk : k = hd.1
+    · subst hk
+      have hf : hd.2 = f := by
+        have : List.lookup hd.1 (hd :: tl) = some hd.2 := by
+          show (match hd.1 == hd.1 with | true => some hd.2 | false => _) = _; simp
+        rw [this] at hLookup; exact Option.some.inj hLookup
+      subst hf
+      unfold idCompatTransformAux
+      show (match hd.1 == hd.1 with | true => _ | false => _) = _
+      simp
+    · have htl : List.lookup k tl = some f := by
+        have h1 : List.lookup k (hd :: tl) =
+          (match k == hd.1 with | true => some hd.2 | false => List.lookup k tl) := rfl
+        rw [h1, show (k == hd.1) = false from by rw [beq_eq_decide]; simp [hk]] at hLookup
+        simpa using hLookup
+      unfold idCompatTransformAux
+      show (match k == hd.1 with | true => _ | false => _) = _
+      rw [show (k == hd.1) = false from by rw [beq_eq_decide]; simp [hk]]
+      exact ih v k f hSorted.tail htl
+
+/-- `idCompatTransform` lookup at a key in the descriptor. -/
+theorem idCompatTransform_get?_some (d : Desc) (v : Value) (k : Int) (f : Field) :
+    d.WF → d.get? k = some f →
+    (idCompatTransform d v).get? k =
+      some (match f, v.get? k with
+        | Field.bool, some (Val.bool b) => Val.bool b
+        | Field.int, some (Val.int z) => Val.int z
+        | Field.msg d', some (Val.msg v') => Val.msg (idCompatTransform d' v')
+        | _, _ => Val.missing) := by
+  intro ⟨hSorted, _⟩ hd
+  cases d with | mk fs =>
+  simp [idCompatTransform, Value.get?, Value.vals, Desc.get?, Desc.fields] at *
+  exact idCompatTransformAux_lookup fs v k f hSorted hd
+
+/-- `idCompatTransform` lookup at a key NOT in the descriptor. -/
+theorem idCompatTransform_get?_none (d : Desc) (v : Value) (k : Int) :
+    d.get? k = none → (idCompatTransform d v).get? k = none := by
+  intro hdk
+  cases d with | mk fs =>
+  simp only [idCompatTransform, Value.get?, Value.vals, Desc.get?, Desc.fields] at *
+  exact idCompatTransformAux_lookup_none fs v k hdk
+
+/-! ## Main round-trip theorem -/
+
+/-
+If the descriptor is empty and all entries in the value are `.missing`,
+    dropping each entry gives `IdCompatible ∅ v ∅`.
+-/
+theorem idcompat_drop_all_missing (vs : List (Int × Val)) :
+    (∀ kv ∈ vs, kv.2 = Val.missing) →
+    List.Pairwise (fun a b : Int × Val => a.1 < b.1) vs →
+    (List.map Prod.fst vs).Nodup →
+    IdCompatible (∅ : Desc) (.mk vs) (∅ : Value) := by
+  induction' vs with kv vs ih;
+  · exact fun _ _ _ => IdCompatible.emp;
+  · intro h1 h2 h3;
+    -- Apply the induction hypothesis to the rest of the list.
+    have h_ind : IdCompatible ∅ (Value.mk vs) ∅ := by
+      aesop;
+    convert IdCompatible.drop ∅ ( Value.mk vs ) ∅ kv.1 kv.2 h_ind _ _ using 1;
+    · unfold Value.insert;
+      unfold Value.sortedInsert; aesop;
+    · -- The empty list's lookup function returns none for any key.
+      simp [Desc.get?];
+      simp +decide [ Desc.fields ];
+    · simp_all +decide [ Value.get? ];
+      exact fun a b hab => ne_of_lt ( h2.1 a b hab )
+
+/-- Extract the accumulated predicate from `valid'Fold`. -/
+theorem valid'Fold_extract (ds : List (Int × Field)) (k : Int) (v : Val) (P : Prop) :
+    valid'Fold ds k v P → P := by
+  unfold valid'Fold; cases v <;> simp
+
+/-- Extract the accumulated predicate from `valid'FoldList`. -/
+theorem valid'FoldList_extract (ds : List (Int × Field)) (vs : List (Int × Val)) (P : Prop) :
+    valid'FoldList ds vs P → P := by
+  induction vs generalizing P with
+  | nil => exact id
+  | cons hd tl ih =>
+    intro h; exact valid'Fold_extract ds hd.1 hd.2 _ (ih _ h)
+
+/-- Weaken the accumulator in `valid'Fold`. -/
+theorem valid'Fold_weaken (ds : List (Int × Field)) (k : Int) (v : Val) (P Q : Prop) :
+    (P → Q) → valid'Fold ds k v P → valid'Fold ds k v Q := by
+  intro hPQ; unfold valid'Fold; cases v <;> simp <;> tauto
+
+/-- Weaken the accumulator in `valid'FoldList`. -/
+theorem valid'FoldList_weaken (ds : List (Int × Field)) (vs : List (Int × Val))
+    (P Q : Prop) :
+    (P → Q) → valid'FoldList ds vs P → valid'FoldList ds vs Q := by
+  induction vs generalizing P Q with
+  | nil => exact id
+  | cons hd tl ih =>
+    intro hPQ h
+    show valid'FoldList ds tl (valid'Fold ds hd.1 hd.2 Q)
+    exact ih _ _ (valid'Fold_weaken ds hd.1 hd.2 P Q hPQ) h
+
+/-- Dropping the head preserves `valid'`. -/
+theorem valid'_cons (ds : List (Int × Field)) (kv : Int × Val) (vs : List (Int × Val)) :
+    valid'FoldList ds (kv :: vs) True → valid'FoldList ds vs True := by
+  intro h; unfold valid'FoldList at h
+  exact valid'FoldList_weaken ds vs _ _ (fun _ => trivial) h
+
+/-- Extract info about the head entry from `valid'`. -/
+theorem valid'_entry_head (ds : List (Int × Field)) (kv : Int × Val) (vs : List (Int × Val)) :
+    valid'FoldList ds (kv :: vs) True → valid'Fold ds kv.1 kv.2 True := by
+  intro h; unfold valid'FoldList at h
+  exact valid'FoldList_extract ds vs _ h
+
+/-- `idCompatTransformAux` is independent of entries at keys not in `ds`. -/
+theorem idCompatTransformAux_erase_irrelevant
+    (ds : List (Int × Field)) (v : Value) (k : Int) :
+    List.lookup k ds = none →
+    idCompatTransformAux ds (v.erase k) = idCompatTransformAux ds v := by
+  intro hk
+  induction' ds with hd tl ih generalizing v k
+  · rfl
+  · have hne : k ≠ hd.1 := by
+      intro heq; subst heq; simp [List.lookup] at hk
+    have htl : List.lookup k tl = none := by
+      have : List.lookup k (hd :: tl) =
+        (match k == hd.1 with | true => some hd.2 | false => List.lookup k tl) := rfl
+      rw [this, show (k == hd.1) = false from by rw [beq_eq_decide]; simp [hne]] at hk
+      simpa using hk
+    unfold idCompatTransformAux
+    have hlookup_eq : (v.erase k).get? hd.1 = v.get? hd.1 := by
+      cases v with | mk vs =>
+      simp [Value.erase, Value.get?, Value.vals]
+      exact value_lookup_sortedErase_ne k hd.1 vs (Ne.symm hne)
+    simp only [hlookup_eq]
+    congr 1
+    exact ih v k htl
+
+
+/-! ## Recursive well-formedness predicates
+
+The `IdCompatible.insertMsg` constructor requires a recursive derivation
+on a sub-descriptor `d'` and sub-value `v'`.  To carry out the inner
+induction we need to know that **all** nested descriptors and values are
+well-formed (sorted, no-dup), not just the top-level ones.  The predicates
+below make this requirement explicit. -/
+
+mutual
+/-- Every nested `Desc` inside a field list is well-formed. -/
+def fieldListAllWF : List (Int × Field) → Prop
+  | [] => True
+  | (_, f) :: rest => fieldAllWF f ∧ fieldListAllWF rest
+/-- Every nested `Desc` inside a field is well-formed. -/
+def fieldAllWF : Field → Prop
+  | .msg (Desc.mk fs) => (Desc.mk fs).WF ∧ fieldListAllWF fs
+  | .bool | .int => True
+end
+
+mutual
+/-- Every nested `Value` inside a val list is well-formed. -/
+def valListAllWF : List (Int × Val) → Prop
+  | [] => True
+  | (_, v) :: rest => valAllWF v ∧ valListAllWF rest
+/-- Every nested `Value` inside a val is well-formed. -/
+def valAllWF : Val → Prop
+  | .msg (Value.mk vs) => (Value.mk vs).WF ∧ valListAllWF vs
+  | .bool _ | .int _ | .missing => True
+end
+
+theorem fieldListAllWF_tail {f : Int × Field} {rest : List (Int × Field)} :
+    fieldListAllWF (f :: rest) → fieldListAllWF rest := by
+  exact fun h => h.2
+
+theorem fieldListAllWF_head {k : Int} {f : Field} {rest : List (Int × Field)} :
+    fieldListAllWF ((k, f) :: rest) → fieldAllWF f := by
+  exact fun h => h.1
+
+theorem valListAllWF_tail {v : Int × Val} {rest : List (Int × Val)} :
+    valListAllWF (v :: rest) → valListAllWF rest := by
+  exact fun h => h.2
+
+theorem valListAllWF_head {k : Int} {v : Val} {rest : List (Int × Val)} :
+    valListAllWF ((k, v) :: rest) → valAllWF v := by
+  exact fun h => h.1
+
+/-! ## IdCompatible constructors for sorted-cons form -/
+
+/-- addMissing when the insert acts as a cons (key below all others). -/
+theorem IdCompatible.addMissing_cons (k : Int) (f : Field)
+    (rest_ds : List (Int × Field)) (vs : List (Int × Val)) (v2 : List (Int × Val))
+    (hlt_ds : ∀ p ∈ rest_ds, k < p.1)
+    (hlt_v2 : ∀ p ∈ v2, k < p.1)
+    (ih : IdCompatible (.mk rest_ds) (.mk vs) (.mk v2))
+    (h1 : rest_ds.lookup k = none)
+    (h2 : vs.lookup k = none)
+    (h3 : v2.lookup k = none) :
+    IdCompatible (.mk ((k, f) :: rest_ds)) (.mk vs) (.mk ((k, Val.missing) :: v2)) := by
+  have h_eq1 : (Desc.mk rest_ds).insert k f = Desc.mk ((k, f) :: rest_ds) := by
+    unfold Desc.insert Desc.fields; congr 1
+    cases rest_ds with | nil => simp [Desc.sortedInsert] | cons hd _ => simp [Desc.sortedInsert, show k < hd.1 from hlt_ds hd (by simp)]
+  have h_eq2 : (Value.mk v2).insert k Val.missing = Value.mk ((k, Val.missing) :: v2) := by
+    unfold Value.insert Value.vals; congr 1
+    cases v2 with | nil => simp [Value.sortedInsert] | cons hd _ => simp [Value.sortedInsert, show k < hd.1 from hlt_v2 hd (by simp)]
+  rw [← h_eq1, ← h_eq2]
+  exact IdCompatible.addMissing _ _ _ k f ih
+    (by simp [Desc.get?, Desc.fields, h1]) (by simp [Value.get?, Value.vals, h2]) (by simp [Value.get?, Value.vals, h3])
+
+/-- drop when the insert acts as a cons. -/
+theorem IdCompatible.drop_cons (k : Int) (val : Val)
+    (ds : List (Int × Field)) (rest_vs : List (Int × Val)) (v2 : List (Int × Val))
+    (hlt_vs : ∀ p ∈ rest_vs, k < p.1)
+    (ih : IdCompatible (.mk ds) (.mk rest_vs) (.mk v2))
+    (h1 : ds.lookup k = none)
+    (h2 : rest_vs.lookup k = none) :
+    IdCompatible (.mk ds) (.mk ((k, val) :: rest_vs)) (.mk v2) := by
+  have h_eq : (Value.mk rest_vs).insert k val = Value.mk ((k, val) :: rest_vs) := by
+    unfold Value.insert Value.vals; congr 1
+    cases rest_vs with | nil => simp [Value.sortedInsert] | cons hd _ => simp [Value.sortedInsert, show k < hd.1 from hlt_vs hd (by simp)]
+  rw [← h_eq]
+  exact IdCompatible.drop _ _ _ k val ih
+    (by simp [Desc.get?, Desc.fields, h1]) (by simp [Value.get?, Value.vals, h2])
+
+/-- insertInt when the insert acts as a cons. -/
+theorem IdCompatible.insertInt_cons (k : Int) (z : Int)
+    (rest_ds : List (Int × Field)) (rest_vs : List (Int × Val)) (v2 : List (Int × Val))
+    (hlt_ds : ∀ p ∈ rest_ds, k < p.1)
+    (hlt_vs : ∀ p ∈ rest_vs, k < p.1)
+    (hlt_v2 : ∀ p ∈ v2, k < p.1)
+    (ih : IdCompatible (.mk rest_ds) (.mk rest_vs) (.mk v2))
+    (h1 : rest_ds.lookup k = none)
+    (h2 : rest_vs.lookup k = none)
+    (h3 : v2.lookup k = none) :
+    IdCompatible (.mk ((k, .int) :: rest_ds)) (.mk ((k, .int z) :: rest_vs))
+      (.mk ((k, .int z) :: v2)) := by
+  have h_eq1 : (Desc.mk rest_ds).insert k .int = Desc.mk ((k, .int) :: rest_ds) := by
+    unfold Desc.insert Desc.fields; congr 1
+    cases rest_ds with | nil => simp [Desc.sortedInsert] | cons hd _ => simp [Desc.sortedInsert, show k < hd.1 from hlt_ds hd (by simp)]
+  have h_eq2 : (Value.mk rest_vs).insert k (.int z) = Value.mk ((k, .int z) :: rest_vs) := by
+    unfold Value.insert Value.vals; congr 1
+    cases rest_vs with | nil => simp [Value.sortedInsert] | cons hd _ => simp [Value.sortedInsert, show k < hd.1 from hlt_vs hd (by simp)]
+  have h_eq3 : (Value.mk v2).insert k (.int z) = Value.mk ((k, .int z) :: v2) := by
+    unfold Value.insert Value.vals; congr 1
+    cases v2 with | nil => simp [Value.sortedInsert] | cons hd _ => simp [Value.sortedInsert, show k < hd.1 from hlt_v2 hd (by simp)]
+  rw [← h_eq1, ← h_eq2, ← h_eq3]
+  exact IdCompatible.insertInt _ _ _ k z ih
+    (by simp [Desc.get?, Desc.fields, h1]) (by simp [Value.get?, Value.vals, h2]) (by simp [Value.get?, Value.vals, h3])
+
+/-- insertBool when the insert acts as a cons. -/
+theorem IdCompatible.insertBool_cons (k : Int) (b : Bool)
+    (rest_ds : List (Int × Field)) (rest_vs : List (Int × Val)) (v2 : List (Int × Val))
+    (hlt_ds : ∀ p ∈ rest_ds, k < p.1)
+    (hlt_vs : ∀ p ∈ rest_vs, k < p.1)
+    (hlt_v2 : ∀ p ∈ v2, k < p.1)
+    (ih : IdCompatible (.mk rest_ds) (.mk rest_vs) (.mk v2))
+    (h1 : rest_ds.lookup k = none)
+    (h2 : rest_vs.lookup k = none)
+    (h3 : v2.lookup k = none) :
+    IdCompatible (.mk ((k, .bool) :: rest_ds)) (.mk ((k, .bool b) :: rest_vs))
+      (.mk ((k, .bool b) :: v2)) := by
+  have h_eq1 : (Desc.mk rest_ds).insert k .bool = Desc.mk ((k, .bool) :: rest_ds) := by
+    unfold Desc.insert Desc.fields; congr 1
+    cases rest_ds with | nil => simp [Desc.sortedInsert] | cons hd _ => simp [Desc.sortedInsert, show k < hd.1 from hlt_ds hd (by simp)]
+  have h_eq2 : (Value.mk rest_vs).insert k (.bool b) = Value.mk ((k, .bool b) :: rest_vs) := by
+    unfold Value.insert Value.vals; congr 1
+    cases rest_vs with | nil => simp [Value.sortedInsert] | cons hd _ => simp [Value.sortedInsert, show k < hd.1 from hlt_vs hd (by simp)]
+  have h_eq3 : (Value.mk v2).insert k (.bool b) = Value.mk ((k, .bool b) :: v2) := by
+    unfold Value.insert Value.vals; congr 1
+    cases v2 with | nil => simp [Value.sortedInsert] | cons hd _ => simp [Value.sortedInsert, show k < hd.1 from hlt_v2 hd (by simp)]
+  rw [← h_eq1, ← h_eq2, ← h_eq3]
+  exact IdCompatible.insertBool _ _ _ k b ih
+    (by simp [Desc.get?, Desc.fields, h1]) (by simp [Value.get?, Value.vals, h2]) (by simp [Value.get?, Value.vals, h3])
+
+/-- insertMsg when the insert acts as a cons. -/
+theorem IdCompatible.insertMsg_cons (k : Int) (d' : Desc) (v1' v2' : Value)
+    (rest_ds : List (Int × Field)) (rest_vs : List (Int × Val)) (v2 : List (Int × Val))
+    (hlt_ds : ∀ p ∈ rest_ds, k < p.1)
+    (hlt_vs : ∀ p ∈ rest_vs, k < p.1)
+    (hlt_v2 : ∀ p ∈ v2, k < p.1)
+    (ih : IdCompatible (.mk rest_ds) (.mk rest_vs) (.mk v2))
+    (ih_inner : IdCompatible d' v1' v2')
+    (h1 : rest_ds.lookup k = none)
+    (h2 : rest_vs.lookup k = none)
+    (h3 : v2.lookup k = none) :
+    IdCompatible (.mk ((k, .msg d') :: rest_ds)) (.mk ((k, .msg v1') :: rest_vs))
+      (.mk ((k, .msg v2') :: v2)) := by
+  have h_eq1 : (Desc.mk rest_ds).insert k (.msg d') = Desc.mk ((k, .msg d') :: rest_ds) := by
+    unfold Desc.insert Desc.fields; congr 1
+    cases rest_ds with | nil => simp [Desc.sortedInsert] | cons hd _ => simp [Desc.sortedInsert, show k < hd.1 from hlt_ds hd (by simp)]
+  have h_eq2 : (Value.mk rest_vs).insert k (.msg v1') = Value.mk ((k, .msg v1') :: rest_vs) := by
+    unfold Value.insert Value.vals; congr 1
+    cases rest_vs with | nil => simp [Value.sortedInsert] | cons hd _ => simp [Value.sortedInsert, show k < hd.1 from hlt_vs hd (by simp)]
+  have h_eq3 : (Value.mk v2).insert k (.msg v2') = Value.mk ((k, .msg v2') :: v2) := by
+    unfold Value.insert Value.vals; congr 1
+    cases v2 with | nil => simp [Value.sortedInsert] | cons hd _ => simp [Value.sortedInsert, show k < hd.1 from hlt_v2 hd (by simp)]
+  rw [← h_eq1, ← h_eq2, ← h_eq3]
+  exact IdCompatible.insertMsg _ _ _ _ _ _ k ih ih_inner
+    (by simp [Desc.get?, Desc.fields, h1]) (by simp [Value.get?, Value.vals, h2]) (by simp [Value.get?, Value.vals, h3])
+
+/-- inputMissing when the insert acts as a cons. -/
+theorem IdCompatible.inputMissing_cons (k : Int) (f : Field)
+    (rest_ds : List (Int × Field)) (rest_vs : List (Int × Val)) (v2 : List (Int × Val))
+    (hlt_ds : ∀ p ∈ rest_ds, k < p.1)
+    (hlt_vs : ∀ p ∈ rest_vs, k < p.1)
+    (hlt_v2 : ∀ p ∈ v2, k < p.1)
+    (ih : IdCompatible (.mk rest_ds) (.mk rest_vs) (.mk v2))
+    (h1 : rest_ds.lookup k = none)
+    (h2 : rest_vs.lookup k = none)
+    (h3 : v2.lookup k = none) :
+    IdCompatible (.mk ((k, f) :: rest_ds)) (.mk ((k, .missing) :: rest_vs))
+      (.mk ((k, .missing) :: v2)) := by
+  have h_eq1 : (Desc.mk rest_ds).insert k f = Desc.mk ((k, f) :: rest_ds) := by
+    unfold Desc.insert Desc.fields; congr 1
+    cases rest_ds with | nil => simp [Desc.sortedInsert] | cons hd _ => simp [Desc.sortedInsert, show k < hd.1 from hlt_ds hd (by simp)]
+  have h_eq2 : (Value.mk rest_vs).insert k .missing = Value.mk ((k, .missing) :: rest_vs) := by
+    unfold Value.insert Value.vals; congr 1
+    cases rest_vs with | nil => simp [Value.sortedInsert] | cons hd _ => simp [Value.sortedInsert, show k < hd.1 from hlt_vs hd (by simp)]
+  have h_eq3 : (Value.mk v2).insert k .missing = Value.mk ((k, .missing) :: v2) := by
+    unfold Value.insert Value.vals; congr 1
+    cases v2 with | nil => simp [Value.sortedInsert] | cons hd _ => simp [Value.sortedInsert, show k < hd.1 from hlt_v2 hd (by simp)]
+  rw [← h_eq1, ← h_eq2, ← h_eq3]
+  exact IdCompatible.inputMissing _ _ _ k f ih
+    (by simp [Desc.get?, Desc.fields, h1]) (by simp [Value.get?, Value.vals, h2]) (by simp [Value.get?, Value.vals, h3])
+
+/-! ## Case lemmas for the round-trip proof -/
+
+/-
+Case ds=[], vs nonempty.
+-/
+private theorem roundTrip_case2
+    (vs : List (Int × Val))
+    (hvs_sorted : List.Pairwise (fun a b : Int × Val => a.1 < b.1) vs)
+    (hvs_nodup : (List.map Prod.fst vs).Nodup)
+    (hvalid : valid' (.mk []) (.mk vs)) :
+    IdCompatible (.mk []) (.mk vs) (.mk (idCompatTransformAux [] (.mk vs))) := by
+  -- Apply the induction hypothesis to the tail of the list.
+  have h_ind : ∀ (vs' : List (Int × Val)), valid'FoldList [] vs' True → (∀ kv ∈ vs', kv.2 = Val.missing) := by
+    intros vs' hvs' kv hk; induction vs' <;> simp_all +decide [ valid'FoldList ] ;
+    nontriviality;
+    rename_i h₁ h₂ h₃;
+    rename_i h₄op;
+    cases h₄op ; simp_all +decide [ valid'FoldList ];
+    cases ‹Val› <;> simp_all +decide [ valid'Fold ];
+    · exact absurd ( valid'FoldList_extract _ _ _ hvs' ) ( by decide );
+    · exact absurd ( valid'FoldList_extract _ _ _ hvs' ) ( by tauto );
+    · exact absurd ( valid'FoldList_extract _ _ _ hvs' ) ( by simp +decide );
+    · grind;
+  exact idcompat_drop_all_missing vs ( h_ind vs hvalid ) hvs_sorted hvs_nodup
+
+/-- Case vs=[], ds nonempty. -/
+private theorem roundTrip_case3
+    (ds : List (Int × Field))
+    (hds_sorted : List.Pairwise (fun a b : Int × Field => a.1 < b.1) ds)
+    (hds_nodup : (List.map Prod.fst ds).Nodup)
+    (hvalid : valid' (.mk ds) (.mk [])) :
+    IdCompatible (.mk ds) (.mk []) (.mk (idCompatTransformAux ds (.mk []))) := by
   sorry
+
+/-- Case k_v < k_d: drop the value entry. -/
+private theorem roundTrip_case4a
+    (k_d : Int) (f_d : Field) (rest_ds : List (Int × Field))
+    (k_v : Int) (val : Val) (rest_vs : List (Int × Val))
+    (h_lt : k_v < k_d)
+    (hds_sorted : List.Pairwise (fun a b : Int × Field => a.1 < b.1) ((k_d, f_d) :: rest_ds))
+    (hds_nodup : (List.map Prod.fst ((k_d, f_d) :: rest_ds)).Nodup)
+    (hvs_sorted : List.Pairwise (fun a b : Int × Val => a.1 < b.1) ((k_v, val) :: rest_vs))
+    (hvs_nodup : (List.map Prod.fst ((k_v, val) :: rest_vs)).Nodup)
+    (hds_allwf : fieldListAllWF ((k_d, f_d) :: rest_ds))
+    (hvs_allwf : valListAllWF ((k_v, val) :: rest_vs))
+    (hvalid : valid' (.mk ((k_d, f_d) :: rest_ds)) (.mk ((k_v, val) :: rest_vs)))
+    (ih_vs : IdCompatible (.mk ((k_d, f_d) :: rest_ds)) (.mk rest_vs)
+      (.mk (idCompatTransformAux ((k_d, f_d) :: rest_ds) (.mk rest_vs)))) :
+    IdCompatible (.mk ((k_d, f_d) :: rest_ds)) (.mk ((k_v, val) :: rest_vs))
+      (.mk (idCompatTransformAux ((k_d, f_d) :: rest_ds) (.mk ((k_v, val) :: rest_vs)))) := by
+  sorry
+
+/-- Case k_d < k_v: add missing for the descriptor field. -/
+private theorem roundTrip_case4c
+    (k_d : Int) (f_d : Field) (rest_ds : List (Int × Field))
+    (k_v : Int) (val : Val) (rest_vs : List (Int × Val))
+    (h_lt : k_d < k_v)
+    (hds_sorted : List.Pairwise (fun a b : Int × Field => a.1 < b.1) ((k_d, f_d) :: rest_ds))
+    (hds_nodup : (List.map Prod.fst ((k_d, f_d) :: rest_ds)).Nodup)
+    (hvs_sorted : List.Pairwise (fun a b : Int × Val => a.1 < b.1) ((k_v, val) :: rest_vs))
+    (hvs_nodup : (List.map Prod.fst ((k_v, val) :: rest_vs)).Nodup)
+    (hds_allwf : fieldListAllWF ((k_d, f_d) :: rest_ds))
+    (hvs_allwf : valListAllWF ((k_v, val) :: rest_vs))
+    (hvalid : valid' (.mk ((k_d, f_d) :: rest_ds)) (.mk ((k_v, val) :: rest_vs)))
+    (ih_outer : IdCompatible (.mk rest_ds) (.mk ((k_v, val) :: rest_vs))
+      (.mk (idCompatTransformAux rest_ds (.mk ((k_v, val) :: rest_vs))))) :
+    IdCompatible (.mk ((k_d, f_d) :: rest_ds)) (.mk ((k_v, val) :: rest_vs))
+      (.mk (idCompatTransformAux ((k_d, f_d) :: rest_ds) (.mk ((k_v, val) :: rest_vs)))) := by
+  sorry
+
+/-- Case k_v = k_d: matching keys. -/
+private theorem roundTrip_case4b
+    (k : Int) (f_d : Field) (rest_ds : List (Int × Field))
+    (val : Val) (rest_vs : List (Int × Val))
+    (hds_sorted : List.Pairwise (fun a b : Int × Field => a.1 < b.1) ((k, f_d) :: rest_ds))
+    (hds_nodup : (List.map Prod.fst ((k, f_d) :: rest_ds)).Nodup)
+    (hvs_sorted : List.Pairwise (fun a b : Int × Val => a.1 < b.1) ((k, val) :: rest_vs))
+    (hvs_nodup : (List.map Prod.fst ((k, val) :: rest_vs)).Nodup)
+    (hds_allwf : fieldListAllWF ((k, f_d) :: rest_ds))
+    (hvs_allwf : valListAllWF ((k, val) :: rest_vs))
+    (hvalid : valid' (.mk ((k, f_d) :: rest_ds)) (.mk ((k, val) :: rest_vs)))
+    (ih_tails : IdCompatible (.mk rest_ds) (.mk rest_vs)
+      (.mk (idCompatTransformAux rest_ds (.mk rest_vs))))
+    (ih_msg : ∀ (d' : Desc) (v' : Value),
+      fieldListSize d'.fields < fieldListSize ((k, f_d) :: rest_ds) →
+      d'.WF → v'.WF → fieldListAllWF d'.fields → valListAllWF v'.vals →
+      valid' d' v' →
+      IdCompatible d' v' (idCompatTransform d' v')) :
+    IdCompatible (.mk ((k, f_d) :: rest_ds)) (.mk ((k, val) :: rest_vs))
+      (.mk (idCompatTransformAux ((k, f_d) :: rest_ds) (.mk ((k, val) :: rest_vs)))) := by
+  sorry
+
+/-- Well-founded induction helper: assembles the case lemmas. -/
+private theorem idCompatRoundTrip_aux_wf :
+    ∀ (n : Nat) (ds : List (Int × Field)) (vs : List (Int × Val)),
+    fieldListSize ds ≤ n →
+    List.Pairwise (fun a b : Int × Field => a.1 < b.1) ds →
+    (List.map Prod.fst ds).Nodup →
+    List.Pairwise (fun a b : Int × Val => a.1 < b.1) vs →
+    (List.map Prod.fst vs).Nodup →
+    fieldListAllWF ds →
+    valListAllWF vs →
+    valid' (.mk ds) (.mk vs) →
+    IdCompatible (.mk ds) (.mk vs) (.mk (idCompatTransformAux ds (.mk vs))) := by
+  sorry
+
+/-- Core induction lemma: processes both descriptor fields and value entries
+    simultaneously to build the `IdCompatible` derivation.
+    Works on raw lists to enable structural induction.
+
+    The `fieldListAllWF` / `valListAllWF` hypotheses ensure that all
+    nested descriptors and values are well-formed, which is needed for
+    the `insertMsg` case where we recurse into sub-descriptors. -/
+theorem idCompatRoundTrip_aux
+    (ds : List (Int × Field)) (vs : List (Int × Val)) :
+    List.Pairwise (fun a b : Int × Field => a.1 < b.1) ds →
+    (List.map Prod.fst ds).Nodup →
+    List.Pairwise (fun a b : Int × Val => a.1 < b.1) vs →
+    (List.map Prod.fst vs).Nodup →
+    fieldListAllWF ds →
+    valListAllWF vs →
+    valid' (.mk ds) (.mk vs) →
+    IdCompatible (.mk ds) (.mk vs) (.mk (idCompatTransformAux ds (.mk vs))) :=
+  idCompatRoundTrip_aux_wf (fieldListSize ds) ds _ le_rfl
+/- Proof sketch (for future formalization).
+
+We argue by well-founded recursion on `ds.length + vs.length`, processing the
+sorted lists in lockstep and applying one `IdCompatible` constructor per step.
+Throughout, "the transform" means `idCompatTransformAux ds (.mk vs)`.
+
+Case 1: `ds = []` and `vs = []`.
+  The transform is `[]`. Apply `IdCompatible.emp`.
+
+Case 2: `ds = []` and `vs = (k_v, val) :: rest_vs`.
+  Since `ds` is empty, `valid'` forces `val = .missing`. Apply `IdCompatible.drop`.
+
+Case 3: `ds = (k_d, f_d) :: rest_ds` and `vs = []`.
+  The transform pads every key in `ds` with `.missing`. Apply `IdCompatible.addMissing`.
+
+Case 4: Compare `k_v` and `k_d`:
+  4a. `k_v < k_d`: drop the value entry.
+  4b. `k_v = k_d`: match on field/value type.
+  4c. `k_d < k_v`: add missing for the descriptor field.
+-/
+
+/-- Recursive well-formedness for a `Desc`: the top-level is well-formed
+    and every nested descriptor inside its fields is also recursively WF. -/
+def Desc.AllWF (d : Desc) : Prop := d.WF ∧ fieldListAllWF d.fields
+
+/-- Recursive well-formedness for a `Value`: the top-level is well-formed
+    and every nested value inside its vals is also recursively WF. -/
+def Value.AllWF' (v : Value) : Prop := v.WF ∧ valListAllWF v.vals
+
+/-- The round-trip theorem with recursive well-formedness.
+
+    The `insertMsg` case of `IdCompatible` recurses into nested
+    descriptors/values that must also be sorted and duplicate-free,
+    hence the need for `AllWF` / `AllWF'` instead of plain `WF`. -/
+theorem idCompatRoundTrip (v : Value) (d : Desc) :
+    d.AllWF → v.AllWF' → valid' d v → ⟨ v ≼ idCompatTransform d v ⟩∷ d := by
+  intro ⟨hd, hd_all⟩ ⟨hv, hv_all⟩ hvalid
+  cases d with | mk ds =>
+  cases v with | mk vs =>
+  simp only [idCompatTransform]
+  exact idCompatRoundTrip_aux ds vs hd.1 hd.2 hv.1 hv.2 hd_all hv_all hvalid
 
 end Pollux.InterParse

@@ -486,7 +486,7 @@ theorem interParseOk (v : Value) (d : Desc) :
     show Parser.map (Parser.rep _) _ enc = _
     unfold Parser.map
     rw [hrep]
-  · -- Compatibility: full-descriptor roundtrip yields `Compatible`.
+  · -- Compatibility: full-descriptor roundtrip yields `SchemaCorrectCompatible`.
     exact fullDescriptor_roundTrip x st1 hsc_x
 
 end Pollux.InterParse
