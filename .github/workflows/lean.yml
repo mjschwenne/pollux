@@ -7,6 +7,7 @@ on:
     paths:
       - "**/*.lean"
   pull_request:
+  workflow_dispatch:
 
 jobs:
   build-lean-linux:
