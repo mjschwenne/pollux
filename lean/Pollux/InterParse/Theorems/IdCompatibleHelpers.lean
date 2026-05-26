@@ -32,7 +32,7 @@ If every key in `vs` has the same lookup in `fs` and `gs`, then
 theorem valid'FoldList_lookup_congr (fs gs : List (Int × Field)) (vs : List (Int × Val)) (P : Prop) :
     (∀ kv ∈ vs, fs.lookup kv.1 = gs.lookup kv.1) →
     valid'FoldList fs vs P → valid'FoldList gs vs P := by
-  intro h_lookup h_valid
+  intro h_lookup h_valid ; simp_all +decide;
   induction' vs with kv vs ih generalizing P <;> simp_all +decide [ valid'FoldList ];
   convert ih _ _ h_valid using 1;
   · exact ⟨ fun h => valid'Fold_lookup_congr _ _ _ _ _ ( h_lookup _ _ ( Or.inl rfl ) |> Eq.symm ) h, fun h => valid'Fold_lookup_congr _ _ _ _ _ ( h_lookup _ _ ( Or.inl rfl ) ) h ⟩;
@@ -165,8 +165,8 @@ theorem idCompatTransformAux_keys_gt (rest_ds : List (Int × Field)) (v : Value)
     (∀ p ∈ rest_ds, k < p.1) →
     ∀ p ∈ idCompatTransformAux rest_ds v, k < p.1 := by
   -- By idCompatTransformAux_keys, the keys of the transform result are the same as the keys of rest_ds.
-  have h_keys_eq : (idCompatTransformAux rest_ds v).map Prod.fst = rest_ds.map Prod.fst := by
-    exact?;
+  have h_keys_eq : (idCompatTransformAux rest_ds v).map Prod.fst = rest_ds.map Prod.fst :=
+    idCompatTransformAux_keys rest_ds v
   intro h p hp;
   have := List.mem_map.mp ( h_keys_eq ▸ List.mem_map.mpr ⟨ p, hp, rfl ⟩ ) ; aesop;
 

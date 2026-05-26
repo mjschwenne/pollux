@@ -82,12 +82,7 @@ private theorem roundTrip_case4a
     (k_v : Int) (val : Val) (rest_vs : List (Int × Val))
     (h_lt : k_v < k_d)
     (hds_sorted : List.Pairwise (fun a b : Int × Field => a.1 < b.1) ((k_d, f_d) :: rest_ds))
-    (hds_nodup : (List.map Prod.fst ((k_d, f_d) :: rest_ds)).Nodup)
     (hvs_sorted : List.Pairwise (fun a b : Int × Val => a.1 < b.1) ((k_v, val) :: rest_vs))
-    (hvs_nodup : (List.map Prod.fst ((k_v, val) :: rest_vs)).Nodup)
-    (hds_allwf : fieldListAllWF ((k_d, f_d) :: rest_ds))
-    (hvs_allwf : valListAllWF ((k_v, val) :: rest_vs))
-    (hvalid : valid' (.mk ((k_d, f_d) :: rest_ds)) (.mk ((k_v, val) :: rest_vs)))
     (ih_vs : IdCompatible (.mk ((k_d, f_d) :: rest_ds)) (.mk rest_vs)
       (.mk (idCompatTransformAux ((k_d, f_d) :: rest_ds) (.mk rest_vs)))) :
     IdCompatible (.mk ((k_d, f_d) :: rest_ds)) (.mk ((k_v, val) :: rest_vs))
@@ -109,12 +104,7 @@ private theorem roundTrip_case4c
     (k_v : Int) (val : Val) (rest_vs : List (Int × Val))
     (h_lt : k_d < k_v)
     (hds_sorted : List.Pairwise (fun a b : Int × Field => a.1 < b.1) ((k_d, f_d) :: rest_ds))
-    (hds_nodup : (List.map Prod.fst ((k_d, f_d) :: rest_ds)).Nodup)
     (hvs_sorted : List.Pairwise (fun a b : Int × Val => a.1 < b.1) ((k_v, val) :: rest_vs))
-    (hvs_nodup : (List.map Prod.fst ((k_v, val) :: rest_vs)).Nodup)
-    (hds_allwf : fieldListAllWF ((k_d, f_d) :: rest_ds))
-    (hvs_allwf : valListAllWF ((k_v, val) :: rest_vs))
-    (hvalid : valid' (.mk ((k_d, f_d) :: rest_ds)) (.mk ((k_v, val) :: rest_vs)))
     (ih_outer : IdCompatible (.mk rest_ds) (.mk ((k_v, val) :: rest_vs))
       (.mk (idCompatTransformAux rest_ds (.mk ((k_v, val) :: rest_vs))))) :
     IdCompatible (.mk ((k_d, f_d) :: rest_ds)) (.mk ((k_v, val) :: rest_vs))
@@ -242,7 +232,7 @@ private theorem idCompatRoundTrip_aux_wf :
       rcases lt_trichotomy k_v k_d with h_lt | h_eq | h_gt
       · -- case 4a: k_v < k_d, drop value entry
         apply roundTrip_case4a k_d f_d rest_ds k_v val rest_vs h_lt
-          hds_sorted hds_nodup hvs_sorted hvs_nodup hds_allwf hvs_allwf hvalid
+          hds_sorted hvs_sorted
         exact ih_vs ((k_d, f_d) :: rest_ds) hn hds_sorted hds_nodup
           hvs_sorted.tail hvs_nodup.of_cons hds_allwf (valListAllWF_tail hvs_allwf)
           (valid'_cons _ (k_v, val) rest_vs hvalid)
@@ -267,7 +257,7 @@ private theorem idCompatRoundTrip_aux_wf :
             hv'_wf.1 hv'_wf.2 hd'_allwf hv'_allwf hvalid'
       · -- case 4c: k_d < k_v, add missing
         apply roundTrip_case4c k_d f_d rest_ds k_v val rest_vs h_gt
-          hds_sorted hds_nodup hvs_sorted hvs_nodup hds_allwf hvs_allwf hvalid
+          hds_sorted hvs_sorted
         exact ih_n (fieldListSize rest_ds) (by omega) rest_ds ((k_v, val) :: rest_vs) le_rfl
           hds_sorted.tail hds_nodup.of_cons hvs_sorted hvs_nodup
           (fieldListAllWF_tail hds_allwf) hvs_allwf
