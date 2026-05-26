@@ -402,6 +402,60 @@ theorem ext_lookup (v₁ v₂ : Value) :
 
 end Value
 
+/-! ## Recursive well-formedness
+
+The plain `Desc.WF` / `Value.WF` predicates only constrain the top-level
+sorted / no-dup invariants. The `AllWF` predicates below additionally
+require that every **nested** `Desc` / `Value` inside a `.msg` field is
+also well-formed. They are needed any time a proof recurses structurally
+through nested messages (e.g. the `IdCompatible` round-trip). -/
+
+mutual
+/-- Every nested `Desc` inside a field list is well-formed. -/
+def fieldListAllWF : List (Int × Field) → Prop
+  | [] => True
+  | (_, f) :: rest => fieldAllWF f ∧ fieldListAllWF rest
+/-- Every nested `Desc` inside a field is well-formed. -/
+def fieldAllWF : Field → Prop
+  | .msg (Desc.mk fs) => (Desc.mk fs).WF ∧ fieldListAllWF fs
+  | .bool | .int => True
+end
+
+mutual
+/-- Every nested `Value` inside a val list is well-formed. -/
+def valListAllWF : List (Int × Val) → Prop
+  | [] => True
+  | (_, v) :: rest => valAllWF v ∧ valListAllWF rest
+/-- Every nested `Value` inside a val is well-formed. -/
+def valAllWF : Val → Prop
+  | .msg (Value.mk vs) => (Value.mk vs).WF ∧ valListAllWF vs
+  | .bool _ | .int _ | .missing => True
+end
+
+theorem fieldListAllWF_tail {f : Int × Field} {rest : List (Int × Field)} :
+    fieldListAllWF (f :: rest) → fieldListAllWF rest :=
+  fun h => h.2
+
+theorem fieldListAllWF_head {k : Int} {f : Field} {rest : List (Int × Field)} :
+    fieldListAllWF ((k, f) :: rest) → fieldAllWF f :=
+  fun h => h.1
+
+theorem valListAllWF_tail {v : Int × Val} {rest : List (Int × Val)} :
+    valListAllWF (v :: rest) → valListAllWF rest :=
+  fun h => h.2
+
+theorem valListAllWF_head {k : Int} {v : Val} {rest : List (Int × Val)} :
+    valListAllWF ((k, v) :: rest) → valAllWF v :=
+  fun h => h.1
+
+/-- Recursive well-formedness for a `Desc`: the top-level is well-formed
+    and every nested descriptor inside its fields is also recursively WF. -/
+def Desc.AllWF (d : Desc) : Prop := d.WF ∧ fieldListAllWF d.fields
+
+/-- Recursive well-formedness for a `Value`: the top-level is well-formed
+    and every nested value inside its vals is also recursively WF. -/
+def Value.AllWF (v : Value) : Prop := v.WF ∧ valListAllWF v.vals
+
 /-! ## Map helper: full outer join -/
 
 /-- Full outer join of two association lists. Corresponds to `merge` from stdpp. -/

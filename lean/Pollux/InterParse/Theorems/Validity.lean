@@ -230,6 +230,49 @@ theorem valInMap_smallerDepth' (v : Value) (k : Int) (val : Value) :
     valueDepth val < valueDepth v := by
       exact fun a => valInMap_smallerDepth v k val a
 
+/-! ## Generic `valid'Fold` / `valid'FoldList` manipulators -/
+
+/-- Extract the accumulated predicate from `valid'Fold`. -/
+theorem valid'Fold_extract (ds : List (Int × Field)) (k : Int) (v : Val) (P : Prop) :
+    valid'Fold ds k v P → P := by
+  unfold valid'Fold; cases v <;> simp
+
+/-- Extract the accumulated predicate from `valid'FoldList`. -/
+theorem valid'FoldList_extract (ds : List (Int × Field)) (vs : List (Int × Val)) (P : Prop) :
+    valid'FoldList ds vs P → P := by
+  induction vs generalizing P with
+  | nil => exact id
+  | cons hd tl ih =>
+    intro h; exact valid'Fold_extract ds hd.1 hd.2 _ (ih _ h)
+
+/-- Weaken the accumulator in `valid'Fold`. -/
+theorem valid'Fold_weaken (ds : List (Int × Field)) (k : Int) (v : Val) (P Q : Prop) :
+    (P → Q) → valid'Fold ds k v P → valid'Fold ds k v Q := by
+  intro hPQ; unfold valid'Fold; cases v <;> simp <;> tauto
+
+/-- Weaken the accumulator in `valid'FoldList`. -/
+theorem valid'FoldList_weaken (ds : List (Int × Field)) (vs : List (Int × Val))
+    (P Q : Prop) :
+    (P → Q) → valid'FoldList ds vs P → valid'FoldList ds vs Q := by
+  induction vs generalizing P Q with
+  | nil => exact id
+  | cons hd tl ih =>
+    intro hPQ h
+    show valid'FoldList ds tl (valid'Fold ds hd.1 hd.2 Q)
+    exact ih _ _ (valid'Fold_weaken ds hd.1 hd.2 P Q hPQ) h
+
+/-- Dropping the head preserves `valid'`. -/
+theorem valid'_cons (ds : List (Int × Field)) (kv : Int × Val) (vs : List (Int × Val)) :
+    valid'FoldList ds (kv :: vs) True → valid'FoldList ds vs True := by
+  intro h; unfold valid'FoldList at h
+  exact valid'FoldList_weaken ds vs _ _ (fun _ => trivial) h
+
+/-- Extract info about the head entry from `valid'`. -/
+theorem valid'_entry_head (ds : List (Int × Field)) (kv : Int × Val) (vs : List (Int × Val)) :
+    valid'FoldList ds (kv :: vs) True → valid'Fold ds kv.1 kv.2 True := by
+  intro h; unfold valid'FoldList at h
+  exact valid'FoldList_extract ds vs _ h
+
 /-- Per-entry validity extraction: if a list is `valid'`, then each entry
     in the list satisfies `valid'Fold`. -/
 theorem valid'FoldList_mem (fs : List (Int × Field)) :
