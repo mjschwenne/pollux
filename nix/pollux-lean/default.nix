@@ -81,7 +81,7 @@ let
     name = "lean-all-deps";
     src = depSrc;
 
-    outputHash = "sha256-/GG29d61qZMB+v1nNyx9wbDcCQiBYFMeHriwRBExC5Q=";
+    outputHash = "sha256-WVWAdJ6EY0Lbb+GzOS2jEcJssawWRyDu+hg4rztRjkI=";
     outputHashMode = "recursive";
     dontFixup = true;
 
