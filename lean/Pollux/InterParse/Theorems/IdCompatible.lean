@@ -67,6 +67,9 @@ inductive IdCompatible : Desc → Value → Value → Prop where
 
 notation "⟨ " v1 " ≼ " v2 " ⟩∷ " d => IdCompatible d v1 v2
 
+def IdCompatibleWrapper (d _d' : Desc) (v₁ v₂ : Value) : Prop :=
+  IdCompatible d v₁ v₂
+
 /-! ## Round-trip transformation
 
 The transformation `idCompatTransform d v` produces the value that an

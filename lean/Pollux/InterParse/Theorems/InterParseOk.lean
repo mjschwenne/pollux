@@ -7,6 +7,8 @@ import Pollux.InterParse.Parser
 import Pollux.InterParse.Serializer
 import Pollux.InterParse.Theorems.SchemaCorrect
 import Pollux.InterParse.Theorems.SchemaCorrectCompatible
+import Pollux.InterParse.Theorems.IdCompatible
+import Pollux.InterParse.Theorems.IdCompatibleRoundTrip
 import Pollux.InterParse.Theorems.Serialization
 import Pollux.InterParse.Theorems.ValList
 
@@ -349,7 +351,10 @@ private theorem parseVal_serialVal_correct
     | int _ => exact hwfd'.elim
     | missing => exact hwfd'.elim
 
-theorem interParseOk (v : Value) (d : Desc) :
+theorem idInterParseOk (v : Value) (d : Desc) :
+  d.AllWF → v.AllWF → valid' d v → LimitParseOkCompat'' IdCompatibleWrapper parseValue serialValue d d v := sorry
+
+theorem schemaCorrectInterParseOk (v : Value) (d : Desc) :
     ⟨ v ∷ d ⟩ →
     LimitParseOkCompat'' SchemaCorrectCompatible parseValue serialValue d d v := by
   intro hsc
