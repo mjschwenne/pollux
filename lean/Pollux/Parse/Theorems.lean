@@ -379,6 +379,128 @@ theorem serializer_recurSt_unfold {wf : σ → α → Prop}
     ) st x := by
   rw [ Serializer.recurSt]
 
+/-! ## Weak repetition correctness -/
+
+/-- Convert a per-element well-formedness `wf x` (for `x` in a list) to the
+    list-level `Serializer.repWf`. -/
+theorem repWf_of_forall {α : Type} (wf : α → Prop) :
+    ∀ (l : List α),
+    (∀ x ∈ l, wf x) → Serializer.repWf wf l := by
+  intro l
+  induction l with
+  | nil => intro _; trivial
+  | cons hd tl ih =>
+    intro h
+    refine ⟨h hd List.mem_cons_self, ih ?_⟩
+    intro x hx; exact h x (List.mem_cons_of_mem _ hx)
+
+/-- The "weak full" version of `repCorrect`: only requires per-element correctness
+    on elements actually in the list, with bounded encoding length. Adapted from
+    Rocq's `RepCorrectWeakFull`. The well-formedness predicate `wfα` is taken
+    explicitly so it can differ from the serializer's intrinsic phantom wf. The
+    serializer is taken as a raw function to avoid the phantom wfα mismatch. -/
+theorem repCorrectWeakFull {α : Type} (wfα : α → Prop)
+    (ser : α → Result ι Unit) (par : Parser ι α)
+    (l : List α) (bound : Nat) :
+    (∃ msg data, par (Input.default : ι) =
+      .failure .recoverable ⟨msg, Input.default, data⟩) →
+    (∀ x enc, wfα x → ser x = .success () enc → Input.length enc > 0) →
+    (∀ x encElem, x ∈ l → ser x = .success () encElem →
+        Input.length encElem ≤ bound →
+        ∀ rest, wfα x → ser x = .success () encElem →
+        par (Input.app encElem rest) = .success x rest) →
+    ∀ enc, Serializer.repWf wfα l →
+        @Serializer.rep' ι _ α wfα ser l = .success () enc →
+        Input.length enc ≤ bound →
+        Parser.rep par enc = .success l Input.default := by
+  intro hparEmp hpro
+  induction l with
+  | nil =>
+    intro hpOk enc _hwf hser _hbound
+    have henc : enc = Input.default := by
+      show enc = (Input.default : ι)
+      have : @Serializer.rep' ι _ α wfα ser [] = .success () Input.default := rfl
+      rw [this] at hser
+      injection hser with _ h; exact h.symm
+    subst henc
+    obtain ⟨msg, data, hpar⟩ := hparEmp
+    show Parser.rep par Input.default = _
+    unfold Parser.rep
+    rw [parser_rep'_unfold]
+    rw [hpar]
+  | cons hd tl ih =>
+    intro hpOk enc ⟨hwfH, hwfT⟩ hser hbound
+    have hser2 : @Serializer.rep ι _ α wfα ser (hd :: tl) =
+        .success () enc := hser
+    rw [serialRep_first_inversion] at hser2
+    obtain ⟨encH, encT, hH, hT, henc⟩ := hser2
+    have hT : @Serializer.rep' ι _ α wfα ser tl = .success () encT := hT
+    have hHlen_pos : Input.length encH > 0 := hpro hd encH hwfH hH
+    have hHlen : Input.length encH ≤ bound := by
+      subst henc; rw [Input.app_length] at hbound; omega
+    have hTlen : Input.length encT ≤ bound := by
+      subst henc; rw [Input.app_length] at hbound; omega
+    have hpOk_tl : ∀ x encElem, x ∈ tl → ser x = .success () encElem →
+        Input.length encElem ≤ bound → ∀ rest, wfα x → ser x = .success () encElem →
+        par (Input.app encElem rest) = .success x rest :=
+      fun x encElem hx => hpOk x encElem (List.mem_cons_of_mem _ hx)
+    have hH_par : par (Input.app encH encT) = .success hd encT :=
+      hpOk hd encH List.mem_cons_self hH hHlen encT hwfH hH
+    have hT_par : Parser.rep par encT = .success tl Input.default :=
+      ih hpOk_tl encT hwfT hT hTlen
+    subst henc
+    show Parser.rep par (Input.app encH encT) = _
+    unfold Parser.rep
+    rw [parser_rep'_unfold, hH_par]
+    have hlen : Input.length encT < Input.length (Input.app encH encT) := by
+      rw [Input.app_length]; omega
+    have : Parser.rep' par encT = .success tl Input.default := hT_par
+    show (if Input.length encT < Input.length (Input.app encH encT) then
+            match Parser.rep' par encT with | _ => _ else _) = _
+    rw [if_pos hlen]
+    show (match Parser.rep' par encT with | _ => _) = _
+    rw [this]
+
+/-- Generalisation of `repCorrectWeakFull` where the parser may produce
+    `f x` instead of `x` for each list element. `repCorrectWeakFull` is
+    the special case `f = id`. -/
+theorem repCorrectWeakFullMap {α : Type} (wfα : α → Prop)
+    (ser : α → Result ι Unit) (par : Parser ι α)
+    (f : α → α)
+    (l : List α) (bound : Nat) :
+    (∃ msg data, par (Input.default : ι) =
+      .failure .recoverable ⟨msg, Input.default, data⟩) →
+    (∀ x enc, wfα x → ser x = .success () enc → Input.length enc > 0) →
+    (∀ x encElem, x ∈ l → ser x = .success () encElem →
+        Input.length encElem ≤ bound →
+        ∀ rest, wfα x → ser x = .success () encElem →
+        par (Input.app encElem rest) = .success (f x) rest) →
+    ∀ enc, Serializer.repWf wfα l →
+        @Serializer.rep' ι _ α wfα ser l = .success () enc →
+        Input.length enc ≤ bound →
+        Parser.rep par enc = .success (l.map f) Input.default := by
+  intro hparEmp hpro hpOk enc hwf hser hbound
+  induction' l with hd tl ih generalizing enc bound;
+  · rw [ show enc = Input.default from by { cases hser; rfl } ] ; unfold Parser.rep; rw [ parser_rep'_unfold ] ; aesop;
+  · obtain ⟨encH, encT, hH, hT, henc⟩ : ∃ encH encT, ser hd = .success () encH ∧ @Serializer.rep' ι _ α wfα ser tl = .success () encT ∧ enc = Input.app encH encT := by
+      unfold Serializer.rep' at hser;
+      cases h : ser hd <;> cases h' : Serializer.rep' ser tl <;> simp +decide [ h, h' ] at hser ⊢;
+      exact hser.symm;
+    have hHlen_pos : Input.length encH > 0 := hpro hd encH (by
+    exact hwf.1) hH
+    have hHlen : Input.length encH ≤ bound := by
+      exact le_trans ( by rw [ henc, Input.app_length ] ; exact Nat.le_add_right _ _ ) hbound
+    have hTlen : Input.length encT ≤ bound := by
+      rw [henc] at hbound; rw [Input.app_length] at hbound; omega;
+    have hH_par : par (Input.app encH encT) = .success (f hd) encT := by
+      exact hpOk hd encH ( by simp +decide ) hH hHlen encT ( by cases hwf; tauto ) hH
+    have hT_par : Parser.rep par encT = .success (List.map f tl) Input.default := by
+      exact ih bound ( fun x encElem hx => hpOk x encElem ( List.mem_cons_of_mem _ hx ) ) encT hwf.2 hT hTlen
+    simp_all +decide [ Parser.rep ];
+    rw [ parser_rep'_unfold, hH_par ];
+    simp +decide [ Input.app_length, hT_par ];
+    linarith
+
 /-! ## Recursive combinator correctness -/
 
 theorem recursive_correct {wf : α → Prop}

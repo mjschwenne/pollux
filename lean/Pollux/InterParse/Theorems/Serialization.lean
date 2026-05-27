@@ -1,7 +1,7 @@
 /-
   Pollux.InterParse.Theorems.Serialization — Serialization helper lemmas:
-  `willEncode` non-emptiness, weakening under `erase`, the `serialValue`
-  inversion lemma for insert, and the encoding-length theorem.
+  `willEncode` non-emptiness and weakening, the `serialValue` inversion
+  lemma for insert, and the encoding-length theorem.
 -/
 import Pollux.Parse.Input
 import Pollux.Parse.Theorems
@@ -49,57 +49,6 @@ theorem willEncode_nonEmpty (d : Desc) (k : Int) (v : Val) (enc : List UInt8) :
          exact aux _ _ _ _ hser)
 
 /-! ## Well-formedness -/
-
-theorem valueWf_weaken (v : Value) (d : Desc) (k : Int) :
-    d.WF → v.get? k = none → (valueWf d v ↔ valueWf (d.erase k) v) := by
-  intro hwf hno
-  -- All keys in `v.vals` differ from `k`.
-  have h_keys_ne : ∀ kv ∈ v.vals, kv.1 ≠ k := by
-    intro kv hkv hk
-    unfold Value.get? at hno
-    rw [List.lookup_eq_none_iff] at hno
-    have := hno kv hkv
-    -- this : k != kv.1 (as Prop, i.e. (k != kv.1) = true)
-    simp_all
-  -- For any key `k' ≠ k`, lookup in `d.fields` and `(d.erase k).fields` agree.
-  have h_lookup_eq : ∀ k', k' ≠ k → (d.erase k).fields.lookup k' = d.fields.lookup k' := by
-    intro k' hne
-    have := Desc.get?_erase_ne d k k' hwf (Ne.symm hne)
-    unfold Desc.get? at this
-    exact this
-  -- Destructure to expose underlying lists, then induct.
-  rcases v with ⟨vs⟩
-  rcases d with ⟨fs⟩
-  simp only [Value.vals] at h_keys_ne
-  -- Specialize the lookup-equality helper to the destructured form.
-  have h_lookup_eq' : ∀ k', k' ≠ k → (Desc.sortedErase k fs).lookup k' = fs.lookup k' := by
-    intro k' hne
-    have := h_lookup_eq k' hne
-    simpa [Desc.fields, Desc.erase] using this
-  -- Generalize the accumulator and prove by induction.
-  suffices h : ∀ (vs : List (Int × Val)) (acc : Prop),
-      (∀ kv ∈ vs, kv.1 ≠ k) →
-      (valWfFoldList fs vs acc ↔ valWfFoldList (Desc.sortedErase k fs) vs acc) by
-    -- Both sides reduce to `valWfFoldList _ vs True` since both `Desc` and `Value` are now in
-    -- constructor form.
-    show valWfFoldList fs vs True ↔ valWfFoldList (Desc.sortedErase k fs) vs True
-    exact h vs True h_keys_ne
-  intro vs acc hkeys
-  induction' vs with hd tl ih generalizing acc
-  · exact Iff.rfl
-  · obtain ⟨k', val⟩ := hd
-    have hne : k' ≠ k := hkeys (k', val) (List.mem_cons_self)
-    have hne_keys_tl : ∀ kv ∈ tl, kv.1 ≠ k :=
-      fun kv hkv => hkeys kv (List.mem_cons_of_mem _ hkv)
-    -- The two folds will agree if `valWfFold` agrees on the head.
-    have hfold_eq : valWfFold fs k' val acc
-                   = valWfFold (Desc.sortedErase k fs) k' val acc := by
-      unfold valWfFold
-      rw [h_lookup_eq' k' hne]
-    show valWfFoldList fs tl (valWfFold fs k' val acc)
-       ↔ valWfFoldList (Desc.sortedErase k fs) tl (valWfFold (Desc.sortedErase k fs) k' val acc)
-    rw [hfold_eq]
-    exact ih _ hne_keys_tl
 
 theorem willEncode_weaken (kv : Int × Val) (d : Desc) (k : Int) (v : Value) :
     d.WF →

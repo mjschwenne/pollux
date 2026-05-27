@@ -297,4 +297,115 @@ theorem valid'FoldList_mem (fs : List (Int × Field)) :
       rw [valid'FoldList_eq fs tl True]
       exact ⟨hp_tl, trivial⟩
 
+/-! ## `valueWf` decomposition lemmas -/
+
+/-- `valWfFold` is monotone in `acc`: it can be split into a closed-form
+    "per-entry" predicate (`valWfFold _ _ _ True`) and `acc`. -/
+private theorem valWfFold_split (fs : List (Int × Field)) (k : Int) (v : Val)
+    (acc : Prop) :
+    valWfFold fs k v acc ↔ valWfFold fs k v True ∧ acc := by
+  unfold valWfFold
+  cases fs.lookup k with
+  | none =>
+    simp only []
+    exact ⟨fun h => ⟨trivial, h⟩, fun h => h.2⟩
+  | some f =>
+    cases f <;> cases v <;>
+      first
+        | exact ⟨fun h => ⟨h, trivial⟩, fun h => h.elim⟩
+        | (simp only [and_assoc]; tauto)
+
+/-- `valWfFoldList fs vs acc` decomposes into per-entry constraints AND `acc`. -/
+private theorem valWfFoldList_decomp (fs : List (Int × Field)) :
+    ∀ (vs : List (Int × Val)) (acc : Prop),
+    valWfFoldList fs vs acc ↔
+      (∀ kv : Int × Val, kv ∈ vs → valWfFold fs kv.1 kv.2 True) ∧ acc := by
+  intro vs
+  induction vs with
+  | nil =>
+    intro acc
+    show acc ↔
+      (∀ kv : Int × Val, kv ∈ ([] : List (Int × Val)) → valWfFold fs kv.1 kv.2 True) ∧ acc
+    simp
+  | cons hd tl ih =>
+    intro acc
+    obtain ⟨k, v⟩ := hd
+    show valWfFoldList fs tl (valWfFold fs k v acc) ↔
+      (∀ kv : Int × Val, kv ∈ ((k, v) :: tl) → valWfFold fs kv.1 kv.2 True) ∧ acc
+    rw [ih (valWfFold fs k v acc), valWfFold_split fs k v acc]
+    constructor
+    · rintro ⟨htl, hhd, hacc⟩
+      refine ⟨?_, hacc⟩
+      intro kv hkv
+      cases List.mem_cons.mp hkv with
+      | inl heq => subst heq; exact hhd
+      | inr htl' => exact htl _ htl'
+    · rintro ⟨hall, hacc⟩
+      refine ⟨?_, hall (k, v) List.mem_cons_self, hacc⟩
+      intro kv hkv
+      exact hall kv (List.mem_cons_of_mem _ hkv)
+
+/-- Helper: extract `valWfFold` for a specific entry from `valueWf`. -/
+theorem valueWf_mem (d : Desc) (v : Value) :
+    valueWf d v →
+    ∀ (k : Int) (val : Val), (k, val) ∈ v.vals →
+    valWfFold d.fields k val True := by
+  intro hwf k val hmem
+  rcases d with ⟨fs⟩
+  rcases v with ⟨vs⟩
+  have hwf' : valWfFoldList fs vs True := hwf
+  exact ((valWfFoldList_decomp fs vs True).mp hwf').1 (k, val) hmem
+
+/-- `valueWf` is invariant under erasing a key that doesn't appear in `v`. -/
+theorem valueWf_weaken (v : Value) (d : Desc) (k : Int) :
+    d.WF → v.get? k = none → (valueWf d v ↔ valueWf (d.erase k) v) := by
+  intro hwf hno
+  -- All keys in `v.vals` differ from `k`.
+  have h_keys_ne : ∀ kv ∈ v.vals, kv.1 ≠ k := by
+    intro kv hkv hk
+    unfold Value.get? at hno
+    rw [List.lookup_eq_none_iff] at hno
+    have := hno kv hkv
+    -- this : k != kv.1 (as Prop, i.e. (k != kv.1) = true)
+    simp_all
+  -- For any key `k' ≠ k`, lookup in `d.fields` and `(d.erase k).fields` agree.
+  have h_lookup_eq : ∀ k', k' ≠ k → (d.erase k).fields.lookup k' = d.fields.lookup k' := by
+    intro k' hne
+    have := Desc.get?_erase_ne d k k' hwf (Ne.symm hne)
+    unfold Desc.get? at this
+    exact this
+  -- Destructure to expose underlying lists, then induct.
+  rcases v with ⟨vs⟩
+  rcases d with ⟨fs⟩
+  simp only [Value.vals] at h_keys_ne
+  -- Specialize the lookup-equality helper to the destructured form.
+  have h_lookup_eq' : ∀ k', k' ≠ k → (Desc.sortedErase k fs).lookup k' = fs.lookup k' := by
+    intro k' hne
+    have := h_lookup_eq k' hne
+    simpa [Desc.fields, Desc.erase] using this
+  -- Generalize the accumulator and prove by induction.
+  suffices h : ∀ (vs : List (Int × Val)) (acc : Prop),
+      (∀ kv ∈ vs, kv.1 ≠ k) →
+      (valWfFoldList fs vs acc ↔ valWfFoldList (Desc.sortedErase k fs) vs acc) by
+    -- Both sides reduce to `valWfFoldList _ vs True` since both `Desc` and `Value` are now in
+    -- constructor form.
+    show valWfFoldList fs vs True ↔ valWfFoldList (Desc.sortedErase k fs) vs True
+    exact h vs True h_keys_ne
+  intro vs acc hkeys
+  induction' vs with hd tl ih generalizing acc
+  · exact Iff.rfl
+  · obtain ⟨k', val⟩ := hd
+    have hne : k' ≠ k := hkeys (k', val) (List.mem_cons_self)
+    have hne_keys_tl : ∀ kv ∈ tl, kv.1 ≠ k :=
+      fun kv hkv => hkeys kv (List.mem_cons_of_mem _ hkv)
+    -- The two folds will agree if `valWfFold` agrees on the head.
+    have hfold_eq : valWfFold fs k' val acc
+                   = valWfFold (Desc.sortedErase k fs) k' val acc := by
+      unfold valWfFold
+      rw [h_lookup_eq' k' hne]
+    show valWfFoldList fs tl (valWfFold fs k' val acc)
+       ↔ valWfFoldList (Desc.sortedErase k fs) tl (valWfFold (Desc.sortedErase k fs) k' val acc)
+    rw [hfold_eq]
+    exact ih _ hne_keys_tl
+
 end Pollux.InterParse

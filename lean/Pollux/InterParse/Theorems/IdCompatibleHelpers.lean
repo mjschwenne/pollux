@@ -339,4 +339,13 @@ theorem IdCompatible.inputMissing_cons (k : Int) (f : Field)
   exact IdCompatible.inputMissing _ _ _ k f ih
     (by simp [Desc.get?, Desc.fields, h1]) (by simp [Value.get?, Value.vals, h2]) (by simp [Value.get?, Value.vals, h3])
 
+/-! ## listToValue / entryTransform / idCompatTransform bridge -/
+
+/-- The key equality: the round-trip via `listToValue ∘ map entryTransform ∘ valList`
+    equals `idCompatTransform`. -/
+theorem listToValue_map_eq_idCompatTransform (d : Desc) (v : Value) :
+    d.AllWF → v.AllWF → valid' d v → valueWf d v →
+    listToValue d ((valList d v).map (entryTransform d)) = idCompatTransform d v := by
+  sorry
+
 end Pollux.InterParse

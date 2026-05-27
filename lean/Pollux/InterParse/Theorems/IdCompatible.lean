@@ -212,4 +212,13 @@ theorem idCompatTransform_get?_none (d : Desc) (v : Value) (k : Int) :
   simp only [idCompatTransform, Value.get?, Value.vals, Desc.get?, Desc.fields] at *
   exact idCompatTransformAux_lookup_none fs v k hdk
 
+/-- Transform an entry according to the descriptor: recursively apply
+    `idCompatTransform` to nested messages, leave other entries unchanged. -/
+def entryTransform (d : Desc) : (Int × Val) → (Int × Val)
+  | (k, .msg v') =>
+    match d.fields.lookup k with
+    | some (.msg d') => (k, .msg (idCompatTransform d' v'))
+    | _ => (k, .msg v')
+  | kv => kv
+
 end Pollux.InterParse

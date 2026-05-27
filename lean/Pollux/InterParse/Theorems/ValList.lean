@@ -1,13 +1,19 @@
 /-
   Pollux.InterParse.Theorems.ValList — Theorems about `valList` and
-  `listToValue`: filtering, membership, and the SC-roundtrip lemmas.
+  `listToValue`: filtering, membership, the SC-roundtrip lemmas, and
+  `parseOk_wf` (the per-entry well-formedness lifted to `Serializer.repWf`).
 -/
+import Pollux.Parse.Theorems
 import Pollux.InterParse.Parser
 import Pollux.InterParse.Serializer
+import Pollux.InterParse.Theorems.Validity
 import Pollux.InterParse.Theorems.SchemaCorrect
 import Pollux.InterParse.Theorems.SchemaCorrectCompatible
 
 namespace Pollux.InterParse
+
+open Pollux.Parse
+open Pollux.Parse.Theorems
 
 /-! ## ValList correctness -/
 
@@ -69,7 +75,7 @@ private theorem mergeFieldVal_none_left (v : Option Val) :
 
 /-- `listMerge mergeFieldVal` simplifies: the `fromM2Only` part is always empty
     because `mergeFieldVal none _ = none`. -/
-private theorem listMerge_mergeFieldVal_eq (fs : List (Int × Field))
+theorem listMerge_mergeFieldVal_eq (fs : List (Int × Field))
     (vs : List (Int × Val)) :
     listMerge mergeFieldVal fs vs =
     fs.filterMap (fun kv : Int × Field =>
@@ -87,7 +93,7 @@ private theorem listMerge_mergeFieldVal_eq (fs : List (Int × Field))
 
 /-- Lookup distributes over `listMerge mergeFieldVal` when the field list has
     no duplicate keys. -/
-private theorem listMerge_mergeFieldVal_lookup (fs : List (Int × Field))
+theorem listMerge_mergeFieldVal_lookup (fs : List (Int × Field))
     (vs : List (Int × Val)) (k : Int)
     (hnd : (fs.map Prod.fst).Nodup) :
     (listMerge mergeFieldVal fs vs).lookup k =
@@ -193,7 +199,7 @@ private theorem listMerge_mergeFieldVal_keys_sublist
 
 /-- `listMerge mergeFieldVal` preserves sortedness and nodup-keys when the
     field side is well-ordered. -/
-private theorem listMerge_mergeFieldVal_wf (fs : List (Int × Field))
+theorem listMerge_mergeFieldVal_wf (fs : List (Int × Field))
     (vs : List (Int × Val))
     (h_sorted : List.Pairwise (fun a b : Int × Field => a.1 < b.1) fs)
     (h_nodup : (fs.map Prod.fst).Nodup) :
@@ -328,5 +334,42 @@ theorem fullDescriptor_roundTrip (v : Value) (d : Desc) :
   intro h
   rw [← list_to_value_id v d h]
   exact SchemaCorrectCompatible.refl d d v h h
+
+/-! ## `parseOk_wf` (lifts per-entry well-formedness to `Serializer.repWf`) -/
+
+theorem parseOk_wf (v : Value) (d : Desc) :
+    ⟨ v ∷ d ⟩ → valueWf d v →
+    Serializer.repWf (willEncode d) (valList d v) := by
+  intro hsc hwf
+  obtain ⟨_hd_wf, hv_wf⟩ := sc_implies_wf d v hsc
+  apply repWf_of_forall
+  intro kv hkv
+  obtain ⟨k, val⟩ := kv
+  -- (k, val) ∈ valList d v ⊆ v.vals
+  have hmem : (k, val) ∈ v.vals := (List.mem_filter.mp hkv).1
+  -- v.get? k = some val (from membership and `v.WF`).
+  have hget : v.get? k = some val := valList_elem_of v d k val hv_wf hkv
+  -- Field exists and is type-matched (from `SchemaCorrect`).
+  obtain ⟨f, hf, _hmatch⟩ := sc_implies_val_in_desc_typed d v hsc k val hget
+  refine ⟨f, hf, ?_⟩
+  -- valWf d (k, val) — extract from valueWf via `valueWf_mem`.
+  show valWfFold d.fields k val True
+  exact valueWf_mem d v hwf k val hmem
+
+/-- `parseOk_wf` variant that uses `v.WF` + `valueWf` directly,
+    without requiring full schema correctness. -/
+theorem parseOk_wf_valid' (v : Value) (d : Desc) :
+    v.WF → valueWf d v →
+    Serializer.repWf (willEncode d) (valList d v) := by
+  intros _hv hwf
+  apply repWf_of_forall
+  intro kv hkv
+  obtain ⟨k, val⟩ := kv;
+  -- By definition of `valList`, `valList d v` is the list of pairs `(k, val)` where
+  -- `k` is in the descriptor `d` and `val` is not missing.
+  unfold valList at hkv;
+  unfold valListFilterP at hkv;
+  cases h : List.lookup k d.fields <;> simp_all +decide;
+  exact ⟨ _, h, valueWf_mem d v hwf k val hkv.1 ⟩
 
 end Pollux.InterParse
