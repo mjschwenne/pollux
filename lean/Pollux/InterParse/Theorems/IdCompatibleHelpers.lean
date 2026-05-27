@@ -3,6 +3,7 @@
 -/
 import Pollux.InterParse.Theorems.IdCompatible
 import Pollux.InterParse.Theorems.Validity
+import Pollux.InterParse.Theorems.ValList
 
 namespace Pollux.InterParse
 
@@ -341,11 +342,156 @@ theorem IdCompatible.inputMissing_cons (k : Int) (f : Field)
 
 /-! ## listToValue / entryTransform / idCompatTransform bridge -/
 
+/-
+`entryTransform` preserves the key of a pair.
+-/
+theorem entryTransform_fst (d : Desc) (kv : Int × Val) :
+    (entryTransform d kv).1 = kv.1 := by
+  rcases kv with ⟨ k, v ⟩;
+  rcases v with ( _ | _ | _ | _ ) <;> unfold entryTransform <;> aesop
+
+/-- Lookup in the mapped list: `entryTransform` applies `idCompatTransform`
+    to message values whose key has a message field in the descriptor. -/
+theorem lookup_map_entryTransform (d : Desc) (vs : List (Int × Val)) (k : Int) :
+    (vs.map (entryTransform d)).lookup k =
+    match vs.lookup k with
+    | none => none
+    | some (.msg v') =>
+      match d.fields.lookup k with
+      | some (.msg d') => some (.msg (idCompatTransform d' v'))
+      | _ => some (.msg v')
+    | some val => some val := by
+  induction vs with
+  | nil => rfl
+  | cons hd tl ih =>
+    obtain ⟨k', val⟩ := hd
+    simp only [List.map_cons]
+    have hfst : (entryTransform d (k', val)).1 = k' := entryTransform_fst d (k', val)
+    rw [List.lookup_cons, hfst, List.lookup_cons]
+    by_cases h : k = k'
+    · subst h; simp
+      cases val with
+      | bool b => simp [entryTransform]
+      | int z => simp [entryTransform]
+      | missing => simp [entryTransform]
+      | msg v' =>
+        simp [entryTransform]
+        cases hf : d.fields.lookup k with
+        | none => rfl
+        | some f =>
+          cases f with
+          | bool => rfl
+          | int => rfl
+          | msg d' => rfl
+    · simp only [show (k == k') = false from by rw [beq_eq_decide]; simp [h]]
+      exact ih
+
+/-
+Characterize (valList d v).lookup k in terms of d.fields.lookup and v.get?.
+-/
+theorem valList_lookup_characterize (d : Desc) (v : Value) (k : Int) :
+    v.WF →
+    (valList d v).lookup k =
+    match d.fields.lookup k, v.get? k with
+    | none, _ => none
+    | _, none => none
+    | some _, some .missing => none
+    | some _, some val => some val := by
+  intro hv;
+  have h_filter : ∀ (l : List (Int × Val)), List.Nodup (List.map Prod.fst l) → ∀ (k : Int), List.lookup k (List.filter (fun kv => match List.lookup kv.1 d.fields, kv.2 with | some val, Val.missing => false | none, x => false | x, x_1 => true) l) = match List.lookup k d.fields, List.lookup k l with | none, x => none | x, none => none | some val, some Val.missing => none | some val, some val_1 => some val_1 := by
+    intro l hl k;
+    induction' l with kv l ihizing k;
+    · cases List.lookup k d.fields <;> simp +decide;
+    · grind;
+  convert h_filter v.vals _ k;
+  convert hv.2 using 1;
+  unfold Value.NodupKeys; aesop;
+
+/-- Extract valid' constraint for a particular key-value pair. -/
+private theorem valid'_entry_at_key (d : Desc) (v : Value) (k : Int) (val : Val)
+    (hvalid : valid' d v) (hget : v.get? k = some val) :
+    valid'Fold d.fields k val True := by
+  rcases d with ⟨fs⟩; rcases v with ⟨vs⟩
+  simp only [valid'] at hvalid; simp only [Value.get?, Value.vals] at hget
+  have hmem : (k, val) ∈ vs := by
+    have : ∀ (l : List (Int × Val)), l.lookup k = some val → (k, val) ∈ l := by
+      intro l; induction l with
+      | nil => intro h; cases h
+      | cons hd tl ih =>
+        intro h; rw [List.lookup_cons] at h
+        by_cases hkk : k = hd.1
+        · subst hkk; simp at h; subst h; exact List.mem_cons_self
+        · rw [show (k == hd.1) = false from by rw [beq_eq_decide]; simp [hkk]] at h
+          exact List.mem_cons_of_mem _ (ih h)
+    exact this vs hget
+  exact valid'FoldList_mem fs vs k val hvalid hmem
+
+/-- The merged lookup of `listToValue` applied to the transformed valList
+    agrees with the `idCompatTransform` lookup at every key. -/
+theorem listToValue_entryTransform_lookup (d : Desc) (v : Value) (k : Int) :
+    d.AllWF → v.AllWF → valid' d v → valueWf d v →
+    (listToValue d ((valList d v).map (entryTransform d))).get? k =
+    (idCompatTransform d v).get? k := by
+  intro hd hv hvalid _hvwf
+  have h_d_wf : d.WF := hd.1
+  have h_v_wf : v.WF := hv.1
+  rcases d with ⟨fs⟩
+  have h_nodup : (fs.map Prod.fst).Nodup := h_d_wf.2
+  have h_lhs : (listToValue (.mk fs) ((valList (.mk fs) v).map (entryTransform (.mk fs)))).get? k =
+    mergeFieldVal (fs.lookup k) ((List.map (entryTransform (.mk fs)) (valList (.mk fs) v)).lookup k) := by
+    show (listMerge mergeFieldVal fs _).lookup k = _
+    exact listMerge_mergeFieldVal_lookup fs _ k h_nodup
+  rw [h_lhs, lookup_map_entryTransform (.mk fs), valList_lookup_characterize (.mk fs) v k h_v_wf]
+  simp only [Desc.fields]
+  cases hdk : fs.lookup k with
+  | none =>
+    have : (idCompatTransform (.mk fs) v).get? k = none :=
+      idCompatTransform_get?_none (.mk fs) v k (by simp [Desc.get?, Desc.fields, hdk])
+    rw [this]; cases v.get? k <;> rfl
+  | some f =>
+    rw [idCompatTransform_get?_some (.mk fs) v k f h_d_wf (by simp [Desc.get?, Desc.fields, hdk])]
+    cases hvk : v.get? k with
+    | none => cases f <;> simp [mergeFieldVal]
+    | some val =>
+      cases val with
+      | missing => cases f <;> simp [mergeFieldVal]
+      | bool b =>
+        have hentry := valid'_entry_at_key (.mk fs) v k (.bool b) hvalid hvk
+        simp only [Desc.fields, valid'Fold, hdk] at hentry
+        obtain ⟨hf, _⟩ := hentry; injection hf with hf; subst hf
+        simp [mergeFieldVal]
+      | int z =>
+        have hentry := valid'_entry_at_key (.mk fs) v k (.int z) hvalid hvk
+        simp only [Desc.fields, valid'Fold, hdk] at hentry
+        obtain ⟨hf, _⟩ := hentry; injection hf with hf; subst hf
+        simp [mergeFieldVal]
+      | msg v' =>
+        have hentry := valid'_entry_at_key (.mk fs) v k (.msg v') hvalid hvk
+        simp only [Desc.fields, valid'Fold, hdk] at hentry
+        obtain ⟨⟨d', hd', _⟩, _⟩ := hentry
+        injection hd' with hd'; subst hd'
+        simp [mergeFieldVal]
+
+/-- The LHS value is well-formed. -/
+theorem listToValue_entryTransform_wf (d : Desc) (v : Value) :
+    d.AllWF →
+    (listToValue d ((valList d v).map (entryTransform d))).WF := by
+  intro hd
+  unfold listToValue
+  rcases d with ⟨fs⟩
+  have ⟨⟨hs, hnd⟩, _⟩ := hd
+  simp only [Desc.fields]
+  exact Pollux.InterParse.listMerge_mergeFieldVal_wf fs _ hs hnd
+
 /-- The key equality: the round-trip via `listToValue ∘ map entryTransform ∘ valList`
     equals `idCompatTransform`. -/
 theorem listToValue_map_eq_idCompatTransform (d : Desc) (v : Value) :
     d.AllWF → v.AllWF → valid' d v → valueWf d v →
     listToValue d ((valList d v).map (entryTransform d)) = idCompatTransform d v := by
-  sorry
+  intro hd hv hvalid hwf
+  apply Value.ext_lookup
+  · exact listToValue_entryTransform_wf d v hd
+  · exact idCompatTransform_wf d v hd.1
+  · intro k; exact listToValue_entryTransform_lookup d v k hd hv hvalid hwf
 
 end Pollux.InterParse
