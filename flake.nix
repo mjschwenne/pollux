@@ -73,7 +73,7 @@
                   python-lsp-server
                   pyright
                   numpy
-                  nptyping
+                  # nptyping
                   scipy
                   pandas
                   pandas-stubs
