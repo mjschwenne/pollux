@@ -64,6 +64,7 @@ lean/
             ├── IdCompatibleHelpers.lean -- sorted-cons smart constructors + transform lemmas
             ├── IdCompatibleRoundTrip.lean -- `idCompatRoundTrip`
             ├── Serialization.lean       -- willEncode + weakening + serializer inversion
+            ├── Compatible.lean          -- full cross-descriptor ≺/∝/≪/≼ + `≪` structure
             └── InterParseOk.lean        -- `parseOk_wf` + `schemaCorrectInterParseOk` + `idInterParseOk`
 ```
 
@@ -202,7 +203,7 @@ Both reduce to `limitRecursiveStateCompat_correct` plus per-step correctness; th
 
 ### When extending proofs
 
-- The `Theorems/` subdirectory is **layered** for incremental compilation; respect the dependency order (`Primitives → SortedHelpers → Validity → SchemaCorrect → SchemaCorrectCompatible → ValList → IdCompatible → IdCompatibleHelpers → IdCompatibleRoundTrip → Serialization → InterParseOk`). Note `IdCompatibleHelpers` imports `ValList`, so `ValList` precedes the `IdCompatible*` group; `Serialization` only needs `Primitives`/`Validity` and is otherwise free-floating.
+- The `Theorems/` subdirectory is **layered** for incremental compilation; respect the dependency order (`Primitives → SortedHelpers → Validity → SchemaCorrect → SchemaCorrectCompatible → ValList → IdCompatible → IdCompatibleHelpers → IdCompatibleRoundTrip → Serialization → Compatible → InterParseOk`). Note `IdCompatibleHelpers` imports `ValList`, so `ValList` precedes the `IdCompatible*` group; `Serialization` and `Compatible` only need `Primitives`/`Validity`/`SchemaCorrect` and are otherwise free-floating.
 - Anything that needs schema correctness should go through `⟨ v ∷ d ⟩`. Anything about same-descriptor evolution should go through `IdCompatible`; `SchemaCorrectCompatible` is the stricter schema-correct variant. Don't reach into the underlying lists if you can use `get?` / `ext_lookup` / `insert_wf` / `erase_wf` instead — those abstractions exist precisely so callers can ignore the sorted-list encoding.
 - `valid'` and `valueWf` overlap: on keys *in* the descriptor `valueWf` is strictly stronger (type match plus bounds plus recursive `valueWf`); on keys *outside* it `valid'` demands `.missing` while `valueWf` demands nothing. Prefer `valueWf` in new statements — it comes for free as `serialValue`'s phantom wf. `Validity.lean` carries parallel decomposition lemmas for both (`valid'_cons` / `valueWf_cons`, `valid'_entry_head` / `valueWf_entry_head`, …), plus `valWfFold_{bool,int,msg}_field` and `valWfFold_missing_elim` for reading a field type off `valWfFold` once the key is known to be in the descriptor. `valid'` survives mainly for `valueEncLength_length` and as the Rocq `Valid'` counterpart; several of its helpers in `IdCompatibleHelpers.lean` are now unused.
 - New mutually-recursive functions on `Desc`/`Value` should follow the existing pattern: define the structural size or depth, then prove the relevant `*_smaller` lemma so they can be used as termination measures.
