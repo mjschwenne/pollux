@@ -173,21 +173,19 @@ theorem idCompatTransformAux_keys_gt (rest_ds : List (Int × Field)) (v : Value)
 
 /-! ## Drop-all-missing helper -/
 
-/-
-If the descriptor is empty and all entries in the value are `.missing`,
-    dropping each entry gives `IdCompatible ∅ v ∅`.
--/
-theorem idcompat_drop_all_missing (vs : List (Int × Val)) :
-    (∀ kv ∈ vs, kv.2 = Val.missing) →
+/-- Against the empty descriptor every entry is dropped, whatever it holds.
+    `IdCompatible.drop` places no constraint on the dropped value, so this needs
+    no validity hypothesis — which is what lets the round-trip theorem run off
+    `valueWf` alone (`valueWf` is vacuous on keys outside the descriptor). -/
+theorem idcompat_drop_all (vs : List (Int × Val)) :
     List.Pairwise (fun a b : Int × Val => a.1 < b.1) vs →
     (List.map Prod.fst vs).Nodup →
     IdCompatible (∅ : Desc) (.mk vs) (∅ : Value) := by
   induction' vs with kv vs ih;
-  · exact fun _ _ _ => IdCompatible.emp;
-  · intro h1 h2 h3;
+  · exact fun _ _ => IdCompatible.emp;
+  · intro h2 h3;
     -- Apply the induction hypothesis to the rest of the list.
-    have h_ind : IdCompatible ∅ (Value.mk vs) ∅ := by
-      aesop;
+    have h_ind : IdCompatible ∅ (Value.mk vs) ∅ := ih h2.tail h3.of_cons
     convert IdCompatible.drop ∅ ( Value.mk vs ) ∅ kv.1 kv.2 h_ind _ _ using 1;
     · unfold Value.insert;
       unfold Value.sortedInsert; aesop;
@@ -429,10 +427,10 @@ private theorem valid'_entry_at_key (d : Desc) (v : Value) (k : Int) (val : Val)
 /-- The merged lookup of `listToValue` applied to the transformed valList
     agrees with the `idCompatTransform` lookup at every key. -/
 theorem listToValue_entryTransform_lookup (d : Desc) (v : Value) (k : Int) :
-    d.AllWF → v.AllWF → valid' d v → valueWf d v →
+    d.AllWF → v.AllWF → valueWf d v →
     (listToValue d ((valList d v).map (entryTransform d))).get? k =
     (idCompatTransform d v).get? k := by
-  intro hd hv hvalid _hvwf
+  intro hd hv hvwf
   have h_d_wf : d.WF := hd.1
   have h_v_wf : v.WF := hv.1
   rcases d with ⟨fs⟩
@@ -456,20 +454,20 @@ theorem listToValue_entryTransform_lookup (d : Desc) (v : Value) (k : Int) :
       cases val with
       | missing => cases f <;> simp [mergeFieldVal]
       | bool b =>
-        have hentry := valid'_entry_at_key (.mk fs) v k (.bool b) hvalid hvk
-        simp only [Desc.fields, valid'Fold, hdk] at hentry
-        obtain ⟨hf, _⟩ := hentry; injection hf with hf; subst hf
+        have hentry := valueWf_at_key (.mk fs) v k (.bool b) hvwf hvk
+        simp only [Desc.fields] at hentry
+        have hf := valWfFold_bool_field fs k b f True hdk hentry; subst hf
         simp [mergeFieldVal]
       | int z =>
-        have hentry := valid'_entry_at_key (.mk fs) v k (.int z) hvalid hvk
-        simp only [Desc.fields, valid'Fold, hdk] at hentry
-        obtain ⟨hf, _⟩ := hentry; injection hf with hf; subst hf
+        have hentry := valueWf_at_key (.mk fs) v k (.int z) hvwf hvk
+        simp only [Desc.fields] at hentry
+        have hf := valWfFold_int_field fs k z f True hdk hentry; subst hf
         simp [mergeFieldVal]
       | msg v' =>
-        have hentry := valid'_entry_at_key (.mk fs) v k (.msg v') hvalid hvk
-        simp only [Desc.fields, valid'Fold, hdk] at hentry
-        obtain ⟨⟨d', hd', _⟩, _⟩ := hentry
-        injection hd' with hd'; subst hd'
+        have hentry := valueWf_at_key (.mk fs) v k (.msg v') hvwf hvk
+        simp only [Desc.fields] at hentry
+        obtain ⟨d', hd', _⟩ := valWfFold_msg_field fs k v' f True hdk hentry
+        subst hd'
         simp [mergeFieldVal]
 
 /-- The LHS value is well-formed. -/
@@ -486,12 +484,12 @@ theorem listToValue_entryTransform_wf (d : Desc) (v : Value) :
 /-- The key equality: the round-trip via `listToValue ∘ map entryTransform ∘ valList`
     equals `idCompatTransform`. -/
 theorem listToValue_map_eq_idCompatTransform (d : Desc) (v : Value) :
-    d.AllWF → v.AllWF → valid' d v → valueWf d v →
+    d.AllWF → v.AllWF → valueWf d v →
     listToValue d ((valList d v).map (entryTransform d)) = idCompatTransform d v := by
-  intro hd hv hvalid hwf
+  intro hd hv hwf
   apply Value.ext_lookup
   · exact listToValue_entryTransform_wf d v hd
   · exact idCompatTransform_wf d v hd.1
-  · intro k; exact listToValue_entryTransform_lookup d v k hd hv hvalid hwf
+  · intro k; exact listToValue_entryTransform_lookup d v k hd hv hwf
 
 end Pollux.InterParse

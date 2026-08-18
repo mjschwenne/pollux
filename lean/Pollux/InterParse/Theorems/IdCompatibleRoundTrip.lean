@@ -17,27 +17,16 @@ namespace Pollux.InterParse
 /-! ## Case lemmas for the round-trip proof -/
 
 /-
-Case ds=[], vs nonempty.
+Case ds=[], vs nonempty.  Every entry is dropped regardless of what it holds:
+against the empty descriptor `valueWf` constrains nothing, and
+`IdCompatible.drop` places no condition on the dropped value.
 -/
 private theorem roundTrip_case2
     (vs : List (Int × Val))
     (hvs_sorted : List.Pairwise (fun a b : Int × Val => a.1 < b.1) vs)
-    (hvs_nodup : (List.map Prod.fst vs).Nodup)
-    (hvalid : valid' (.mk []) (.mk vs)) :
-    IdCompatible (.mk []) (.mk vs) (.mk (idCompatTransformAux [] (.mk vs))) := by
-  -- Apply the induction hypothesis to the tail of the list.
-  have h_ind : ∀ (vs' : List (Int × Val)), valid'FoldList [] vs' True → (∀ kv ∈ vs', kv.2 = Val.missing) := by
-    intros vs' hvs' kv hk; induction vs' <;> simp_all +decide [ valid'FoldList ] ;
-    nontriviality;
-    rename_i h₁ h₂ h₃;
-    rename_i h₄op;
-    cases h₄op ; simp_all +decide;
-    cases ‹Val› <;> simp_all +decide [ valid'Fold ];
-    · exact absurd ( valid'FoldList_extract _ _ _ hvs' ) ( by decide );
-    · exact absurd ( valid'FoldList_extract _ _ _ hvs' ) ( by tauto );
-    · exact absurd ( valid'FoldList_extract _ _ _ hvs' ) ( by simp +decide );
-    · grind;
-  exact idcompat_drop_all_missing vs ( h_ind vs hvalid ) hvs_sorted hvs_nodup
+    (hvs_nodup : (List.map Prod.fst vs).Nodup) :
+    IdCompatible (.mk []) (.mk vs) (.mk (idCompatTransformAux [] (.mk vs))) :=
+  idcompat_drop_all vs hvs_sorted hvs_nodup
 
 /-- Helper: unfold the transform for matching keys. -/
 private theorem transform_head_eq (k : Int) (f_d : Field) (rest_ds : List (Int × Field))
@@ -56,8 +45,7 @@ private theorem transform_head_eq (k : Int) (f_d : Field) (rest_ds : List (Int �
 private theorem roundTrip_case3
     (ds : List (Int × Field))
     (hds_sorted : List.Pairwise (fun a b : Int × Field => a.1 < b.1) ds)
-    (hds_nodup : (List.map Prod.fst ds).Nodup)
-    (hvalid : valid' (.mk ds) (.mk [])) :
+    (hds_nodup : (List.map Prod.fst ds).Nodup) :
     IdCompatible (.mk ds) (.mk []) (.mk (idCompatTransformAux ds (.mk []))) := by
   induction ds with
   | nil => exact IdCompatible.emp
@@ -68,7 +56,7 @@ private theorem roundTrip_case3
       conv_lhs => unfold idCompatTransformAux
       simp only [Value.get?, Value.vals, List.lookup_nil]
     rw [hunfold]
-    have ih_rest := ih hds_sorted.tail hds_nodup.of_cons (by simp [valid', valid'FoldList])
+    have ih_rest := ih hds_sorted.tail hds_nodup.of_cons
     have hlt_ds : ∀ (p : Int × Field), p ∈ rest → k < p.1 :=
       fun p hp => List.rel_of_pairwise_cons hds_sorted hp
     exact IdCompatible.addMissing_cons k f rest [] (idCompatTransformAux rest (.mk [])) hlt_ds
@@ -139,13 +127,13 @@ private theorem roundTrip_case4b
     (hvs_nodup : (List.map Prod.fst ((k, val) :: rest_vs)).Nodup)
     (hds_allwf : fieldListAllWF ((k, f_d) :: rest_ds))
     (hvs_allwf : valListAllWF ((k, val) :: rest_vs))
-    (hvalid : valid' (.mk ((k, f_d) :: rest_ds)) (.mk ((k, val) :: rest_vs)))
+    (hwf : valueWf (.mk ((k, f_d) :: rest_ds)) (.mk ((k, val) :: rest_vs)))
     (ih_tails : IdCompatible (.mk rest_ds) (.mk rest_vs)
       (.mk (idCompatTransformAux rest_ds (.mk rest_vs))))
     (ih_msg : ∀ (d' : Desc) (v' : Value),
       fieldListSize d'.fields < fieldListSize ((k, f_d) :: rest_ds) →
       d'.WF → v'.WF → fieldListAllWF d'.fields → valListAllWF v'.vals →
-      valid' d' v' →
+      valueWf d' v' →
       IdCompatible d' v' (idCompatTransform d' v')) :
     IdCompatible (.mk ((k, f_d) :: rest_ds)) (.mk ((k, val) :: rest_vs))
       (.mk (idCompatTransformAux ((k, f_d) :: rest_ds) (.mk ((k, val) :: rest_vs)))) := by
@@ -158,27 +146,25 @@ private theorem roundTrip_case4b
   have h_ds_lookup := lookup_none_of_lt_all_field k rest_ds hlt_ds
   have h_vs_lookup := lookup_none_of_lt_all_val k rest_vs hlt_vs
   have h_v2_lookup := lookup_none_of_lt_all_val k _ hlt_v2
-  have hentry := valid'_entry_head ((k, f_d) :: rest_ds) (k, val) rest_vs hvalid
+  have hentry := valueWf_entry_head ((k, f_d) :: rest_ds) (k, val) rest_vs hwf
+  have hdk : ((k, f_d) :: rest_ds).lookup k = some f_d := List.lookup_cons_self
   rw [transform_head_eq, htail_eq]
   cases val with
   | missing =>
-    simp only
-    exact IdCompatible.inputMissing_cons k f_d rest_ds rest_vs _ hlt_ds hlt_vs hlt_v2
-      ih_tails h_ds_lookup h_vs_lookup h_v2_lookup
+    -- `valueWf` rejects `.missing` at a key that is in the descriptor, so this
+    -- case is vacuous (and `IdCompatible.inputMissing` stays unreachable).
+    exact (valWfFold_missing_elim _ k f_d True hdk hentry).elim
   | bool b =>
-    simp only [valid'Fold, List.lookup_cons_self] at hentry
-    have hf : f_d = .bool := Option.some_injective _ hentry.1; subst hf; simp only
+    have hf := valWfFold_bool_field _ k b f_d True hdk hentry; subst hf; simp only
     exact IdCompatible.insertBool_cons k b rest_ds rest_vs _ hlt_ds hlt_vs hlt_v2
       ih_tails h_ds_lookup h_vs_lookup h_v2_lookup
   | int z =>
-    simp only [valid'Fold, List.lookup_cons_self] at hentry
-    have hf : f_d = .int := Option.some_injective _ hentry.1; subst hf; simp only
+    have hf := valWfFold_int_field _ k z f_d True hdk hentry; subst hf; simp only
     exact IdCompatible.insertInt_cons k z rest_ds rest_vs _ hlt_ds hlt_vs hlt_v2
       ih_tails h_ds_lookup h_vs_lookup h_v2_lookup
   | msg v' =>
-    simp only [valid'Fold, List.lookup_cons_self] at hentry
-    obtain ⟨⟨d', hd', hvalid'⟩, _⟩ := hentry
-    have hf : f_d = .msg d' := Option.some_injective _ hd'; subst hf; simp only
+    obtain ⟨d', hf, hvalid'⟩ := valWfFold_msg_field _ k v' f_d True hdk hentry
+    subst hf; simp only
     have hsize : fieldListSize d'.fields < fieldListSize ((k, .msg d') :: rest_ds) := by
       show fieldListSize d'.fields < fieldSize (.msg d') + fieldListSize rest_ds
       show fieldListSize d'.fields < 1 + descSize d' + fieldListSize rest_ds
@@ -207,7 +193,7 @@ private theorem idCompatRoundTrip_aux_wf :
     (List.map Prod.fst vs).Nodup →
     fieldListAllWF ds →
     valListAllWF vs →
-    valid' (.mk ds) (.mk vs) →
+    valueWf (.mk ds) (.mk vs) →
     IdCompatible (.mk ds) (.mk vs) (.mk (idCompatTransformAux ds (.mk vs))) := by
   intro n
   induction n using Nat.strongRecOn with
@@ -215,15 +201,15 @@ private theorem idCompatRoundTrip_aux_wf :
   intro ds vs; revert ds
   induction vs with
   | nil =>
-    intro ds hn hds_sorted hds_nodup _ _ hds_allwf _ hvalid
+    intro ds hn hds_sorted hds_nodup _ _ hds_allwf _ _hwf
     cases ds with
     | nil => exact IdCompatible.emp
-    | cons _ _ => exact roundTrip_case3 _ hds_sorted hds_nodup hvalid
+    | cons _ _ => exact roundTrip_case3 _ hds_sorted hds_nodup
   | cons kv rest_vs ih_vs =>
     obtain ⟨k_v, val⟩ := kv
-    intro ds hn hds_sorted hds_nodup hvs_sorted hvs_nodup hds_allwf hvs_allwf hvalid
+    intro ds hn hds_sorted hds_nodup hvs_sorted hvs_nodup hds_allwf hvs_allwf hwf
     cases ds with
-    | nil => exact roundTrip_case2 _ hvs_sorted hvs_nodup hvalid
+    | nil => exact roundTrip_case2 _ hvs_sorted hvs_nodup
     | cons hd rest_ds =>
       obtain ⟨k_d, f_d⟩ := hd
       have hfls : fieldListSize rest_ds < fieldListSize ((k_d, f_d) :: rest_ds) := by
@@ -235,18 +221,18 @@ private theorem idCompatRoundTrip_aux_wf :
           hds_sorted hvs_sorted
         exact ih_vs ((k_d, f_d) :: rest_ds) hn hds_sorted hds_nodup
           hvs_sorted.tail hvs_nodup.of_cons hds_allwf (valListAllWF_tail hvs_allwf)
-          (valid'_cons _ (k_v, val) rest_vs hvalid)
+          (valueWf_cons _ (k_v, val) rest_vs hwf)
       · -- case 4b: k_v = k_d, matching keys
         subst h_eq
         apply roundTrip_case4b k_v f_d rest_ds val rest_vs
-          hds_sorted hds_nodup hvs_sorted hvs_nodup hds_allwf hvs_allwf hvalid
+          hds_sorted hds_nodup hvs_sorted hvs_nodup hds_allwf hvs_allwf hwf
         · -- IH on tails (rest_ds, rest_vs): use ih_n with smaller n
           exact ih_n (fieldListSize rest_ds) (by omega) rest_ds rest_vs le_rfl
             hds_sorted.tail hds_nodup.of_cons hvs_sorted.tail hvs_nodup.of_cons
             (fieldListAllWF_tail hds_allwf) (valListAllWF_tail hvs_allwf)
-            (valid'_drop_head_ds k_v f_d rest_ds rest_vs
+            (valueWf_drop_head_ds k_v f_d rest_ds rest_vs
               (fun kv hkv => List.rel_of_pairwise_cons hvs_sorted hkv)
-              (valid'_cons _ (k_v, val) rest_vs hvalid))
+              (valueWf_cons _ (k_v, val) rest_vs hwf))
         · -- ih_msg for nested messages: use ih_n with smaller n
           intro d' v' hsize hd'_wf hv'_wf hd'_allwf hv'_allwf hvalid'
           cases d' with | mk fs =>
@@ -261,11 +247,11 @@ private theorem idCompatRoundTrip_aux_wf :
         exact ih_n (fieldListSize rest_ds) (by omega) rest_ds ((k_v, val) :: rest_vs) le_rfl
           hds_sorted.tail hds_nodup.of_cons hvs_sorted hvs_nodup
           (fieldListAllWF_tail hds_allwf) hvs_allwf
-          (valid'_drop_head_ds k_d f_d rest_ds _
+          (valueWf_drop_head_ds k_d f_d rest_ds _
             (fun kv hkv => by cases hkv with
               | head => exact h_gt
               | tail _ h => exact lt_trans h_gt (List.rel_of_pairwise_cons hvs_sorted h))
-            hvalid)
+            hwf)
 
 /-- Core induction lemma: processes both descriptor fields and value entries
     simultaneously to build the `IdCompatible` derivation.
@@ -282,7 +268,7 @@ theorem idCompatRoundTrip_aux
     (List.map Prod.fst vs).Nodup →
     fieldListAllWF ds →
     valListAllWF vs →
-    valid' (.mk ds) (.mk vs) →
+    valueWf (.mk ds) (.mk vs) →
     IdCompatible (.mk ds) (.mk vs) (.mk (idCompatTransformAux ds (.mk vs))) :=
   idCompatRoundTrip_aux_wf (fieldListSize ds) ds _ le_rfl
 
@@ -294,11 +280,11 @@ theorem idCompatRoundTrip_aux
     descriptors/values that must also be sorted and duplicate-free,
     hence the need for `AllWF` instead of plain `WF`. -/
 theorem idCompatRoundTrip (v : Value) (d : Desc) :
-    d.AllWF → v.AllWF → valid' d v → ⟨ v ≼ idCompatTransform d v ⟩∷ d := by
-  intro ⟨hd, hd_all⟩ ⟨hv, hv_all⟩ hvalid
+    d.AllWF → v.AllWF → valueWf d v → ⟨ v ≼ idCompatTransform d v ⟩∷ d := by
+  intro ⟨hd, hd_all⟩ ⟨hv, hv_all⟩ hwf
   cases d with | mk ds =>
   cases v with | mk vs =>
   simp only [idCompatTransform]
-  exact idCompatRoundTrip_aux ds vs hd.1 hd.2 hv.1 hv.2 hd_all hv_all hvalid
+  exact idCompatRoundTrip_aux ds vs hd.1 hd.2 hv.1 hv.2 hd_all hv_all hwf
 
 end Pollux.InterParse

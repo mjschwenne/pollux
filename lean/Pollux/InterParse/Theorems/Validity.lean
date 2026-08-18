@@ -408,4 +408,179 @@ theorem valueWf_weaken (v : Value) (d : Desc) (k : Int) :
     rw [hfold_eq]
     exact ih _ hne_keys_tl
 
+/-! ## Generic `valWfFold` / `valWfFoldList` manipulators
+
+These mirror the `valid'Fold` / `valid'FoldList` manipulators above.  They are
+what lets the `IdCompatible` round-trip proof run off `valueWf` alone: on keys
+present in the descriptor `valueWf` is strictly stronger than `valid'`, and on
+keys absent from it `valueWf` imposes no constraint at all (which is exactly
+the `IdCompatible.drop` case). -/
+
+/-- Extract the accumulated predicate from `valWfFold`. -/
+theorem valWfFold_extract (ds : List (Int × Field)) (k : Int) (v : Val) (P : Prop) :
+    valWfFold ds k v P → P :=
+  fun h => ((valWfFold_split ds k v P).mp h).2
+
+/-- Extract the accumulated predicate from `valWfFoldList`. -/
+theorem valWfFoldList_extract (ds : List (Int × Field)) (vs : List (Int × Val))
+    (P : Prop) :
+    valWfFoldList ds vs P → P :=
+  fun h => ((valWfFoldList_decomp ds vs P).mp h).2
+
+/-- Weaken the accumulator in `valWfFold`. -/
+theorem valWfFold_weaken (ds : List (Int × Field)) (k : Int) (v : Val) (P Q : Prop) :
+    (P → Q) → valWfFold ds k v P → valWfFold ds k v Q := by
+  intro hPQ h
+  rw [valWfFold_split] at h ⊢
+  exact ⟨h.1, hPQ h.2⟩
+
+/-- Weaken the accumulator in `valWfFoldList`. -/
+theorem valWfFoldList_weaken (ds : List (Int × Field)) (vs : List (Int × Val))
+    (P Q : Prop) :
+    (P → Q) → valWfFoldList ds vs P → valWfFoldList ds vs Q := by
+  intro hPQ h
+  rw [valWfFoldList_decomp] at h ⊢
+  exact ⟨h.1, hPQ h.2⟩
+
+/-- Dropping the head entry preserves `valueWf`.  Mirrors `valid'_cons`. -/
+theorem valueWf_cons (ds : List (Int × Field)) (kv : Int × Val) (vs : List (Int × Val)) :
+    valWfFoldList ds (kv :: vs) True → valWfFoldList ds vs True := by
+  intro h
+  rw [valWfFoldList_decomp] at h ⊢
+  exact ⟨fun kv' hkv' => h.1 kv' (List.mem_cons_of_mem _ hkv'), trivial⟩
+
+/-- Extract info about the head entry from `valueWf`.  Mirrors `valid'_entry_head`. -/
+theorem valueWf_entry_head (ds : List (Int × Field)) (kv : Int × Val)
+    (vs : List (Int × Val)) :
+    valWfFoldList ds (kv :: vs) True → valWfFold ds kv.1 kv.2 True := by
+  intro h
+  rw [valWfFoldList_decomp] at h
+  exact h.1 kv List.mem_cons_self
+
+/-- A successful `List.lookup` witnesses membership. -/
+theorem mem_of_lookup_val (vs : List (Int × Val)) (k : Int) (val : Val) :
+    vs.lookup k = some val → (k, val) ∈ vs := by
+  induction vs with
+  | nil => intro h; cases h
+  | cons hd tl ih =>
+    intro h; rw [List.lookup_cons] at h
+    by_cases hkk : k = hd.1
+    · subst hkk; simp at h; subst h; exact List.mem_cons_self
+    · rw [show (k == hd.1) = false from by rw [beq_eq_decide]; simp [hkk]] at h
+      exact List.mem_cons_of_mem _ (ih h)
+
+/-- Extract the `valWfFold` constraint at a particular key.  The `valueWf`
+    counterpart of `valid'_entry_at_key`. -/
+theorem valueWf_at_key (d : Desc) (v : Value) (k : Int) (val : Val) :
+    valueWf d v → v.get? k = some val → valWfFold d.fields k val True := by
+  intro hwf hget
+  rcases v with ⟨vs⟩
+  simp only [Value.get?, Value.vals] at hget ⊢
+  exact valueWf_mem d (.mk vs) hwf k val (mem_of_lookup_val vs k val hget)
+
+/-! ### Per-entry field/value matching
+
+`valid'Fold` states the field type directly, so callers read it off with an
+`injection`.  `valWfFold` instead matches on the pair `(lookup, val)`, and is
+vacuous when the lookup is `none`.  These lemmas recover the `valid'Fold`-style
+interface *given* that the key is present in the descriptor, which is the only
+situation the callers use it in. -/
+
+/-- A `.bool` entry at a key present in the descriptor forces a `.bool` field. -/
+theorem valWfFold_bool_field (fs : List (Int × Field)) (k : Int) (b : Bool)
+    (f : Field) (P : Prop) :
+    fs.lookup k = some f → valWfFold fs k (.bool b) P → f = .bool := by
+  intro hlk h
+  unfold valWfFold at h
+  rw [hlk] at h
+  cases f with
+  | bool => rfl
+  | int => exact h.elim
+  | msg _ => exact h.elim
+
+/-- An `.int` entry at a key present in the descriptor forces an `.int` field. -/
+theorem valWfFold_int_field (fs : List (Int × Field)) (k : Int) (z : Int)
+    (f : Field) (P : Prop) :
+    fs.lookup k = some f → valWfFold fs k (.int z) P → f = .int := by
+  intro hlk h
+  unfold valWfFold at h
+  rw [hlk] at h
+  cases f with
+  | bool => exact h.elim
+  | int => rfl
+  | msg _ => exact h.elim
+
+/-- A `.msg` entry at a key present in the descriptor forces a `.msg` field,
+    and hands back the nested `valueWf`. -/
+theorem valWfFold_msg_field (fs : List (Int × Field)) (k : Int) (v' : Value)
+    (f : Field) (P : Prop) :
+    fs.lookup k = some f → valWfFold fs k (.msg v') P →
+    ∃ d', f = .msg d' ∧ valueWf d' v' := by
+  intro hlk h
+  unfold valWfFold at h
+  rw [hlk] at h
+  cases f with
+  | bool => exact h.elim
+  | int => exact h.elim
+  | msg d' => exact ⟨d', rfl, h.2.2.2⟩
+
+/-- `valueWf` rejects `.missing` at a key that *is* in the descriptor.  This is
+    why `IdCompatible.inputMissing` is unreachable from the top-level theorem;
+    see the note in `IdCompatible.lean`. -/
+theorem valWfFold_missing_elim (fs : List (Int × Field)) (k : Int) (f : Field)
+    (P : Prop) :
+    fs.lookup k = some f → valWfFold fs k .missing P → False := by
+  intro hlk h
+  unfold valWfFold at h
+  rw [hlk] at h
+  cases f <;> exact h.elim
+
+/-- `valWfFold` only inspects the descriptor through `lookup`, so agreeing
+    lookups can be swapped.  Mirrors `valid'Fold_lookup_congr`. -/
+theorem valWfFold_lookup_congr (fs gs : List (Int × Field)) (k : Int) (v : Val)
+    (P : Prop) :
+    fs.lookup k = gs.lookup k → valWfFold fs k v P → valWfFold gs k v P := by
+  intro hlookup h
+  unfold valWfFold at h ⊢
+  rw [← hlookup]
+  exact h
+
+/-- If `fs` and `gs` agree on the lookup of every key in `vs`, then
+    `valWfFoldList` can switch between them.  Mirrors
+    `valid'FoldList_lookup_congr`. -/
+theorem valWfFoldList_lookup_congr (fs gs : List (Int × Field))
+    (vs : List (Int × Val)) (P : Prop) :
+    (∀ kv ∈ vs, fs.lookup kv.1 = gs.lookup kv.1) →
+    valWfFoldList fs vs P → valWfFoldList gs vs P := by
+  intro hlookup h
+  rw [valWfFoldList_decomp] at h ⊢
+  exact ⟨fun kv hkv =>
+    valWfFold_lookup_congr fs gs kv.1 kv.2 True (hlookup kv hkv) (h.1 kv hkv), h.2⟩
+
+/-- Removing the head field of the descriptor, when its key is below every key
+    in `vs`, doesn't change `valueWf`.  Mirrors `valid'_drop_head_ds`. -/
+theorem valueWf_drop_head_ds (k₀ : Int) (f₀ : Field)
+    (rest_ds : List (Int × Field)) (vs : List (Int × Val)) :
+    (∀ kv ∈ vs, k₀ < kv.1) →
+    valWfFoldList ((k₀, f₀) :: rest_ds) vs True →
+    valWfFoldList rest_ds vs True := by
+  intro hgt
+  apply valWfFoldList_lookup_congr
+  intro kv hkv
+  have hne : ¬ (kv.1 = k₀) := ne_of_gt (hgt kv hkv)
+  rw [List.lookup_cons, show (kv.1 == k₀) = false from by rw [beq_eq_decide]; simp [hne]]
+
+/-- Adding a fresh head field to the descriptor, when its key is below every key
+    in `vs`, doesn't change `valueWf`.  Mirrors `valid'_add_head_ds`. -/
+theorem valueWf_add_head_ds (k₀ : Int) (f₀ : Field)
+    (rest_ds : List (Int × Field)) (vs : List (Int × Val)) :
+    (∀ kv ∈ vs, k₀ < kv.1) →
+    valWfFoldList rest_ds vs True →
+    valWfFoldList ((k₀, f₀) :: rest_ds) vs True := by
+  intro hgt
+  apply valWfFoldList_lookup_congr
+  intro kv hkv
+  have hne : ¬ (kv.1 = k₀) := ne_of_gt (hgt kv hkv)
+  rw [List.lookup_cons, show (kv.1 == k₀) = false from by rw [beq_eq_decide]; simp [hne]]
+
 end Pollux.InterParse

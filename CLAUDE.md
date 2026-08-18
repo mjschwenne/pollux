@@ -11,7 +11,7 @@ The Lean port covers:
 - The abstract parser/serializer framework (`Pollux.Parse`)
 - The intermediate tagged key-value format (`Pollux.InterParse`)
 
-The full protobuf wire-format layer (`ProtoParse`, `Varint`, `SimplParse`, etc. from the Rocq side) has **not** been ported. All ported files are sorry-free; the top-level correctness theorem `interParseOk` is fully proven.
+The full protobuf wire-format layer (`ProtoParse`, `Varint`, `SimplParse`, etc. from the Rocq side) has **not** been ported. All ported files are sorry-free; both top-level correctness theorems (`schemaCorrectInterParseOk` and `idInterParseOk`) are fully proven.
 
 ## Build System and Commands
 
@@ -55,13 +55,16 @@ lean/
         └── Theorems/
             ├── Primitives.lean          -- byte/unsigned/nat/z32/bool roundtrips
             ├── SortedHelpers.lean       -- sortedInsert/sortedErase commutativity
-            ├── Validity.lean            -- validDropFirst, validInsert, depth/length
+            ├── Validity.lean            -- validDropFirst, validInsert, depth/length,
+            │                               `valid'` + `valueWf` decomposition lemmas
             ├── SchemaCorrect.lean       -- `SchemaCorrect` relation + sc_* lemmas
             ├── SchemaCorrectCompatible.lean  -- `SchemaCorrectCompatible` + schemaCorrectCompatibleEqual
-            ├── IdCompatible.lean        -- (stub) `IdCompatible` relation, not yet implemented
             ├── ValList.lean             -- valList filter + listToValue roundtrip
+            ├── IdCompatible.lean        -- `IdCompatible` relation + `idCompatTransform`
+            ├── IdCompatibleHelpers.lean -- sorted-cons smart constructors + transform lemmas
+            ├── IdCompatibleRoundTrip.lean -- `idCompatRoundTrip`
             ├── Serialization.lean       -- willEncode + weakening + serializer inversion
-            └── InterParseOk.lean        -- `parseOk_wf` + top-level `interParseOk`
+            └── InterParseOk.lean        -- `parseOk_wf` + `schemaCorrectInterParseOk` + `idInterParseOk`
 ```
 
 Outside `lean/`: `rocq/` (legacy proofs), `pollux-go/` (reference Go implementation), `proto/` (schema versions for evolution tests), `ocaml/` (Rocq extraction target — does not apply to Lean).
@@ -150,11 +153,18 @@ The schema-evolution relation: when two `(descriptor, value)` pairs both corresp
 
 `schemaCorrectCompatibleEqual` is the load-bearing lemma: if `d₁ = d₂` then `v₁ = v₂`. This is what lets the top-level theorem squeeze a `Compatible`-flavored conclusion down to a true roundtrip equality.
 
-**`IdCompatible`** (`Theorems/IdCompatible.lean`)
+**`IdCompatible d v₁ v₂`** (`Theorems/IdCompatible.lean`, notation `⟨ v₁ ≼ v₂ ⟩∷ d`)
 
-Currently a **stub** — only a docstring is present. The intended relation: two values are compatible under the *same* descriptor, allowing the input value to carry fields outside the descriptor (dropped on parse) or to be missing fields (re-injected as `V_MISSING` on parse). This relaxes `SchemaCorrectCompatible` by removing the schema-correct requirement on both sides. Touch this when extending the proof to cover the "lossy parse / lossy serialize" cases.
+Two values compatible under the *same* descriptor, dropping the schema-correct requirement that `SchemaCorrectCompatible` imposes on both sides. The input value may carry fields outside the descriptor (dropped on parse) or omit declared fields (re-injected as `.missing` on parse). Seven constructors: `emp`, `insertInt` / `insertBool` / `insertMsg` (type-matched entries, recursing at nested messages), `drop` (key absent from the descriptor — no constraint on the dropped value), `addMissing` (key declared but absent from the input), and `inputMissing` (`.missing` on both sides at a declared key).
 
-The notation `≼` is suggestive: `SchemaCorrectCompatible` is a partial order on the schema-extension lattice.
+Alongside the relation, `idCompatTransform d v` computes the value a round trip actually yields — drop unknown keys, `.missing` for unmatched declared keys, recurse into nested messages. `idCompatRoundTrip` (`Theorems/IdCompatibleRoundTrip.lean`) proves the transform always lands in the relation; the top-level theorem proves parsing *produces* the transform, then composes. `IdCompatibleWrapper` is the `δ → δ → α → α → Prop` shim that lets it slot into `LimitParseOkCompat''`.
+
+Two caveats worth knowing before extending this:
+
+- `idInterParseOk` is stated under `valueWf d v` alone (it used to also require `valid' d v`, which forbade real values at unknown keys and so left the drop case only half-proven). `valueWf` is vacuous on keys outside the descriptor, which is exactly what makes `drop` reachable.
+- `valueWf` still sends `some f, .missing` to `False`, so **`inputMissing` is unreachable from `idInterParseOk`** — `IdCompatible.inputMissing_cons` is currently dead code, and `roundTrip_case4b`'s `.missing` branch is discharged by `valWfFold_missing_elim`. Relaxing that arm of `valueWf` (the serializer already handles the case: `valListFilterP` drops it, `mergeFieldVal` re-injects it) would make the constructor live, but `valueWf` is `serialValue`'s phantom wf, so the change also touches `schemaCorrectInterParseOk` and the `Serialization.lean` inversion lemmas.
+
+The `≼` in both notations is suggestive: these are partial orders on the schema-extension lattice. Neither is the cross-descriptor "full compatibility relation" (value `≺` / field-type `∝` / descriptor-type `≪` / message `≼`) from the written report — that is not implemented. The plumbing anticipates it: `LimitParseOkCompat''` already takes two descriptors, and `limitRecursiveStateCompat_correct` takes a `linkedState : σ → σ → Prop` that both current theorems instantiate with `(· = ·)`.
 
 ### `ParseOk` family (`Parse/Theorems.lean`)
 
@@ -170,22 +180,31 @@ ParseOk    par ser            := ∀ x enc rest, …               -- full
 
 `LimitParseOk*` are the no-trailing-data variants. `LenOk` says the declared length function matches the actual encoding size. These compose: most combinator lemmas (`bind_correct`, `concat_correct`, `rep_correct`, …) take `ParseOk`s on subparts and produce a `ParseOk` on the whole.
 
-### Top-level theorem (`Theorems/InterParseOk.lean`)
+### Top-level theorems (`Theorems/InterParseOk.lean`)
 
 ```
-theorem interParseOk (v : Value) (d : Desc) :
+theorem schemaCorrectInterParseOk (v : Value) (d : Desc) :
   ⟨ v ∷ d ⟩ →
   LimitParseOkCompat'' SchemaCorrectCompatible parseValue serialValue d d v
+
+theorem idInterParseOk (v : Value) (d : Desc) :
+  d.AllWF → v.AllWF →
+  LimitParseOkCompat'' IdCompatibleWrapper parseValue serialValue d d v
 ```
 
-For any schema-correct value, `serialValue` followed by `parseValue` recovers a value that is `SchemaCorrectCompatible` with the original under the same descriptor — which, by `schemaCorrectCompatibleEqual`, equals the original. The proof reduces to `limitRecursiveStateCompat_correct` plus per-step correctness; the per-step argument is the bulk of the file and uses `repCorrectWeakFull` to lift per-entry correctness through `Parser.rep`.
+The first: for any schema-correct value, `serialValue` followed by `parseValue` recovers a value that is `SchemaCorrectCompatible` with the original under the same descriptor — which, by `schemaCorrectCompatibleEqual`, equals the original.
+
+The second drops schema correctness for `AllWF` (recursive sortedness/no-dups) plus the `valueWf` already carried by `serialValue`, and concludes with the looser `IdCompatible`. It goes through `idCompatTransform`: prove the strengthened statement "parsing yields exactly `idCompatTransform d v`", then compose with `idCompatRoundTrip`.
+
+Both reduce to `limitRecursiveStateCompat_correct` plus per-step correctness; the per-step arguments (`parseVal_serialVal_correct` and `parseVal_serialVal_transform`) are the bulk of the file and use `repCorrectWeakFull` / `repCorrectWeakFullMap` to lift per-entry correctness through `Parser.rep`.
 
 ## Working in This Project
 
 ### When extending proofs
 
-- The `Theorems/` subdirectory is **layered** for incremental compilation; respect the dependency order (`Primitives → SortedHelpers → Validity → SchemaCorrect → SchemaCorrectCompatible → Serialization → ValList → InterParseOk`).
-- Anything that needs schema correctness should go through `⟨ v ∷ d ⟩`. Anything about schema evolution should go through `≼`. Don't reach into the underlying lists if you can use `get?` / `ext_lookup` / `insert_wf` / `erase_wf` instead — those abstractions exist precisely so callers can ignore the sorted-list encoding.
+- The `Theorems/` subdirectory is **layered** for incremental compilation; respect the dependency order (`Primitives → SortedHelpers → Validity → SchemaCorrect → SchemaCorrectCompatible → ValList → IdCompatible → IdCompatibleHelpers → IdCompatibleRoundTrip → Serialization → InterParseOk`). Note `IdCompatibleHelpers` imports `ValList`, so `ValList` precedes the `IdCompatible*` group; `Serialization` only needs `Primitives`/`Validity` and is otherwise free-floating.
+- Anything that needs schema correctness should go through `⟨ v ∷ d ⟩`. Anything about same-descriptor evolution should go through `IdCompatible`; `SchemaCorrectCompatible` is the stricter schema-correct variant. Don't reach into the underlying lists if you can use `get?` / `ext_lookup` / `insert_wf` / `erase_wf` instead — those abstractions exist precisely so callers can ignore the sorted-list encoding.
+- `valid'` and `valueWf` overlap: on keys *in* the descriptor `valueWf` is strictly stronger (type match plus bounds plus recursive `valueWf`); on keys *outside* it `valid'` demands `.missing` while `valueWf` demands nothing. Prefer `valueWf` in new statements — it comes for free as `serialValue`'s phantom wf. `Validity.lean` carries parallel decomposition lemmas for both (`valid'_cons` / `valueWf_cons`, `valid'_entry_head` / `valueWf_entry_head`, …), plus `valWfFold_{bool,int,msg}_field` and `valWfFold_missing_elim` for reading a field type off `valWfFold` once the key is known to be in the descriptor. `valid'` survives mainly for `valueEncLength_length` and as the Rocq `Valid'` counterpart; several of its helpers in `IdCompatibleHelpers.lean` are now unused.
 - New mutually-recursive functions on `Desc`/`Value` should follow the existing pattern: define the structural size or depth, then prove the relevant `*_smaller` lemma so they can be used as termination measures.
 
 ### Aristotle

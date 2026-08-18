@@ -201,11 +201,11 @@ private theorem parseVal_serialVal_correct
     `idCompatTransform` for nested messages. -/
 private theorem parseVal_serialVal_transform
     (d : Desc) (v : Value) (enc : List UInt8)
-    (hvalid : valid' d v) (hdwf : d.AllWF) (hvwf : v.AllWF) (hwf : valueWf d v)
+    (hdwf : d.AllWF) (hvwf : v.AllWF) (hwf : valueWf d v)
     (IH : ∀ (d' : Desc) (v' : Value) (encInner : List UInt8),
         Input.length encInner < Input.length enc →
         valueDepth v' < valueDepth v →
-        valueWf d' v' → d'.AllWF → v'.AllWF → valid' d' v' →
+        valueWf d' v' → d'.AllWF → v'.AllWF →
         Serializer.recurSt serialValue' valueDepth d' v' = .success () encInner →
         Parser.recurSt parseValue' d' encInner =
           .success (idCompatTransform d' v') Input.default) :
@@ -290,15 +290,6 @@ private theorem parseVal_serialVal_transform
     | msg v' =>
       have hwfZ : 0 ≤ z ∧ z < 256 := ⟨hwfd'.2.1, hwfd'.2.2.1⟩
       have hv'_wf : valueWf d' v' := hwfd'.2.2.2
-      have hvalid_v' : valid' d' v' := by
-        rcases d with ⟨fs⟩; rcases v with ⟨vs⟩
-        have hvm := valid'FoldList_mem fs vs z (Val.msg v') hvalid hmem
-        unfold valid'Fold at hvm
-        obtain ⟨⟨d'', hd'', hvalid''⟩, _⟩ := hvm
-        simp only [Desc.fields] at hf
-        rw [hf] at hd''
-        cases hd''
-        exact hvalid''
       have hd'_allwf : d'.AllWF := by
         obtain ⟨_, hfall⟩ := hdwf
         suffices h : fieldAllWF (Field.msg d') by
@@ -344,7 +335,7 @@ private theorem parseVal_serialVal_transform
       -- KEY DIFFERENCE: IH gives idCompatTransform instead of exact roundtrip.
       have hPP : Parser.recurSt parseValue' d' encP =
           .success (idCompatTransform d' v') Input.default :=
-        IH d' v' encP hencP_lt_enc hdepth_lt hv'_wf hd'_allwf hv'_allwf hvalid_v' hP
+        IH d' v' encP hencP_lt_enc hdepth_lt hv'_wf hd'_allwf hv'_allwf hP
       subst hBeq; subst hencEq
       show Parser.depConcat _ _ _ = _
       unfold Parser.depConcat
@@ -385,9 +376,9 @@ private theorem parseVal_serialVal_transform
     | missing => exact hwfd'.elim
 
 theorem idInterParseOk (v : Value) (d : Desc) :
-    d.AllWF → v.AllWF → valid' d v →
+    d.AllWF → v.AllWF →
     LimitParseOkCompat'' IdCompatibleWrapper parseValue serialValue d d v := by
-  intro hd hv hvalid
+  intro hd hv
   -- Use the transform-equality approach: prove parsing produces idCompatTransform d v,
   -- then derive IdCompatible via idCompatRoundTrip.
   -- First, prove the stronger LimitParseOkCompat'' with R = "result equals idCompatTransform".
@@ -396,27 +387,27 @@ theorem idInterParseOk (v : Value) (d : Desc) :
     unfold LimitParseOkCompat'' at hstrong ⊢
     intro enc hwf hser
     obtain ⟨x', hparse, heq⟩ := hstrong enc hwf hser
-    exact ⟨x', hparse, heq ▸ idCompatRoundTrip v d hd hv hvalid⟩
+    exact ⟨x', hparse, heq ▸ idCompatRoundTrip v d hd hv hwf⟩
   -- Apply the recursive-state correctness combinator.
   apply limitRecursiveStateCompat_correct
     (fun d₁ _ v v' => v' = idCompatTransform d₁ v)
     parseValue' serialValue'
-    (fun d v => d.AllWF ∧ v.AllWF ∧ valid' d v) (· = ·)
-    valueDepth d d v _ ⟨hd, hv, hvalid⟩ rfl
+    (fun d v => d.AllWF ∧ v.AllWF) (· = ·)
+    valueDepth d d v _ ⟨hd, hv⟩ rfl
   -- Per-step proof.
-  intro st1 st2 x enc hwf_x ⟨hdwf, hvwf, hvalid_x⟩ hlinked IH hser
+  intro st1 st2 x enc hwf_x ⟨hdwf, hvwf⟩ hlinked IH hser
   subst hlinked
   -- Extract IH in usable form.
   have IH' : ∀ (d' : Desc) (v' : Value) (encInner : List UInt8),
       Input.length encInner < Input.length enc →
       valueDepth v' < valueDepth x →
-      valueWf d' v' → d'.AllWF → v'.AllWF → valid' d' v' →
+      valueWf d' v' → d'.AllWF → v'.AllWF →
       Serializer.recurSt serialValue' valueDepth d' v' = .success () encInner →
       Parser.recurSt parseValue' d' encInner =
         .success (idCompatTransform d' v') Input.default := by
-    intro d' v' encInner hlen hdep hwfv' hd' hv' hval' hserv'
+    intro d' v' encInner hlen hdep hwfv' hd' hv' hserv'
     obtain ⟨x'', hpar, heq⟩ :=
-      IH encInner d' d' v' hlen hdep hwfv' ⟨hd', hv', hval'⟩ rfl hserv'
+      IH encInner d' d' v' hlen hdep hwfv' ⟨hd', hv'⟩ rfl hserv'
     subst heq; exact hpar
   -- The witness is idCompatTransform st1 x.
   refine ⟨idCompatTransform st1 x, ?_, rfl⟩
@@ -506,7 +497,7 @@ theorem idInterParseOk (v : Value) (d : Desc) :
       exact willEncode_nonEmpty st1 kv.1 kv.2 encE hwfE hserE
     · -- Per-element correctness.
       intro kv encElem hin hser_e hbound rest hwfE hserE
-      exact parseVal_serialVal_transform st1 x enc hvalid_x hdwf hvwf hwf_x IH'
+      exact parseVal_serialVal_transform st1 x enc hdwf hvwf hwf_x IH'
         kv encElem hin hser_e hbound rest hwfE hserE
     · exact hpwf
     · exact hser_swap
@@ -522,7 +513,7 @@ theorem idInterParseOk (v : Value) (d : Desc) :
   rw [hrep]
   -- Step 6: Simplify the match and use the key equality.
   simp only []
-  rw [listToValue_map_eq_idCompatTransform st1 x hdwf hvwf hvalid_x hwf_x]
+  rw [listToValue_map_eq_idCompatTransform st1 x hdwf hvwf hwf_x]
 
 theorem schemaCorrectInterParseOk (v : Value) (d : Desc) :
     ⟨ v ∷ d ⟩ →
