@@ -14,6 +14,13 @@
   They must be defined in a single `mutual` block because they reference each
   other: `V-Msg → ≼`, `F-Msg → ≪`, `D-Chg → ∝`, `M-Update → ≺` and `∝`.
 
+  `≼`'s ninth rule, `M-Declare`, is load-bearing rather than convenient:
+  without it the relation cannot express a writer that declares a field its own
+  value leaves unset — a configuration `serialValue`/`parseValue` produce
+  routinely, and one `valueWf` permits — so the round-trip theorem would be
+  false even at `d₁ = d₂`.  See `MsgCompat.declare` and
+  `msgCompat_of_idCompatible`.
+
   Unlike `SchemaCorrectCompatible` and `IdCompatible`, this relation is
   genuinely two-descriptor: it is the relation that makes
   `LimitParseOkCompat'' R parseValue serialValue d₁ d₂ v` interesting for
@@ -43,7 +50,17 @@ namespace Pollux.InterParse
     become explicit `get?` hypotheses.
   * `insert` overwrites, so rules that extend a map carry `get? k = none`
     premises on *both* sides (the report states these only for the left-hand
-    pair in `M-Add`/`M-Missing` and only for the right-hand pair in `M-Drop`).
+    pair in `M-Missing`/`M-Declare` and only for the right-hand pair in
+    `M-Drop`).
+
+  **`M-Add` is deliberately omitted.**  The report's `M-Add` lets the reader
+  gain a field carrying *any* value matching its declared type, at a key the
+  writer's descriptor never declared.  No round trip produces that: the writer
+  emits nothing for such a key and `parseVal` injects `.missing`, which is
+  exactly `M-Missing`.  Because `≼` occurs only positively in
+  `LimitParseOkCompat''`, keeping `M-Add` would have been sound — but it would
+  let a derivation conjure values out of thin air, so `≼` could not be read as
+  a specification of what parsing produces.  `M-Missing` covers the real case.
 
   Well-formedness (`Desc.WF` / `Value.WF`) is *not* required by the
   constructors; as with `SchemaCorrect` and `IdCompatible` it is carried
@@ -113,23 +130,33 @@ inductive DescCompat : Desc → Desc → Prop where
 inductive MsgCompat : Value → Desc → Value → Desc → Prop where
   /-- M-Emp -/
   | emp : MsgCompat (∅ : Value) (∅ : Desc) (∅ : Value) (∅ : Desc)
-  /-- M-Add: the reader gains a field carrying a value that matches its
-      declared type. -/
-  | add (m₁ : Value) (d₁ : Desc) (m₂ : Value) (d₂ : Desc) (k : Int)
-      (v : Val) (f : Field) :
-    MsgCompat m₁ d₁ m₂ d₂ →
-    fieldValMatch f v →
-    m₁.get? k = none → d₁.get? k = none →
-    m₂.get? k = none → d₂.get? k = none →
-    MsgCompat m₁ d₁ (m₂.insert k v) (d₂.insert k f)
   /-- M-Missing: the reader declares a field the writer never had, so parsing
-      injects `V_MISSING`. -/
+      injects `V_MISSING`.  This is the *only* rule that gives the reader a key
+      the writer's descriptor did not declare, and the value it gives is always
+      `.missing` — see the note on `M-Add` in the module header. -/
   | missing (m₁ : Value) (d₁ : Desc) (m₂ : Value) (d₂ : Desc) (k : Int)
       (f : Field) :
     MsgCompat m₁ d₁ m₂ d₂ →
     m₁.get? k = none → d₁.get? k = none →
     m₂.get? k = none → d₂.get? k = none →
     MsgCompat m₁ d₁ (m₂.insert k .missing) (d₂.insert k f)
+  /-- M-Declare: the writer *declares* a field its own value never populates,
+      so parsing injects `V_MISSING` on the reader's side.  This is `M-Missing`
+      with `d₁` extended alongside `d₂`.
+
+      Not optional: without it `≼` cannot follow `IdCompatible.addMissing`, and
+      the cross-descriptor round-trip theorem is *false* already at `d₁ = d₂`.
+      `serialValue` emits nothing for a declared-but-absent key and
+      `parseValue` reads it back as `.missing`; `valueWf` permits exactly that
+      (it constrains only the keys the value actually carries), so the
+      configuration is reachable from the top-level theorem's hypotheses and no
+      other rule produces it. -/
+  | declare (m₁ : Value) (d₁ : Desc) (m₂ : Value) (d₂ : Desc) (k : Int)
+      (f : Field) :
+    MsgCompat m₁ d₁ m₂ d₂ →
+    m₁.get? k = none → d₁.get? k = none →
+    m₂.get? k = none → d₂.get? k = none →
+    MsgCompat m₁ (d₁.insert k f) (m₂.insert k .missing) (d₂.insert k f)
   /-- M-Update: an existing field changes value and type together. -/
   | update (m₁ : Value) (d₁ : Desc) (m₂ : Value) (d₂ : Desc) (k : Int)
       (v₁ : Val) (f₁ : Field) (v : Val) (f : Field) :
@@ -180,55 +207,266 @@ def MsgCompatWrapper (d₁ d₂ : Desc) (v₁ v₂ : Value) : Prop :=
 
 /-! ## Recovering `IdCompatible`
 
-  `MsgCompat` should subsume `IdCompatible` at `d₁ = d₂ = d`.  The subsumption
-  is stated below but not proved — it is not needed for the round-trip theorem,
-  which only ever *constructs* `MsgCompat` derivations, but it is the sanity
-  check that says the new relation really is a generalization of the old one. -/
+  `MsgCompat` subsumes `IdCompatible` at `d₁ = d₂ = d`: the sanity check saying
+  the new relation really is a generalization of the old one.  It is not needed
+  for the round-trip theorem, which only ever *constructs* `MsgCompat`
+  derivations.
 
-/-- Every `IdCompatible` derivation is built from `∅` by `Desc.insert` /
-    `Value.insert`, so all three components are automatically well-formed.
-    This is what lets `msgCompat_of_idCompatible` be stated without `WF`
-    hypotheses even though its proof needs them. -/
-theorem idCompatible_wf (d : Desc) (v₁ v₂ : Value) :
-    (⟨ v₁ ≼ v₂ ⟩∷ d) → d.WF ∧ v₁.WF ∧ v₂.WF := by
+  The subsumption is what forced `M-Declare` into the rule set.  Without it `≼`
+  has no rule extending the writer's descriptor `d₁` while leaving the writer's
+  value `m₁` alone — `M-Missing` extends `m₂`/`d₂` only and `M-Drop` extends
+  `m₁` and `d₁` in lockstep — so it cannot follow `IdCompatible.addMissing`, and
+  the witness `d = {0 ↦ int}`, `v₁ = ∅`, `v₂ = {0 ↦ missing}` is a genuine
+  round trip that no derivation reaches.  See `MsgCompat.declare`.
+
+  Note the cost, recorded in `not_msgCompat_dom`: with `M-Declare` present `≼`
+  no longer constrains the four domains at all.  That is not a soundness
+  problem — `≼` occurs only positively in `LimitParseOkCompat''`, and the
+  constraint on which `(writer, reader)` descriptor pairs the theorem covers
+  comes from `≪` in the `linkedState` slot, never from `≼`. -/
+
+/-! ### A single-relation eliminator for `≼`
+
+  Same construction as `DescCompat.ind` below: `MsgCompat.rec` is fed `True`
+  motives for `≺`, `∝` and `≪`.  An earlier note in this file said this cannot
+  work because `M-Update` "genuinely depends on both" `≺` and `∝` — that is
+  true of a motive that has to *inspect* the value relation, but for a motive
+  that only tracks the four maps (as `not_msgCompat_dom` below does) the two
+  premises can simply be handed back unanalyzed, exactly as `F-Msg` hands back
+  a raw `≪` in `FieldCompat.ind`. -/
+
+/-- Induction principle for `MsgCompat` alone.  Use it as
+    `refine MsgCompat.ind (motive := fun m₁ d₁ m₂ d₂ => …) ?_ … h`. -/
+theorem MsgCompat.ind {motive : Value → Desc → Value → Desc → Prop}
+    (hemp : motive ∅ ∅ ∅ ∅)
+    (hmissing : ∀ m₁ d₁ m₂ d₂ k f, (⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩) →
+      m₁.get? k = none → d₁.get? k = none → m₂.get? k = none → d₂.get? k = none →
+      motive m₁ d₁ m₂ d₂ → motive m₁ d₁ (m₂.insert k .missing) (d₂.insert k f))
+    (hdeclare : ∀ m₁ d₁ m₂ d₂ k f, (⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩) →
+      m₁.get? k = none → d₁.get? k = none → m₂.get? k = none → d₂.get? k = none →
+      motive m₁ d₁ m₂ d₂ →
+      motive m₁ (d₁.insert k f) (m₂.insert k .missing) (d₂.insert k f))
+    (hupdate : ∀ m₁ d₁ m₂ d₂ k v₁ f₁ v f, (⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩) →
+      m₁.get? k = some v₁ → d₁.get? k = some f₁ →
+      (⟨ v₁ ∷ f₁ ⟩≺⟨ v ∷ f ⟩) → (f₁ ∝ f) →
+      motive m₁ d₁ m₂ d₂ → motive m₁ d₁ (m₂.insert k v) (d₂.insert k f))
+    (hdrop : ∀ m₁ d₁ m₂ d₂ k v f, (⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩) →
+      m₁.get? k = none → d₁.get? k = none → m₂.get? k = none → d₂.get? k = none →
+      motive m₁ d₁ m₂ d₂ → motive (m₁.insert k v) (d₁.insert k f) m₂ d₂)
+    (hdropUnknown : ∀ m₁ d₁ m₂ d₂ k v, (⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩) →
+      m₁.get? k = none → d₁.get? k = none →
+      motive m₁ d₁ m₂ d₂ → motive (m₁.insert k v) d₁ m₂ d₂)
+    (hrefl : ∀ m d, motive m d m d)
+    (htrans : ∀ m₁ d₁ m₂ d₂ m₃ d₃, (⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩) → (⟨ m₂ ∷ d₂ ⟩⪯⟨ m₃ ∷ d₃ ⟩) →
+      motive m₁ d₁ m₂ d₂ → motive m₂ d₂ m₃ d₃ → motive m₁ d₁ m₃ d₃)
+    {m₁ : Value} {d₁ : Desc} {m₂ : Value} {d₂ : Desc}
+    (h : ⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩) : motive m₁ d₁ m₂ d₂ := by
+  refine MsgCompat.rec
+    (motive_1 := fun _ _ _ _ _ => True) (motive_2 := fun _ _ _ => True)
+    (motive_3 := fun _ _ _ => True)
+    (motive_4 := fun a b c e _ => motive a b c e)
+    ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ h
+  all_goals try (intros; exact trivial)
+  case _ => exact hemp
+  case _ =>
+    intro a b c e k f hmc h1 h2 h3 h4 ih
+    exact hmissing a b c e k f hmc h1 h2 h3 h4 ih
+  case _ =>
+    intro a b c e k f hmc h1 h2 h3 h4 ih
+    exact hdeclare a b c e k f hmc h1 h2 h3 h4 ih
+  case _ =>
+    intro a b c e k v₁ f₁ v f hmc h1 h2 hv hf ih _ _
+    exact hupdate a b c e k v₁ f₁ v f hmc h1 h2 hv hf ih
+  case _ =>
+    intro a b c e k v f hmc h1 h2 h3 h4 ih
+    exact hdrop a b c e k v f hmc h1 h2 h3 h4 ih
+  case _ =>
+    intro a b c e k v hmc h1 h2 ih
+    exact hdropUnknown a b c e k v hmc h1 h2 ih
+  case _ => intro m d; exact hrefl m d
+  case _ =>
+    intro a b c e g i h1 h2 ih1 ih2
+    exact htrans a b c e g i h1 h2 ih1 ih2
+
+/-! ### The domain invariant of `≼` collapses
+
+  Before `M-Declare`, `≼` satisfied a genuine domain invariant: every key of
+  the reader's value was a key of the writer's value or a key the writer's
+  descriptor did not declare, and every key the writer declared was declared by
+  the reader or populated in the writer's value.  That invariant is what showed
+  the subsumption of `IdCompatible` to be underivable, and so it is the reason
+  `M-Declare` exists.
+
+  `M-Declare` destroys it outright.  Both halves fail, and the second fails
+  even though `M-Declare` does not obviously bear on it: composing `M-Declare`
+  with `M-Drop` yields `⟨ ∅ ∷ {0 ↦ int} ⟩⪯⟨ ∅ ∷ ∅ ⟩`, a derivation whose writer
+  declares a key that neither the reader's descriptor nor the writer's value
+  mentions.  `not_msgCompat_dom` records this.
+
+  Nothing downstream depended on the invariant, and nothing can: `≼` occurs
+  only positively in `LimitParseOkCompat''`, so it never constrains anything —
+  the constraint on which `(writer, reader)` descriptor pairs the top-level
+  theorem covers comes from `≪` in the `linkedState` slot.  `MsgCompat.ind` is
+  kept regardless: the mutual block admits no `induction` tactic, so it is the
+  only route to any future proof about `≼`. -/
+
+/-- The domain invariant of `≼`, as it stood before `M-Declare`, is false.
+
+    Witness: `M-Declare` at key `0` builds
+    `⟨ ∅ ∷ {0 ↦ int} ⟩⪯⟨ {0 ↦ missing} ∷ {0 ↦ int} ⟩` and `M-Drop` at the same
+    key builds `⟨ {0 ↦ missing} ∷ {0 ↦ int} ⟩⪯⟨ ∅ ∷ ∅ ⟩`; `M-Trans` composes
+    them into `⟨ ∅ ∷ {0 ↦ int} ⟩⪯⟨ ∅ ∷ ∅ ⟩`, refuting the second conjunct at
+    `k = 0`.  The first conjunct fails on the `M-Declare` step alone. -/
+theorem not_msgCompat_dom :
+    ¬ ∀ (m₁ : Value) (d₁ : Desc) (m₂ : Value) (d₂ : Desc),
+      (⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩) →
+      (∀ k, (m₂.get? k).isSome → (m₁.get? k).isSome ∨ d₁.get? k = none) ∧
+      (∀ k, (d₁.get? k).isSome → (d₂.get? k).isSome ∨ (m₁.get? k).isSome) := by
   intro h
-  induction h with
-  | emp => exact ⟨Desc.empty_wf, Value.empty_wf, Value.empty_wf⟩
-  | insertInt d v1 v2 k z _ _ _ _ ih =>
-    exact ⟨Desc.insert_wf d k _ ih.1, Value.insert_wf v1 k _ ih.2.1,
-      Value.insert_wf v2 k _ ih.2.2⟩
-  | insertBool d v1 v2 k b _ _ _ _ ih =>
-    exact ⟨Desc.insert_wf d k _ ih.1, Value.insert_wf v1 k _ ih.2.1,
-      Value.insert_wf v2 k _ ih.2.2⟩
-  | insertMsg d d' v1 v2 v1' v2' k _ _ _ _ _ ih _ =>
-    exact ⟨Desc.insert_wf d k _ ih.1, Value.insert_wf v1 k _ ih.2.1,
-      Value.insert_wf v2 k _ ih.2.2⟩
-  | drop d v1 v2 k val _ _ _ ih =>
-    exact ⟨ih.1, Value.insert_wf v1 k _ ih.2.1, ih.2.2⟩
-  | addMissing d v1 v2 k f _ _ _ _ ih =>
-    exact ⟨Desc.insert_wf d k _ ih.1, ih.2.1, Value.insert_wf v2 k _ ih.2.2⟩
-  | inputMissing d v1 v2 k f _ _ _ _ ih =>
-    exact ⟨Desc.insert_wf d k _ ih.1, Value.insert_wf v1 k _ ih.2.1,
-      Value.insert_wf v2 k _ ih.2.2⟩
+  have hdecl : ⟨ (∅ : Value) ∷ (∅ : Desc).insert 0 .int ⟩⪯⟨
+      (∅ : Value).insert 0 .missing ∷ (∅ : Desc).insert 0 .int ⟩ :=
+    MsgCompat.declare ∅ ∅ ∅ ∅ 0 .int MsgCompat.emp rfl rfl rfl rfl
+  have hdrop : ⟨ (∅ : Value).insert 0 .missing ∷ (∅ : Desc).insert 0 .int ⟩⪯⟨
+      (∅ : Value) ∷ (∅ : Desc) ⟩ :=
+    MsgCompat.drop ∅ ∅ ∅ ∅ 0 .missing .int MsgCompat.emp rfl rfl rfl rfl
+  have hcomp := MsgCompat.trans _ _ _ _ _ _ hdecl hdrop
+  rcases (h _ _ _ _ hcomp).2 0 (by rw [Desc.get?_insert_same]; rfl) with hh | hh
+  · simp [Desc.get?, Desc.fields] at hh
+  · simp [Value.get?, Value.vals] at hh
 
-/-- `MsgCompat` subsumes `IdCompatible`.
-
-    Proof route, if someone wants to finish it: induct on the `IdCompatible`
-    derivation, carrying `idCompatible_wf` alongside.
+/-- `MsgCompat` subsumes `IdCompatible`, via `M-Declare`.
 
     * `emp` is `M-Emp`.
-    * `drop` is `M-Drop-Unknown` directly — the two rules are the same shape.
+    * `drop` is `M-Drop-Unknown` — the two rules are the same shape.
     * each `insert*` case needs *two* steps, because no single rule extends all
       four of `m₁, d₁, m₂, d₂` at once: first `M-Drop` to extend `m₁` and `d₁`,
-      then `M-Update` (at `V-Refl` / `F-Refl`) to extend `m₂` and `d₂`.  The
-      `M-Update` step reads the just-inserted entry back with
-      `Value.get?_insert_same` / `Desc.get?_insert_same`, which is where the
-      well-formedness side conditions are consumed.
-    * `addMissing` is `M-Missing`; `inputMissing` is `M-Drop` followed by
-      `M-Missing`. -/
+      then `M-Update` at `V-Refl`/`F-Refl` to extend `m₂` and `d₂`.
+    * `addMissing` is `M-Declare`, the rule added for exactly this case.
+    * `inputMissing` is `M-Drop` followed by `M-Update` — *not* `M-Missing`,
+      whose `m₁.get? k = none` premise fails once `M-Drop` has put `k` into
+      `m₁`.
+
+    No well-formedness hypotheses are needed: the `M-Update` steps read the
+    just-inserted entries back with `Value.get?_insert_same` /
+    `Desc.get?_insert_same`, which carry no `WF` side condition. -/
 theorem msgCompat_of_idCompatible (d : Desc) (v₁ v₂ : Value) :
     (⟨ v₁ ≼ v₂ ⟩∷ d) → ⟨ v₁ ∷ d ⟩⪯⟨ v₂ ∷ d ⟩ := by
-  sorry
+  intro h
+  induction h with
+  | emp => exact MsgCompat.emp
+  | insertInt d v1 v2 k z _ hd hv1 hv2 ih =>
+    exact MsgCompat.update _ _ v2 d k (.int z) .int (.int z) .int
+      (MsgCompat.drop v1 d v2 d k (.int z) .int ih hv1 hd hv2 hd)
+      (Value.get?_insert_same v1 k _) (Desc.get?_insert_same d k _)
+      (ValCompat.refl _ _) (FieldCompat.refl _)
+  | insertBool d v1 v2 k b _ hd hv1 hv2 ih =>
+    exact MsgCompat.update _ _ v2 d k (.bool b) .bool (.bool b) .bool
+      (MsgCompat.drop v1 d v2 d k (.bool b) .bool ih hv1 hd hv2 hd)
+      (Value.get?_insert_same v1 k _) (Desc.get?_insert_same d k _)
+      (ValCompat.refl _ _) (FieldCompat.refl _)
+  | insertMsg d d' v1 v2 v1' v2' k _ _ hd hv1 hv2 ih ih' =>
+    exact MsgCompat.update _ _ v2 d k (.msg v1') (.msg d') (.msg v2') (.msg d')
+      (MsgCompat.drop v1 d v2 d k (.msg v1') (.msg d') ih hv1 hd hv2 hd)
+      (Value.get?_insert_same v1 k _) (Desc.get?_insert_same d k _)
+      (ValCompat.msg v1' d' v2' d' ih') (FieldCompat.refl _)
+  | drop d v1 v2 k val _ hd hv1 ih =>
+    exact MsgCompat.dropUnknown v1 d v2 d k val ih hv1 hd
+  | addMissing d v1 v2 k f _ hd hv1 hv2 ih =>
+    exact MsgCompat.declare v1 d v2 d k f ih hv1 hd hv2 hd
+  | inputMissing d v1 v2 k f _ hd hv1 hv2 ih =>
+    exact MsgCompat.update _ _ v2 d k .missing f .missing f
+      (MsgCompat.drop v1 d v2 d k .missing f ih hv1 hd hv2 hd)
+      (Value.get?_insert_same v1 k _) (Desc.get?_insert_same d k _)
+      (ValCompat.refl _ _) (FieldCompat.refl _)
+
+/-! ### `IdCompatible` on schema-correct writers
+
+  Worth recording separately, because it says the subsumption above carries no
+  information in the schema-correct case.  `SchemaCorrect` rules out the three
+  `IdCompatible` rules that move anything — `addMissing` (a declared key the
+  writer's value omits), `inputMissing` (a declared key explicitly set to
+  `V_MISSING`) and `drop` (an entry whose key the descriptor never declared) —
+  leaving `emp` and the three `insert*` rules, which build the two values in
+  lockstep.  `IdCompatible` therefore degenerates to equality, and
+  `msgCompat_of_idCompatible` to `M-Refl`.
+
+  The two inversion lemmas the induction needs are recorded first; both are
+  ordinary facts about `SchemaCorrect` that the existing files did not have. -/
+
+/-- Erasing a freshly inserted key undoes the insert. -/
+theorem desc_erase_insert_self (d : Desc) (k : Int) (f : Field) (h : d.get? k = none) :
+    (d.insert k f).erase k = d := by
+  cases d with | mk fs =>
+  show Desc.mk (Desc.sortedErase k (Desc.sortedInsert k f fs)) = Desc.mk fs
+  rw [desc_sortedErase_sortedInsert_same k f fs h]
+
+@[inherit_doc desc_erase_insert_self]
+theorem value_erase_insert_self (v : Value) (k : Int) (a : Val) (h : v.get? k = none) :
+    (v.insert k a).erase k = v := by
+  cases v with | mk vs =>
+  show Value.mk (Value.sortedErase k (Value.sortedInsert k a vs)) = Value.mk vs
+  rw [value_sortedErase_sortedInsert_same k a vs h]
+
+/-- Inversion for `SchemaCorrect` at a simultaneous insert on a fresh key. -/
+theorem sc_insert_inv (d : Desc) (v : Value) (k : Int) (f : Field) (a : Val)
+    (hd : d.get? k = none) (hv : v.get? k = none)
+    (h : ⟨ v.insert k a ∷ d.insert k f ⟩) : ⟨ v ∷ d ⟩ := by
+  have h' := sc_delete_key _ _ k h
+  rwa [desc_erase_insert_self d k f hd, value_erase_insert_self v k a hv] at h'
+
+/-- A nested message of a schema-correct value is schema-correct for the nested
+    descriptor.  This is `sc_implies_nested_correct` read off at one key. -/
+theorem sc_nested_inv (d : Desc) (v : Value) (k : Int) (d' : Desc) (v' : Value)
+    (hd : d.get? k = some (.msg d')) (hv : v.get? k = some (.msg v'))
+    (h : ⟨ v ∷ d ⟩) : ⟨ v' ∷ d' ⟩ := by
+  have hmem : (k, Val.msg v') ∈ v.vals := by
+    cases v with | mk vs => exact mem_of_lookup_val vs k _ hv
+  have hnc := sc_implies_nested_correct d v h (k, Val.msg v') hmem
+  unfold nestedCorrect at hnc
+  have hlk : d.fields.lookup k = some (.msg d') := hd
+  rw [hlk] at hnc
+  exact hnc
+
+/-- Under a schema-correct writer, `IdCompatible` degenerates to equality. -/
+theorem idCompatible_eq_of_schemaCorrect (d : Desc) (v₁ v₂ : Value) :
+    (⟨ v₁ ≼ v₂ ⟩∷ d) → ⟨ v₁ ∷ d ⟩ → v₁ = v₂ := by
+  intro h
+  induction h with
+  | emp => intro _; rfl
+  | insertInt d v1 v2 k z _ hd hv1 hv2 ih =>
+    intro hsc; rw [ih (sc_insert_inv d v1 k .int (.int z) hd hv1 hsc)]
+  | insertBool d v1 v2 k b _ hd hv1 hv2 ih =>
+    intro hsc; rw [ih (sc_insert_inv d v1 k .bool (.bool b) hd hv1 hsc)]
+  | insertMsg d d' v1 v2 v1' v2' k _ _ hd hv1 hv2 ih ih' =>
+    intro hsc
+    have hinner : ⟨ v1' ∷ d' ⟩ :=
+      sc_nested_inv (d.insert k (.msg d')) (v1.insert k (.msg v1')) k d' v1'
+        (Desc.get?_insert_same d k _) (Value.get?_insert_same v1 k _) hsc
+    rw [ih (sc_insert_inv d v1 k (.msg d') (.msg v1') hd hv1 hsc), ih' hinner]
+  | drop d v1 v2 k val _ hd hv1 _ =>
+    intro hsc
+    obtain ⟨f, hf⟩ :=
+      sc_implies_val_in_desc d _ hsc k val (Value.get?_insert_same v1 k val)
+    rw [hd] at hf
+    exact absurd hf (by simp)
+  | addMissing d v1 v2 k f _ _ hv1 _ _ =>
+    intro hsc
+    obtain ⟨val, hval⟩ :=
+      sc_implies_desc_in_val _ v1 hsc k f (Desc.get?_insert_same d k f)
+    rw [hv1] at hval
+    exact absurd hval (by simp)
+  | inputMissing d v1 v2 k f _ _ _ _ _ =>
+    intro hsc
+    exact absurd (Value.get?_insert_same v1 k .missing)
+      (sc_implies_no_missing _ _ hsc k)
+
+/-- Hence `msgCompat_of_idCompatible` is `M-Refl` in disguise on schema-correct
+    writers. -/
+theorem msgCompat_of_idCompatible_of_schemaCorrect (d : Desc) (v₁ v₂ : Value) :
+    (⟨ v₁ ≼ v₂ ⟩∷ d) → ⟨ v₁ ∷ d ⟩ → ⟨ v₁ ∷ d ⟩⪯⟨ v₂ ∷ d ⟩ := by
+  intro h hsc
+  rw [← idCompatible_eq_of_schemaCorrect d v₁ v₂ h hsc]
+  exact MsgCompat.refl v₁ d
 
 /-! ### The two dropping rules
 
@@ -262,17 +500,6 @@ theorem msgCompat_of_idCompatible (d : Desc) (v₁ v₂ : Value) :
   consequence worth stating once: `⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩` does *not* imply
   `d₁ ⋘ d₂`. -/
 
-/-- `M-Add` at `V-Refl`/`F-Refl` is the same-descriptor insert of
-    `IdCompatible.insertInt`. -/
-theorem msgCompat_insert_int (m₁ : Value) (d₁ : Desc) (m₂ : Value) (d₂ : Desc)
-    (k z : Int) :
-    ⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩ →
-    m₁.get? k = none → d₁.get? k = none →
-    m₂.get? k = none → d₂.get? k = none →
-    ⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂.insert k (.int z) ∷ d₂.insert k .int ⟩ :=
-  fun h h₁ h₂ h₃ h₄ =>
-    MsgCompat.add m₁ d₁ m₂ d₂ k (.int z) .int h trivial h₁ h₂ h₃ h₄
-
 /-! ## Structural lemmas for `DescCompat`
 
   These are what `limitRecursiveStateCompat_correct` needs: from
@@ -291,15 +518,16 @@ theorem msgCompat_insert_int (m₁ : Value) (d₁ : Desc) (m₂ : Value) (d₂ :
   three relations, recovering ordinary induction on `≪`.  Every proof below
   goes through it.
 
-  The analogous `MsgCompat.ind` will need real motives for `≺` and `∝` (its
-  `M-Update` case genuinely depends on both), so it cannot be produced by the
-  same trick — it has to be a proper simultaneous induction.
+  `MsgCompat.ind` above is the same construction.  It works for the same
+  reason: a motive that only tracks the four maps can hand `M-Update`'s `≺` and
+  `∝` premises back unanalyzed.  A motive that has to *inspect* the value
+  relation would need a proper simultaneous induction.
 
-  **Maintenance note.**  Both eliminators feed `.rec` one `?_` per constructor
-  across the *whole* mutual block — currently 5 + 5 + 5 + 8 = 23.  Adding a
-  rule to any of the four relations breaks both `refine`s with a confusing
-  "application type mismatch" on the major premise; the fix is to add one more
-  `?_`, not to change the motives. -/
+  **Maintenance note.**  All three eliminators feed `.rec` one `?_` per
+  constructor across the *whole* mutual block — currently 5 + 5 + 5 + 8 = 23.
+  Adding a rule to any of the four relations breaks all three `refine`s with a
+  confusing "application type mismatch" on the major premise; the fix is to add
+  one more `?_`, not to change the motives. -/
 
 /-- Induction principle for `DescCompat` alone.  Use it as
     `refine DescCompat.ind (motive := fun a b => …) ?_ ?_ ?_ ?_ ?_ h` — the
@@ -349,11 +577,11 @@ theorem FieldCompat.ind {motive : Field → Field → Prop}
     | (rename_i a b c hab hbc iha ihb; exact htrans a b c hab hbc iha ihb)
     | (rename_i f; exact hrefl f)
 
-/-- `≪` preserves the sorted/no-duplicate-keys invariant.  Needed as a side
-    condition throughout, because `Desc.get?_insert_same` and
-    `Desc.get?_insert_ne` only hold on well-formed descriptors — in a
-    `D-Trans` chain the intermediate descriptor's `WF` is not otherwise
-    available. -/
+/-- `≪` preserves the sorted/no-duplicate-keys invariant.  No longer needed by
+    the lemmas below — `Desc.get?_insert_same` and `Desc.get?_insert_ne` hold
+    unconditionally — but kept as the structural counterpart of
+    `not_descCompat_allWF`: `WF` lifts along `≪`, the recursive `AllWF` does
+    not. -/
 theorem descCompat_wf (d₁ d₂ : Desc) : d₁ ⋘ d₂ → d₁.WF → d₂.WF := by
   intro h
   refine DescCompat.ind (motive := fun a b => a.WF → b.WF) ?_ ?_ ?_ ?_ ?_ h
@@ -368,51 +596,50 @@ theorem descCompat_wf (d₁ d₂ : Desc) : d₁ ⋘ d₂ → d₁.WF → d₂.WF
     consumes the tag byte but not the payload, so a reader that is missing a
     key the writer encoded would desynchronize the byte stream. -/
 theorem descCompat_isSome (d₁ d₂ : Desc) (k : Int) :
-    d₁ ⋘ d₂ → d₁.WF → (d₁.get? k).isSome → (d₂.get? k).isSome := by
+    d₁ ⋘ d₂ → (d₁.get? k).isSome → (d₂.get? k).isSome := by
   intro h
   refine DescCompat.ind
-    (motive := fun a b => a.WF → (a.get? k).isSome → (b.get? k).isSome)
+    (motive := fun a b => (a.get? k).isSome → (b.get? k).isSome)
     ?_ ?_ ?_ ?_ ?_ h
+  · exact id
+  · intro d k' f _ hk
+    rcases eq_or_ne k' k with rfl | hne
+    · simp [Desc.get?_insert_same d k' f]
+    · rw [Desc.get?_insert_ne d k' k f hne]; exact hk
+  · intro d k' f₀ f _ _ hk
+    rcases eq_or_ne k' k with rfl | hne
+    · simp [Desc.get?_insert_same d k' f]
+    · rw [Desc.get?_insert_ne d k' k f hne]; exact hk
   · exact fun _ => id
-  · intro d k' f _ hwf hk
-    rcases eq_or_ne k' k with rfl | hne
-    · simp [Desc.get?_insert_same d k' f hwf]
-    · rw [Desc.get?_insert_ne d k' k f hwf hne]; exact hk
-  · intro d k' f₀ f _ _ hwf hk
-    rcases eq_or_ne k' k with rfl | hne
-    · simp [Desc.get?_insert_same d k' f hwf]
-    · rw [Desc.get?_insert_ne d k' k f hwf hne]; exact hk
-  · exact fun _ _ => id
-  · exact fun a b _ hab _ ih₁ ih₂ hwf hk =>
-      ih₂ (descCompat_wf a b hab hwf) (ih₁ hwf hk)
+  · exact fun _ _ _ _ _ ih₁ ih₂ hk => ih₂ (ih₁ hk)
 
 /-- The field type at a shared key evolves along `∝`.  This is the load-bearing
     inversion lemma: it has to survive `D-Trans`, which is why it is phrased as
     an existential over the target type rather than as an equality. -/
 theorem descCompat_field (d₁ d₂ : Desc) (k : Int) :
-    d₁ ⋘ d₂ → d₁.WF → ∀ f₁, d₁.get? k = some f₁ →
+    d₁ ⋘ d₂ → ∀ f₁, d₁.get? k = some f₁ →
     ∃ f₂, d₂.get? k = some f₂ ∧ (f₁ ∝ f₂) := by
   intro h
   refine DescCompat.ind
-    (motive := fun a b => a.WF → ∀ f₁, a.get? k = some f₁ →
+    (motive := fun a b => ∀ f₁, a.get? k = some f₁ →
       ∃ f₂, b.get? k = some f₂ ∧ (f₁ ∝ f₂))
     ?_ ?_ ?_ ?_ ?_ h
-  · intro _ f₁ hk; simp [Desc.get?, Desc.fields] at hk
-  · intro d k' f hnone hwf f₁ hk
+  · intro f₁ hk; simp [Desc.get?, Desc.fields] at hk
+  · intro d k' f hnone f₁ hk
     rcases eq_or_ne k' k with rfl | hne
     · rw [hnone] at hk; exact absurd hk (by simp)
-    · exact ⟨f₁, by rw [Desc.get?_insert_ne d k' k f hwf hne]; exact hk,
+    · exact ⟨f₁, by rw [Desc.get?_insert_ne d k' k f hne]; exact hk,
         FieldCompat.refl f₁⟩
-  · intro d k' f₀ f hsome hf hwf f₁ hk
+  · intro d k' f₀ f hsome hf f₁ hk
     rcases eq_or_ne k' k with rfl | hne
     · rw [hsome] at hk
-      exact ⟨f, Desc.get?_insert_same d k' f hwf, by cases hk; exact hf⟩
-    · exact ⟨f₁, by rw [Desc.get?_insert_ne d k' k f hwf hne]; exact hk,
+      exact ⟨f, Desc.get?_insert_same d k' f, by cases hk; exact hf⟩
+    · exact ⟨f₁, by rw [Desc.get?_insert_ne d k' k f hne]; exact hk,
         FieldCompat.refl f₁⟩
-  · exact fun _ _ f₁ hk => ⟨f₁, hk, FieldCompat.refl f₁⟩
-  · intro a b _ hab _ ih₁ ih₂ hwf f₁ hk
-    obtain ⟨f₂, hf₂, hc₂⟩ := ih₁ hwf f₁ hk
-    obtain ⟨f₃, hf₃, hc₃⟩ := ih₂ (descCompat_wf a b hab hwf) f₂ hf₂
+  · exact fun _ f₁ hk => ⟨f₁, hk, FieldCompat.refl f₁⟩
+  · intro a b _ _ _ ih₁ ih₂ f₁ hk
+    obtain ⟨f₂, hf₂, hc₂⟩ := ih₁ f₁ hk
+    obtain ⟨f₃, hf₃, hc₃⟩ := ih₂ f₂ hf₂
     exact ⟨f₃, hf₃, FieldCompat.trans f₁ f₂ f₃ hc₂ hc₃⟩
 
 /-- `∝` never crosses the scalar/message boundary: there is no derivation from
@@ -458,10 +685,10 @@ theorem fieldCompat_scalar_inv (f₁ f₂ : Field) :
     message in `d₁` is still a nested message in `d₂`, with `≪`-related inner
     descriptors.  Follows from `descCompat_field` and `fieldCompat_msg_inv`. -/
 theorem descCompat_msg (d₁ d₂ : Desc) (k : Int) (d₁' : Desc) :
-    d₁ ⋘ d₂ → d₁.WF → d₁.get? k = some (.msg d₁') →
+    d₁ ⋘ d₂ → d₁.get? k = some (.msg d₁') →
     ∃ d₂', d₂.get? k = some (.msg d₂') ∧ (d₁' ⋘ d₂') := by
-  intro hd hwf hk
-  obtain ⟨f₂, hf₂, hcompat⟩ := descCompat_field d₁ d₂ k hd hwf (.msg d₁') hk
+  intro hd hk
+  obtain ⟨f₂, hf₂, hcompat⟩ := descCompat_field d₁ d₂ k hd (.msg d₁') hk
   obtain ⟨d₂', rfl, hd'⟩ := fieldCompat_msg_inv d₁' f₂ hcompat
   exact ⟨d₂', hf₂, hd'⟩
 

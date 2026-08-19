@@ -64,7 +64,8 @@ lean/
             ├── IdCompatibleHelpers.lean -- sorted-cons smart constructors + transform lemmas
             ├── IdCompatibleRoundTrip.lean -- `idCompatRoundTrip`
             ├── Serialization.lean       -- willEncode + weakening + serializer inversion
-            ├── Compatible.lean          -- full cross-descriptor ≺/∝/≪/≼ + `≪` structure
+            ├── Compatible.lean          -- full cross-descriptor ≺/∝/≪/≼, `≪` structure,
+            │                               `msgCompat_of_idCompatible`
             └── InterParseOk.lean        -- `parseOk_wf` + `schemaCorrectInterParseOk` + `idInterParseOk`
 ```
 
@@ -125,6 +126,8 @@ end
 
 Every constructor in the codebase (`∅`, `insert`, `erase`) preserves `WF`; lemmas use this throughout.
 
+**Lookup after insert carries no `WF` side condition.** `Desc.get?_insert_same` / `get?_insert_ne` and their `Value` analogues (plus `isSome_get?_insert`) hold for *any* underlying list, because `sortedInsert k x` only ever adds or replaces an entry whose key is `k` and leaves every other lookup alone. They are proved from `lookup_sortedInsert_self` / `lookup_sortedInsert_ne`. Prefer them over threading `WF` — several relations (`MsgCompat` especially) carry no well-formedness premises at all, and needing one used to be the only reason `descCompat_isSome` / `descCompat_field` / `descCompat_msg` took a `d₁.WF` argument. Lookup after *erase* still requires `WF`.
+
 The file also defines several derived metrics and predicates that downstream proofs depend on:
 
 - `descSize` / `fieldSize` / `valueSize` / `valSize` — for well-founded recursion
@@ -165,7 +168,22 @@ Two caveats worth knowing before extending this:
 - `idInterParseOk` is stated under `valueWf d v` alone (it used to also require `valid' d v`, which forbade real values at unknown keys and so left the drop case only half-proven). `valueWf` is vacuous on keys outside the descriptor, which is exactly what makes `drop` reachable.
 - `valueWf` still sends `some f, .missing` to `False`, so **`inputMissing` is unreachable from `idInterParseOk`** — `IdCompatible.inputMissing_cons` is currently dead code, and `roundTrip_case4b`'s `.missing` branch is discharged by `valWfFold_missing_elim`. Relaxing that arm of `valueWf` (the serializer already handles the case: `valListFilterP` drops it, `mergeFieldVal` re-injects it) would make the constructor live, but `valueWf` is `serialValue`'s phantom wf, so the change also touches `schemaCorrectInterParseOk` and the `Serialization.lean` inversion lemmas.
 
-The `≼` in both notations is suggestive: these are partial orders on the schema-extension lattice. Neither is the cross-descriptor "full compatibility relation" (value `≺` / field-type `∝` / descriptor-type `≪` / message `≼`) from the written report — that is not implemented. The plumbing anticipates it: `LimitParseOkCompat''` already takes two descriptors, and `limitRecursiveStateCompat_correct` takes a `linkedState : σ → σ → Prop` that both current theorems instantiate with `(· = ·)`.
+The `≼` in both notations is suggestive: these are partial orders on the schema-extension lattice. Neither is the cross-descriptor "full compatibility relation" from the written report — that lives in `Theorems/Compatible.lean`, below.
+
+**The full compatibility relation** (`Theorems/Compatible.lean`)
+
+Four mutually-recursive relations transcribing `sec:ip-compat-rel` of the report: `ValCompat v₁ f₁ v₂ f₂` (`≺`, notation `⟨ v₁ ∷ f₁ ⟩≺⟨ v₂ ∷ f₂ ⟩`), `FieldCompat f₁ f₂` (`∝`), `DescCompat d₁ d₂` (`⋘`, the report's `≪`), and `MsgCompat m₁ d₁ m₂ d₂` (notation `⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩`, the report's `≼`). They must share one `mutual` block: `V-Msg → ≼`, `F-Msg → ≪`, `D-Chg → ∝`, `M-Update → ≺` and `∝`. `MsgCompatWrapper` is the shim into `LimitParseOkCompat''`.
+
+The round-trip theorem is **not** here — only the relations plus the `DescCompat` structure lemmas that `limitRecursiveStateCompat_correct` will consume (`descCompat_isSome`, `descCompat_field`, `descCompat_msg`, `fieldCompat_msg_inv`, `fieldCompat_scalar_inv`). The plumbing is ready: `LimitParseOkCompat''` already takes two descriptors, and `limitRecursiveStateCompat_correct` takes a `linkedState : σ → σ → Prop` that the two existing theorems instantiate with `(· = ·)` and that `≪` is meant to fill.
+
+Things to know before touching this file:
+
+- **`≼` has eight rules, and they are not the report's eight.** `M-Declare` (writer declares a field its own value leaves unset; reader gets `.missing`) was added — without it `≼` cannot follow `IdCompatible.addMissing`, and the cross-descriptor round-trip theorem is false already at `d₁ = d₂`, since `valueWf` permits a value that omits a declared key. `M-Add` (reader gains an arbitrary type-matching value at a key the writer never declared) was removed — no round trip produces it, `M-Missing` covers the real case, and keeping it would stop `≼` being readable as a specification of what parsing produces. Both changes are safe in the same direction: `≼` occurs only *positively* in `LimitParseOkCompat''`.
+- **`≪` is the asymmetric one.** It occurs *negatively*, as the `linkedState` hypothesis, and has no drop rule. Adding one would make the top-level theorem false: `parseVal`'s `none` branch consumes the tag byte but not the payload, so a reader whose descriptor lacks a key the writer encoded desynchronizes the stream. Consequently `⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩` does *not* imply `d₁ ⋘ d₂`.
+- **`≼` constrains no domains.** `not_msgCompat_dom` proves the natural domain invariant false: composing `M-Declare` with `M-Drop` yields `⟨ ∅ ∷ {0 ↦ int} ⟩⪯⟨ ∅ ∷ ∅ ⟩`. Don't try to recover facts about `dom(m₂)` or `dom(d₁)` from a `≼` derivation.
+- **Induction needs the hand-rolled eliminators.** Lean's `induction` tactic refuses mutually inductive types, so use `MsgCompat.ind` / `DescCompat.ind` / `FieldCompat.ind`, which specialize the joint recursor with `True` motives for the other three relations. This works for any motive that doesn't need to *inspect* the sibling relations. All three feed `.rec` one `?_` per constructor across the whole block — currently 5 + 5 + 5 + 8 = 23; adding a rule anywhere breaks all three with a confusing "application type mismatch", and the fix is one more `?_`, not a motive change.
+- `msgCompat_of_idCompatible` is the sanity check that `≼` generalizes `IdCompatible` at `d₁ = d₂`. `idCompatible_eq_of_schemaCorrect` records why that check is weak on schema-correct writers: `SchemaCorrect` makes `IdCompatible` degenerate to equality, so the subsumption there is just `M-Refl`.
+- `descCompat_wf` lifts `Desc.WF` along `≪`; `not_descCompat_allWF` shows the recursive `AllWF` does *not* lift, because `D-Add` inserts an unconstrained field. So `d₂.AllWF` has to be an explicit hypothesis of the eventual top-level theorem rather than something recovered from `d₁`.
 
 ### `ParseOk` family (`Parse/Theorems.lean`)
 
@@ -203,10 +221,11 @@ Both reduce to `limitRecursiveStateCompat_correct` plus per-step correctness; th
 
 ### When extending proofs
 
-- The `Theorems/` subdirectory is **layered** for incremental compilation; respect the dependency order (`Primitives → SortedHelpers → Validity → SchemaCorrect → SchemaCorrectCompatible → ValList → IdCompatible → IdCompatibleHelpers → IdCompatibleRoundTrip → Serialization → Compatible → InterParseOk`). Note `IdCompatibleHelpers` imports `ValList`, so `ValList` precedes the `IdCompatible*` group; `Serialization` and `Compatible` only need `Primitives`/`Validity`/`SchemaCorrect` and are otherwise free-floating.
-- Anything that needs schema correctness should go through `⟨ v ∷ d ⟩`. Anything about same-descriptor evolution should go through `IdCompatible`; `SchemaCorrectCompatible` is the stricter schema-correct variant. Don't reach into the underlying lists if you can use `get?` / `ext_lookup` / `insert_wf` / `erase_wf` instead — those abstractions exist precisely so callers can ignore the sorted-list encoding.
+- The `Theorems/` subdirectory is **layered** for incremental compilation; respect the dependency order (`Primitives → SortedHelpers → Validity → SchemaCorrect → SchemaCorrectCompatible → ValList → IdCompatible → IdCompatibleHelpers → IdCompatibleRoundTrip → Serialization → Compatible → InterParseOk`). Note `IdCompatibleHelpers` imports `ValList`, so `ValList` precedes the `IdCompatible*` group; `Serialization` needs only `Primitives`/`Validity`/`SchemaCorrect` and `Compatible` only those plus `IdCompatible`, so both are otherwise free-floating.
+- Anything that needs schema correctness should go through `⟨ v ∷ d ⟩`. Anything about same-descriptor evolution should go through `IdCompatible`; `SchemaCorrectCompatible` is the stricter schema-correct variant. Anything genuinely cross-descriptor goes through `MsgCompat`/`DescCompat`. Don't reach into the underlying lists if you can use `get?` / `ext_lookup` / `get?_insert_same` / `get?_insert_ne` / `insert_wf` / `erase_wf` instead — those abstractions exist precisely so callers can ignore the sorted-list encoding.
 - `valid'` and `valueWf` overlap: on keys *in* the descriptor `valueWf` is strictly stronger (type match plus bounds plus recursive `valueWf`); on keys *outside* it `valid'` demands `.missing` while `valueWf` demands nothing. Prefer `valueWf` in new statements — it comes for free as `serialValue`'s phantom wf. `Validity.lean` carries parallel decomposition lemmas for both (`valid'_cons` / `valueWf_cons`, `valid'_entry_head` / `valueWf_entry_head`, …), plus `valWfFold_{bool,int,msg}_field` and `valWfFold_missing_elim` for reading a field type off `valWfFold` once the key is known to be in the descriptor. `valid'` survives mainly for `valueEncLength_length` and as the Rocq `Valid'` counterpart; several of its helpers in `IdCompatibleHelpers.lean` are now unused.
 - New mutually-recursive functions on `Desc`/`Value` should follow the existing pattern: define the structural size or depth, then prove the relevant `*_smaller` lemma so they can be used as termination measures.
+- **Keep the axiom set standard.** Every theorem in `lean/Pollux` depends only on `propext`, `Classical.choice` and `Quot.sound`; check with `#print axioms`. In particular don't reach for `native_decide` — it pulls in `Lean.ofReduceBool` and `Lean.trustCompiler`, and the one place that used it (`sc_dom_eq`'s base case) turned out to be `rfl`.
 
 ### Aristotle
 

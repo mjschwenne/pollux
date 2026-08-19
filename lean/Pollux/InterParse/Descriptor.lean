@@ -142,25 +142,64 @@ theorem erase_wf (d : Desc) (k : Int) :
     cases d ; tauto;
   grind +locals
 
-/-- Lookup after insert (same key). -/
-theorem get?_insert_same (d : Desc) (k : Int) (f : Field) :
-    d.WF → (d.insert k f).get? k = some f := by
-  unfold Desc.insert Desc.get?;
-  induction' d.fields with hd tl ih generalizing k f;
-  · -- In the base case, when the list is empty, inserting k f results in [(k, f)], and looking up k in this list returns some f.
-    simp [Desc.fields, sortedInsert];
-  · unfold sortedInsert;
-    unfold Desc.fields; simp +decide;
-    unfold List.lookup; aesop;
+/-- Lookup of the inserted key in a sorted insertion. -/
+theorem lookup_sortedInsert_self (k : Int) (f : Field) (l : List (Int × Field)) :
+    List.lookup k (sortedInsert k f l) = some f := by
+  induction l with
+  | nil => simp [sortedInsert]
+  | cons hd tl ih =>
+    obtain ⟨k', f'⟩ := hd
+    rw [sortedInsert]
+    -- `k < k'` and `k == k'` both put `(k, f)` at the head; otherwise `k ≠ k'`,
+    -- the head is skipped and the recursive call is the inductive hypothesis.
+    split_ifs with hlt heq
+    · simp
+    · simp
+    · simp [List.lookup_cons, heq, ih]
 
-/-- Lookup after insert (different key). -/
-theorem get?_insert_ne (d : Desc) (k k' : Int) (f : Field) :
-    d.WF → k ≠ k' → (d.insert k f).get? k' = d.get? k' := by
-  cases d;
-  induction ‹List _› <;> simp_all +decide [ Desc.insert, Desc.get? ];
-  · simp +decide [ Desc.fields, sortedInsert ];
-    tauto;
-  · grind +locals
+/-- Lookup after insert (same key).
+
+    No well-formedness hypothesis is needed: `sortedInsert k f` only ever adds
+    or replaces an entry whose key is `k`, leaving every other entry — and hence
+    every other lookup — untouched, whatever the shape of the underlying list. -/
+theorem get?_insert_same (d : Desc) (k : Int) (f : Field) :
+    (d.insert k f).get? k = some f := by
+  cases d
+  simpa [Desc.insert, Desc.get?, Desc.fields] using lookup_sortedInsert_self k f _
+
+/-- Lookup of an untouched key in a sorted insertion. -/
+theorem lookup_sortedInsert_ne (k k' : Int) (f : Field) (h : k ≠ k')
+    (l : List (Int × Field)) :
+    List.lookup k' (sortedInsert k f l) = List.lookup k' l := by
+  have hb : (k' == k) = false := by simpa using Ne.symm h
+  induction l with
+  | nil => simp [sortedInsert, List.lookup_cons, hb]
+  | cons hd tl ih =>
+    obtain ⟨k'', f''⟩ := hd
+    rw [sortedInsert]
+    split_ifs with hlt heq
+    · -- head is the new `(k, f)`, which `k'` skips; the tail is untouched
+      simp [List.lookup_cons, hb]
+    · -- the entry at `k'' = k` was replaced, and `k'` skips it either way
+      have hkk : k = k'' := by simpa using heq
+      subst hkk
+      simp [List.lookup_cons, hb]
+    · -- head is shared; recurse
+      simp [List.lookup_cons, ih]
+
+@[inherit_doc get?_insert_same]
+theorem get?_insert_ne (d : Desc) (k k' : Int) (f : Field) (h : k ≠ k') :
+    (d.insert k f).get? k' = d.get? k' := by
+  cases d
+  simpa [Desc.insert, Desc.get?, Desc.fields] using lookup_sortedInsert_ne k k' f h _
+
+/-- `insert` only ever grows the domain of a descriptor. -/
+theorem isSome_get?_insert (d : Desc) (k k' : Int) (f : Field) :
+    (d.get? k').isSome → ((d.insert k f).get? k').isSome := by
+  intro h
+  rcases eq_or_ne k k' with rfl | hne
+  · simp [Desc.get?_insert_same]
+  · rwa [Desc.get?_insert_ne d k k' f hne]
 
 /-- Lookup after erase (same key). -/
 theorem get?_erase_same (d : Desc) (k : Int) :
@@ -322,27 +361,64 @@ theorem erase_wf (v : Value) (k : Int) :
       grind;
     exact ⟨ fun a b hab => h₅ a b ( h_subset _ _ _ hab ), fun x hx => h₇ x ( h_subset _ _ _ hx ) ⟩
 
-/-- Lookup after insert (same key). -/
-theorem get?_insert_same (v : Value) (k : Int) (val : Val) :
-    v.WF → (v.insert k val).get? k = some val := by
-  -- By definition of `sortedInsert`, inserting `k` with value `val` into `v` results in a new value `v'` such that `v'.get? k = some val`.
-  unfold Value.insert;
-  unfold Value.get?;
-  induction' v.vals with hd tl ih;
-  · unfold Value.vals; simp +decide [ sortedInsert ] ;
-  · unfold sortedInsert;
-    split_ifs <;> simp_all +decide [ Value.vals ];
-    rw [ List.lookup_cons ] ; aesop
+/-- Lookup of the inserted key in a sorted insertion. -/
+theorem lookup_sortedInsert_self (k : Int) (val : Val) (l : List (Int × Val)) :
+    List.lookup k (sortedInsert k val l) = some val := by
+  induction l with
+  | nil => simp [sortedInsert]
+  | cons hd tl ih =>
+    obtain ⟨k', v'⟩ := hd
+    rw [sortedInsert]
+    -- `k < k'` and `k == k'` both put `(k, val)` at the head; otherwise `k ≠ k'`,
+    -- the head is skipped and the recursive call is the inductive hypothesis.
+    split_ifs with hlt heq
+    · simp
+    · simp
+    · simp [List.lookup_cons, heq, ih]
 
-/-- Lookup after insert (different key). -/
-theorem get?_insert_ne (v : Value) (k k' : Int) (val : Val) :
-    v.WF → k ≠ k' → (v.insert k val).get? k' = v.get? k' := by
-  intro hv hk; cases v; simp_all +decide [ Value.insert, Value.get? ] ;
-  have h_sorted_insert : ∀ (k : ℤ) (val : Val) (vs : List (ℤ × Val)), List.Pairwise (fun a b => a.1 < b.1) vs → (k ≠ k' → List.lookup k' (sortedInsert k val vs) = List.lookup k' vs) := by
-    intros k val vs hv hk; induction' vs with vs ih <;> simp_all +decide [ sortedInsert ] ;
-    · tauto;
-    · grind;
-  exact h_sorted_insert k val _ hv.1 hk
+/-- Lookup after insert (same key).
+
+    No well-formedness hypothesis is needed: `sortedInsert k val` only ever adds
+    or replaces an entry whose key is `k`, leaving every other entry — and hence
+    every other lookup — untouched, whatever the shape of the underlying list. -/
+theorem get?_insert_same (v : Value) (k : Int) (val : Val) :
+    (v.insert k val).get? k = some val := by
+  cases v
+  simpa [Value.insert, Value.get?, Value.vals] using lookup_sortedInsert_self k val _
+
+/-- Lookup of an untouched key in a sorted insertion. -/
+theorem lookup_sortedInsert_ne (k k' : Int) (val : Val) (h : k ≠ k')
+    (l : List (Int × Val)) :
+    List.lookup k' (sortedInsert k val l) = List.lookup k' l := by
+  have hb : (k' == k) = false := by simpa using Ne.symm h
+  induction l with
+  | nil => simp [sortedInsert, List.lookup_cons, hb]
+  | cons hd tl ih =>
+    obtain ⟨k'', v''⟩ := hd
+    rw [sortedInsert]
+    split_ifs with hlt heq
+    · -- head is the new `(k, val)`, which `k'` skips; the tail is untouched
+      simp [List.lookup_cons, hb]
+    · -- the entry at `k'' = k` was replaced, and `k'` skips it either way
+      have hkk : k = k'' := by simpa using heq
+      subst hkk
+      simp [List.lookup_cons, hb]
+    · -- head is shared; recurse
+      simp [List.lookup_cons, ih]
+
+@[inherit_doc get?_insert_same]
+theorem get?_insert_ne (v : Value) (k k' : Int) (val : Val) (h : k ≠ k') :
+    (v.insert k val).get? k' = v.get? k' := by
+  cases v
+  simpa [Value.insert, Value.get?, Value.vals] using lookup_sortedInsert_ne k k' val h _
+
+/-- `insert` only ever grows the domain of a value. -/
+theorem isSome_get?_insert (v : Value) (k k' : Int) (val : Val) :
+    (v.get? k').isSome → ((v.insert k val).get? k').isSome := by
+  intro h
+  rcases eq_or_ne k k' with rfl | hne
+  · simp [Value.get?_insert_same]
+  · rwa [Value.get?_insert_ne v k k' val hne]
 
 /-- Lookup after erase (same key). -/
 theorem get?_erase_same (v : Value) (k : Int) :

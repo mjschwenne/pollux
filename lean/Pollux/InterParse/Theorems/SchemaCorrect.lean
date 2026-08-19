@@ -248,7 +248,7 @@ theorem sc_dom_eq (d : Desc) (v : Value) :
     ⟨ v ∷ d ⟩ → (v.vals.map Prod.fst) = (d.fields.map Prod.fst) := by
   intro h
   induction' h with d v h_ind
-  · native_decide +revert
+  · rfl
   · rename_i h₁ h₂ h₃ h₄ h₅ h₆
     have h_keys_eq : ∀ (l : List (Int × Val)) (l' : List (Int × Field)),
         List.map Prod.fst l = List.map Prod.fst l' →
