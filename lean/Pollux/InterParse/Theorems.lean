@@ -18,6 +18,8 @@
   - Serialization           : willEncode + weakening + serializer inversion + length
   - ValList                 : `valList` filtering + listToValue roundtrip
   - Compatible              : full cross-descriptor `≺`/`∝`/`≪`/`≼` + `≪` structure
+  - CompatTransform         : `compatTransform` (cross-descriptor round-trip transform)
+  - CompatRoundTrip         : `compatRoundTrip` (cross-descriptor schema evolution)
   - InterParseOk            : `parseOk_wf` + the top-level correctness theorems
 -/
 import Pollux.InterParse.Theorems.Primitives
@@ -31,4 +33,6 @@ import Pollux.InterParse.Theorems.IdCompatibleRoundTrip
 import Pollux.InterParse.Theorems.Serialization
 import Pollux.InterParse.Theorems.ValList
 import Pollux.InterParse.Theorems.Compatible
+import Pollux.InterParse.Theorems.CompatTransform
+import Pollux.InterParse.Theorems.CompatRoundTrip
 import Pollux.InterParse.Theorems.InterParseOk

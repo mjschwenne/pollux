@@ -11,7 +11,7 @@ The Lean port covers:
 - The abstract parser/serializer framework (`Pollux.Parse`)
 - The intermediate tagged key-value format (`Pollux.InterParse`)
 
-The full protobuf wire-format layer (`ProtoParse`, `Varint`, `SimplParse`, etc. from the Rocq side) has **not** been ported. All ported files are sorry-free; both top-level correctness theorems (`schemaCorrectInterParseOk` and `idInterParseOk`) are fully proven.
+The full protobuf wire-format layer (`ProtoParse`, `Varint`, `SimplParse`, etc. from the Rocq side) has **not** been ported. Both same-descriptor top-level correctness theorems (`schemaCorrectInterParseOk` and `idInterParseOk`) are fully proven. The cross-descriptor `compatInterParseOk` is stated, and its proof is in progress.
 
 ## Build System and Commands
 
@@ -66,7 +66,8 @@ lean/
             ├── Serialization.lean       -- willEncode + weakening + serializer inversion
             ├── Compatible.lean          -- full cross-descriptor ≺/∝/≪/≼, `≪` structure,
             │                               `msgCompat_of_idCompatible`
-            └── InterParseOk.lean        -- `parseOk_wf` + `schemaCorrectInterParseOk` + `idInterParseOk`
+            └── InterParseOk.lean        -- `parseOk_wf` + `schemaCorrectInterParseOk` +
+                                            --   `idInterParseOk` + `compatInterParseOk`
 ```
 
 Outside `lean/`: `rocq/` (legacy proofs), `pollux-go/` (reference Go implementation), `proto/` (schema versions for evolution tests), `ocaml/` (Rocq extraction target — does not apply to Lean).
@@ -174,11 +175,11 @@ The `≼` in both notations is suggestive: these are partial orders on the schem
 
 Four mutually-recursive relations transcribing `sec:ip-compat-rel` of the report: `ValCompat v₁ f₁ v₂ f₂` (`≺`, notation `⟨ v₁ ∷ f₁ ⟩≺⟨ v₂ ∷ f₂ ⟩`), `FieldCompat f₁ f₂` (`∝`), `DescCompat d₁ d₂` (`⋘`, the report's `≪`), and `MsgCompat m₁ d₁ m₂ d₂` (notation `⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩`, the report's `≼`). They must share one `mutual` block: `V-Msg → ≼`, `F-Msg → ≪`, `D-Chg → ∝`, `M-Update → ≺` and `∝`. `MsgCompatWrapper` is the shim into `LimitParseOkCompat''`.
 
-The round-trip theorem is **not** here — only the relations plus the `DescCompat` structure lemmas that `limitRecursiveStateCompat_correct` will consume (`descCompat_isSome`, `descCompat_field`, `descCompat_msg`, `fieldCompat_msg_inv`, `fieldCompat_scalar_inv`). The plumbing is ready: `LimitParseOkCompat''` already takes two descriptors, and `limitRecursiveStateCompat_correct` takes a `linkedState : σ → σ → Prop` that the two existing theorems instantiate with `(· = ·)` and that `≪` is meant to fill.
+The round-trip theorem is **not** here — only the relations plus the `DescCompat` structure lemmas that `limitRecursiveStateCompat_correct` will consume (`descCompat_isSome`, `descCompat_field`, `descCompat_msg`, `fieldCompat_msg_inv`, `fieldCompat_scalar_inv`). The theorem itself is stated (unproved) as `compatInterParseOk` in `InterParseOk.lean`, which is where it consumes them: `LimitParseOkCompat''` already takes two descriptors, and `limitRecursiveStateCompat_correct` takes a `linkedState : σ → σ → Prop` that the two same-descriptor theorems instantiate with `(· = ·)` and that `≪` fills.
 
 Things to know before touching this file:
 
-- **`≼` has eight rules, and they are not the report's eight.** `M-Declare` (writer declares a field its own value leaves unset; reader gets `.missing`) was added — without it `≼` cannot follow `IdCompatible.addMissing`, and the cross-descriptor round-trip theorem is false already at `d₁ = d₂`, since `valueWf` permits a value that omits a declared key. `M-Add` (reader gains an arbitrary type-matching value at a key the writer never declared) was removed — no round trip produces it, `M-Missing` covers the real case, and keeping it would stop `≼` being readable as a specification of what parsing produces. Both changes are safe in the same direction: `≼` occurs only *positively* in `LimitParseOkCompat''`.
+- **`≼` has eight rules, and they are not the report's eight.** `M-Declare` (writer declares a field its own value leaves unset; reader gets `.missing`) was added — without it `≼` cannot follow `IdCompatible.addMissing`, and the cross-descriptor round-trip theorem is false already at `d₁ = d₂`, since `valueWf` permits a value that omits a declared key. It relates the two field types by `f₁ ∝ f₂` rather than equating them, which is also forced: a `D-Chg` on a declared-but-unset key retypes the `V_MISSING` the reader injects, and with `f₁ = f₂` the resulting judgment is underivable (`≺` cannot carry a `.missing` across a type change, and `M-Update` needs the writer's key populated). `F-Refl` recovers the equal-type rule. `M-Add` (reader gains an arbitrary type-matching value at a key the writer never declared) was removed — no round trip produces it, `M-Missing` covers the real case, and keeping it would stop `≼` being readable as a specification of what parsing produces. Both changes are safe in the same direction: `≼` occurs only *positively* in `LimitParseOkCompat''`.
 - **`≪` is the asymmetric one.** It occurs *negatively*, as the `linkedState` hypothesis, and has no drop rule. Adding one would make the top-level theorem false: `parseVal`'s `none` branch consumes the tag byte but not the payload, so a reader whose descriptor lacks a key the writer encoded desynchronizes the stream. Consequently `⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩` does *not* imply `d₁ ⋘ d₂`.
 - **`≼` constrains no domains.** `not_msgCompat_dom` proves the natural domain invariant false: composing `M-Declare` with `M-Drop` yields `⟨ ∅ ∷ {0 ↦ int} ⟩⪯⟨ ∅ ∷ ∅ ⟩`. Don't try to recover facts about `dom(m₂)` or `dom(d₁)` from a `≼` derivation.
 - **Induction needs the hand-rolled eliminators.** Lean's `induction` tactic refuses mutually inductive types, so use `MsgCompat.ind` / `DescCompat.ind` / `FieldCompat.ind`, which specialize the joint recursor with `True` motives for the other three relations. This works for any motive that doesn't need to *inspect* the sibling relations. All three feed `.rec` one `?_` per constructor across the whole block — currently 5 + 5 + 5 + 8 = 23; adding a rule anywhere breaks all three with a confusing "application type mismatch", and the fix is one more `?_`, not a motive change.
@@ -209,6 +210,10 @@ theorem schemaCorrectInterParseOk (v : Value) (d : Desc) :
 theorem idInterParseOk (v : Value) (d : Desc) :
   d.AllWF → v.AllWF →
   LimitParseOkCompat'' IdCompatibleWrapper parseValue serialValue d d v
+
+theorem compatInterParseOk (v : Value) (d₁ d₂ : Desc) :
+  d₁.AllWF → v.AllWF → d₂.AllWF → d₁ ⋘ d₂ →
+  LimitParseOkCompat'' MsgCompatWrapper parseValue serialValue d₁ d₂ v
 ```
 
 The first: for any schema-correct value, `serialValue` followed by `parseValue` recovers a value that is `SchemaCorrectCompatible` with the original under the same descriptor — which, by `schemaCorrectCompatibleEqual`, equals the original.
@@ -216,6 +221,8 @@ The first: for any schema-correct value, `serialValue` followed by `parseValue` 
 The second drops schema correctness for `AllWF` (recursive sortedness/no-dups) plus the `valueWf` already carried by `serialValue`, and concludes with the looser `IdCompatible`. It goes through `idCompatTransform`: prove the strengthened statement "parsing yields exactly `idCompatTransform d v`", then compose with `idCompatRoundTrip`.
 
 Both reduce to `limitRecursiveStateCompat_correct` plus per-step correctness; the per-step arguments (`parseVal_serialVal_correct` and `parseVal_serialVal_transform`) are the bulk of the file and use `repCorrectWeakFull` / `repCorrectWeakFullMap` to lift per-entry correctness through `Parser.rep`.
+
+The third is the cross-descriptor generalization, and its proof is in progress; a full outline sits in the docstring above it. Two things about it are not guesswork and shouldn't be re-litigated: the `limitRecursiveStateCompat_correct` instantiation with `linkedState := fun a b => a ⋘ b ∧ b.AllWF` typechecks as written, and `d₂.AllWF` has to be an explicit hypothesis carried in `linkedState` — `validState` is threaded on the writer's descriptor only, and `AllWF` does not lift along `≪` (`not_descCompat_allWF`).
 
 ## Working in This Project
 

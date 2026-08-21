@@ -18,7 +18,9 @@
   without it the relation cannot express a writer that declares a field its own
   value leaves unset — a configuration `serialValue`/`parseValue` produce
   routinely, and one `valueWf` permits — so the round-trip theorem would be
-  false even at `d₁ = d₂`.  See `MsgCompat.declare` and
+  false even at `d₁ = d₂`.  It relates the writer's and reader's field types by
+  `∝` rather than equating them, because a `D-Chg` on such a key retypes the
+  `V_MISSING` the reader injects.  See `MsgCompat.declare` and
   `msgCompat_of_idCompatible`.
 
   Unlike `SchemaCorrectCompatible` and `IdCompatible`, this relation is
@@ -150,13 +152,27 @@ inductive MsgCompat : Value → Desc → Value → Desc → Prop where
       `parseValue` reads it back as `.missing`; `valueWf` permits exactly that
       (it constrains only the keys the value actually carries), so the
       configuration is reachable from the top-level theorem's hypotheses and no
-      other rule produces it. -/
+      other rule produces it.
+
+      The two field types are related by `∝` rather than equated, and that
+      generality is forced too.  Take `d₁ = {0 ↦ bool}`, `d₂ = {0 ↦ int}` (a
+      `D-Chg` at `F-Bool-Int`, so `d₁ ≪ d₂`) and `m₁ = ∅`, which satisfies
+      `valueWf d₁` and both `AllWF`s.  The writer emits nothing and the
+      reader's `listToValue d₂` injects `.missing` at `0` typed by *its own*
+      descriptor, so the round trip demands
+      `⟨ ∅ ∷ {0 ↦ bool} ⟩⪯⟨ {0 ↦ missing} ∷ {0 ↦ int} ⟩`.  With `f₁ = f₂` that
+      is underivable: `M-Update` needs `m₁.get? 0` populated, and routing
+      through `M-Trans` stalls on `⟨ .missing ∷ .bool ⟩≺⟨ ? ∷ .int ⟩`, which
+      `≺` cannot produce — only `V-Refl` gives a `.missing` left-hand side and
+      it cannot change the field.  Instantiating `f₁ := f₂` at `F-Refl`
+      recovers the equal-type rule, so this only widens `≼`. -/
   | declare (m₁ : Value) (d₁ : Desc) (m₂ : Value) (d₂ : Desc) (k : Int)
-      (f : Field) :
+      (f₁ f₂ : Field) :
     MsgCompat m₁ d₁ m₂ d₂ →
+    FieldCompat f₁ f₂ →
     m₁.get? k = none → d₁.get? k = none →
     m₂.get? k = none → d₂.get? k = none →
-    MsgCompat m₁ (d₁.insert k f) (m₂.insert k .missing) (d₂.insert k f)
+    MsgCompat m₁ (d₁.insert k f₁) (m₂.insert k .missing) (d₂.insert k f₂)
   /-- M-Update: an existing field changes value and type together. -/
   | update (m₁ : Value) (d₁ : Desc) (m₂ : Value) (d₂ : Desc) (k : Int)
       (v₁ : Val) (f₁ : Field) (v : Val) (f : Field) :
@@ -242,10 +258,10 @@ theorem MsgCompat.ind {motive : Value → Desc → Value → Desc → Prop}
     (hmissing : ∀ m₁ d₁ m₂ d₂ k f, (⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩) →
       m₁.get? k = none → d₁.get? k = none → m₂.get? k = none → d₂.get? k = none →
       motive m₁ d₁ m₂ d₂ → motive m₁ d₁ (m₂.insert k .missing) (d₂.insert k f))
-    (hdeclare : ∀ m₁ d₁ m₂ d₂ k f, (⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩) →
+    (hdeclare : ∀ m₁ d₁ m₂ d₂ k f₁ f₂, (⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩) → (f₁ ∝ f₂) →
       m₁.get? k = none → d₁.get? k = none → m₂.get? k = none → d₂.get? k = none →
       motive m₁ d₁ m₂ d₂ →
-      motive m₁ (d₁.insert k f) (m₂.insert k .missing) (d₂.insert k f))
+      motive m₁ (d₁.insert k f₁) (m₂.insert k .missing) (d₂.insert k f₂))
     (hupdate : ∀ m₁ d₁ m₂ d₂ k v₁ f₁ v f, (⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩) →
       m₁.get? k = some v₁ → d₁.get? k = some f₁ →
       (⟨ v₁ ∷ f₁ ⟩≺⟨ v ∷ f ⟩) → (f₁ ∝ f) →
@@ -272,8 +288,8 @@ theorem MsgCompat.ind {motive : Value → Desc → Value → Desc → Prop}
     intro a b c e k f hmc h1 h2 h3 h4 ih
     exact hmissing a b c e k f hmc h1 h2 h3 h4 ih
   case _ =>
-    intro a b c e k f hmc h1 h2 h3 h4 ih
-    exact hdeclare a b c e k f hmc h1 h2 h3 h4 ih
+    intro a b c e k f₁ f₂ hmc hfc h1 h2 h3 h4 ih _
+    exact hdeclare a b c e k f₁ f₂ hmc hfc h1 h2 h3 h4 ih
   case _ =>
     intro a b c e k v₁ f₁ v f hmc h1 h2 hv hf ih _ _
     exact hupdate a b c e k v₁ f₁ v f hmc h1 h2 hv hf ih
@@ -325,7 +341,8 @@ theorem not_msgCompat_dom :
   intro h
   have hdecl : ⟨ (∅ : Value) ∷ (∅ : Desc).insert 0 .int ⟩⪯⟨
       (∅ : Value).insert 0 .missing ∷ (∅ : Desc).insert 0 .int ⟩ :=
-    MsgCompat.declare ∅ ∅ ∅ ∅ 0 .int MsgCompat.emp rfl rfl rfl rfl
+    MsgCompat.declare ∅ ∅ ∅ ∅ 0 .int .int MsgCompat.emp (FieldCompat.refl _)
+      rfl rfl rfl rfl
   have hdrop : ⟨ (∅ : Value).insert 0 .missing ∷ (∅ : Desc).insert 0 .int ⟩⪯⟨
       (∅ : Value) ∷ (∅ : Desc) ⟩ :=
     MsgCompat.drop ∅ ∅ ∅ ∅ 0 .missing .int MsgCompat.emp rfl rfl rfl rfl
@@ -341,7 +358,8 @@ theorem not_msgCompat_dom :
     * each `insert*` case needs *two* steps, because no single rule extends all
       four of `m₁, d₁, m₂, d₂` at once: first `M-Drop` to extend `m₁` and `d₁`,
       then `M-Update` at `V-Refl`/`F-Refl` to extend `m₂` and `d₂`.
-    * `addMissing` is `M-Declare`, the rule added for exactly this case.
+    * `addMissing` is `M-Declare` at `F-Refl` — the rule added for exactly this
+      case; the same-descriptor setting never exercises its `f₁ ∝ f₂` premise.
     * `inputMissing` is `M-Drop` followed by `M-Update` — *not* `M-Missing`,
       whose `m₁.get? k = none` premise fails once `M-Drop` has put `k` into
       `m₁`.
@@ -372,7 +390,7 @@ theorem msgCompat_of_idCompatible (d : Desc) (v₁ v₂ : Value) :
   | drop d v1 v2 k val _ hd hv1 ih =>
     exact MsgCompat.dropUnknown v1 d v2 d k val ih hv1 hd
   | addMissing d v1 v2 k f _ hd hv1 hv2 ih =>
-    exact MsgCompat.declare v1 d v2 d k f ih hv1 hd hv2 hd
+    exact MsgCompat.declare v1 d v2 d k f f ih (FieldCompat.refl _) hv1 hd hv2 hd
   | inputMissing d v1 v2 k f _ hd hv1 hv2 ih =>
     exact MsgCompat.update _ _ v2 d k .missing f .missing f
       (MsgCompat.drop v1 d v2 d k .missing f ih hv1 hd hv2 hd)
