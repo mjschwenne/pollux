@@ -10,8 +10,9 @@ The Lean port covers:
 
 - The abstract parser/serializer framework (`Pollux.Parse`)
 - The intermediate tagged key-value format (`Pollux.InterParse`)
+- The real protobuf layer (`Pollux.Proto`) — **in progress**, starting from the sealed descriptor kernel
 
-The full protobuf wire-format layer (`ProtoParse`, `Varint`, `SimplParse`, etc. from the Rocq side) has **not** been ported. Both same-descriptor top-level correctness theorems (`schemaCorrectInterParseOk` and `idInterParseOk`) are fully proven. The cross-descriptor `compatInterParseOk` is stated, and its proof is in progress.
+The `InterParse` layer is **complete and frozen**: all three top-level correctness theorems (`schemaCorrectInterParseOk`, `idInterParseOk`, and the cross-descriptor `compatInterParseOk`) are fully proven, and the layer is kept as the v1 artifact documented in the written report. Don't refactor it — new correctness work targets `Pollux.Proto`, which replaces the toy encoding with the actual wire format (Rocq's `ProtoParse`/`Varint`/`SimplParse` have still not been ported; `Pollux.Proto` is their successor, not a port). The design rationale for the Proto layer's descriptor representation lives in `lean/proto-design.org`.
 
 ## Build System and Commands
 
@@ -37,7 +38,8 @@ CI lives at `.github/workflows/lean.yml` (Linux + macOS, both run `nix build -L 
 ```
 lean/
 ├── lakefile.toml, lean-toolchain, lake-manifest.json
-├── Pollux.lean                          -- root (imports Parse + InterParse)
+├── proto-design.org                     -- design rationale for the Proto descriptor kernel
+├── Pollux.lean                          -- root (imports Parse + InterParse + Proto)
 └── Pollux/
     ├── Parse.lean                       -- umbrella for the abstract framework
     ├── Parse/
@@ -66,8 +68,15 @@ lean/
             ├── Serialization.lean       -- willEncode + weakening + serializer inversion
             ├── Compatible.lean          -- full cross-descriptor ≺/∝/≪/≼, `≪` structure,
             │                               `msgCompat_of_idCompatible`
+            ├── CompatTransform.lean     -- `compatTransform d₁ d₂ v` (cross-descriptor
+            │                               analogue of `idCompatTransform`) + lookup/WF lemmas
+            ├── CompatRoundTrip.lean     -- `compatRoundTrip`: the transform lands in `≼`
             └── InterParseOk.lean        -- `parseOk_wf` + `schemaCorrectInterParseOk` +
                                             --   `idInterParseOk` + `compatInterParseOk`
+    ├── Proto.lean                       -- umbrella for the protobuf layer (in progress)
+    └── Proto/
+        └── Descriptor.lean              -- sealed descriptor kernel: Desc/Field/FieldType,
+                                            --   `explode` interface, WF/AllWF, sizes
 ```
 
 Outside `lean/`: `rocq/` (legacy proofs), `pollux-go/` (reference Go implementation), `proto/` (schema versions for evolution tests), `ocaml/` (Rocq extraction target — does not apply to Lean).
@@ -175,7 +184,7 @@ The `≼` in both notations is suggestive: these are partial orders on the schem
 
 Four mutually-recursive relations transcribing `sec:ip-compat-rel` of the report: `ValCompat v₁ f₁ v₂ f₂` (`≺`, notation `⟨ v₁ ∷ f₁ ⟩≺⟨ v₂ ∷ f₂ ⟩`), `FieldCompat f₁ f₂` (`∝`), `DescCompat d₁ d₂` (`⋘`, the report's `≪`), and `MsgCompat m₁ d₁ m₂ d₂` (notation `⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩`, the report's `≼`). They must share one `mutual` block: `V-Msg → ≼`, `F-Msg → ≪`, `D-Chg → ∝`, `M-Update → ≺` and `∝`. `MsgCompatWrapper` is the shim into `LimitParseOkCompat''`.
 
-The round-trip theorem is **not** here — only the relations plus the `DescCompat` structure lemmas that `limitRecursiveStateCompat_correct` will consume (`descCompat_isSome`, `descCompat_field`, `descCompat_msg`, `fieldCompat_msg_inv`, `fieldCompat_scalar_inv`). The theorem itself is stated (unproved) as `compatInterParseOk` in `InterParseOk.lean`, which is where it consumes them: `LimitParseOkCompat''` already takes two descriptors, and `limitRecursiveStateCompat_correct` takes a `linkedState : σ → σ → Prop` that the two same-descriptor theorems instantiate with `(· = ·)` and that `≪` fills.
+The round-trip theorem is **not** here — only the relations plus the `DescCompat` structure lemmas that `limitRecursiveStateCompat_correct` consumes (`descCompat_isSome`, `descCompat_field`, `descCompat_msg`, `fieldCompat_msg_inv`, `fieldCompat_scalar_inv`). The theorem itself is proven as `compatInterParseOk` in `InterParseOk.lean` (via `Theorems/CompatTransform.lean` and `Theorems/CompatRoundTrip.lean`), which is where it consumes them: `LimitParseOkCompat''` already takes two descriptors, and `limitRecursiveStateCompat_correct` takes a `linkedState : σ → σ → Prop` that the two same-descriptor theorems instantiate with `(· = ·)` and that `≪` fills.
 
 Things to know before touching this file:
 
@@ -222,13 +231,24 @@ The second drops schema correctness for `AllWF` (recursive sortedness/no-dups) p
 
 Both reduce to `limitRecursiveStateCompat_correct` plus per-step correctness; the per-step arguments (`parseVal_serialVal_correct` and `parseVal_serialVal_transform`) are the bulk of the file and use `repCorrectWeakFull` / `repCorrectWeakFullMap` to lift per-entry correctness through `Parser.rep`.
 
-The third is the cross-descriptor generalization, and its proof is in progress; a full outline sits in the docstring above it. Two things about it are not guesswork and shouldn't be re-litigated: the `limitRecursiveStateCompat_correct` instantiation with `linkedState := fun a b => a ⋘ b ∧ b.AllWF` typechecks as written, and `d₂.AllWF` has to be an explicit hypothesis carried in `linkedState` — `validState` is threaded on the writer's descriptor only, and `AllWF` does not lift along `≪` (`not_descCompat_allWF`).
+The third is the cross-descriptor generalization, proven by the same two-step strategy as `idInterParseOk`: `Theorems/CompatTransform.lean` defines `compatTransform d₁ d₂ v` — the value a cross-descriptor round trip actually yields, a structural recursion over the *reader's* field list reading the writer's descriptor and value by key lookup — the strengthened statement "parsing produces exactly `compatTransform d₁ d₂ v`" goes through `limitRecursiveStateCompat_correct` with `linkedState := fun a b => a ⋘ b ∧ b.AllWF`, and `compatRoundTrip` (`Theorems/CompatRoundTrip.lean`) shows the transform always lands in `≼`, assembling the derivation key by key in increasing key order (the reader's field list drives the walk, since `≪` never removes a key). `d₂.AllWF` is carried in `linkedState` because `validState` is threaded on the writer's descriptor only and `AllWF` does not lift along `≪` (`not_descCompat_allWF`).
+
+## The Proto layer (`Pollux/Proto/`) — in progress
+
+`Pollux.Proto` is the real-protobuf successor to `InterParse`. Its first file is the **sealed descriptor kernel** (`Proto/Descriptor.lean`); the design rationale, including the experiments that ruled out the alternatives, is in `lean/proto-design.org` (source material for the report). Operative rules:
+
+- **The list encoding is sealed by convention.** `Desc` stores its field map as a sorted sigma list, but outside `Proto/Descriptor.lean` nothing may mention `Desc.entries`, `sortedInsert`, or any list lemma. The public interface is `explode : Desc → Finmap (fun _ : Int => Field)` — a one-layer unwrap into a genuine mathlib map with nested message descriptors staying sealed `Desc` handles — plus `get?`/`insert`/`erase`/`ofList`/`∅`. This is possible because positivity constrains constructor arguments, not functions out of the type. Lean's `private` is file-scoped, so the seal is enforced by review, not the language; the parser/serializer implementation files may reach the representation, theorem *statements* may not.
+- **WF discipline**: `Desc.WF` is a single `Pairwise` (sortedness; no-dup keys is derived, `WF.nodupKeys`). Interface lemmas are WF-free wherever possible — `explode_insert` and both `get?_insert` lemmas hold unconditionally because the `Finmap` quotient absorbs the invariant; only the `erase` laws at the erased key and `eq_of_explode_eq` (WF descriptors are canonical representatives) need `WF`.
+- **Recursion through descriptors goes through the interface**: `descSize_lt_of_get?_msg` is the termination lemma — anything recursing into a nested message obtained via `get?` uses well-founded recursion on `descSize`. `Desc.AllWF` is *defined* this way, directly in its one-layer form; there is no structural `fieldListAllWF` analogue to keep in sync.
+- Field numbers are `Int` (continuity with the InterParse relations); the protobuf range bounds (1 to 2^29−1, reserved 19000–19999) belong in the serializer-layer validity predicate, like `valueWf`'s bounds in InterParse.
+- Values, when they arrive, stay **unsealed** — they are the induction skeleton of the round-trip proofs. The seal asymmetry is deliberate: descriptors are observed one layer at a time; values are traversed.
+- Planned but not yet present (see `proto-design.org`): the value layer, varint primitives, a *relational* encoding spec `Encodes` (spec-compliant parsers must accept arbitrary field order — the functional serializer becomes its soundness leg), enums/oneof/map fields, and the flat symbol-table representation if recursive message types turn out to be needed (`explode` is the interface that makes that swap non-breaking).
 
 ## Working in This Project
 
 ### When extending proofs
 
-- The `Theorems/` subdirectory is **layered** for incremental compilation; respect the dependency order (`Primitives → SortedHelpers → Validity → SchemaCorrect → SchemaCorrectCompatible → ValList → IdCompatible → IdCompatibleHelpers → IdCompatibleRoundTrip → Serialization → Compatible → InterParseOk`). Note `IdCompatibleHelpers` imports `ValList`, so `ValList` precedes the `IdCompatible*` group; `Serialization` needs only `Primitives`/`Validity`/`SchemaCorrect` and `Compatible` only those plus `IdCompatible`, so both are otherwise free-floating.
+- The `Theorems/` subdirectory is **layered** for incremental compilation; respect the dependency order (`Primitives → SortedHelpers → Validity → SchemaCorrect → SchemaCorrectCompatible → ValList → IdCompatible → IdCompatibleHelpers → IdCompatibleRoundTrip → Serialization → Compatible → CompatTransform → CompatRoundTrip → InterParseOk`). Note `IdCompatibleHelpers` imports `ValList`, so `ValList` precedes the `IdCompatible*` group; `Serialization` needs only `Primitives`/`Validity`/`SchemaCorrect` and `Compatible` only those plus `IdCompatible`, so both are otherwise free-floating. `CompatTransform` needs the `IdCompatible*` group, `ValList`, and `Compatible`; `CompatRoundTrip` needs `CompatTransform` and `IdCompatibleRoundTrip`.
 - Anything that needs schema correctness should go through `⟨ v ∷ d ⟩`. Anything about same-descriptor evolution should go through `IdCompatible`; `SchemaCorrectCompatible` is the stricter schema-correct variant. Anything genuinely cross-descriptor goes through `MsgCompat`/`DescCompat`. Don't reach into the underlying lists if you can use `get?` / `ext_lookup` / `get?_insert_same` / `get?_insert_ne` / `insert_wf` / `erase_wf` instead — those abstractions exist precisely so callers can ignore the sorted-list encoding.
 - `valid'` and `valueWf` overlap: on keys *in* the descriptor `valueWf` is strictly stronger (type match plus bounds plus recursive `valueWf`); on keys *outside* it `valid'` demands `.missing` while `valueWf` demands nothing. Prefer `valueWf` in new statements — it comes for free as `serialValue`'s phantom wf. `Validity.lean` carries parallel decomposition lemmas for both (`valid'_cons` / `valueWf_cons`, `valid'_entry_head` / `valueWf_entry_head`, …), plus `valWfFold_{bool,int,msg}_field` and `valWfFold_missing_elim` for reading a field type off `valWfFold` once the key is known to be in the descriptor. `valid'` survives mainly for `valueEncLength_length` and as the Rocq `Valid'` counterpart; several of its helpers in `IdCompatibleHelpers.lean` are now unused.
 - New mutually-recursive functions on `Desc`/`Value` should follow the existing pattern: define the structural size or depth, then prove the relevant `*_smaller` lemma so they can be used as termination measures.

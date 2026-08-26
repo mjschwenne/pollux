@@ -1,0 +1,310 @@
+#+title: Design notes: the sealed descriptor kernel for Pollux.Proto
+#+author: recorded from the design sessions of 2026-08-26
+#+options: toc:2
+
+This document records the design decisions behind
+=Pollux/Proto/Descriptor.lean= and the experiments that motivated them, as
+source material for the written report. The starting point was the
+completed =InterParse= layer (all three top-level round-trip theorems
+proven) and the question of how its descriptor representation should
+evolve for the real protobuf wire format.
+
+* Requirements
+
+The descriptor representation for the protobuf layer has to satisfy:
+
+1. *Kernel acceptance.* =Desc= and =Field= are mutually inductive (message
+   fields contain nested descriptors), so whatever container holds the
+   field map must be accepted by Lean's nested-inductive translation.
+2. *Map semantics with extensionality up to equality.* The round-trip
+   theorems conclude genuine equalities (in InterParse,
+   =schemaCorrectCompatibleEqual= squeezes the compatibility relation down
+   to =v₁ = v₂=); the representation must support "same lookups ⇒ equal".
+3. *Termination measures.* Serializers and predicates recurse through
+   nested messages; the representation must admit a structural size.
+4. *Minimal bespoke proof surface.* As much as possible should come from
+   mathlib rather than be re-proven per project. This was the explicit
+   motivation for the redesign: InterParse's =Descriptor.lean= is ~850
+   lines, and its theorem layer touches the raw list encoding at ~237
+   sites across 15 files.
+5. *Forward compatibility* with things real protobuf will demand:
+   importing a =FileDescriptorSet= (which requires parsing output produced
+   by other implementations), and possibly recursive message types
+   (=descriptor.proto= itself is recursive via
+   =DescriptorProto.nested_type=; =google.protobuf.Struct=/=Value= are
+   mutually recursive).
+
+* Experiment: what the kernel accepts
+
+All candidates were compiled against the project toolchain
+(=leanprover/lean4:v4.28.0=, mathlib =v4.28.0=). The test shape:
+
+#+begin_src lean
+mutual
+inductive Desc where | mk (fs : ⟨candidate container⟩)
+inductive Field where | msg (d : Desc) | bool | int
+end
+#+end_src
+
+| Container                                  | Accepted? | Failure mode                              |
+|--------------------------------------------+-----------+-------------------------------------------|
+| =List (Int × Field)= (InterParse status quo) | yes       |                                           |
+| =List ((_ : Int) × Field)= (sigma list)      | yes       |                                           |
+| =Std.TreeMap.Raw Int Field=                  | yes       | (rejected for other reasons, below)       |
+| =Array (Int × Field)=                        | yes       |                                           |
+| =Int → Option Field=                         | yes       | (no finiteness; rejected below)           |
+| =AList (fun _ : Int => Field)=               | *no*      | kernel: =List.NodupKeys entries= applied to =_nested.List_2= |
+| =Finmap (fun _ : Int => Field)=              | *no*      | same, via =Multiset _nested.Sigma_2=        |
+| ={l : List (Int × Field) // l.Pairwise …}=   | *no*      | kernel: unknown constant =Field=            |
+
+The failures share one cause, and it is more specific than "the positivity
+checker": the nested-inductive translation rewrites the payload type
+(=List (Int × Field)=) into an internal =_nested.List_2= type, and any
+structure that *bundles a proof about that payload* (=AList='s =NodupKeys=
+field, =Finmap='s quotient, a =Subtype='s predicate) then no longer
+typechecks in the kernel. The blocker is proof-bundling over the nested
+type, not sortedness per se. This observation is what later licenses the
+=explode= interface (§ The seal).
+
+** Why not =TreeMap.Raw= (accepted but rejected)
+
+Two disqualifiers, both verified:
+
+1. *Recursor pollution.* The generated recursor for the =TreeMap.Raw=
+   version has five motives — it exposes =Std.DTreeMap.Raw= and
+   =Std.DTreeMap.Internal.Impl=, so every structural recursion
+   (sizes, depths) must handle balanced-tree internals.
+2. *Non-canonical shapes.* Inserting the same ten bindings in ascending
+   vs. descending key order produces trees with equal =toList= but
+   different shapes:
+
+   #+begin_example
+   mk [1..10]  →  (((. 1 .) 2 (. 3 .)) 4 (((. 5 .) 6 (. 7 .)) 8 (. 9 (. 10 .))))
+   mk [10..1]  →  ((((. 1 .) 2 .) 3 ((. 4 .) 5 (. 6 .))) 7 ((. 8 .) 9 (. 10 .)))
+   toList equal: true
+   #+end_example
+
+   Consequently lookup-extensionality can only conclude the =Equiv=
+   relation Std provides (there is no public =ext= for =TreeMap=, by
+   design), violating requirement 2. Every equality-flavored conclusion in
+   the theorem layer would decay to a setoid.
+
+** Why not a function type (accepted but rejected)
+
+=Int → Option Field= has no finiteness: no structural size (requirement
+3), and no way to enumerate declared fields, which the parser's
+missing-field injection needs.
+
+So sorted association lists are the right family; the remaining choices
+are the pair type and where the invariant lives.
+
+* Decision: sigma pairs, =WF= as sortedness alone
+
+=List ((_ : Int) × Field)= rather than =List (Int × Field)=, because
+mathlib's association-list theory (=Mathlib/Data/List/Sigma.lean=:
+=dlookup=, =kerase=, =kinsert=, =dedupKeys=, =lookup_ext=,
+=perm_nodupKeys=, …) is stated for =List (Sigma β)=. This is precisely
+=AList='s internals, available unbundled — the workaround for the kernel
+limitation is to use the *contents* of the bundled type without the
+bundle.
+
+Payoffs measured against the InterParse equivalents:
+
+- =WF= collapses from =Sorted ∧ NodupKeys= to the single =Pairwise=
+  (no-dup keys is derived in one line: =nodupKeys_iff_pairwise.mpr
+  (h.imp ne_of_lt)=).
+- =erase= is literally =List.kerase=; its =WF=-preservation is one line
+  (=Pairwise.sublist (kerase_sublist k _)=); its lookup laws are
+  =dlookup_kerase= / =dlookup_kerase_ne= — and the different-key law needs
+  *no* well-formedness, which the InterParse version did.
+- Extensionality is =lookup_ext= (equal lookups ⇒ permutation) composed
+  with =Perm.eq_of_pairwise= (permutation of sorted lists ⇒ equality),
+  replacing a ~20-line bespoke induction.
+- In a same-API prototype, the =Desc= map layer shrank from 183 non-blank
+  lines to ~75, with the =Value= mirror (another 190) subsumable by a
+  payload-parameterized version.
+
+=sortedInsert= stays hand-rolled (single pass, replace-on-collision)
+rather than =orderedInsert ∘ kerase=: the single pass is what makes the
+lookup-after-insert lemmas hold with *no* well-formedness hypothesis,
+whereas any permutation-based route threads =NodupKeys= through
+=perm_dlookup= at every use. The unconditional insert-lookup laws were
+already load-bearing in InterParse (the =MsgCompat= relations carry no WF
+premises), and in the new design they do one more job — see next section.
+
+* Decision: the seal and =explode=
+
+The interface idea (proposed by Matt): make the descriptor type opaque —
+no introspection — with a single observation =explode= that unwraps *one
+layer* into a map, leaving nested message descriptors sealed.
+
+The realization that makes this strong: the kernel restriction from the
+experiment table constrains *constructor arguments*, not *functions out of
+the type*. Once =Desc= and =Field= exist, a function
+
+#+begin_src lean
+def explode (d : Desc) : Finmap (fun _ : Int => Field) := d.entries.toFinmap
+#+end_src
+
+is perfectly legal — the very map types that cannot appear inside the
+inductive are available as its *views*. So the sorted list is quarantined
+as the canonical representative inside the kernel module, and the public
+theory is stated against a genuine mathlib =Finmap=.
+
+Because =Finmap= is a quotient by permutation, the sorted-list invariant
+is absorbed by the codomain:
+
+| Interface law                                    | WF hypothesis? |
+|--------------------------------------------------+----------------|
+| =explode_insert= (=insert= ↦ =Finmap.insert=)    | *none*         |
+| =get?_insert_same= / =get?_insert_ne=            | *none*         |
+| =get?_erase_ne=                                  | *none*         |
+| =explode_ext= (interface extensionality)         | *none* (it is =Finmap.ext_lookup=) |
+| =explode_erase= / =get?_erase_same=              | =WF= (=kerase= removes only the first hit on a duplicated list) |
+| =eq_of_explode_eq= (WF descriptors are canonical representatives) | =WF= both sides |
+
+The proof of the unconditional =explode_insert= is exactly the
+unconditional sorted-insert lookup laws plus =Finmap.ext_lookup= — the two
+design choices reinforce each other.
+
+** What is sealed, and what is not
+
+- *Descriptors: sealed.* Evidence from InterParse that this is cheap:
+  descriptors are only ever consumed one layer at a time. The serializer
+  never iterates a descriptor at all (=serialValue= walks the *value's*
+  entry list, consulting the descriptor via lookup); the parser's one
+  descriptor-order-dependent step is the missing-field injection
+  (=listToValue=), which lives inside the seal. Termination measures live
+  on values (=valueDepth=) and input length, never on descriptor
+  structure. =Desc.ext_lookup= had exactly one consumer outside
+  =Descriptor.lean=.
+- *Values: not sealed.* Values are the induction skeleton of every
+  round-trip proof, =Value.ext_lookup= is consumed at several sites, and
+  the serializer's termination recurses on them. The asymmetry is
+  principled: descriptors are /observed/, values are /traversed/.
+- *Enforcement is by convention.* Lean 4's =private= is file-scoped and
+  the parser/serializer implementation files legitimately need the list
+  view, so the seal is a *spec boundary*, not an implementation boundary:
+  theorem statements outside the kernel use =explode=/=get?= only;
+  implementations inside =Pollux/Proto/= may reach the representation.
+
+** Recursion through the interface
+
+Structural recursion on the representation is replaced by well-founded
+recursion on =descSize= through =get?=: =descSize_lt_of_get?_msg= (a
+nested message descriptor reached by lookup is strictly smaller) is the
+public termination lemma. =Desc.AllWF= is /defined/ this way, directly in
+its one-layer form —
+
+#+begin_src lean
+def Desc.AllWF (d : Desc) : Prop :=
+  d.WF ∧ ∀ k c d', d.get? k = some (.mk c (.msg d')) → Desc.AllWF d'
+termination_by descSize d
+#+end_src
+
+— eliminating InterParse's parallel structural
+=fieldListAllWF=/=fieldAllWF= mutual block and its synchronization
+lemmas.
+
+* Decision: ordering, determinism, and the coming relational spec
+
+The protobuf spec permits serializing fields in any order, which raised
+the question of whether the sorted list is needed at all. The analysis
+(worth reproducing in the report):
+
+1. *A Lean serializer is a function*, so it emits one byte string per
+   value; "any order" is freedom the type cannot express. Quotienting the
+   input (values as =Finmap=) does not remove the choice of order — it
+   relocates it into every function out of the quotient, which must
+   canonicalize to be well-defined. The sorted list is the alternative:
+   /choose the canonical representative once, globally/.
+2. *Sortedness serves the theorem statements, not the wire.* The parser's
+   output is descriptor-ordered (lookup-based merge); the transform it
+   must equal is value-ordered. Both being sorted with equal key sets is
+   what lets round-trip conclusions be syntactic equalities rather than
+   map-equivalences. Reproducible bytes fall out as a side effect and
+   should *not* be advertised as a spec guarantee (real implementations
+   treat deterministic marshaling as opt-in).
+3. *The spec's "arbitrary order" is an obligation on the parser*, not just
+   a freedom of the serializer: a compliant parser must accept fields in
+   any order, last-wins duplicates, and concatenation/merge semantics —
+   and for repeated fields the relation is only /partially/ order-free
+   (element order within a field is semantic; cross-field interleaving is
+   not). The existing =ParseOk= family proves the parser correct on the
+   image of our own serializer only. The planned architecture is
+   therefore two-level, following the standard verified-parsing pattern
+   (Narcissus's nondeterministic format relations; EverParse):
+
+   - a relational spec =Encodes d v bytes= closed under the spec's
+     nondeterminism;
+   - serializer soundness: =Encodes d v (serialValue d v)=;
+   - parser completeness: =Encodes d v bytes → parseValue d bytes ≡ᵣ
+     success (transform v) rest=.
+
+   The functional round-trip theorems become the soundness leg. Parser
+   completeness is also what justifies trusting an imported
+   =FileDescriptorSet=, which was serialized by someone else's
+   implementation.
+
+* Deferred: recursive message types
+
+The current tree-shaped =Desc= cannot express recursive messages. The
+in-repo proto corpus (=proto/v1=–=v5=) has none — its message graph is a
+DAG — but the meta level always does: =descriptor.proto= is recursive, so
+any self-hosting story (parsing descriptor sets to load schemas
+dynamically) forces the issue, as do the =google.protobuf.Struct=/=Value=
+well-known types.
+
+If adopted, the plan is the *flat symbol table* (fields reference message
+types by name; an environment maps names to descriptors — which is
+literally what =FileDescriptorSet= is), rather than coinductive/M-type
+descriptors or μ-binders. Key facts:
+
+- Values stay finite even under cyclic schemas, so parser/serializer
+  termination (value- and input-indexed) is unaffected.
+- =explode= becomes /one resolution step through the environment/, and
+  nothing stated against =explode= changes — this is the main reason the
+  interface was adopted before the decision was made.
+- =AllWF= simplifies to a finite conjunction over the table.
+- The real casualty is the compatibility relations: an inductive
+  =DescCompat= recursing structurally through =F-Msg= cannot have finite
+  derivations relating cyclic descriptors, and would restate as pointwise
+  one-layer compatibility over the (finite) name graph. This cost is
+  intrinsic to recursive schemas, not to any representation.
+
+The decision waits on evidence from the actual dataset about how common
+recursion is.
+
+* Decision: freeze InterParse, build Proto fresh
+
+With all three InterParse theorems proven (zero sorries; 7,391 lines
+across the layer), retrofitting it onto the new framework would be pure
+rework of finished, Aristotle-dense proofs, validated against exactly the
+cases (no repeated fields, no varints, single-byte tags) that don't
+stress the new design. InterParse is frozen as the v1 artifact documented
+in the report; what transfers to =Pollux.Proto= is architecture, not code:
+
+- verbatim: the =Pollux.Parse= combinator framework and =ParseOk= family
+  (encoding-agnostic);
+- as patterns: the relation shapes (=SchemaCorrect=, =IdCompatible=,
+  =≼=/=≪=), the transform-based round-trip strategy
+  (=idCompatTransform=/=compatTransform=), the
+  =limitRecursiveStateCompat_correct= instantiation, and the hand-rolled
+  mutual eliminators;
+- as knowledge: =M-Declare= being forced, =≪= having no drop rule,
+  =AllWF= not lifting along =≪=.
+
+* Status and verification
+
+=Pollux/Proto/Descriptor.lean= implements the kernel: =Desc= / =Field= /
+=FieldType= (15 scalar types, proto3 cardinalities; enums, oneof, map
+fields, and groups deliberately deferred), the sealed operations, the
+interface laws in the table above, sizes with =descSize_lt_of_get?_msg=,
+one-layer =AllWF= with =insert=/=ofList= preservation. Field numbers are
+=Int= for continuity with the InterParse relations; protobuf's range
+bounds belong in the serializer-layer validity predicate, as =valueWf='s
+bounds did in InterParse.
+
+Every theorem in the kernel depends only on =propext=,
+=Classical.choice=, =Quot.sound= (checked with =#print axioms=), keeping
+the project's standard axiom set.
