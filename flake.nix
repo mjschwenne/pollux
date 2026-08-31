@@ -68,7 +68,7 @@
               # eval utilities
               gh
               jq
-              (python313.withPackages (
+              (python314.withPackages (
                 ps: with ps; [
                   python-lsp-server
                   pyright

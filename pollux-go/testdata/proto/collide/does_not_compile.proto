@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package collide;
+
+// Deliberately malformed, to check that one bad file does not take down a run.
+message Broken {
+  this is not a field
+}

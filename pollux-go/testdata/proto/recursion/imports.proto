@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package rec;
+
+import "google/protobuf/struct.proto";
+
+// Not recursive itself, but google.protobuf.Struct is: Struct, Value and
+// ListValue form a cycle in the imported file. Config can therefore nest to
+// unbounded depth even though nothing in this file is on a cycle.
+message Config {
+  google.protobuf.Struct settings = 1;
+}
+
+message Plain {
+  string name = 1;
+}

@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package rec;
+
+// Self recursive: a field of its own type.
+message Tree {
+  string label = 1;
+  repeated Tree children = 2;
+}
+
+// Self recursive through a map, which the compiler represents as a repeated
+// synthetic MapNode.ChildrenEntry message.
+message MapNode {
+  map<string, MapNode> children = 1;
+}
+
+// A map with a scalar value is not a reference at all.
+message MapScalar {
+  map<string, int32> counts = 1;
+}
+
+// The smallest mutual recursion.
+message Expr {
+  Stmt body = 1;
+}
+
+message Stmt {
+  Expr cond = 1;
+}
+
+// A longer cycle.
+message A {
+  B b = 1;
+}
+
+message B {
+  C c = 1;
+}
+
+message C {
+  A a = 1;
+}
+
+// Not recursive, but reaches a recursive message.
+message Root {
+  Tree tree = 1;
+}
+
+// Reaches nothing recursive.
+message Leaf {
+  int32 x = 1;
+}
+
+message Wrapper {
+  Leaf leaf = 1;
+}
+
+// A nested message can be recursive on its own.
+message Outer {
+  message Inner {
+    Inner next = 1;
+  }
+  Inner inner = 1;
+}
+
+// Recursion through a oneof arm.
+message Value {
+  oneof kind {
+    int32 num = 1;
+    ValueList list = 2;
+  }
+}
+
+message ValueList {
+  repeated Value values = 1;
+}

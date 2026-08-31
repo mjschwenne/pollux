@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+// Two copies of the same schema at different paths, the way a repository that
+// vendors a preview alongside a release ends up. They compile fine apart and
+// collide when compiled together, since they define the same symbols.
+package collide;
+
+message Dup {
+  Dup next = 1;
+}

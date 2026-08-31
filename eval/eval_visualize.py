@@ -663,6 +663,268 @@ def plot_field_type_distribution(
     return chart
 
 
+# Columns produced by `pollux proto stats` for the recursion analysis. A message
+# is recursive when it lies on a cycle of the message reference graph, and it
+# contains recursion when it can reach such a message -- itself included -- and
+# so can nest to unbounded depth. The second set contains the first.
+RECURSION_COLUMNS = [
+    "message_count_total",
+    "message_count_map_entry",
+    "message_count_recursive",
+    "message_count_self_recursive",
+    "message_count_mutually_recursive",
+    "message_count_contains_recursive",
+    "recursion_group_count",
+    "recursion_group_max_size",
+]
+
+
+def require_recursion_columns(df: pl.DataFrame):
+    """
+    Checks that the recursion counters are present, and explains how to get them
+    if they are not.
+
+    Args:
+        df: Polars DataFrame to check.
+    """
+    missing = [col for col in RECURSION_COLUMNS if col not in df.columns]
+    if missing:
+        raise ValueError(
+            f"Missing required columns: {missing}. These come from "
+            "'pollux proto stats', so re-run the fetch command to collect them. "
+            "Note that combining parquet files keeps only the columns they all "
+            "share, so a single file fetched before recursion counting existed "
+            "drops these from the whole set."
+        )
+
+
+def recursion_by_repository(df: pl.DataFrame) -> pl.DataFrame:
+    """
+    Aggregates the recursion counters per repository and splits the messages
+    into the three categories the breakdown chart stacks.
+
+    Args:
+        df: Polars DataFrame containing protobuf data with the recursion columns.
+
+    Returns:
+        Polars DataFrame, one row per repository, sorted by the share of
+        messages containing recursion.
+    """
+    require_recursion_columns(df)
+
+    agg = df.group_by("repository").agg(
+        [
+            pl.col("message_count_total").sum().alias("total"),
+            pl.col("message_count_map_entry").sum().alias("map_entries"),
+            pl.col("message_count_recursive").sum().alias("recursive"),
+            pl.col("message_count_self_recursive").sum().alias("self_recursive"),
+            pl.col("message_count_mutually_recursive").sum().alias("mutually_recursive"),
+            pl.col("message_count_contains_recursive").sum().alias("contains"),
+            pl.col("recursion_group_count").sum().alias("cycles"),
+            pl.col("recursion_group_max_size").max().alias("largest_cycle"),
+        ]
+    )
+
+    # message_count_total counts the synthetic entry message of every map field,
+    # which the recursion counters leave out. Subtracting them puts the two on
+    # the same denominator.
+    agg = agg.with_columns((pl.col("total") - pl.col("map_entries")).alias("messages"))
+
+    # Recursive messages are a subset of the ones containing recursion, so these
+    # three categories partition the messages and the stack sums to 100%.
+    agg = agg.with_columns(
+        [
+            (pl.col("contains") - pl.col("recursive")).alias("contains_only"),
+            (pl.col("messages") - pl.col("contains")).alias("neither"),
+        ]
+    ).filter(pl.col("messages") > 0)
+
+    return agg.with_columns(
+        [
+            (pl.col("recursive") / pl.col("messages") * 100).alias("pct_recursive"),
+            (pl.col("contains") / pl.col("messages") * 100).alias("pct_contains"),
+        ]
+    ).sort("pct_contains", descending=True)
+
+
+def print_recursion_summary(df: pl.DataFrame):
+    """
+    Prints how many messages are recursive and how many contain recursion, over
+    the whole dataset and per repository.
+
+    Args:
+        df: Polars DataFrame containing protobuf data with the recursion columns.
+    """
+    by_repo = recursion_by_repository(df)
+
+    messages = by_repo["messages"].sum()
+    recursive = by_repo["recursive"].sum()
+    contains = by_repo["contains"].sum()
+
+    def share(count: int) -> str:
+        return f"{count:>8,}  ({count / messages * 100:5.2f}%)"
+
+    print("Message recursion summary:")
+    print(f"  Repositories:         {len(by_repo):>8,}")
+    print(f"  Messages:             {messages:>8,}  (synthetic map entries excluded)")
+    print(f"  Recursive:            {share(recursive)}")
+    print(f"    self recursive:     {share(by_repo['self_recursive'].sum())}")
+    print(f"    mutually recursive: {share(by_repo['mutually_recursive'].sum())}")
+    print(f"  Contains recursion:   {share(contains)}")
+    print(
+        f"  Cycles:               {by_repo['cycles'].sum():>8,}"
+        f"  (largest {by_repo['largest_cycle'].max()} messages)"
+    )
+
+    print()
+    print(f"  {'Repository':<32}{'Messages':>10}{'Recursive':>20}{'Contains':>20}")
+    for row in by_repo.iter_rows(named=True):
+        print(
+            f"  {row['repository']:<32}{row['messages']:>10,}"
+            f"{row['recursive']:>12,} {row['pct_recursive']:>6.2f}%"
+            f"{row['contains']:>12,} {row['pct_contains']:>6.2f}%"
+        )
+    print()
+
+
+def plot_recursion_breakdown(
+    df: pl.DataFrame, output_file: str | None = None
+) -> alt.LayerChart:
+    """
+    Creates a normalized stacked bar chart showing, per repository, what share of
+    messages are recursive, contain recursion without being recursive, or neither.
+
+    The three categories are nested rather than unrelated -- each one is "more
+    entangled in recursion" than the last -- so they are colored with steps of a
+    single hue rather than with the categorical palette the type breakdown uses.
+    The two recursion categories sit at the bottom of the stack, sharing a
+    baseline, since they are the ones worth comparing across repositories.
+
+    Args:
+        df: Polars DataFrame containing protobuf data with the recursion columns.
+        output_file: Optional path to save the plot. Format determined by file extension (.png, .html, etc.)
+
+    Returns:
+        Altair LayerChart object
+    """
+    by_repo = recursion_by_repository(df)
+
+    total_repos = len(by_repo)
+    if total_repos > 20:
+        by_repo = by_repo.head(20)
+        print(f"Note: Showing top 20 repositories out of {total_repos} total repositories")
+
+    # Bottom of the stack first, so that the two categories worth comparing
+    # across repositories share a baseline instead of floating on top of a
+    # block whose height varies.
+    categories = [
+        ("Recursive", "recursive"),
+        ("Contains recursion", "contains_only"),
+        ("Neither", "neither"),
+    ]
+
+    # Positions are computed here rather than left to Altair's stack transform
+    # so that the labels can sit at the middle of a segment: a stacked text mark
+    # lands on the segment boundary, where labels of neighbouring segments
+    # collide and the top one is clipped by the edge of the plot.
+    segments = []
+    for row in by_repo.iter_rows(named=True):
+        offset = 0.0
+        for label, column in categories:
+            percentage = row[column] / row["messages"] * 100
+            segments.append(
+                {
+                    "repository": row["repository"],
+                    "category": label,
+                    "count": row[column],
+                    "percentage": percentage,
+                    "y_start": offset,
+                    "y_end": offset + percentage,
+                    "y_mid": offset + percentage / 2,
+                    "messages": row["messages"],
+                    "pct_contains": row["pct_contains"],
+                }
+            )
+            offset += percentage
+
+    plot_df = pl.DataFrame(segments)
+
+    labels = [label for label, _ in categories]
+    # Steps of one blue hue, light to dark, so that darker reads as more
+    # entangled in recursion. Validated for monotone lightness, separation
+    # between steps, and contrast against a light surface.
+    ramp = ["#104281", "#2a78d6", "#86b6ef"]
+
+    repo_sort = alt.Sort(field="pct_contains", order="descending")
+    x = alt.X(
+        "repository:N",
+        title="Repository",
+        sort=repo_sort,
+        axis=alt.Axis(labelAngle=-45, labelLimit=200),
+    )
+
+    bars = (
+        alt.Chart(plot_df)
+        .mark_bar(stroke="white", strokeWidth=2)
+        .encode(
+            x=x,
+            y=alt.Y(
+                "y_start:Q",
+                scale=alt.Scale(domain=[0, 100]),
+                title="Share of messages (%)",
+            ),
+            y2=alt.Y2("y_end:Q"),
+            color=alt.Color(
+                "category:N",
+                title="Message",
+                scale=alt.Scale(domain=labels, range=ramp),
+                legend=alt.Legend(orient="right"),
+            ),
+            tooltip=[
+                alt.Tooltip("repository:N", title="Repository"),
+                alt.Tooltip("category:N", title="Message"),
+                alt.Tooltip("count:Q", title="Messages", format=","),
+                alt.Tooltip("percentage:Q", title="Share", format=".2f"),
+                alt.Tooltip("messages:Q", title="Messages in repository", format=","),
+            ],
+        )
+    )
+
+    # Label only the two categories the chart is about, and only where the
+    # segment is thick enough to hold the text. Everything else is carried by
+    # the axis, the legend and the tooltip; "Neither" is whatever is left over.
+    labelled = plot_df.filter(
+        (pl.col("category") != "Neither") & (pl.col("percentage") >= 6)
+    )
+    text = (
+        alt.Chart(labelled)
+        .mark_text(
+            align="center", baseline="middle", fontSize=10, fontWeight="bold", color="white"
+        )
+        .encode(
+            x=x,
+            y=alt.Y("y_mid:Q", scale=alt.Scale(domain=[0, 100])),
+            text=alt.Text("percentage:Q", format=".1f"),
+        )
+    )
+
+    messages = by_repo["messages"].sum()
+    contains = by_repo["contains"].sum()
+    chart = (bars + text).properties(
+        width=max(600, min(1200, len(by_repo) * 80)),
+        height=500,
+        title=[
+            "Message Recursion by Repository",
+            f"{contains:,} of {messages:,} messages ({contains / messages * 100:.2f}%) "
+            "can nest to unbounded depth",
+        ],
+    )
+
+    save_plot(chart, output_file)
+
+    return chart
+
+
 def handle_visualize_command(args):
     """
     Main entry point for the visualize subcommand.
@@ -741,6 +1003,13 @@ def handle_visualize_command(args):
         if args.verbose:
             print("Creating field type distribution bar chart...")
         plot_field_type_distribution(df, args.output)
+    elif args.type == "recursion":
+        # The summary answers the same question as the chart, in numbers, so it
+        # is worth having whether or not the plot is being looked at.
+        print_recursion_summary(df)
+        if args.verbose:
+            print("Creating message recursion breakdown plot...")
+        plot_recursion_breakdown(df, args.output)
 
     if args.verbose:
         print("\nVisualization complete!")

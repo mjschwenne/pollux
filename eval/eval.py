@@ -19,11 +19,15 @@ def main():
         description="Run evalutation tasks for the Pollux project.",
         epilog="""
 Examples:
-  # Fetch using GitHub API (fast, limited to 1000 files)
-  python eval.py fetch --api googleapis google-cloud-go
+  # Fetch every repository in PROTO_REPOS, reusing cached clones
+  python eval.py fetch --all --cache ~/repos --output data-proto
 
-  # Fetch using local cloning (no limits, slower)
-  python eval.py fetch googleapis googleapis
+  # Fetch one repository by local cloning (the default method)
+  python eval.py fetch --repo googleapis google-cloud-go
+
+  # Fetch using the GitHub API instead (fast, but capped at 1000 files
+  # and collects no per-file statistics)
+  python eval.py fetch --repo googleapis google-cloud-go --api
 
   # Compare both methods
   python eval.py compare mjschwenne grackle
@@ -34,8 +38,9 @@ Examples:
   # Create combined visualizations from multiple files
   python eval.py visualize --type commits mjschwenne-grackle.parquet googleapis-googleapis.parquet --output combined-histogram.png
 
-Note: GitHub API method requires GITHUB_TOKEN environment variable.
-      Local method requires git but no token.
+Note: The GitHub API method requires the GITHUB_TOKEN environment variable.
+      The local method requires git but no token, and is the only one that
+      collects the statistics the message, field and recursion plots need.
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -108,6 +113,7 @@ Note: GitHub API method requires GITHUB_TOKEN environment variable.
             "methods",
             "breakdown",
             "field_types",
+            "recursion",
         ],
         default="commits",
         help="Type of plot to create (default: commits)",

@@ -3,11 +3,13 @@
 * Table of Contents :toc_4_gh:
 - [[#scripts][Scripts]]
   - [[#evalpy][=eval.py=]]
-    - [[#fetch-methods][Fetch Methods]]
-      - [[#github-api-method-default][GitHub API Method (Default)]]
-      - [[#local-cloning-method][Local Cloning Method]]
-      - [[#comparison-mode][Comparison Mode]]
-    - [[#visualization][Visualization]]
+    - [[#fetch][=fetch=]]
+      - [[#repository-selection][Repository selection]]
+      - [[#collection-method][Collection method]]
+      - [[#import-paths][Import paths]]
+      - [[#the-pollux-binary][The pollux binary]]
+    - [[#visualize][=visualize=]]
+    - [[#compare][=compare=]]
 - [[#repos][Repos]]
   - [[#observations][Observations]]
 
@@ -15,56 +17,167 @@
 
 ** =eval.py=
 
-Python script for fetching protobuf commit histories and creating visualizations. Supports multiple methods:
+Python script for collecting protobuf statistics and turning them into
+visualizations. Three subcommands: =fetch= gathers the data into Parquet files,
+=visualize= plots them, and =compare= checks the two collection methods against
+each other.
+
+*** =fetch=
+
+Walks every =.proto= file in a repository and records, per file, its commit
+history (from =git log=) together with the summary statistics from =pollux proto
+stats=. Writes one Parquet file per repository, named =<owner>-<repo>.parquet=.
+
+To regenerate the whole protobuf dataset:
 
 #+begin_src bash
-# Fetch proto commit history using GitHub API (requires GITHUB_TOKEN)
-python eval.py fetch googleapis google-cloud-go
-
-# Fetch proto commit history using local cloning (bypasses API limits)
-python eval.py fetch googleapis google-cloud-go --local
-
-# Create histogram visualization from single repository
-python eval.py visualize data.parquet --type commits --output single-repo.png
-
-# Create combined histogram from multiple repositories
-python eval.py visualize --type commits mjschwenne-grackle.parquet googleapis-googleapis.parquet --output combined-histogram.png
-
-# Create message histogram visualization from multiple repositories with verbose stats
-python eval.py visualize file1.parquet file2.parquet file3.parquet --type messages --verbose --output multi-repo-messages.html
-
-# Analyze all repositories at once using glob pattern
-python eval.py visualize *.parquet --type commits --verbose --output all-repos-analysis.html
-
-# Get detailed statistics about combined datasets
-python eval.py visualize googleapis-googleapis.parquet samchon-typia.parquet --verbose
+python eval.py fetch --all \
+  --cache ~/workspace/pollux-repos-protobuf \
+  --output data-proto \
+  --error-log error.log
 #+end_src
 
-*** Fetch Methods
+Or a single repository:
 
-**** GitHub API Method (Default)
-- Fast, no local disk space required
-- Limited to 1000 protobuf files due to GitHub Search API constraints
-- Requires =GITHUB_TOKEN= environment variable
-- Usage: =python eval.py fetch owner repo=
+#+begin_src bash
+python eval.py fetch --repo googleapis google-cloud-go --output data-proto
+#+end_src
 
-**** Local Cloning Method
-- Bypasses all API limits, gets complete commit history
-- Clones repository temporarily, extracts data with git commands
-- Requires git installation but no GitHub token
-- Usage: =python eval.py fetch owner repo --local=
+**** Repository selection
 
-**** Comparison Mode
-- Tests both methods on the same repository to verify consistency
-- Useful for validating results on smaller repositories
-- Usage: =python eval.py compare owner repo=
+Exactly one of these is required:
 
-*** Visualization
-- Create histograms of commit distributions and message counts
-- Multi-repository analysis: combine data from multiple Parquet files
-- Single repo: =python eval.py visualize data.parquet --type commits --output plot.png=
-- Multi repo: =python eval.py visualize repo1.parquet repo2.parquet --type commits --output combined.html=
-- Message analysis: =python eval.py visualize data.parquet --type messages --output messages.png= (requires --local fetch)
+- =--all= / =-a= :: every repository in =PROTO_REPOS= (=eval_utils.py=), which is
+  the protobuf dataset. With =--json-usage= it means =JSON_REPOS= instead.
+- =--repo= / =-r= /owner/ /repo/ :: a single repository, given as two arguments.
+- =--search-go-repos= :: searches GitHub for popular Go repositories and analyzes
+  their JSON tag usage rather than their protobuf. Requires =GITHUB_TOKEN=.
+
+**** Collection method
+
+Local cloning is the *default*. Passing =--api= switches to the GitHub REST
+API instead.
+
+| Method          | Limits                                   | Needs          |
+|-----------------+------------------------------------------+----------------|
+| local (default) | none; full commit history and statistics | =git=          |
+| =--api=         | 1000 files, no per-file statistics       | =GITHUB_TOKEN= |
+
+Because =--api= collects no statistics, data fetched that way only supports the
+=commits= plot. Everything else -- =messages=, =fields=, =field_types=,
+=breakdown=, =recursion= -- needs a local fetch.
+
+Other options:
+
+- =--cache= /dir/ :: keep the clones in /dir/ as =<owner>-<repo>= instead of a
+  temporary directory. An existing clone is reused, but it is first brought up to
+  date with =git fetch --all= and =git reset --hard origin/HEAD=, so a refetch
+  moves the dataset to whatever the repositories now hold. Without this flag
+  every repository is cloned from scratch on each run.
+- =--output= /dir/ :: directory to write the Parquet files into. Defaults to the
+  working directory.
+- =--error-log= /file/ :: append files that failed to compile, with repository
+  context, to /file/. It is appended to, never truncated, so delete it first if
+  the point of the run is to count what still fails.
+- =--json-usage= :: analyze Go struct JSON tags instead of protobuf.
+
+**** Import paths
+
+A repository is not one protobuf module. Its =.proto= files sit under directories
+that play the role of protoc's =-I=, and an import names a file relative to one
+of those rather than to the repository root, so compiling everything from the
+root alone fails on every file whose imports are written that way. That was most
+of what used to fail: 360 of the 486 entries in the error log were an import that
+did resolve, just not from where the compiler was looking.
+
+Nothing in a repository declares those directories in a form worth parsing --
+=buf.yaml= covers buf's own modules but not the testdata that is most of its
+=.proto= files -- so =fetch= reads them off the imports themselves: if some file
+imports =google/rpc/code.proto= and the repository holds
+=third_party/google/rpc/code.proto=, then =third_party= is an import path. Each
+file is then compiled under the root that resolves the most of its own imports,
+and files sharing a root are compiled together, which is also what makes a
+repository the size of googleapis tractable: a shared import is parsed once
+rather than once per file importing it.
+
+Every invocation gets every root, since a file can import across module
+boundaries, ordered by how much of their path they share with the group's own
+root -- a workspace where =a/a.proto= imports ="b.proto"= means the =b/b.proto=
+beside it, not one of the fifty others in the repository.
+
+What is left in the error log after that is, in descending order:
+
+- files importing something the repository genuinely does not contain, either a
+  fixture named =nonexistent.proto= or a real dependency that lives in another
+  repository, such as google-cloud-go's conformance tests importing googleapis;
+- protobuf newer than the compiler: =protocompile= v0.14.1 is the latest release
+  and knows editions up to 2023, so the 2024 and 2026 files in
+  =protocolbuffers/protobuf= and the =import option= statement cannot be parsed
+  at all;
+- deliberately invalid files, which a linter's test corpus is full of: import
+  cycles, unknown types, and syntax errors, all of them the fixture's point.
+
+None of the three is worth chasing, but a sudden change in the count is worth a
+look -- it usually means a heuristic stopped working, not that the corpus moved.
+
+**** The pollux binary
+
+=fetch= locates the binary with =which pollux=, so the =pollux= on =PATH= is the
+one that decides which columns exist. A dev shell pins it at the moment it was
+entered, so after rebuilding, leave and re-enter =nix develop= -- otherwise the
+run silently regenerates the dataset with an old binary. Check with:
+
+#+begin_src bash
+pollux proto stats --help | grep parquet
+#+end_src
+
+*** =visualize=
+
+Takes one or more Parquet files and writes a plot. The output format follows the
+file extension: =.png= or =.html=.
+
+#+begin_src bash
+# Single repository
+python eval.py visualize data-proto/googleapis-googleapis.parquet \
+  --type commits --output single-repo.png
+
+# Every repository at once, with the summary statistics printed as well
+python eval.py visualize data-proto/*.parquet --type breakdown --verbose \
+  --output all-repos-analysis.html
+#+end_src
+
+=--type= selects the plot:
+
+| Type          | Plot                                                          |
+|---------------+---------------------------------------------------------------|
+| =commits=     | histogram of commits per file, split by usefulness (default)  |
+| =messages=    | histogram of messages per file                                |
+| =fields=      | histogram of fields per file                                  |
+| =enums=       | histogram of enums per file                                   |
+| =enum_vals=   | histogram of enum values per file                             |
+| =services=    | histogram of services per file                                |
+| =methods=     | histogram of methods per file                                 |
+| =breakdown=   | messages, enums and services per repository, normalized       |
+| =field_types= | field types across the whole dataset                          |
+| =recursion=   | recursive messages per repository, normalized, plus a summary |
+
+=--verbose= adds statistics about the combined dataset to stdout. =recursion=
+prints its summary either way, since the numbers are the point of it.
+
+Note that combining Parquet files keeps only the columns they all share. A
+single file fetched before a counter existed therefore drops that counter from
+the whole set, which shows up as a "Missing required columns" error naming the
+counter. Refetch to fix it.
+
+*** =compare=
+
+Runs both collection methods against one repository and reports whether they
+agree. Useful on a small repository to check that the API method is not silently
+truncating.
+
+#+begin_src bash
+python eval.py compare mjschwenne grackle
+#+end_src
 
 * Repos
 

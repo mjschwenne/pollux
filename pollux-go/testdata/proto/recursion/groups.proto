@@ -1,0 +1,21 @@
+syntax = "proto2";
+
+package rec2;
+
+// A proto2 group is a message type too, so this is a cycle of two: the holder
+// refers to the group and the group refers back.
+message GroupHolder {
+  optional group Nested = 1 {
+    optional GroupHolder holder = 1;
+  }
+}
+
+// The reference an extension creates belongs to the message being extended, so
+// this makes Extendable self recursive.
+message Extendable {
+  extensions 100 to 200;
+}
+
+extend Extendable {
+  optional Extendable more = 100;
+}

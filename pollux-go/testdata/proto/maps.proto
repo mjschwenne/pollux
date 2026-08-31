@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package maps;
+
+message Inventory {
+  map<string, int32> counts = 1;
+  map<int64, Item> items = 2;
+
+  // Not a map. This is a hand written message that happens to be named the
+  // way the compiler names the synthetic entry it generates for a map, so
+  // the "Entry" suffix cannot be what tells the two apart -- only the
+  // map_entry option the compiler sets can.
+  message TagEntry {
+    string key = 1;
+    string value = 2;
+  }
+  repeated TagEntry tags = 3;
+}
+
+message Item {
+  string sku = 1;
+}
