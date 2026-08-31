@@ -1,5 +1,5 @@
 #+title: Design notes: the sealed descriptor kernel for Pollux.Proto
-#+author: recorded from the design sessions of 2026-08-26
+#+author: recorded from the design sessions of 2026-08-26; recursion survey and oneof/map decisions folded in 2026-08-31
 #+options: toc:2
 
 This document records the design decisions behind =Pollux/Proto/Descriptor.lean=
@@ -235,7 +235,7 @@ reproducing in the report):
    completeness is also what justifies trusting an imported =FileDescriptorSet=,
    which was serialized by someone else's implementation.
 
-* Deferred: recursive message types
+* Decision: recursive message types — tree now, symbol table with the import path
 
 The current tree-shaped =Desc= cannot express recursive messages. The in-repo
 proto corpus (=proto/v1=–=v5=) has none — its message graph is a DAG — but the
@@ -260,8 +260,227 @@ name; an environment maps names to descriptors — which is literally what
   over the (finite) name graph. This cost is intrinsic to recursive schemas, not
   to any representation.
 
-The decision waits on evidence from the actual dataset about how common
-recursion is.
+The decision waited on evidence about how common recursion actually is; the
+survey below (2026-08-31) supplied it.
+
+** The evidence: message recursion in the wild
+
+Fourteen protobuf-using repositories, 57,461 messages, synthetic map-entry
+messages excluded (map fields desugar to nested =*Entry= messages, which are
+never recursive and would only dilute the rates). /Recursive/ = the message lies
+on a cycle of the type-reference graph; /contains recursion/ = some message in
+its transitive field closure does (a superset of /recursive/, and the metric
+that matters here — a tree-shaped =Desc= cannot represent anything in the
+closure of a cycle).
+
+| Metric               |  Count |     % |
+|----------------------+--------+-------|
+| Messages             | 57,461 |       |
+| Recursive            |    831 | 1.45% |
+| — self-recursive     |    425 | 0.74% |
+| — mutually recursive |    447 | 0.78% |
+| Contains recursion   |  3,893 | 6.78% |
+| Cycles               |    533 |       |
+
+(425 + 447 = 872 > 831: 41 messages are both self- and mutually recursive. The
+largest cycle has 22 messages.)
+
+| Repository                  | Messages | Recursive |      % | Contains |      % |
+|-----------------------------+----------+-----------+--------+----------+--------|
+| protocolbuffers/protobuf-go |      605 |       110 | 18.18% |      151 | 24.96% |
+| cloudwego/kitex             |       34 |         4 | 11.76% |        7 | 20.59% |
+| go-kratos/kratos            |       94 |         8 |  8.51% |       17 | 18.09% |
+| bufbuild/buf                |    2,922 |       210 |  7.19% |      371 | 12.70% |
+| google/protobuf.dart        |      503 |        30 |  5.96% |       59 | 11.73% |
+| protocolbuffers/protobuf    |    2,372 |       172 |  7.25% |      242 | 10.20% |
+| googleapis/googleapis       |   49,370 |       289 |  0.59% |    3,022 |  6.12% |
+| streamdal/plumber           |      286 |         2 |  0.70% |       13 |  4.55% |
+| google/rejoiner             |       50 |         0 |  0.00% |        2 |  4.00% |
+| googleapis/google-cloud-go  |      134 |         3 |  2.24% |        3 |  2.24% |
+| uber/prototool              |      469 |         3 |  0.64% |        6 |  1.28% |
+| asynkron/protoactor-go      |      149 |         0 |  0.00% |        0 |  0.00% |
+| colinmarc/hdfs              |      443 |         0 |  0.00% |        0 |  0.00% |
+| twitchtv/twirp              |       30 |         0 |  0.00% |        0 |  0.00% |
+
+Readings, in the order they matter for the decision:
+
+1. *The operative exclusion rate is 6.78%, not 1.45%.* A tree-shaped =Desc=
+   excludes every message that /contains/ recursion, not just the recursive
+   ones. The ~4.7× amplification between the two rates (~10× inside googleapis:
+   289 recursive → 3,022 containing) is the structural fact worth reproducing
+   in the report: recursion is rare as a local phenomenon, but the few
+   recursive types sit near the roots of the import graph and poison the
+   closure of everything above them.
+2. *The aggregate is corpus-weighted — effectively a googleapis number.* At
+   49,370 of 57,461 messages (86%), googleapis dominates the totals; the honest
+   view is the per-repo table, which shows a clean infra/application split:
+   repos that manipulate protobuf itself (protobuf-go 24.96%, kitex 20.59%,
+   kratos 18.09%, buf 12.70%, protobuf 10.20% contains-recursion) run 10–25%,
+   application-level and generated-API corpora run 0–6%. Pollux is an infra
+   artifact; its natural benchmark peers are the top of the table. The report
+   should show both views.
+3. *Mutual ≈ self kills the cheap shortcut.* 447 mutually recursive vs 425
+   self-recursive: a self-loop-only mechanism (a μ-binder, per-message fuel)
+   would cover barely half the phenomenon. If recursion is supported at all, it
+   must be the general mechanism — the flat symbol table above.
+4. *Cycles are tame.* 533 cycles with a maximum SCC of 22 messages keeps both
+   feared costs bounded: the symbol-table =AllWF= stays a small finite
+   conjunction, and the restated one-layer compatibility relation quantifies
+   over small name graphs. The intrinsic casualty (finite inductive =DescCompat=
+   derivations) is real, but the graphs it must handle are tiny.
+5. *Open follow-up: attribute the closure.* The suspicion is that googleapis's
+   3,022 traces overwhelmingly to =google.protobuf.Struct=/=Value=/=ListValue= and
+   the =descriptor.proto= cluster. Worth measuring: "contains recursion,
+   excluding closures that trace only to well-known-type roots". If that
+   collapses toward the 0.59% local rate, the option space widens — a bespoke
+   builtin for the =Struct= SCC (a hand-rolled μ for that one fixed
+   three-message cycle; values stay finite, so a value-indexed parser for it
+   terminates as usual) plus tree descriptors would recover most of the 6.78%
+   without general name resolution.
+
+** Resolution
+
+The tree-shaped =Desc= stands for the current milestone (value layer, varints,
+the relational =Encodes= spec): 93.2% of surveyed messages — and 100% of
+=proto/v1=–=v5= — are tree-representable, so the wire-format work is not
+blocked. But the survey also confirms recursion support cannot be dropped
+permanently, for a reason the percentages understate: the exclusions
+concentrate exactly where the roadmap points. =descriptor.proto= is itself
+recursive, so the =FileDescriptorSet= import path (=Desc.ofList='s docstring
+already names it as its consumer) is blocked at the meta level no matter how
+rare recursion is in user schemas — and =Struct= sits on real API surfaces.
+
+So: tree now; flat symbol table when the import path becomes real, with
+=explode= bounding the retrofit as designed; self-loop-only mechanisms ruled
+out by the mutual-recursion share; the well-known-type attribution measurement
+(reading 5) decides whether a =Struct= builtin is a worthwhile intermediate
+step.
+
+* Decision: oneof is a presence mode; maps arrive pre-desugared
+
+The kernel as first committed had neither map fields nor oneof. The survey
+corpus says oneof cannot stay out: roughly 11% of fields are members of a
+oneof. (Measurement caveat, parallel to the synthetic map-entry exclusion: if
+the rate was computed from descriptor sets, every proto3 =optional= field is a
+member of a /synthetic/ singleton oneof — =proto3_optional= sets =oneof_index= —
+and those are already covered by =Cardinality.optional=. The actionable number
+is membership in real oneofs; splitting the metric is an open follow-up, as is
+the group-size distribution for the report.)
+
+** Maps: nothing to decide
+
+The wire format /defines/ =map<K,V>= as =repeated MapEntry=, where =MapEntry= is a
+synthetic nested message with =key = 1=, =value = 2= — desugaring in the
+descriptor is not an approximation but the ground truth, so the kernel needs
+no map support at all. What remains of map-ness lands in the usual places:
+key-type restrictions (no message/float keys) in the serializer-layer validity
+predicate alongside the field-number bounds; per-key last-wins and entry-order
+irrelevance in the relational =Encodes= spec with the rest of the order
+nondeterminism. The value layer keeps entries as a repeated list, so the
+functional round trip is untouched.
+
+** Oneof: what it is on the wire
+
+Oneof is wire-invisible. Members are ordinary explicit-presence fields with
+their own numbers drawn from the message's single flat tag space; there is no
+oneof tag, and nothing on the wire names the group. What oneof adds is a
+constraint (at most one member set) and a parser semantics (last-one-wins
+across the group's field numbers, clearing the others). Unlike recursion,
+which broke the representation, oneof is an annotation plus semantics.
+
+** The representation: =Cardinality.oneof (group : Nat)=
+
+Presence in protobuf is four-valued by the official field-presence taxonomy —
+no presence, explicit presence, repeated, oneof — and =Cardinality= was already
+the kernel's presence discipline, so oneof membership joins it as a
+constructor rather than as structure:
+
+#+begin_src lean
+inductive Cardinality where
+  | singular | optional | repeated
+  | oneof (group : Nat)
+#+end_src
+
+The =group= tag transcribes =FieldDescriptorProto.oneof_index= verbatim. A field
+carries exactly one =Cardinality=, so membership in two groups and repeated
+oneof members are unrepresentable; so are empty groups (protoc rejects empty
+oneofs). The kernel is otherwise untouched — entry list, =explode=, =get?=, =WF=,
+sizes, =AllWF= all unchanged — and no name table is needed (unlike enums),
+because group identity on the wire is just an index.
+
+** The rejected alternative: the folded representation
+
+The natural objection (raised and worked through 2026-08-31): why not have the
+oneof /contain/ its member fields, matching the =.proto= surface syntax? Four
+reasons, in decreasing order of force:
+
+1. /The descriptor structure is already flat./ The nested block is surface
+   syntax protoc desugars: in =descriptor.proto=, members sit in
+   =DescriptorProto.field= alongside ordinary fields, carrying =oneof_index= — a
+   pointer into =oneof_decl=, which holds only names and options. The import
+   path parses descriptors, never source, so the flat tag is a verbatim
+   transcription and the folded form would need a desugaring step.
+2. /Oneofs have no field number./ Members share the message's tag space and
+   the wire tag names the member directly, so a nested oneof entry has no key
+   to live under in the sorted map — it needs a fake key or a second =Desc=
+   component. Either breaks the kernel's shape: =get?= (tag dispatch, the
+   parser's central move) becomes a two-level search, =WF= must add cross-group
+   number-disjointness (today one =Pairwise= over one list), and the
+   unconditional insert/lookup laws get reproved over two levels with new
+   side conditions (=insert= into which group?). Kernel acceptance is not the
+   issue — plain nested lists typecheck, per the experiment table — the cost
+   is pure proof surface. And values stay flat regardless (a set member on
+   the wire is just a set field), so every descriptor↔value predicate would
+   flatten the nesting at each use.
+3. /Even nested storage would present the flat view./ The sealed interface
+   answers "what is declared at number k?", because that is what parsing
+   needs; if group structure is observable at all, =get?= must return
+   type + presence + group identity — which /is/ the flat annotation. The tag
+   is the one-layer observation of the partition, exactly parallel to
+   =explode= being the one-layer observation of the field map. Nesting would
+   be a representation choice hidden behind the same interface, and the
+   seal's own principle — smallest proof surface — selects the flat list.
+4. /"Matching tags" never happens./ Within one descriptor there is nothing to
+   match: tag-equality /is/ the grouping. Across descriptors tags are never
+   compared: the compatibility side condition is partition preservation — for
+   shared numbers k₁, k₂, same-group-in-d₁ ↔ same-group-in-d₂ — each side
+   stated with that descriptor's own tags. That phrasing is forced in any
+   representation (nested included, where "same group" means "same syntactic
+   block"), because raw =oneof_index= is not evolution-stable: adding a oneof
+   shifts every later index.
+
+Where the folded view is genuinely wanted (a report figure, a pretty-printer,
+possibly an =Encodes= lemma), it is a /derived view/ — a =Desc.oneofs= grouping
+the exploded map by tag, the same move as =explode= itself. Functions out of
+the type are free; structure inside the type is what costs lemmas.
+
+** Where the semantics land, by layer
+
+- /Serializer validity/: the at-most-one-member-set constraint joins the
+  =valueWf= analogue, pointwise over pairs of set keys (same group ⇒ same
+  key). The functional round-trip proofs are unchanged — our own serializer
+  never emits two members of a group.
+- /=Encodes= and parser completeness/: cross-member last-wins (the last
+  occurrence among /all/ of a group's field numbers wins and clears the rest)
+  activates only against foreign encoders; deferred with the rest of the
+  relational spec.
+- /Compatibility/: the one place to expect trouble. Moving fields in or out
+  of oneofs is wire-compatible but changes the reader's transform (a writer
+  legitimately setting two ungrouped fields gets one cleared by a reader that
+  groups them). Notably, oneof compatibility constrains /pairs/ of fields, so
+  it cannot live in the pointwise =∝= — it would be =≪='s first genuinely
+  non-pointwise side condition. Safest v1: require the partition preserved
+  along =≪= on shared fields, and expect the relaxations to force rules the
+  way =M-Declare= was forced.
+
+** Timing
+
+The annotation went in now, while =Field.mk card ty= is matched almost
+nowhere; once the value layer and its theorems exist, a new =Cardinality=
+constructor touches every match. At ~11% of fields — even if the synthetic
+split halves it — oneof is too common to exclude from the coverage story, and
+the =group= tag costs the kernel nothing today: it sits dormant until the
+validity predicate and =Encodes= consume it.
 
 * Decision: freeze InterParse, build Proto fresh
 
@@ -285,8 +504,8 @@ frozen as the v1 artifact documented in the report; what transfers to
 * Status and verification
 
 =Pollux/Proto/Descriptor.lean= implements the kernel: =Desc= / =Field= / =FieldType= (15
-scalar types, proto3 cardinalities; enums, oneof, map fields, and groups
-deliberately deferred), the sealed operations, the interface laws in the table
+scalar types, the four presence modes including =oneof= group tags; enums and
+groups deliberately deferred; map fields arrive pre-desugared), the sealed operations, the interface laws in the table
 above, sizes with =descSize_lt_of_get?_msg=, one-layer =AllWF= with =insert=/=ofList=
 preservation. Field numbers are =Int= for continuity with the InterParse
 relations; protobuf's range bounds belong in the serializer-layer validity

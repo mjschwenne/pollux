@@ -60,12 +60,20 @@
   Field numbers are `Int` for continuity with the InterParse compatibility
   relations; protobuf's range bounds (1 to 2^29 − 1, minus the reserved
   19000–19999) belong in the serializer-layer validity predicate, as
-  `valueWf`'s bounds did in InterParse. Deliberately absent for now (see
-  `proto-design.org`): the value layer (values stay *unsealed* — they are
-  the induction skeleton of round-trip proofs), enums, oneof, map fields,
-  groups, and the flat symbol-table representation that recursive message
-  types would require — `explode` is exactly the interface that makes that
-  swap non-breaking if it comes.
+  `valueWf`'s bounds did in InterParse. Oneof membership is a presence
+  mode (`Cardinality.oneof`), not structure: the group tag transcribes
+  `FieldDescriptorProto.oneof_index`, and its semantics — at most one
+  member set, cross-member last-wins — land in the validity predicate and
+  the relational spec respectively (`proto-design.org` records the
+  argument against the folded representation). Map fields need no
+  descriptor support at all: the wire format defines `map<K,V>` as
+  `repeated MapEntry`, so they arrive pre-desugared. Deliberately absent
+  for now (see `proto-design.org`): the value layer (values stay
+  *unsealed* — they are the induction skeleton of round-trip proofs),
+  enums, groups, and the flat symbol-table representation that recursive
+  message types will require once the `FileDescriptorSet` import path
+  arrives — `explode` is exactly the interface that makes that swap
+  non-breaking.
 -/
 import Mathlib
 
@@ -81,12 +89,27 @@ inductive ScalarType where
   | bool | string | bytes
   deriving DecidableEq, Repr
 
-/-- Field cardinality under the proto3 presence discipline: `singular` is
-    implicit presence, `optional` explicit presence, `repeated` a list.
+/-- Field cardinality under the proto3 presence discipline, four-valued as
+    in protobuf's own field-presence taxonomy: `singular` is implicit
+    presence, `optional` explicit presence, `repeated` a list, and
+    `oneof group` explicit presence plus mutual exclusion among the
+    message's fields carrying the same `group` tag.
+
+    The tag transcribes `FieldDescriptorProto.oneof_index` (descriptor form
+    is flat — the folded `.proto` block is surface syntax) and is
+    meaningful only within one descriptor: tag-equality *is* the grouping,
+    and nothing ever compares tags across descriptors (compatibility will
+    compare the induced partitions). A field carries exactly one
+    `Cardinality`, so membership in two groups, repeated oneof members,
+    and empty groups are all unrepresentable. Synthetic oneofs (proto3
+    `optional` sugar) import as `.optional`, not `.oneof`.
+
     Whether a repeated scalar field is packed is an encoding-layer concern,
-    not a descriptor one. -/
+    not a descriptor one; the at-most-one-member-set constraint is a
+    serializer-layer validity concern, like the field-number bounds. -/
 inductive Cardinality where
   | singular | optional | repeated
+  | oneof (group : Nat)
   deriving DecidableEq, Repr
 
 -- The descriptor tree. The `List ((_ : Int) × Field)` argument is the
