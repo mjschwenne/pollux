@@ -26,6 +26,14 @@
     `dedupKeys`, `lookup_ext`, …) is stated for `List (Sigma β)`. This is
     `AList`'s internals, available unbundled.
 
+  The operations on that list — `sortedInsert`, `WF`, the lookup laws,
+  extensionality — are **not** defined here: they live in
+  `Proto/SortedMap.lean`, stated for a general payload `β` and shared with
+  `Value`. Only the constructor's list type has to be repeated per
+  inductive, because a parameterized synonym in constructor position is
+  rejected by the kernel (that experiment is recorded in
+  `Proto/SortedMap.lean`).
+
   ## The seal
 
   The list encoding is **kernel-internal by convention** (Lean's `private`
@@ -67,15 +75,16 @@
   the relational spec respectively (`proto-design.org` records the
   argument against the folded representation). Map fields need no
   descriptor support at all: the wire format defines `map<K,V>` as
-  `repeated MapEntry`, so they arrive pre-desugared. Deliberately absent
-  for now (see `proto-design.org`): the value layer (values stay
-  *unsealed* — they are the induction skeleton of round-trip proofs),
-  enums, groups, and the flat symbol-table representation that recursive
-  message types will require once the `FileDescriptorSet` import path
-  arrives — `explode` is exactly the interface that makes that swap
-  non-breaking.
+  `repeated MapEntry`, so they arrive pre-desugared. The value layer is in
+  `Proto/Value.lean`, and stays *unsealed* — values are the induction
+  skeleton of the round-trip proofs, so they are traversed where
+  descriptors are only observed. Deliberately absent for now (see
+  `proto-design.org`): enums, groups, and the flat symbol-table
+  representation that recursive message types will require once the
+  `FileDescriptorSet` import path arrives — `explode` is exactly the
+  interface that makes that swap non-breaking.
 -/
-import Mathlib
+import Pollux.Proto.SortedMap
 
 namespace Pollux.Proto
 
@@ -136,30 +145,15 @@ open List
 
 /-! ### Kernel internals
 
-The raw entry list and the sorted insertion on it. Everything in this
-section is representation; nothing below `explode` should be used outside
-this file. -/
+The raw entry list. Everything in this section is representation; nothing
+below `explode` should be used outside this file. The insertion itself and
+its theory come from `SortedMap`. -/
 
 /-- The raw entry list. Kernel-internal. -/
 def entries : Desc → List ((_ : Int) × Field) | .mk es => es
 
 @[simp] theorem entries_mk (es : List ((_ : Int) × Field)) :
     (Desc.mk es).entries = es := rfl
-
-/-- Sorted insertion into a key-ordered entry list, replacing any existing
-    entry with the same key. Kernel-internal.
-
-    Kept hand-rolled rather than `orderedInsert ∘ kerase`: the single pass is
-    what makes the lookup-after-insert lemmas below hold with no
-    well-formedness hypothesis (a perm-based route would thread `NodupKeys`
-    through every lookup). -/
-def sortedInsert (k : Int) (f : Field) :
-    List ((_ : Int) × Field) → List ((_ : Int) × Field)
-  | [] => [⟨k, f⟩]
-  | ⟨k', f'⟩ :: rest =>
-    if k < k' then ⟨k, f⟩ :: ⟨k', f'⟩ :: rest
-    else if k = k' then ⟨k, f⟩ :: rest
-    else ⟨k', f'⟩ :: sortedInsert k f rest
 
 /-! ### Constructors and the public interface -/
 
@@ -169,7 +163,7 @@ instance : EmptyCollection Desc := ⟨.mk []⟩
 
 /-- Insert (or replace) a field declaration. -/
 def insert (d : Desc) (k : Int) (f : Field) : Desc :=
-  .mk (sortedInsert k f d.entries)
+  .mk (SortedMap.sortedInsert k f d.entries)
 
 /-- Remove a field declaration. -/
 def erase (d : Desc) (k : Int) : Desc :=
@@ -190,78 +184,32 @@ def get? (d : Desc) (k : Int) : Option Field :=
     by key. No-duplicate-keys is a consequence (`WF.nodupKeys`), not a second
     conjunct. Interface-level statements should not need this — see the
     header. -/
-def WF (d : Desc) : Prop :=
-  d.entries.Pairwise (fun a b => a.1 < b.1)
+def WF (d : Desc) : Prop := SortedMap.WF d.entries
 
 theorem WF.nodupKeys {d : Desc} (h : d.WF) : d.entries.NodupKeys :=
-  nodupKeys_iff_pairwise.mpr (h.imp ne_of_lt)
+  SortedMap.WF.nodupKeys h
 
-/-! ### Bridge lemmas (kernel-internal)
+/-! ### Bridge lemma (kernel-internal)
 
-Everything here is about the raw list; the interface lemmas in the next
-section are their public faces. -/
+The one fact tying the `Finmap` view back to the raw list; the interface
+lemmas in the next section are stated on top of it. -/
 
 theorem get?_eq_dlookup (d : Desc) (k : Int) :
     d.get? k = d.entries.dlookup k := by
   simp [get?, explode]
 
-theorem mem_sortedInsert {k : Int} {f : Field} {a : (_ : Int) × Field}
-    {l : List ((_ : Int) × Field)} :
-    a ∈ sortedInsert k f l → a = ⟨k, f⟩ ∨ a ∈ l := by
-  induction l with
-  | nil => simp [sortedInsert]
-  | cons hd tl ih =>
-    obtain ⟨k', f'⟩ := hd
-    rw [sortedInsert]; split_ifs <;> grind
+/-! ### Well-formedness preservation
 
-theorem dlookup_sortedInsert_self (k : Int) (f : Field)
-    (l : List ((_ : Int) × Field)) :
-    dlookup k (sortedInsert k f l) = some f := by
-  induction l with
-  | nil => simp [sortedInsert]
-  | cons hd tl ih =>
-    obtain ⟨k', f'⟩ := hd
-    rw [sortedInsert]; split_ifs with h1 h2
-    · simp [dlookup]
-    · simp [dlookup]
-    · simp [dlookup, Ne.symm h2, ih]
+All three are the `SortedMap` theory at `β := Field`. -/
 
-theorem dlookup_sortedInsert_ne (k k' : Int) (f : Field) (h : k ≠ k')
-    (l : List ((_ : Int) × Field)) :
-    dlookup k' (sortedInsert k f l) = dlookup k' l := by
-  induction l with
-  | nil => simp [sortedInsert, dlookup, h]
-  | cons hd tl ih =>
-    obtain ⟨k'', f''⟩ := hd
-    rw [sortedInsert]; split_ifs with h1 h2
-    · simp [dlookup, h]
-    · subst h2; simp [dlookup, h]
-    · by_cases hk : k'' = k' <;> simp [dlookup, hk, ih]
-
-/-! ### Well-formedness preservation -/
-
-theorem empty_wf : (∅ : Desc).WF := Pairwise.nil
+theorem empty_wf : (∅ : Desc).WF := SortedMap.wf_nil
 
 theorem insert_wf (d : Desc) (k : Int) (f : Field) :
-    d.WF → (d.insert k f).WF := by
-  cases d with | mk es =>
-  simp only [WF, insert, entries]
-  induction es with
-  | nil => simp [sortedInsert]
-  | cons hd tl ih =>
-    obtain ⟨k', f'⟩ := hd
-    intro h
-    rw [sortedInsert]
-    split_ifs with h1 h2
-    · exact h.cons fun a ha => (mem_cons.mp ha).elim
-        (fun e => e ▸ h1) (fun m => h1.trans (rel_of_pairwise_cons h m))
-    · subst h2; exact h.of_cons.cons fun a ha => rel_of_pairwise_cons h ha
-    · exact (ih h.of_cons).cons fun a ha => (mem_sortedInsert ha).elim
-        (fun e => e ▸ lt_of_le_of_ne (not_lt.mp h1) (Ne.symm h2))
-        (fun m => rel_of_pairwise_cons h m)
+    d.WF → (d.insert k f).WF :=
+  fun h => SortedMap.sortedInsert_wf k f h
 
 theorem erase_wf (d : Desc) (k : Int) : d.WF → (d.erase k).WF :=
-  fun h => Pairwise.sublist (kerase_sublist k _) h
+  fun h => SortedMap.kerase_wf k h
 
 /-! ### The interface's equational theory
 
@@ -284,9 +232,9 @@ duplicated list removes the first hit only). -/
   intro k'
   rcases eq_or_ne k k' with rfl | hne
   · rw [Finmap.lookup_insert]
-    simp [explode, insert, entries, dlookup_sortedInsert_self]
+    simp [explode, insert, entries, SortedMap.dlookup_sortedInsert_self]
   · rw [Finmap.lookup_insert_of_ne _ (Ne.symm hne)]
-    simp [explode, insert, entries, dlookup_sortedInsert_ne k k' f hne]
+    simp [explode, insert, entries, SortedMap.dlookup_sortedInsert_ne k k' f hne]
 
 @[simp] theorem get?_insert_same (d : Desc) (k : Int) (f : Field) :
     (d.insert k f).get? k = some f := by
@@ -345,9 +293,7 @@ theorem eq_of_explode_eq {d₁ d₂ : Desc} (h₁ : d₁.WF) (h₂ : d₂.WF)
     simpa [explode] using this
   cases d₁ with | mk l₁ => cases d₂ with | mk l₂ =>
   simp only [entries_mk] at hk
-  exact congrArg _ <| Perm.eq_of_pairwise
-    (fun a b _ _ hab hba => absurd hab (not_lt.mpr hba.le))
-    h₁ h₂ (lookup_ext h₁.nodupKeys h₂.nodupKeys (fun x y => by rw [hk x]))
+  exact congrArg _ (SortedMap.eq_of_dlookup_eq h₁ h₂ hk)
 
 end Desc
 

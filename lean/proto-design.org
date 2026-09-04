@@ -1,10 +1,11 @@
-#+title: Design notes: the sealed descriptor kernel for Pollux.Proto
-#+author: recorded from the design sessions of 2026-08-26; recursion survey and oneof/map decisions folded in 2026-08-31
+#+title: Design notes: the descriptor kernel and value layer for Pollux.Proto
+#+author: recorded from the design sessions of 2026-08-26; recursion survey and oneof/map decisions folded in 2026-08-31; value layer 2026-09-04
 #+options: toc:2
 
-This document records the design decisions behind =Pollux/Proto/Descriptor.lean=
-and the experiments that motivated them, as source material for the written
-report. The starting point was the completed =InterParse= layer (all three
+This document records the design decisions behind =Pollux/Proto/= — the sealed
+descriptor kernel (=Descriptor.lean=) and the value layer (=SortedMap.lean=,
+=Value.lean=, =Validity.lean=, =Transform.lean=) — and the experiments that
+motivated them, as source material for the written report. The starting point was the completed =InterParse= layer (all three
 top-level round-trip theorems proven) and the question of how its descriptor
 representation should evolve for the real protobuf wire format.
 
@@ -53,14 +54,55 @@ end
 | =AList (fun _ : Int => Field)=                | *no*        | kernel: =List.NodupKeys entries= applied to =_nested.List_2= |
 | =Finmap (fun _ : Int => Field)=               | *no*        | same, via =Multiset _nested.Sigma_2=                       |
 | ={l : List (Int × Field) // l.Pairwise …}=   | *no*        | kernel: unknown constant =Field=                           |
+| =SortedList Field= (=abbrev= synonym)        | *no*        | kernel: non-valid occurrence in =Desc.mk= arg #1           |
+| =SortedList Field= (=def= synonym)           | *no*        | same                                                     |
 
-The failures share one cause, and it is more specific than "the positivity
-checker": the nested-inductive translation rewrites the payload type (=List (Int
+The first three failures share one cause, and it is more specific than "the
+positivity checker": the nested-inductive translation rewrites the payload type (=List (Int
 × Field)=) into an internal =_nested.List_2= type, and any structure that *bundles a
 proof about that payload* (=AList='s =NodupKeys= field, =Finmap='s quotient, a
 =Subtype='s predicate) then no longer typechecks in the kernel. The blocker is
 proof-bundling over the nested type, not sortedness per se. This observation is
 what later licenses the =explode= interface (§ The seal).
+
+The last two rows were added 2026-09-04, when the value layer raised the
+question of whether =Desc= and =Value= could share their container type. They
+cannot: with
+
+#+begin_src lean
+abbrev SortedList (β : Type) := List ((_ : Int) × β)
+mutual
+inductive Desc where | mk (es : SortedList Field)
+...
+#+end_src
+
+the kernel reports
+
+#+begin_example
+(kernel) arg #1 of 'Desc.mk' contains a non valid occurrence
+of the datatypes being declared
+#+end_example
+
+for the =def= form and, notably, for the =abbrev= form too — reducibility does not
+help, because the declaration reaching the kernel still mentions =SortedList
+Field= and the nested-inductive translation only recognizes *literal*
+applications of already-declared inductives. So this is a third face of the same
+restriction: the payload type must be written out in full inside every
+constructor.
+
+The *theory*, however, shares fine, and that is where nearly all the lines were.
+=Pollux/Proto/SortedMap.lean= states =sortedInsert=, =WF=, the lookup laws and
+extensionality for a general payload =β=, and =Desc= and =Value= instantiate it at
+=β := Field= and =β := Val=; each inductive repeats only the constructor's list
+type. This recovers the saving the prototype measured (§ Decision: sigma pairs)
+without the synonym.
+
+Measured after the fact: retrofitting the kernel onto the shared theory took
+=Descriptor.lean= from 492 to 438 lines, with =insert_wf= collapsing from a
+twelve-line induction to one line and =eq_of_explode_eq='s tail to a single
+application. The kernel's public API is byte-for-byte unchanged — the seal
+moved down a level rather than weakening, since =SortedMap= is representation
+too and =explode=/=get?= remain the only interface.
 
 ** Why not =TreeMap.Raw= (accepted but rejected)
 
@@ -482,6 +524,249 @@ split halves it — oneof is too common to exclude from the coverage story, and
 the =group= tag costs the kernel nothing today: it sits dormant until the
 validity predicate and =Encodes= consume it.
 
+* Decision: the value layer — totality, presence, and scalar carriers
+
+Recorded 2026-09-04, when =Pollux/Proto/Value.lean=, =Validity.lean= and
+=Transform.lean= were written. The descriptor kernel fixed cardinality and
+type; the value layer had to decide what a *message* is, and the decisions
+below all follow from one observation about presence.
+
+** Totality is protobuf's data model; optionality is its wire encoding
+
+The objection that opens the question: on the wire every field is optional,
+and omitting an implicit-presence field yields the default — so why should a
+value carry an entry for a field the encoding never mentions?
+
+Because those are two different levels. Implicit presence means precisely
+that the default is *indistinguishable from unset*: =msg.x= always denotes
+something, and no haser is generated. Protobuf's own data model therefore
+assigns every implicit field a value at all times; what is optional is only
+whether that value costs bytes, which is the serializer's skip-defaults rule.
+Absence is observable only for explicit presence, repeated fields, and oneof
+membership — and all three are representable *inside* the presence wrapper.
+
+So a well-formed value is **total over its descriptor** (=Value.Total=, exact
+domain equality), and =Value.init= — the descendant of the Rocq development's
+=init_deco= — is the value denoted by silence. The payoff is that all four
+presence modes round-trip to the identity under one descriptor:
+
+| declared               | =init= gives       | serializer   | parser re-injects |
+|------------------------+------------------+--------------+-------------------|
+| =singular= at default    | =implicit 0=       | emits nothing | =implicit 0=        |
+| =optional= unset         | =optional none=    | emits nothing | =optional none=     |
+| =optional= *at default*  | =optional (some 0)= | *emits it*     | =optional (some 0)= |
+| =repeated= empty         | =repeated []=      | emits nothing | =repeated []=       |
+| =oneof= member unset     | =optional none=    | emits nothing | =optional none=     |
+
+The third row is what justifies the design: explicit presence exists to
+separate "set to 0" from "unset", and totality preserves that distinction
+instead of collapsing it.
+
+** Totality is descriptor-relative, so evolution does not break it
+
+The natural worry: under schema evolution a value written against =d₁= is
+*not* total over a reader's =d₂= that has gained a field, so does the invariant
+not fail exactly where compatibility lives?
+
+It does not, because =Total= is a two-place predicate — as =valueWf d v= already
+was in InterParse. =Total d₁ v= is a hypothesis on the writer's value;
+=Total d₂ (reinterpret d₁ d₂ v)= is a lemma about the reader's
+(=Value.reinterpret_total=, proven). There is no intermediate state in which a
+value is "not yet total" to reason about; the transform *re-totalizes*, and
+its job at a reader-only key is the single uniform rule "inject =Field.init f=".
+
+Stating totality as exact domain equality rather than =dom(d) ⊆ dom(v)= does a
+second job: unknown-field junk is unrepresentable in a valid value, so the
+drop rule fires only across descriptors, never on our own serializer's output.
+
+** Consequences for the compatibility relations
+
+Three, all simplifications relative to InterParse:
+
+1. =M-Declare= *disappears*. It existed only because InterParse's =valueWf=
+   permitted a value that omits a declared key; with totality that is
+   unrepresentable, and =init= handles the case structurally.
+2. =M-Add= *returns, pinned*. InterParse removed it because "no round trip
+   produces it". Here one does — a reader gains =Field.init f= at every key in
+   =dom(d₂) \ dom(d₁)= — but the value is determinate rather than an arbitrary
+   type-matching one. Call it =M-Default=. The symmetry with InterParse is worth
+   the report's attention: in both layers the rule set is forced by what the
+   transform produces, and the two changes are mirror images.
+3. =≼= should become *three cases per key* — shared (recurse), reader-only
+   (default injected), writer-only (dropped) — against InterParse's eight
+   rules.
+
+A fourth, more speculative: InterParse needed =IdCompatible= because =valueWf=
+allowed both junk at unknown keys and omission of declared ones. With exact
+totality both are gone, so the same-descriptor theorem should conclude a
+genuine equality (=Value.reinterpret_self=, stated) rather than a looser
+relation, and the Proto layer may need only *two* top-level theorems where
+InterParse had three.
+
+** The value shape is three-valued, though =Cardinality= is four-valued
+
+Oneof members are =optional=-shaped: oneof's fourth-ness is a cross-field
+constraint (at most one member set), not a shape. That constraint is
+=Value.OneofOk=, quantified over *pairs* of keys — the one protobuf rule that is
+not pointwise, which is also why cross-descriptor oneof compatibility cannot
+live in the pointwise field relation (already anticipated in § Decision: oneof).
+
+The presence wrapper sits *outside* the payload:
+
+#+begin_src lean
+inductive Val     | implicit (p : Payload)
+                  | optional (p : Option Payload)
+                  | repeated (ps : List Payload)
+inductive Payload | int | bool | string | bytes | float | double | msg (v : Value)
+#+end_src
+
+The Rocq development duplicated its =DecoVal= across all six =ValVal=
+constructors; factoring it out writes it once and makes a repeated message
+field a genuine =List Payload=. Cost, measured: =Value.rec= carries 7 motives
+against =Desc.rec='s 5, the extras being =Option Payload= and =List Payload=. This
+is *not* the =TreeMap.Raw= problem — those are trivial helper motives over types
+we already reason about, not balanced-tree internals that every structural
+recursion must handle.
+
+** Scalar carriers: one =Int=, and floating point as bits
+
+Twelve of the fifteen scalar types differ only in *encoding* and *range*, both
+of which the descriptor already records, so they share one =Int= carrier and
+their ranges go to =Payload.MatchesScalar= in the validity predicate — exactly
+where the field-number bounds went. This follows the Rocq development, which
+collapsed the numeric types to =V_INT (DecoVal Z)=.
+
+=double= and =float= carry their IEEE-754 **bit patterns** (=UInt64=/=UInt32=), not
+=Float=. Three reasons, in order of force:
+
+1. Lean's =Float= is opaque, has essentially no equational theory, and IEEE
+   equality is not reflexive (NaN), so an equality-concluding round-trip
+   theorem over it would be unprovable or false.
+2. It is what the wire format actually stores: =double= *is* a =fixed64= holding
+   the bit pattern. The round trip becomes an honest bit equality.
+3. The carriers are width-exact, so unlike the integer types they need *no*
+   range condition in the validity predicate.
+
+Interpreting bits as =Float= is a derived view — the same "functions out of the
+type are free" move as =explode=. This was also a sticking point in the Rocq
+development, which simply had no floating-point support.
+
+=string= is carried as Lean's =String= rather than as bytes plus a UTF-8
+conjunct. Provisional: the round trip will need =String.fromUTF8? (toUTF8 s) =
+some s=, and the fallback if that proves awkward is a byte carrier with
+validity moved into the predicate.
+
+** Implicit presence applies only to scalars
+
+In proto3 a singular *message* field has explicit presence — =has_foo()= is
+generated for it — so =Cardinality.singular= paired with =FieldType.msg= is
+ill-formed. Recorded as =Desc.FieldOk='s second conjunct, and it pays for itself
+twice:
+
+- =Payload.isDefault= (the serializer's skip test) never has to recurse into a
+  nested =Value=, so it is a direct match on the scalar constructors and needs
+  *no* =DecidableEq=. That matters: =Desc=/=Field=/=FieldType= do not derive one.
+- =Field.init='s =singular=/=msg= arm is unreachable; it is mapped to =optional none=
+  only for totality of the function.
+
+** Where the rules live: =Desc.Legal= vs =Value.Valid=
+
+Split along the line protobuf itself draws. =Desc.Legal= collects what protoc
+enforces on a *schema* — field numbers in 1‥2²⁹−1 minus the reserved block, and
+the presence rule above — recursively through nested descriptors, by
+well-founded recursion on =descSize= exactly like =Desc.AllWF=. =Value.Valid= is
+the serializer's phantom well-formedness: sorted, total, oneof-respecting,
+entrywise type- and range-correct.
+
+InterParse folded its =0 ≤ k < 256= bound into =valWfFold= only because it had no
+descriptor-side predicate beyond sortedness; with one available, re-checking a
+schema fact at every value is redundant.
+
+Following InterParse's =valueWf=, =Value.Valid= recurses *structurally on the
+value*, with the descriptor consulted by =get?= — a function call, not a
+recursive argument — so it needs no termination measure even though the
+descriptor changes at nested messages.
+
+** The drop rule returns
+
+InterParse's =≪= deliberately had no drop rule: =parseVal='s =none= branch consumed
+the tag byte but not the payload, so a reader whose descriptor lacks a key the
+writer encoded desynchronized the stream. Real protobuf tags carry a wire type,
+so unknown fields are skippable (=VARINT=, =I64=, =LEN=, =I32=; wire types 3/4 are
+the deprecated groups, which the kernel omits, so they are a parse error rather
+than a hole) and dropping is sound. =Value.reinterpret= drops writer-only keys
+by construction: the walk enumerates the *reader's* domain.
+
+Real protobuf ≥ 3.5 *preserves* unknown fields rather than dropping them. Not
+adopted at this stage: it requires an unparsed-bytes region in =Value=, which
+would put raw bytes into the induction skeleton of every round-trip proof. The
+choice is recorded rather than defaulted into — it changes the transform (the
+round trip becomes the identity on unknowns) and should be revisited when the
+=FileDescriptorSet= import path arrives, since round-tripping foreign descriptors
+is exactly where preservation earns its keep.
+
+** The transform, and its termination
+
+=Value.reinterpret d₁ d₂ v= is the cross-descriptor analogue of InterParse's
+=compatTransform=, and follows the same strategy: compute the value the reader
+ends up with, then prove (a) parsing produces exactly it and (b) it stands in
+the compatibility relation. Both legs wait on the parser and the relations
+respectively; the function and its specification (=Value.get?_reinterpret=) are
+in place.
+
+As in InterParse, the walk is driven by the **reader's** field list — the reader
+must produce a value total over its own descriptor, so its domain is what the
+walk enumerates — with the writer's descriptor and value consulted by key
+lookup. Termination is therefore on =descSize d₂=, through the kernel's public
+=descSize_lt_of_get?_msg=/=fieldSize_lt_of_mem=; nothing recurses on the value.
+This is the first real consumer of the sealed kernel's termination interface,
+and it worked as designed.
+
+Two mechanical notes worth keeping for anyone extending it:
+
+- The measure chain =descSize= → =entryListSize= → =fieldSize= → =fieldTypeSize= →
+  =descSize= only *weakly* decreases at the steps within one layer, so the
+  measures are scaled by 4 with per-step offsets. A lexicographic =(size, rank)=
+  pair fails: at a single-entry descriptor the size component is equal on one
+  step and strictly smaller on another, so neither component works uniformly.
+- The entry walk is a separate function (=reinterpretEntries=) rather than a
+  =List.map= over =attach=. Both typecheck; the explicit recursion keeps the size
+  component honest instead of requiring the obligation to be discharged from a
+  membership proof.
+
+** The oneof side condition arrived immediately
+
+§ Decision: oneof predicted that compatibility would be "the one place to
+expect trouble", because moving fields in or out of a oneof is wire-compatible
+but changes the reader's transform. That prediction was confirmed as soon as
+=Value.reinterpret_valid= was stated: it is *false* without a side condition. A
+writer that legitimately sets two ungrouped fields hands a reader that groups
+them a value violating =OneofOk=.
+
+=Desc.OneofPreserved d₁ d₂= is the assumption added — two of the reader's keys
+sharing a group tag were already in one group for the writer — stated in the
+direction that preserves validity, and confirming the prediction that this
+would be =≪='s first genuinely non-pointwise side condition: it constrains
+*pairs* of fields, so it cannot live in the pointwise =∝=.
+
+The alternative to assuming it is to make the transform implement protobuf's
+cross-member last-wins, clearing all but one member. That is what a
+spec-faithful parser does, and it is the honest fix; it is deferred with the
+rest of the relational =Encodes= work, since last-wins is only observable
+against foreign encoders. Which of the two survives is a decision the parser
+will force, and it is worth flagging in the report as an instance of the
+general pattern: the rule set is dictated by what the transform produces.
+
+** Deferred: scalar type changes
+
+Protobuf permits several wire-compatible retypings (=int32=/=int64=/=uint32=/
+=uint64=/=bool= share a varint representation, =sint32=/=sint64= share zig-zag, and
+so on). =Payload.reinterpret= currently carries a scalar across only when the two
+types are *equal*, falling back to the default otherwise. Widening this to the
+compatible-retyping table is what will force the field relation =∝= to be more
+than equality, and is the natural companion to the oneof-partition side
+condition when the compatibility relations are ported.
+
 * Decision: freeze InterParse, build Proto fresh
 
 With all three InterParse theorems proven (zero sorries; 7,391 lines across the
@@ -511,6 +796,24 @@ preservation. Field numbers are =Int= for continuity with the InterParse
 relations; protobuf's range bounds belong in the serializer-layer validity
 predicate, as =valueWf='s bounds did in InterParse.
 
-Every theorem in the kernel depends only on =propext=, =Classical.choice=,
-=Quot.sound= (checked with =#print axioms=), keeping the project's standard axiom
-set.
+Four further files (2026-09-04) implement the value layer:
+
+- =SortedMap.lean= — the payload-parameterized map theory shared by =Desc= and
+  =Value= (§ Experiment, last two table rows).
+- =Value.lean= — the value tree, the unsealed map interface, sizes, defaults,
+  =Field.init=/=Value.init= with its interface-level specification =get?_init=, and
+  =Value.Total=.
+- =Validity.lean= — =Desc.Legal= (protoc's schema rules), =Value.OneofOk=,
+  =Payload.MatchesScalar= (type and range), and the =Value.Valid= /
+  =Val.Matches= / =Payload.Matches= block.
+- =Transform.lean= — =Value.reinterpret= and its specification.
+
+The definitions are complete and all recursions terminate. Five theorem
+*statements* are deliberately left open for manual proof:
+=Value.Valid.matches=, =Value.init_valid=, =Field.matches_init=,
+=Value.reinterpret_self= and =Value.reinterpret_valid=.
+
+Every *proven* theorem in the kernel and the value layer depends only on
+=propext=, =Classical.choice=, =Quot.sound= (checked with =#print axioms=), keeping
+the project's standard axiom set; the five open statements are the only
+=sorry=s in =lean/Pollux=.
