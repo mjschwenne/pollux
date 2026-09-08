@@ -37,7 +37,7 @@
           perennial = perennial-pkg;
         };
         lean-build = pkgs.callPackage ./nix/pollux-lean { };
-        aristotle = pkgs.python313Packages.callPackage ./lean/aristotle.nix { };
+        aristotle = pkgs.python314Packages.callPackage ./lean/aristotle.nix { };
       in
       {
         packages = {

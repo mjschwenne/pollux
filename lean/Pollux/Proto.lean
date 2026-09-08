@@ -6,3 +6,4 @@ import Pollux.Proto.SortedMap
 import Pollux.Proto.Value
 import Pollux.Proto.Validity
 import Pollux.Proto.Transform
+import Pollux.Proto.OneofCounterexample

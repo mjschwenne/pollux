@@ -190,6 +190,106 @@ theorem Value.reinterpret_total (d₁ d₂ : Desc) (v : Value) :
   rw [Value.get?_reinterpret]
   simp
 
+/-- The engine of `reinterpret_self`: strong induction on the descriptor
+    size, so that the nested-message case can appeal to the statement one
+    layer down. -/
+private theorem Value.reinterpret_self_aux :
+    ∀ (n : Nat) (d : Desc), descSize d ≤ n → d.AllWF →
+      ∀ v : Value, Value.Valid d v → Value.reinterpret d d v = v := by
+  intro n
+  induction n using Nat.strong_induction_on with
+  | _ n IH =>
+  intro d hn hd v hv
+  have hrec : ∀ d' : Desc, descSize d' < descSize d → d'.AllWF →
+      ∀ v' : Value, Value.Valid d' v' → Value.reinterpret d' d' v' = v' :=
+    fun d' hlt hd' v' hv' => IH (descSize d') (by omega) d' le_rfl hd' v' hv'
+  have hpay : ∀ t : FieldType,
+      (∀ d', t = .msg d' → descSize d' < descSize d ∧ d'.AllWF) →
+      ∀ p : Payload, Payload.Matches p t →
+        Payload.reinterpret t t p = some p := by
+    intro t ht p hm
+    cases t with
+    | scalar s => simp [Payload.reinterpret]
+    | msg d' =>
+      obtain ⟨hlt, hall⟩ := ht d' rfl
+      cases p with
+      | msg v' =>
+        rw [Payload.Matches] at hm
+        rw [Payload.reinterpret, hrec d' hlt hall v' hm]
+      | _ => simp [Payload.Matches] at hm
+  have hlist : ∀ t : FieldType,
+      (∀ d', t = .msg d' → descSize d' < descSize d ∧ d'.AllWF) →
+      ∀ ps : List Payload, Payload.MatchesAll ps t →
+        ps.filterMap (fun p => Payload.reinterpret t t p) = ps := by
+    intro t ht ps
+    induction ps with
+    | nil => intro _; rfl
+    | cons p rest ih =>
+      intro hm
+      rw [Payload.MatchesAll] at hm
+      rw [List.filterMap_cons, hpay t ht p hm.1, ih hm.2]
+  have hval : ∀ (k : Int) (f : Field), d.get? k = some f →
+      ∀ x : Val, Val.Matches x f → Val.reinterpret f f x = some x := by
+    intro k f hget x hm
+    obtain ⟨c, t⟩ := f
+    have ht : ∀ d', t = .msg d' → descSize d' < descSize d ∧ d'.AllWF := by
+      rintro d' rfl
+      exact ⟨descSize_lt_of_get?_msg hget, ((Desc.allWF_def d).mp hd).2 k c d' hget⟩
+    cases x with
+    | implicit p =>
+      cases c with
+      | singular =>
+        cases t with
+        | scalar s =>
+          rw [Val.Matches] at hm
+          simp [Val.reinterpret, Field.card, Field.ty, Payload.reinterpret]
+        | msg d' => simp [Val.Matches] at hm
+      | _ => simp [Val.Matches] at hm
+    | optional op =>
+      cases op with
+      | none =>
+        cases c with
+        | optional => simp [Val.reinterpret, Field.card, Cardinality.explicit]
+        | oneof g => simp [Val.reinterpret, Field.card, Cardinality.explicit]
+        | _ => simp [Val.Matches] at hm
+      | some p =>
+        have hp : Payload.Matches p t := by
+          cases c with
+          | optional => rw [Val.Matches] at hm; exact hm
+          | oneof g => rw [Val.Matches] at hm; exact hm
+          | _ => simp [Val.Matches] at hm
+        cases c with
+        | optional =>
+          simp [Val.reinterpret, Field.card, Field.ty, Cardinality.explicit,
+            hpay t ht p hp]
+        | oneof g =>
+          simp [Val.reinterpret, Field.card, Field.ty, Cardinality.explicit,
+            hpay t ht p hp]
+        | _ => simp [Val.Matches] at hm
+    | repeated ps =>
+      cases c with
+      | repeated =>
+        rw [Val.Matches] at hm
+        simp [Val.reinterpret, Field.card, Field.ty, hlist t ht ps hm]
+      | _ => simp [Val.Matches] at hm
+  refine Value.ext_lookup (Value.reinterpret_wf v hd.wf) hv.wf fun k => ?_
+  rw [Value.get?_reinterpret]
+  cases hget : d.get? k with
+  | none =>
+    have : v.get? k = none := by
+      have h2 := hv.total k
+      rw [hget] at h2
+      simpa using h2
+    simp [this]
+  | some f =>
+    obtain ⟨x, hx⟩ : ∃ x, v.get? k = some x := by
+      have h2 := (hv.total k).mpr (by rw [hget]; rfl)
+      exact Option.isSome_iff_exists.mp h2
+    rw [hx]
+    simp only [Option.map_some, Option.some.injEq]
+    simp only [Value.reinterpretAt, hget, hx,
+      hval k f hget x (hv.matches hx hget), Option.getD_some]
+
 /-- **The identity round trip.** Under one descriptor the transform does
     nothing: this is the payoff of totality plus `init`, and the reason
     the same-descriptor theorem should conclude a genuine equality rather
@@ -201,8 +301,8 @@ theorem Value.reinterpret_total (d₁ d₂ : Desc) (v : Value) :
     for. -/
 theorem Value.reinterpret_self {d : Desc} {v : Value}
     (hd : d.AllWF) (h : Value.Valid d v) :
-    Value.reinterpret d d v = v := by
-  sorry
+    Value.reinterpret d d v = v :=
+  Value.reinterpret_self_aux (descSize d) d le_rfl hd v h
 
 /-- Reader-only keys receive the value denoted by silence. The
     determinate form of what InterParse called `M-Add` — that rule was
@@ -213,6 +313,23 @@ theorem Value.reinterpretAt_of_writer_missing {d₁ : Desc} {v : Value}
     {k : Int} {f₂ : Field} (h : d₁.get? k = none) :
     Value.reinterpretAt d₁ v k f₂ = f₂.init := by
   rw [Value.reinterpretAt, h]
+
+/-- Keys the writer's *value* does not carry also receive `Field.init`.
+    (Unreachable when the writer's value is total over `d₁`, but the
+    transform is total, so the case has to be discharged.) -/
+theorem Value.reinterpretAt_of_value_missing {d₁ : Desc} {v : Value}
+    {k : Int} {f₂ : Field} (h : v.get? k = none) :
+    Value.reinterpretAt d₁ v k f₂ = f₂.init := by
+  rw [Value.reinterpretAt, h]
+  cases d₁.get? k <;> rfl
+
+/-- Shared keys: the writer's value is carried across, with `Field.init`
+    as the fallback when the declarations are incompatible. -/
+theorem Value.reinterpretAt_of_shared {d₁ : Desc} {v : Value} {k : Int}
+    {f₁ f₂ : Field} {x : Val} (hd : d₁.get? k = some f₁)
+    (hv : v.get? k = some x) :
+    Value.reinterpretAt d₁ v k f₂ = (Val.reinterpret f₁ f₂ x).getD f₂.init := by
+  rw [Value.reinterpretAt, hd, hv]
 
 /-- Writer-only keys are dropped: they do not appear in the output at
     all, because the walk enumerates the reader's domain. -/
@@ -244,6 +361,315 @@ def Desc.OneofPreserved (d₁ d₂ : Desc) : Prop :=
     f₁'.card = .oneof g → f₂'.card = .oneof g →
     ∃ g₀, f₁.card = .oneof g₀ ∧ f₂.card = .oneof g₀
 
+/-- The recursive closure of `Desc.OneofPreserved`.
+
+    The one-layer condition is *not* enough for
+    `Value.reinterpret_valid`: the transform recurses into nested message
+    fields, and a reader may merge two of its *nested* descriptor's
+    fields into a oneof group while nothing at the top layer is grouped
+    at all. The nested value the transform then builds violates
+    `Value.OneofOk` one layer down, so with only the one-layer
+    hypothesis the statement is false — see
+    `OneofCounterexample.not_reinterpret_valid_one_layer` in
+    `Proto/OneofCounterexample.lean` for a concrete witness.
+
+    This is the hypothesis the proof actually needs: `OneofPreserved`
+    holds at this layer, and again at every pair of nested message
+    descriptors the transform can reach at a common key (which is the
+    only way it recurses). Like `Desc.AllWF` and `Desc.Legal` it is
+    defined by well-founded recursion on `descSize d₂`. -/
+def Desc.OneofPreservedAll (d₁ d₂ : Desc) : Prop :=
+  Desc.OneofPreserved d₁ d₂ ∧
+    ∀ k c₁ d₁' c₂ d₂',
+      d₁.get? k = some (.mk c₁ (.msg d₁')) →
+      d₂.get? k = some (.mk c₂ (.msg d₂')) →
+      Desc.OneofPreservedAll d₁' d₂'
+termination_by descSize d₂
+decreasing_by exact descSize_lt_of_get?_msg (by assumption)
+
+theorem Desc.oneofPreservedAll_def (d₁ d₂ : Desc) :
+    Desc.OneofPreservedAll d₁ d₂ ↔
+      Desc.OneofPreserved d₁ d₂ ∧
+        ∀ k c₁ d₁' c₂ d₂',
+          d₁.get? k = some (.mk c₁ (.msg d₁')) →
+          d₂.get? k = some (.mk c₂ (.msg d₂')) →
+          Desc.OneofPreservedAll d₁' d₂' := by
+  rw [Desc.OneofPreservedAll]
+
+theorem Desc.OneofPreservedAll.oneLayer {d₁ d₂ : Desc}
+    (h : Desc.OneofPreservedAll d₁ d₂) : Desc.OneofPreserved d₁ d₂ :=
+  ((Desc.oneofPreservedAll_def d₁ d₂).mp h).1
+
+/-- Only an explicitly-set optional value can transform into one: the
+    other three value shapes either fail to carry across or carry across
+    as themselves. Used for the oneof conjunct, which has to trace an
+    output `optional (some _)` back to the writer's value. -/
+private theorem Val.reinterpret_eq_optional_some {f₁ f₂ : Field} {x : Val}
+    {p : Payload} (h : Val.reinterpret f₁ f₂ x = some (.optional (some p))) :
+    ∃ q, x = .optional (some q) := by
+  obtain ⟨c₁, t₁⟩ := f₁
+  obtain ⟨c₂, t₂⟩ := f₂
+  cases x with
+  | implicit p' =>
+    cases c₁ with
+    | singular =>
+      cases c₂ with
+      | singular =>
+        simp only [Val.reinterpret, Field.card, Field.ty,
+          Option.map_eq_some_iff] at h
+        obtain ⟨q, _, hq⟩ := h
+        exact absurd hq (by simp)
+      | _ => simp [Val.reinterpret, Field.card] at h
+    | _ => simp [Val.reinterpret, Field.card] at h
+  | optional op =>
+    cases op with
+    | none =>
+      simp only [Val.reinterpret, Field.card] at h
+      split at h
+      · exact absurd (Option.some.inj h) (by simp)
+      · exact absurd h (by simp)
+    | some q => exact ⟨q, rfl⟩
+  | repeated ps =>
+    cases c₁ with
+    | repeated =>
+      cases c₂ with
+      | repeated =>
+        simp only [Val.reinterpret, Field.card, Field.ty] at h
+        exact absurd (Option.some.inj h) (by simp)
+      | _ => simp [Val.reinterpret, Field.card] at h
+    | _ => simp [Val.reinterpret, Field.card] at h
+
+/-- The engine of `reinterpret_valid`: strong induction on the reader
+    descriptor's size, so the nested-message case can appeal to the
+    statement one layer down. -/
+private theorem Value.reinterpret_valid_aux :
+    ∀ (n : Nat) (d₁ d₂ : Desc) (v : Value), descSize d₂ ≤ n →
+      Value.Valid d₁ v → d₂.AllWF → d₂.Legal →
+      Desc.OneofPreservedAll d₁ d₂ →
+      Value.Valid d₂ (Value.reinterpret d₁ d₂ v) := by
+  intro n
+  induction n using Nat.strong_induction_on with
+  | _ n IH =>
+  intro d₁ d₂ v hn h₁ hwf hleg hone
+  have hfo : ∀ k f, d₂.get? k = some f → Desc.FieldOk k f :=
+    ((Desc.legal_def d₂).mp hleg).1
+  -- What the reader's nested descriptors inherit at a shared message key.
+  have hcond : ∀ (k : Int) (c₁ c₂ : Cardinality) (t₁ t₂ : FieldType),
+      d₁.get? k = some (.mk c₁ t₁) → d₂.get? k = some (.mk c₂ t₂) →
+      ∀ d₁' d₂', t₁ = .msg d₁' → t₂ = .msg d₂' →
+        descSize d₂' < descSize d₂ ∧ d₂'.AllWF ∧ d₂'.Legal ∧
+          Desc.OneofPreservedAll d₁' d₂' := by
+    rintro k c₁ c₂ t₁ t₂ hg1 hg2 d₁' d₂' rfl rfl
+    exact ⟨descSize_lt_of_get?_msg hg2,
+      ((Desc.allWF_def d₂).mp hwf).2 k c₂ d₂' hg2,
+      ((Desc.legal_def d₂).mp hleg).2 k c₂ d₂' hg2,
+      ((Desc.oneofPreservedAll_def d₁ d₂).mp hone).2 k c₁ d₁' c₂ d₂' hg1 hg2⟩
+  -- One payload across a type change.
+  have hpay : ∀ t₁ t₂ : FieldType,
+      (∀ d₁' d₂', t₁ = .msg d₁' → t₂ = .msg d₂' →
+        descSize d₂' < descSize d₂ ∧ d₂'.AllWF ∧ d₂'.Legal ∧
+          Desc.OneofPreservedAll d₁' d₂') →
+      ∀ p q : Payload, Payload.Matches p t₁ →
+        Payload.reinterpret t₁ t₂ p = some q → Payload.Matches q t₂ := by
+    intro t₁ t₂ ht p q hm hr
+    cases t₂ with
+    | scalar s₂ =>
+      cases t₁ with
+      | scalar s₁ =>
+        simp only [Payload.reinterpret] at hr
+        split at hr
+        · rename_i hs
+          subst hs
+          obtain rfl := Option.some.inj hr
+          exact hm
+        · exact absurd hr (by simp)
+      | msg d₁' => cases p <;> simp [Payload.reinterpret] at hr
+    | msg d₂' =>
+      cases t₁ with
+      | scalar s₁ => cases p <;> simp [Payload.reinterpret] at hr
+      | msg d₁' =>
+        cases p with
+        | msg v' =>
+          obtain ⟨hlt, ha, hl, ho⟩ := ht d₁' d₂' rfl rfl
+          rw [Payload.Matches] at hm
+          simp only [Payload.reinterpret] at hr
+          obtain rfl := Option.some.inj hr
+          rw [Payload.Matches]
+          exact IH (descSize d₂') (by omega) d₁' d₂' v' le_rfl hm ha hl ho
+        | _ => simp [Payload.reinterpret] at hr
+  -- The elementwise version, for repeated fields.
+  have hlist : ∀ t₁ t₂ : FieldType,
+      (∀ d₁' d₂', t₁ = .msg d₁' → t₂ = .msg d₂' →
+        descSize d₂' < descSize d₂ ∧ d₂'.AllWF ∧ d₂'.Legal ∧
+          Desc.OneofPreservedAll d₁' d₂') →
+      ∀ ps : List Payload, Payload.MatchesAll ps t₁ →
+        Payload.MatchesAll
+          (ps.filterMap (fun p => Payload.reinterpret t₁ t₂ p)) t₂ := by
+    intro t₁ t₂ ht ps
+    induction ps with
+    | nil =>
+      intro _
+      simp only [List.filterMap_nil]
+      rw [Payload.MatchesAll]
+      trivial
+    | cons p rest ih =>
+      intro hm
+      rw [Payload.MatchesAll] at hm
+      cases hq : Payload.reinterpret t₁ t₂ p with
+      | none => simpa only [List.filterMap_cons, hq] using ih hm.2
+      | some q =>
+        simp only [List.filterMap_cons, hq]
+        rw [Payload.MatchesAll]
+        exact ⟨hpay t₁ t₂ ht p q hm.1 hq, ih hm.2⟩
+  -- One field's value across a declaration change.
+  have hval : ∀ (k : Int) (f₁ f₂ : Field), d₁.get? k = some f₁ →
+      d₂.get? k = some f₂ → ∀ x y : Val, Val.Matches x f₁ →
+      Val.reinterpret f₁ f₂ x = some y → Val.Matches y f₂ := by
+    intro k f₁ f₂ hg1 hg2 x y hm hr
+    obtain ⟨c₁, t₁⟩ := f₁
+    obtain ⟨c₂, t₂⟩ := f₂
+    have hct := hcond k c₁ c₂ t₁ t₂ hg1 hg2
+    cases x with
+    | implicit p =>
+      cases c₁ with
+      | singular =>
+        cases c₂ with
+        | singular =>
+          obtain ⟨s₂, hs₂⟩ := (hfo k ⟨.singular, t₂⟩ hg2).2 rfl
+          simp only [Field.ty] at hs₂
+          subst hs₂
+          cases t₁ with
+          | scalar s₁ =>
+            simp only [Val.reinterpret, Field.card, Field.ty,
+              Option.map_eq_some_iff] at hr
+            obtain ⟨q, hq, rfl⟩ := hr
+            rw [Val.Matches] at hm
+            rw [Val.Matches]
+            have := hpay (.scalar s₁) (.scalar s₂) hct p q (by rw [Payload.Matches]; exact hm) hq
+            rwa [Payload.Matches] at this
+          | msg d₁' => simp [Val.Matches] at hm
+        | _ => simp [Val.reinterpret, Field.card] at hr
+      | _ => simp [Val.reinterpret, Field.card] at hr
+    | optional op =>
+      cases op with
+      | none =>
+        simp only [Val.reinterpret, Field.card] at hr
+        split at hr
+        · rename_i hc
+          obtain rfl := Option.some.inj hr
+          cases c₂ with
+          | singular => simp [Cardinality.explicit] at hc
+          | repeated => simp [Cardinality.explicit] at hc
+          | optional => rw [Val.Matches]; trivial
+          | oneof g => rw [Val.Matches]; trivial
+        · exact absurd hr (by simp)
+      | some p =>
+        simp only [Val.reinterpret, Field.card, Field.ty] at hr
+        split at hr
+        · rename_i hc
+          rw [Option.map_eq_some_iff] at hr
+          obtain ⟨q, hq, rfl⟩ := hr
+          have hmp : Payload.Matches p t₁ := by
+            cases c₁ with
+            | singular => simp [Cardinality.explicit] at hc
+            | repeated => simp [Cardinality.explicit] at hc
+            | optional => rw [Val.Matches] at hm; exact hm
+            | oneof g => rw [Val.Matches] at hm; exact hm
+          have hmq := hpay t₁ t₂ hct p q hmp hq
+          cases c₂ with
+          | singular => simp [Cardinality.explicit] at hc
+          | repeated => simp [Cardinality.explicit] at hc
+          | optional => rw [Val.Matches]; exact hmq
+          | oneof g => rw [Val.Matches]; exact hmq
+        · exact absurd hr (by simp)
+    | repeated ps =>
+      cases c₁ with
+      | repeated =>
+        cases c₂ with
+        | repeated =>
+          simp only [Val.reinterpret, Field.card, Field.ty] at hr
+          obtain rfl := Option.some.inj hr
+          rw [Val.Matches] at hm
+          rw [Val.Matches]
+          exact hlist t₁ t₂ hct ps hm
+        | _ => simp [Val.reinterpret, Field.card] at hr
+      | _ => simp [Val.reinterpret, Field.card] at hr
+  -- The reader's value at one of its own keys matches its declaration.
+  have hat : ∀ (k : Int) (f₂ : Field), d₂.get? k = some f₂ →
+      Val.Matches (Value.reinterpretAt d₁ v k f₂) f₂ := by
+    intro k f₂ hg2
+    have hinit : Val.Matches f₂.init f₂ := Field.matches_init (hfo k f₂ hg2)
+    cases hg1 : d₁.get? k with
+    | none => rw [Value.reinterpretAt_of_writer_missing hg1]; exact hinit
+    | some f₁ =>
+      cases hvx : v.get? k with
+      | none => rw [Value.reinterpretAt_of_value_missing hvx]; exact hinit
+      | some x =>
+        rw [Value.reinterpretAt_of_shared hg1 hvx]
+        cases hy : Val.reinterpret f₁ f₂ x with
+        | none => rw [Option.getD_none]; exact hinit
+        | some y =>
+          rw [Option.getD_some]
+          exact hval k f₁ f₂ hg1 hg2 x y (h₁.matches hvx hg1) hy
+  -- The oneof conjunct: the reader groups only what the writer grouped.
+  have honeok : Value.OneofOk d₂ (Value.reinterpret d₁ d₂ v) := by
+    have hex : ∀ (k : Int) (f₂ : Field) (p : Payload),
+        d₂.get? k = some f₂ →
+        (Value.reinterpret d₁ d₂ v).get? k = some (.optional (some p)) →
+        ∃ f₁ q, d₁.get? k = some f₁ ∧ v.get? k = some (.optional (some q)) := by
+      intro k f₂ p hg2 hget
+      rw [Value.get?_reinterpret, hg2, Option.map_some, Option.some.injEq] at hget
+      cases hg1 : d₁.get? k with
+      | none =>
+        rw [Value.reinterpretAt_of_writer_missing hg1] at hget
+        exact absurd hget (Field.init_ne_optional_some f₂ p)
+      | some f₁ =>
+        cases hvx : v.get? k with
+        | none =>
+          rw [Value.reinterpretAt_of_value_missing hvx] at hget
+          exact absurd hget (Field.init_ne_optional_some f₂ p)
+        | some x =>
+          rw [Value.reinterpretAt_of_shared hg1 hvx] at hget
+          cases hy : Val.reinterpret f₁ f₂ x with
+          | none =>
+            rw [hy, Option.getD_none] at hget
+            exact absurd hget (Field.init_ne_optional_some f₂ p)
+          | some y =>
+            rw [hy, Option.getD_some] at hget
+            subst hget
+            obtain ⟨q, rfl⟩ := Val.reinterpret_eq_optional_some hy
+            exact ⟨f₁, q, rfl, rfl⟩
+    intro k₁ k₂ f₁' f₂' g p₁ p₂ hne hg1 hg2 hc1 hc2 hv1 hv2
+    obtain ⟨e₁, q₁, he₁, hq₁⟩ := hex k₁ f₁' p₁ hg1 hv1
+    obtain ⟨e₂, q₂, he₂, hq₂⟩ := hex k₂ f₂' p₂ hg2 hv2
+    obtain ⟨g₀, hg₀1, hg₀2⟩ :=
+      hone.oneLayer k₁ k₂ e₁ e₂ f₁' f₂' g he₁ he₂ hg1 hg2 hc1 hc2
+    exact h₁.oneofOk k₁ k₂ e₁ e₂ g₀ q₁ q₂ hne he₁ he₂ hg₀1 hg₀2 hq₁ hq₂
+  refine Value.valid_of_get? (Value.reinterpret_wf v hwf.wf)
+    (Value.reinterpret_total d₁ d₂ v) honeok ?_
+  intro k x f₂ hx hg2
+  rw [Value.get?_reinterpret, hg2, Option.map_some, Option.some.injEq] at hx
+  subst hx
+  exact hat k f₂ hg2
+
+/-  The originally stated form of the theorem below assumed only the
+    one-layer `Desc.OneofPreserved d₁ d₂`:
+
+      theorem Value.reinterpret_valid {d₁ d₂ : Desc} {v : Value}
+          (h₁ : Value.Valid d₁ v) (hwf : d₂.AllWF) (hleg : d₂.Legal)
+          (hone : Desc.OneofPreserved d₁ d₂) :
+          Value.Valid d₂ (Value.reinterpret d₁ d₂ v)
+
+    That statement is **false**: `Desc.OneofPreserved` constrains only
+    the two descriptors' own field lists, while the transform recurses
+    into nested message fields, where the reader may group fields the
+    writer left ungrouped. `Proto/OneofCounterexample.lean` exhibits a
+    witness and proves the negation
+    (`OneofCounterexample.not_reinterpret_valid_one_layer`). The
+    corrected statement below replaces the hypothesis by its recursive closure
+    `Desc.OneofPreservedAll`, which is implied by the original at every
+    layer and is what the proof needs; nothing else changes. -/
+
 /-- The transform lands in the validity predicate — the well-formedness
     leg of the eventual round-trip theorem.
 
@@ -254,11 +680,15 @@ def Desc.OneofPreserved (d₁ d₂ : Desc) : Prop :=
     `Value.Valid d₂' _` obligations need well-formedness one layer down;
     `Legal` is what rules out `singular`/`msg`, which the transform would
     otherwise be able to populate with a message payload that
-    `Val.Matches` rejects. -/
+    `Val.Matches` rejects.
+
+    The oneof hypothesis is `Desc.OneofPreservedAll`, the recursive
+    closure of `Desc.OneofPreserved`; see the note above on why the
+    one-layer form does not suffice. -/
 theorem Value.reinterpret_valid {d₁ d₂ : Desc} {v : Value}
     (h₁ : Value.Valid d₁ v) (hwf : d₂.AllWF) (hleg : d₂.Legal)
-    (hone : Desc.OneofPreserved d₁ d₂) :
-    Value.Valid d₂ (Value.reinterpret d₁ d₂ v) := by
-  sorry
+    (hone : Desc.OneofPreservedAll d₁ d₂) :
+    Value.Valid d₂ (Value.reinterpret d₁ d₂ v) :=
+  Value.reinterpret_valid_aux (descSize d₂) d₁ d₂ v le_rfl h₁ hwf hleg hone
 
 end Pollux.Proto

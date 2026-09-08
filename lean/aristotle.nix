@@ -8,7 +8,7 @@
   pathspec,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage {
   pname = "aristotlelib";
   version = "2.1.0";
   format = "wheel";
