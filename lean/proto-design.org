@@ -749,6 +749,42 @@ direction that preserves validity, and confirming the prediction that this
 would be =≪='s first genuinely non-pointwise side condition: it constrains
 *pairs* of fields, so it cannot live in the pointwise =∝=.
 
+Proving the theorem (2026-09-08) confirmed the prediction a second time, and
+more sharply: *the one-layer condition is itself not enough*.
+=Desc.OneofPreserved d₁ d₂= quantifies over pairs of keys of =d₁= and =d₂=
+themselves, but the transform recurses into nested message fields, and at
+that point the descriptors under consideration are a pair of /nested/ ones,
+about which the one-layer hypothesis says nothing. A reader can therefore
+merge two fields of a nested message into a group while its top layer is
+entirely oneof-free: the hypothesis holds vacuously and the value the
+transform builds violates =OneofOk= one layer down.
+=Proto/OneofCounterexample.lean= makes this concrete — an explicit
+writer/reader pair (two =bool= fields, independent for the writer and grouped
+for the reader, under a single message field), every hypothesis of the
+original statement discharged for it, and =not_reinterpret_valid_one_layer=
+proving the negation of that statement's universal closure. Strengthening the
+*writer* side does not rescue it: the same witness satisfies =d₁.AllWF= and
+=d₁.Legal=.
+
+The hypothesis in force is =Desc.OneofPreservedAll=, the recursive closure,
+defined by well-founded recursion on =descSize d₂= exactly as =AllWF= and
+=Legal= are, and recursing at shared keys where *both* sides declare =.msg= —
+precisely the transform's recursion sites. Where the two disagree on a key's
+shape the reader receives =Field.init=, which is never =optional (some _)=
+(=Field.init_ne_optional_some=), so no oneof obligation arises there. The
+one-layer form survives because the counterexample needs it to state the
+refutation; =OneofPreservedAll.oneLayer= projects between them.
+
+Two things about this are worth the report's attention. First, it is the same
+lesson as =Desc.WF= versus =Desc.AllWF=, arriving for a different reason: a
+one-layer predicate on a sealed, one-layer-observable type is never
+automatically the predicate a recursive traversal needs, and the gap is
+invisible until something recurses. Second, the shape differs from its
+neighbours — =AllWF= and =Legal= recurse on a single descriptor, whereas this
+recurses on a /pair/. That is the shape of a compatibility relation, which is
+what =OneofPreservedAll= is a first fragment of; when the Proto analogue of
+=≪= is built it should absorb this rather than sit beside it.
+
 The alternative to assuming it is to make the transform implement protobuf's
 cross-member last-wins, clearing all but one member. That is what a
 spec-faithful parser does, and it is the honest fix; it is deferred with the
@@ -809,11 +845,45 @@ Four further files (2026-09-04) implement the value layer:
 - =Transform.lean= — =Value.reinterpret= and its specification.
 
 The definitions are complete and all recursions terminate. Five theorem
-*statements* are deliberately left open for manual proof:
-=Value.Valid.matches=, =Value.init_valid=, =Field.matches_init=,
-=Value.reinterpret_self= and =Value.reinterpret_valid=.
+statements were left open for manual proof — =Value.Valid.matches=,
+=Value.init_valid=, =Field.matches_init=, =Value.reinterpret_self= and
+=Value.reinterpret_valid= — and *all five are now proved* (2026-09-08, with
+Aristotle). =lean/Pollux= contains no =sorry=, and every theorem in the kernel
+and the value layer depends only on =propext=, =Classical.choice= and
+=Quot.sound= (checked with =#print axioms=), keeping the project's standard
+axiom set.
 
-Every *proven* theorem in the kernel and the value layer depends only on
-=propext=, =Classical.choice=, =Quot.sound= (checked with =#print axioms=), keeping
-the project's standard axiom set; the five open statements are the only
-=sorry=s in =lean/Pollux=.
+Closing them changed one statement and added one file:
+
+- =Value.reinterpret_valid= as originally stated is *false*; its oneof side
+  condition is now the recursive =Desc.OneofPreservedAll= rather than the
+  one-layer =Desc.OneofPreserved=. Nothing else in the statement moved. See
+  § The oneof side condition arrived immediately for the argument.
+- =Proto/OneofCounterexample.lean= (a fifth value-layer file) substantiates
+  that correction with an explicit witness and proves the negation of the
+  original form. Its descriptors are built through the public interface
+  (=∅=, =Desc.insert=), so it does not reach through the seal.
+
+Two by-products are worth recording, both consequences of the seal rather
+than incidental:
+
+- =Value.valid_of_get?= is the introduction rule callers should use for
+  =Value.Valid=. The natural entrywise form quantifies over =v.entries=, and
+  since both =Value.init= and =Value.reinterpret= are /defined/ by mapping over
+  the descriptor's entry list, discharging it drags the proof through
+  =Desc.get?_eq_dlookup= — representation contact in a file whose business is
+  statements. Stating the payload condition through =get?= on both sides
+  (totality supplies each entry's declaration, =v.WF= turns membership into a
+  lookup) removes it, and matches the =get?=-form specifications the callers
+  already have in =get?_init= and =get?_reinterpret=. The seal paid for itself
+  here: the awkwardness was the signal that the proof was reaching somewhere
+  it should not.
+- Both round-trip proofs are strong induction on =descSize= with the
+  payload-, list- and field-level steps split out as local =have=s, and both
+  needed the =reinterpretAt= case split completed —
+  =reinterpretAt_of_value_missing= and =reinterpretAt_of_shared= join the
+  existing =reinterpretAt_of_writer_missing=. The writer-missing and
+  value-missing cases both land on =Field.init=, which is what makes the
+  oneof conjunct tractable: only an explicitly-set optional can transform
+  into one (=Val.reinterpret_eq_optional_some=), so an output group conflict
+  can always be traced back to a writer group conflict.
