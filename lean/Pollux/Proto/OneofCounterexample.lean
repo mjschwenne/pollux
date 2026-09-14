@@ -238,7 +238,7 @@ theorem outerR_legal : outerR.Legal := by
 /-- The *one-layer* oneof condition holds vacuously: the reader's own
     field list contains no oneof member at all. -/
 theorem outer_oneofPreserved : Desc.OneofPreserved outerW outerR := by
-  intro k₁ k₂ f₁ f₂ f₁' f₂' g _ _ hr₁ _ hc₁ _
+  intro k₁ k₂ f₁ f₂ f₁' f₂' g _ _ _ hr₁ _ hc₁ _
   by_cases h1 : k₁ = 1
   · subst h1; rw [outerR_get1] at hr₁; cases hr₁; simp [msgR, Field.card] at hc₁
   · rw [outerR_get_other h1] at hr₁; exact absurd hr₁ (by simp)
