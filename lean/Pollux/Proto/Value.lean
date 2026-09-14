@@ -17,7 +17,7 @@
   validity predicate (`Proto/Validity.lean`).
 
   The consequence that shapes this whole layer: a well-formed value is
-  **total over its descriptor** — it carries an entry for every declared
+  **total over its descriptor** — it carries a slot for every declared
   field, with absence expressed *inside* the presence wrapper
   (`optional none`, `repeated []`). This is not an artifact; it is
   protobuf's own data model. Implicit presence means the default is
@@ -66,16 +66,21 @@ out in full because a parameterized synonym is rejected by the kernel (see
 `Proto/SortedMap.lean`). Presence sits *outside* the payload so that the
 wrapper is written once rather than duplicated across every payload
 constructor, and so that a repeated message field is a genuine
-`List Payload`. -/
+`List Payload`.
+
+The middle layer is `Slot`, not `Val`: it is the value-side counterpart of
+`Field` — the descriptor declares a slot, the value fills it — and the name
+keeps both the type and its derived metrics (`slotSize` beside `valueSize`)
+clearly distinct from `Value`. -/
 mutual
-/-- A message value: field numbers to values. -/
+/-- A message value: field numbers to slots. -/
 inductive Value where
-  | mk (es : List ((_ : Int) × Val))
-/-- A field's value, carrying its presence shape. `implicit` is implicit
-    presence (the default is indistinguishable from unset), `optional` is
-    explicit presence, `repeated` is a list. Oneof members are
-    `optional`-shaped. -/
-inductive Val where
+  | mk (es : List ((_ : Int) × Slot))
+/-- One field's contents, wrapped in its presence shape. `implicit` is
+    implicit presence (the default is indistinguishable from unset),
+    `optional` is explicit presence, `repeated` is a list. Oneof members
+    are `optional`-shaped. -/
+inductive Slot where
   | implicit (p : Payload)
   | optional (p : Option Payload)
   | repeated (ps : List Payload)
@@ -96,12 +101,12 @@ namespace Value
 /-! ### The map interface
 
 Public, unlike `Desc`'s: values are traversed. The operations are the
-generic `SortedMap` theory instantiated at `β := Val`. -/
+generic `SortedMap` theory instantiated at `β := Slot`. -/
 
 /-- The entry list. Public — values are not sealed. -/
-def entries : Value → List ((_ : Int) × Val) | .mk es => es
+def entries : Value → List ((_ : Int) × Slot) | .mk es => es
 
-@[simp] theorem entries_mk (es : List ((_ : Int) × Val)) :
+@[simp] theorem entries_mk (es : List ((_ : Int) × Slot)) :
     (Value.mk es).entries = es := rfl
 
 instance : EmptyCollection Value := ⟨.mk []⟩
@@ -109,10 +114,10 @@ instance : EmptyCollection Value := ⟨.mk []⟩
 @[simp] theorem entries_empty : (∅ : Value).entries = [] := rfl
 
 /-- Field lookup. -/
-def get? (v : Value) (k : Int) : Option Val := v.entries.dlookup k
+def get? (v : Value) (k : Int) : Option Slot := v.entries.dlookup k
 
 /-- Insert (or replace) a field value. -/
-def insert (v : Value) (k : Int) (x : Val) : Value :=
+def insert (v : Value) (k : Int) (x : Slot) : Value :=
   .mk (SortedMap.sortedInsert k x v.entries)
 
 /-- Remove a field value. -/
@@ -134,15 +139,15 @@ only ever adds or replaces at `k`. -/
 @[simp] theorem get?_empty (k : Int) : (∅ : Value).get? k = none := by
   simp [get?]
 
-@[simp] theorem get?_insert_same (v : Value) (k : Int) (x : Val) :
+@[simp] theorem get?_insert_same (v : Value) (k : Int) (x : Slot) :
     (v.insert k x).get? k = some x :=
   SortedMap.dlookup_sortedInsert_self k x v.entries
 
-theorem get?_insert_ne (v : Value) (k k' : Int) (x : Val) (h : k ≠ k') :
+theorem get?_insert_ne (v : Value) (k k' : Int) (x : Slot) (h : k ≠ k') :
     (v.insert k x).get? k' = v.get? k' :=
   SortedMap.dlookup_sortedInsert_ne k k' x h v.entries
 
-theorem isSome_get?_insert (v : Value) (k k' : Int) (x : Val) :
+theorem isSome_get?_insert (v : Value) (k k' : Int) (x : Slot) :
     (v.get? k').isSome → ((v.insert k x).get? k').isSome := by
   intro h
   rcases eq_or_ne k k' with rfl | hne
@@ -161,7 +166,7 @@ theorem get?_erase_ne (v : Value) (k k' : Int) (h : k ≠ k') :
 
 theorem empty_wf : (∅ : Value).WF := SortedMap.wf_nil
 
-theorem insert_wf (v : Value) (k : Int) (x : Val) (h : v.WF) :
+theorem insert_wf (v : Value) (k : Int) (x : Slot) (h : v.WF) :
     (v.insert k x).WF :=
   SortedMap.sortedInsert_wf k x h
 
@@ -188,7 +193,7 @@ serializer and the value-indexed predicates.) -/
 mutual
 def valueSize : Value → Nat
   | .mk es => 1 + valueEntriesSize es
-def valSize : Val → Nat
+def slotSize : Slot → Nat
   | .implicit p => 1 + payloadSize p
   | .optional none => 1
   | .optional (some p) => 1 + payloadSize p
@@ -196,17 +201,17 @@ def valSize : Val → Nat
 def payloadSize : Payload → Nat
   | .msg v => 1 + valueSize v
   | .int _ | .bool _ | .string _ | .bytes _ | .float _ | .double _ => 1
-def valueEntriesSize : List ((_ : Int) × Val) → Nat
+def valueEntriesSize : List ((_ : Int) × Slot) → Nat
   | [] => 0
-  | ⟨_, x⟩ :: rest => valSize x + valueEntriesSize rest
+  | ⟨_, x⟩ :: rest => slotSize x + valueEntriesSize rest
 def payloadListSize : List Payload → Nat
   | [] => 0
   | p :: rest => payloadSize p + payloadListSize rest
 end
 
-theorem valSize_lt_of_mem {l : List ((_ : Int) × Val)} {k : Int} {x : Val}
-    (h : (⟨k, x⟩ : (_ : Int) × Val) ∈ l) :
-    valSize x < 1 + valueEntriesSize l := by
+theorem slotSize_lt_of_mem {l : List ((_ : Int) × Slot)} {k : Int} {x : Slot}
+    (h : (⟨k, x⟩ : (_ : Int) × Slot) ∈ l) :
+    slotSize x < 1 + valueEntriesSize l := by
   induction l with
   | nil => cases h
   | cons hd tl ih =>
@@ -218,11 +223,11 @@ theorem valSize_lt_of_mem {l : List ((_ : Int) × Val)} {k : Int} {x : Val}
       simp only [valueEntriesSize]; omega
 
 /-- The value-side termination lemma, mirroring `descSize_lt_of_get?_msg`. -/
-theorem valSize_lt_of_get?_msg {v : Value} {k : Int} {x : Val}
-    (h : v.get? k = some x) : valSize x < valueSize v := by
-  have hmem : (⟨k, x⟩ : (_ : Int) × Val) ∈ v.entries :=
+theorem slotSize_lt_of_get?_msg {v : Value} {k : Int} {x : Slot}
+    (h : v.get? k = some x) : slotSize x < valueSize v := by
+  have hmem : (⟨k, x⟩ : (_ : Int) × Slot) ∈ v.entries :=
     List.of_mem_dlookup (by simpa [Value.get?] using h)
-  have := valSize_lt_of_mem hmem
+  have := slotSize_lt_of_mem hmem
   cases v with | mk es =>
   simpa [valueSize] using this
 
@@ -257,13 +262,13 @@ def Payload.isDefault : Payload → Bool
   | .bytes bs => bs.isEmpty
   | _ => false
 
-/-- The value a field takes when the encoding says nothing about it.
+/-- The slot a field takes when the encoding says nothing about it.
 
     The `singular`/`msg` case is unreachable in a well-formed descriptor
     (`Desc.PresenceOk` forbids implicit presence on message fields); it is
     mapped to `optional none`, which is what protobuf actually gives
     message fields, so that this function is total. -/
-def Field.init : Field → Val
+def Field.init : Field → Slot
   | .mk .singular (.scalar s) => .implicit (ScalarType.defaultPayload s)
   | .mk .singular (.msg _) => .optional none
   | .mk .optional _ => .optional none
@@ -279,7 +284,7 @@ def Field.init : Field → Val
     is an *implementation*: the specification is `Value.get?_init`, stated
     entirely through the interface. -/
 def Value.init (d : Desc) : Value :=
-  .mk (d.entries.map (fun e => (⟨e.1, Field.init e.2⟩ : (_ : Int) × Val)))
+  .mk (d.entries.map (fun e => (⟨e.1, Field.init e.2⟩ : (_ : Int) × Slot)))
 
 /-- The interface-level specification of `Value.init`: it is `Field.init`
     applied pointwise under lookup. Everything downstream should use this
@@ -288,10 +293,10 @@ theorem Value.get?_init (d : Desc) (k : Int) :
     (Value.init d).get? k = (d.get? k).map Field.init := by
   rw [Desc.get?_eq_dlookup]
   simpa [Value.get?, Value.init] using
-    SortedMap.dlookup_mapVal (β := Field) (γ := Val) k Field.init d.entries
+    SortedMap.dlookup_mapVal (β := Field) (γ := Slot) k Field.init d.entries
 
 theorem Value.init_wf {d : Desc} (h : d.WF) : (Value.init d).WF :=
-  SortedMap.mapVal_wf (β := Field) (γ := Val) Field.init h
+  SortedMap.mapVal_wf (β := Field) (γ := Slot) Field.init h
 
 /-! ## Totality
 
@@ -302,7 +307,7 @@ direction is what makes unknown-field junk unrepresentable, so the drop
 rule fires only across descriptors, never on our own serializer's
 output. -/
 
-/-- `v` carries an entry for exactly the fields `d` declares. -/
+/-- `v` carries a slot for exactly the fields `d` declares. -/
 def Value.Total (d : Desc) (v : Value) : Prop :=
   ∀ k, (v.get? k).isSome ↔ (d.get? k).isSome
 

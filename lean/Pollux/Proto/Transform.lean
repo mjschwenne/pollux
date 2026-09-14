@@ -86,7 +86,7 @@ decreasing_by rw [descSize_entries]; omega
     ordering is what the output inherits — which is why the result is
     sorted whenever `d₂` is. -/
 def Value.reinterpretEntries (d₁ : Desc) (v : Value) :
-    List ((_ : Int) × Field) → List ((_ : Int) × Val)
+    List ((_ : Int) × Field) → List ((_ : Int) × Slot)
   | [] => []
   | ⟨k, f₂⟩ :: rest =>
       ⟨k, Value.reinterpretAt d₁ v k f₂⟩ ::
@@ -97,9 +97,9 @@ decreasing_by
 
 /-- The reader's value at one of its own declared keys: the three-case
     split described in the header. -/
-def Value.reinterpretAt (d₁ : Desc) (v : Value) (k : Int) (f₂ : Field) : Val :=
+def Value.reinterpretAt (d₁ : Desc) (v : Value) (k : Int) (f₂ : Field) : Slot :=
   match d₁.get? k, v.get? k with
-  | some f₁, some x => (Val.reinterpret f₁ f₂ x).getD f₂.init
+  | some f₁, some x => (Slot.reinterpret f₁ f₂ x).getD f₂.init
   | _, _ => f₂.init
 termination_by 4 * fieldSize f₂ + 2
 decreasing_by omega
@@ -108,7 +108,7 @@ decreasing_by omega
     reader's. `none` means "not carryable" — the caller falls back to
     `Field.init`, which is exactly what a reader sees when the writer's
     bytes do not populate the field. -/
-def Val.reinterpret (f₁ f₂ : Field) (x : Val) : Option Val :=
+def Slot.reinterpret (f₁ f₂ : Field) (x : Slot) : Option Slot :=
   match x, f₁.card, f₂.card with
   | .implicit p, .singular, .singular =>
       (Payload.reinterpret f₁.ty f₂.ty p).map .implicit
@@ -149,7 +149,7 @@ are not what this pass is for. -/
 theorem Value.reinterpretEntries_eq_map (d₁ : Desc) (v : Value)
     (es : List ((_ : Int) × Field)) :
     Value.reinterpretEntries d₁ v es =
-      es.map (fun e => (⟨e.1, Value.reinterpretAt d₁ v e.1 e.2⟩ : (_ : Int) × Val)) := by
+      es.map (fun e => (⟨e.1, Value.reinterpretAt d₁ v e.1 e.2⟩ : (_ : Int) × Slot)) := by
   induction es with
   | nil => simp [Value.reinterpretEntries]
   | cons hd tl ih => obtain ⟨k, f⟩ := hd; simp [Value.reinterpretEntries, ih]
@@ -228,8 +228,8 @@ private theorem Value.reinterpret_self_aux :
       intro hm
       rw [Payload.MatchesAll] at hm
       rw [List.filterMap_cons, hpay t ht p hm.1, ih hm.2]
-  have hval : ∀ (k : Int) (f : Field), d.get? k = some f →
-      ∀ x : Val, Val.Matches x f → Val.reinterpret f f x = some x := by
+  have hslot : ∀ (k : Int) (f : Field), d.get? k = some f →
+      ∀ x : Slot, Slot.Matches x f → Slot.reinterpret f f x = some x := by
     intro k f hget x hm
     obtain ⟨c, t⟩ := f
     have ht : ∀ d', t = .msg d' → descSize d' < descSize d ∧ d'.AllWF := by
@@ -241,37 +241,37 @@ private theorem Value.reinterpret_self_aux :
       | singular =>
         cases t with
         | scalar s =>
-          rw [Val.Matches] at hm
-          simp [Val.reinterpret, Field.card, Field.ty, Payload.reinterpret]
-        | msg d' => simp [Val.Matches] at hm
-      | _ => simp [Val.Matches] at hm
+          rw [Slot.Matches] at hm
+          simp [Slot.reinterpret, Field.card, Field.ty, Payload.reinterpret]
+        | msg d' => simp [Slot.Matches] at hm
+      | _ => simp [Slot.Matches] at hm
     | optional op =>
       cases op with
       | none =>
         cases c with
-        | optional => simp [Val.reinterpret, Field.card, Cardinality.explicit]
-        | oneof g => simp [Val.reinterpret, Field.card, Cardinality.explicit]
-        | _ => simp [Val.Matches] at hm
+        | optional => simp [Slot.reinterpret, Field.card, Cardinality.explicit]
+        | oneof g => simp [Slot.reinterpret, Field.card, Cardinality.explicit]
+        | _ => simp [Slot.Matches] at hm
       | some p =>
         have hp : Payload.Matches p t := by
           cases c with
-          | optional => rw [Val.Matches] at hm; exact hm
-          | oneof g => rw [Val.Matches] at hm; exact hm
-          | _ => simp [Val.Matches] at hm
+          | optional => rw [Slot.Matches] at hm; exact hm
+          | oneof g => rw [Slot.Matches] at hm; exact hm
+          | _ => simp [Slot.Matches] at hm
         cases c with
         | optional =>
-          simp [Val.reinterpret, Field.card, Field.ty, Cardinality.explicit,
+          simp [Slot.reinterpret, Field.card, Field.ty, Cardinality.explicit,
             hpay t ht p hp]
         | oneof g =>
-          simp [Val.reinterpret, Field.card, Field.ty, Cardinality.explicit,
+          simp [Slot.reinterpret, Field.card, Field.ty, Cardinality.explicit,
             hpay t ht p hp]
-        | _ => simp [Val.Matches] at hm
+        | _ => simp [Slot.Matches] at hm
     | repeated ps =>
       cases c with
       | repeated =>
-        rw [Val.Matches] at hm
-        simp [Val.reinterpret, Field.card, Field.ty, hlist t ht ps hm]
-      | _ => simp [Val.Matches] at hm
+        rw [Slot.Matches] at hm
+        simp [Slot.reinterpret, Field.card, Field.ty, hlist t ht ps hm]
+      | _ => simp [Slot.Matches] at hm
   refine Value.ext_lookup (Value.reinterpret_wf v hd.wf) hv.wf fun k => ?_
   rw [Value.get?_reinterpret]
   cases hget : d.get? k with
@@ -288,7 +288,7 @@ private theorem Value.reinterpret_self_aux :
     rw [hx]
     simp only [Option.map_some, Option.some.injEq]
     simp only [Value.reinterpretAt, hget, hx,
-      hval k f hget x (hv.matches hx hget), Option.getD_some]
+      hslot k f hget x (hv.matches hx hget), Option.getD_some]
 
 /-- **The identity round trip.** Under one descriptor the transform does
     nothing: this is the payoff of totality plus `init`, and the reason
@@ -326,9 +326,9 @@ theorem Value.reinterpretAt_of_value_missing {d₁ : Desc} {v : Value}
 /-- Shared keys: the writer's value is carried across, with `Field.init`
     as the fallback when the declarations are incompatible. -/
 theorem Value.reinterpretAt_of_shared {d₁ : Desc} {v : Value} {k : Int}
-    {f₁ f₂ : Field} {x : Val} (hd : d₁.get? k = some f₁)
+    {f₁ f₂ : Field} {x : Slot} (hd : d₁.get? k = some f₁)
     (hv : v.get? k = some x) :
-    Value.reinterpretAt d₁ v k f₂ = (Val.reinterpret f₁ f₂ x).getD f₂.init := by
+    Value.reinterpretAt d₁ v k f₂ = (Slot.reinterpret f₁ f₂ x).getD f₂.init := by
   rw [Value.reinterpretAt, hd, hv]
 
 /-- Writer-only keys are dropped: they do not appear in the output at
@@ -356,6 +356,7 @@ theorem Value.get?_reinterpret_of_reader_missing {d₁ d₂ : Desc} {v : Value}
     that work. -/
 def Desc.OneofPreserved (d₁ d₂ : Desc) : Prop :=
   ∀ k₁ k₂ f₁ f₂ f₁' f₂' g,
+    k₁ ≠ k₂ →
     d₁.get? k₁ = some f₁ → d₁.get? k₂ = some f₂ →
     d₂.get? k₁ = some f₁' → d₂.get? k₂ = some f₂' →
     f₁'.card = .oneof g → f₂'.card = .oneof g →
@@ -404,8 +405,8 @@ theorem Desc.OneofPreservedAll.oneLayer {d₁ d₂ : Desc}
     other three value shapes either fail to carry across or carry across
     as themselves. Used for the oneof conjunct, which has to trace an
     output `optional (some _)` back to the writer's value. -/
-private theorem Val.reinterpret_eq_optional_some {f₁ f₂ : Field} {x : Val}
-    {p : Payload} (h : Val.reinterpret f₁ f₂ x = some (.optional (some p))) :
+private theorem Slot.reinterpret_eq_optional_some {f₁ f₂ : Field} {x : Slot}
+    {p : Payload} (h : Slot.reinterpret f₁ f₂ x = some (.optional (some p))) :
     ∃ q, x = .optional (some q) := by
   obtain ⟨c₁, t₁⟩ := f₁
   obtain ⟨c₂, t₂⟩ := f₂
@@ -415,16 +416,16 @@ private theorem Val.reinterpret_eq_optional_some {f₁ f₂ : Field} {x : Val}
     | singular =>
       cases c₂ with
       | singular =>
-        simp only [Val.reinterpret, Field.card, Field.ty,
+        simp only [Slot.reinterpret, Field.card, Field.ty,
           Option.map_eq_some_iff] at h
         obtain ⟨q, _, hq⟩ := h
         exact absurd hq (by simp)
-      | _ => simp [Val.reinterpret, Field.card] at h
-    | _ => simp [Val.reinterpret, Field.card] at h
+      | _ => simp [Slot.reinterpret, Field.card] at h
+    | _ => simp [Slot.reinterpret, Field.card] at h
   | optional op =>
     cases op with
     | none =>
-      simp only [Val.reinterpret, Field.card] at h
+      simp only [Slot.reinterpret, Field.card] at h
       split at h
       · exact absurd (Option.some.inj h) (by simp)
       · exact absurd h (by simp)
@@ -434,10 +435,10 @@ private theorem Val.reinterpret_eq_optional_some {f₁ f₂ : Field} {x : Val}
     | repeated =>
       cases c₂ with
       | repeated =>
-        simp only [Val.reinterpret, Field.card, Field.ty] at h
+        simp only [Slot.reinterpret, Field.card, Field.ty] at h
         exact absurd (Option.some.inj h) (by simp)
-      | _ => simp [Val.reinterpret, Field.card] at h
-    | _ => simp [Val.reinterpret, Field.card] at h
+      | _ => simp [Slot.reinterpret, Field.card] at h
+    | _ => simp [Slot.reinterpret, Field.card] at h
 
 /-- The engine of `reinterpret_valid`: strong induction on the reader
     descriptor's size, so the nested-message case can appeal to the
@@ -522,9 +523,9 @@ private theorem Value.reinterpret_valid_aux :
         rw [Payload.MatchesAll]
         exact ⟨hpay t₁ t₂ ht p q hm.1 hq, ih hm.2⟩
   -- One field's value across a declaration change.
-  have hval : ∀ (k : Int) (f₁ f₂ : Field), d₁.get? k = some f₁ →
-      d₂.get? k = some f₂ → ∀ x y : Val, Val.Matches x f₁ →
-      Val.reinterpret f₁ f₂ x = some y → Val.Matches y f₂ := by
+  have hslot : ∀ (k : Int) (f₁ f₂ : Field), d₁.get? k = some f₁ →
+      d₂.get? k = some f₂ → ∀ x y : Slot, Slot.Matches x f₁ →
+      Slot.reinterpret f₁ f₂ x = some y → Slot.Matches y f₂ := by
     intro k f₁ f₂ hg1 hg2 x y hm hr
     obtain ⟨c₁, t₁⟩ := f₁
     obtain ⟨c₂, t₂⟩ := f₂
@@ -540,31 +541,31 @@ private theorem Value.reinterpret_valid_aux :
           subst hs₂
           cases t₁ with
           | scalar s₁ =>
-            simp only [Val.reinterpret, Field.card, Field.ty,
+            simp only [Slot.reinterpret, Field.card, Field.ty,
               Option.map_eq_some_iff] at hr
             obtain ⟨q, hq, rfl⟩ := hr
-            rw [Val.Matches] at hm
-            rw [Val.Matches]
+            rw [Slot.Matches] at hm
+            rw [Slot.Matches]
             have := hpay (.scalar s₁) (.scalar s₂) hct p q (by rw [Payload.Matches]; exact hm) hq
             rwa [Payload.Matches] at this
-          | msg d₁' => simp [Val.Matches] at hm
-        | _ => simp [Val.reinterpret, Field.card] at hr
-      | _ => simp [Val.reinterpret, Field.card] at hr
+          | msg d₁' => simp [Slot.Matches] at hm
+        | _ => simp [Slot.reinterpret, Field.card] at hr
+      | _ => simp [Slot.reinterpret, Field.card] at hr
     | optional op =>
       cases op with
       | none =>
-        simp only [Val.reinterpret, Field.card] at hr
+        simp only [Slot.reinterpret, Field.card] at hr
         split at hr
         · rename_i hc
           obtain rfl := Option.some.inj hr
           cases c₂ with
           | singular => simp [Cardinality.explicit] at hc
           | repeated => simp [Cardinality.explicit] at hc
-          | optional => rw [Val.Matches]; trivial
-          | oneof g => rw [Val.Matches]; trivial
+          | optional => rw [Slot.Matches]; trivial
+          | oneof g => rw [Slot.Matches]; trivial
         · exact absurd hr (by simp)
       | some p =>
-        simp only [Val.reinterpret, Field.card, Field.ty] at hr
+        simp only [Slot.reinterpret, Field.card, Field.ty] at hr
         split at hr
         · rename_i hc
           rw [Option.map_eq_some_iff] at hr
@@ -573,32 +574,32 @@ private theorem Value.reinterpret_valid_aux :
             cases c₁ with
             | singular => simp [Cardinality.explicit] at hc
             | repeated => simp [Cardinality.explicit] at hc
-            | optional => rw [Val.Matches] at hm; exact hm
-            | oneof g => rw [Val.Matches] at hm; exact hm
+            | optional => rw [Slot.Matches] at hm; exact hm
+            | oneof g => rw [Slot.Matches] at hm; exact hm
           have hmq := hpay t₁ t₂ hct p q hmp hq
           cases c₂ with
           | singular => simp [Cardinality.explicit] at hc
           | repeated => simp [Cardinality.explicit] at hc
-          | optional => rw [Val.Matches]; exact hmq
-          | oneof g => rw [Val.Matches]; exact hmq
+          | optional => rw [Slot.Matches]; exact hmq
+          | oneof g => rw [Slot.Matches]; exact hmq
         · exact absurd hr (by simp)
     | repeated ps =>
       cases c₁ with
       | repeated =>
         cases c₂ with
         | repeated =>
-          simp only [Val.reinterpret, Field.card, Field.ty] at hr
+          simp only [Slot.reinterpret, Field.card, Field.ty] at hr
           obtain rfl := Option.some.inj hr
-          rw [Val.Matches] at hm
-          rw [Val.Matches]
+          rw [Slot.Matches] at hm
+          rw [Slot.Matches]
           exact hlist t₁ t₂ hct ps hm
-        | _ => simp [Val.reinterpret, Field.card] at hr
-      | _ => simp [Val.reinterpret, Field.card] at hr
+        | _ => simp [Slot.reinterpret, Field.card] at hr
+      | _ => simp [Slot.reinterpret, Field.card] at hr
   -- The reader's value at one of its own keys matches its declaration.
   have hat : ∀ (k : Int) (f₂ : Field), d₂.get? k = some f₂ →
-      Val.Matches (Value.reinterpretAt d₁ v k f₂) f₂ := by
+      Slot.Matches (Value.reinterpretAt d₁ v k f₂) f₂ := by
     intro k f₂ hg2
-    have hinit : Val.Matches f₂.init f₂ := Field.matches_init (hfo k f₂ hg2)
+    have hinit : Slot.Matches f₂.init f₂ := Field.matches_init (hfo k f₂ hg2)
     cases hg1 : d₁.get? k with
     | none => rw [Value.reinterpretAt_of_writer_missing hg1]; exact hinit
     | some f₁ =>
@@ -606,11 +607,11 @@ private theorem Value.reinterpret_valid_aux :
       | none => rw [Value.reinterpretAt_of_value_missing hvx]; exact hinit
       | some x =>
         rw [Value.reinterpretAt_of_shared hg1 hvx]
-        cases hy : Val.reinterpret f₁ f₂ x with
+        cases hy : Slot.reinterpret f₁ f₂ x with
         | none => rw [Option.getD_none]; exact hinit
         | some y =>
           rw [Option.getD_some]
-          exact hval k f₁ f₂ hg1 hg2 x y (h₁.matches hvx hg1) hy
+          exact hslot k f₁ f₂ hg1 hg2 x y (h₁.matches hvx hg1) hy
   -- The oneof conjunct: the reader groups only what the writer grouped.
   have honeok : Value.OneofOk d₂ (Value.reinterpret d₁ d₂ v) := by
     have hex : ∀ (k : Int) (f₂ : Field) (p : Payload),
@@ -630,20 +631,20 @@ private theorem Value.reinterpret_valid_aux :
           exact absurd hget (Field.init_ne_optional_some f₂ p)
         | some x =>
           rw [Value.reinterpretAt_of_shared hg1 hvx] at hget
-          cases hy : Val.reinterpret f₁ f₂ x with
+          cases hy : Slot.reinterpret f₁ f₂ x with
           | none =>
             rw [hy, Option.getD_none] at hget
             exact absurd hget (Field.init_ne_optional_some f₂ p)
           | some y =>
             rw [hy, Option.getD_some] at hget
             subst hget
-            obtain ⟨q, rfl⟩ := Val.reinterpret_eq_optional_some hy
+            obtain ⟨q, rfl⟩ := Slot.reinterpret_eq_optional_some hy
             exact ⟨f₁, q, rfl, rfl⟩
     intro k₁ k₂ f₁' f₂' g p₁ p₂ hne hg1 hg2 hc1 hc2 hv1 hv2
     obtain ⟨e₁, q₁, he₁, hq₁⟩ := hex k₁ f₁' p₁ hg1 hv1
     obtain ⟨e₂, q₂, he₂, hq₂⟩ := hex k₂ f₂' p₂ hg2 hv2
     obtain ⟨g₀, hg₀1, hg₀2⟩ :=
-      hone.oneLayer k₁ k₂ e₁ e₂ f₁' f₂' g he₁ he₂ hg1 hg2 hc1 hc2
+      hone.oneLayer k₁ k₂ e₁ e₂ f₁' f₂' g hne he₁ he₂ hg1 hg2 hc1 hc2
     exact h₁.oneofOk k₁ k₂ e₁ e₂ g₀ q₁ q₂ hne he₁ he₂ hg₀1 hg₀2 hq₁ hq₂
   refine Value.valid_of_get? (Value.reinterpret_wf v hwf.wf)
     (Value.reinterpret_total d₁ d₂ v) honeok ?_
@@ -680,7 +681,7 @@ private theorem Value.reinterpret_valid_aux :
     `Value.Valid d₂' _` obligations need well-formedness one layer down;
     `Legal` is what rules out `singular`/`msg`, which the transform would
     otherwise be able to populate with a message payload that
-    `Val.Matches` rejects.
+    `Slot.Matches` rejects.
 
     The oneof hypothesis is `Desc.OneofPreservedAll`, the recursive
     closure of `Desc.OneofPreserved`; see the note above on why the

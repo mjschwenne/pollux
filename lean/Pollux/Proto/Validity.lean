@@ -136,19 +136,19 @@ def Value.Valid (d : Desc) : Value → Prop
 
 /-- Entrywise validity. Representation-level; consumers should go through
     `Value.Valid.matches`, which is stated with `get?`. -/
-def Value.ValidEntries (d : Desc) : List ((_ : Int) × Val) → Prop
+def Value.ValidEntries (d : Desc) : List ((_ : Int) × Slot) → Prop
   | [] => True
   | ⟨k, x⟩ :: rest =>
-      (∃ f, d.get? k = some f ∧ Val.Matches x f) ∧ Value.ValidEntries d rest
+      (∃ f, d.get? k = some f ∧ Slot.Matches x f) ∧ Value.ValidEntries d rest
 
-/-- The presence shape of the value agrees with the declared cardinality,
-    and the payload matches the declared type.
+/-- The slot's presence shape agrees with the declared cardinality, and
+    its payload matches the declared type.
 
     Oneof members are `optional`-shaped, so they share the `optional`
     arms; what distinguishes them is the cross-field `Value.OneofOk`. The
     `implicit`/`msg` combination is absent because implicit presence never
     applies to a message field (`Desc.FieldOk`). -/
-def Val.Matches : Val → Field → Prop
+def Slot.Matches : Slot → Field → Prop
   | .implicit p, .mk .singular (.scalar s) => Payload.MatchesScalar p s
   | .optional none, .mk .optional _ => True
   | .optional (some p), .mk .optional t => Payload.Matches p t
@@ -189,7 +189,7 @@ theorem Value.Valid.oneofOk {d : Desc} {v : Value} (h : Value.Valid d v) :
   cases v with | mk es => exact (by rw [Value.Valid] at h; exact h.2.2.1)
 
 /-- The bundle, unfolded at a concrete entry list. -/
-theorem Value.valid_mk (d : Desc) (es : List ((_ : Int) × Val)) :
+theorem Value.valid_mk (d : Desc) (es : List ((_ : Int) × Slot)) :
     Value.Valid d (.mk es) ↔
       SortedMap.WF es ∧ Value.Total d (.mk es) ∧ Value.OneofOk d (.mk es) ∧
         Value.ValidEntries d es := by
@@ -197,8 +197,8 @@ theorem Value.valid_mk (d : Desc) (es : List ((_ : Int) × Val)) :
 
 /-- Entrywise validity follows from a pointwise condition on the entry
     list — the convenient way to *build* a `ValidEntries`. -/
-theorem Value.validEntries_of_mem {d : Desc} {es : List ((_ : Int) × Val)}
-    (h : ∀ e ∈ es, ∃ f, d.get? e.1 = some f ∧ Val.Matches e.2 f) :
+theorem Value.validEntries_of_mem {d : Desc} {es : List ((_ : Int) × Slot)}
+    (h : ∀ e ∈ es, ∃ f, d.get? e.1 = some f ∧ Slot.Matches e.2 f) :
     Value.ValidEntries d es := by
   induction es with
   | nil => rw [Value.ValidEntries]; trivial
@@ -211,7 +211,7 @@ theorem Value.validEntries_of_mem {d : Desc} {es : List ((_ : Int) × Val)}
     representation but with the payload condition in `get?` form. -/
 theorem Value.valid_of_mem {d : Desc} {v : Value} (hwf : v.WF)
     (htot : Value.Total d v) (hone : Value.OneofOk d v)
-    (hm : ∀ e ∈ v.entries, ∃ f, d.get? e.1 = some f ∧ Val.Matches e.2 f) :
+    (hm : ∀ e ∈ v.entries, ∃ f, d.get? e.1 = some f ∧ Slot.Matches e.2 f) :
     Value.Valid d v := by
   cases v with | mk es =>
   rw [Value.valid_mk]
@@ -229,7 +229,7 @@ theorem Value.valid_of_mem {d : Desc} {v : Value} (hwf : v.WF)
     the form that matches them. -/
 theorem Value.valid_of_get? {d : Desc} {v : Value} (hwf : v.WF)
     (htot : Value.Total d v) (hone : Value.OneofOk d v)
-    (hm : ∀ k x f, v.get? k = some x → d.get? k = some f → Val.Matches x f) :
+    (hm : ∀ k x f, v.get? k = some x → d.get? k = some f → Slot.Matches x f) :
     Value.Valid d v := by
   refine Value.valid_of_mem hwf htot hone fun e he => ?_
   obtain ⟨k, x⟩ := e
@@ -242,9 +242,9 @@ theorem Value.valid_of_get? {d : Desc} {v : Value} (hwf : v.WF)
 
 /-- Entrywise validity, consumed at a key. -/
 theorem Value.ValidEntries.dlookup_matches {d : Desc}
-    {es : List ((_ : Int) × Val)} (h : Value.ValidEntries d es) {k : Int}
-    {x : Val} {f : Field} (hv : es.dlookup k = some x)
-    (hd : d.get? k = some f) : Val.Matches x f := by
+    {es : List ((_ : Int) × Slot)} (h : Value.ValidEntries d es) {k : Int}
+    {x : Slot} {f : Field} (hv : es.dlookup k = some x)
+    (hd : d.get? k = some f) : Slot.Matches x f := by
   induction es with
   | nil => simp at hv
   | cons e rest ih =>
@@ -262,9 +262,9 @@ theorem Value.ValidEntries.dlookup_matches {d : Desc}
 
 /-- The usable form of entrywise validity: stated through `get?` rather
     than the entry list. -/
-theorem Value.Valid.matches {d : Desc} {v : Value} {k : Int} {x : Val}
+theorem Value.Valid.matches {d : Desc} {v : Value} {k : Int} {x : Slot}
     {f : Field} (h : Value.Valid d v) (hv : v.get? k = some x)
-    (hd : d.get? k = some f) : Val.Matches x f := by
+    (hd : d.get? k = some f) : Slot.Matches x f := by
   cases v with | mk es =>
   rw [Value.valid_mk] at h
   exact h.2.2.2.dlookup_matches (by simpa [Value.get?] using hv) hd
@@ -280,7 +280,7 @@ theorem Value.Valid.isSome_iff {d : Desc} {v : Value} (h : Value.Valid d v)
 The base case of the round-trip story: the value denoted by an empty
 encoding is a valid value. `Desc.Legal` is needed for the presence rule —
 without it a `singular` message field would force `Field.init` into its
-unreachable arm, which `Val.Matches` rejects. Only the one-layer part of
+unreachable arm, which `Slot.Matches` rejects. Only the one-layer part of
 `Legal` is used, since `Field.init` never produces a nested message. -/
 
 /-- Each default payload inhabits its own type — the scalar core of
@@ -292,7 +292,7 @@ theorem ScalarType.matchesScalar_defaultPayload (s : ScalarType) :
 /-- `Field.init` produces a value matching its own declaration, provided
     the declaration is legal. -/
 theorem Field.matches_init {k : Int} {f : Field} (h : Desc.FieldOk k f) :
-    Val.Matches f.init f := by
+    Slot.Matches f.init f := by
   obtain ⟨c, t⟩ := f
   cases c with
   | singular =>

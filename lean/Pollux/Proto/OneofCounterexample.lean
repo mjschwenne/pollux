@@ -132,10 +132,10 @@ theorem outerV_get_other {k : Int} (h1 : k ≠ 1) : outerV.get? k = none := by
 
 /-- An explicitly-set `true` inhabits an optional `bool` field. -/
 theorem matches_optBool :
-    Val.Matches (.optional (some (.bool true))) optBool := by
-  show Val.Matches (.optional (some (.bool true)))
+    Slot.Matches (.optional (some (.bool true))) optBool := by
+  show Slot.Matches (.optional (some (.bool true)))
     (Field.mk .optional (.scalar .bool))
-  rw [Val.Matches, Payload.Matches, Payload.MatchesScalar]
+  rw [Slot.Matches, Payload.Matches, Payload.MatchesScalar]
   trivial
 
 theorem innerV_valid : Value.Valid innerW innerV := by
@@ -160,10 +160,10 @@ theorem innerV_valid : Value.Valid innerW innerV := by
     · exact ⟨optBool, innerW_get2, matches_optBool⟩
 
 /-- The nested value inhabits the writer's message field. -/
-theorem matches_msgW : Val.Matches (.optional (some (.msg innerV))) msgW := by
-  show Val.Matches (.optional (some (.msg innerV)))
+theorem matches_msgW : Slot.Matches (.optional (some (.msg innerV))) msgW := by
+  show Slot.Matches (.optional (some (.msg innerV)))
     (Field.mk .optional (.msg innerW))
-  rw [Val.Matches, Payload.Matches]
+  rw [Slot.Matches, Payload.Matches]
   exact innerV_valid
 
 theorem outerV_valid : Value.Valid outerW outerV := by
@@ -250,7 +250,7 @@ theorem inner_reinterpret_get1 :
       = some (.optional (some (.bool true))) := by
   rw [Value.get?_reinterpret, innerR_get1, Option.map_some,
     Value.reinterpretAt_of_shared innerW_get1 innerV_get1]
-  simp [Val.reinterpret, optBool, oneofBool, Field.card, Field.ty,
+  simp [Slot.reinterpret, optBool, oneofBool, Field.card, Field.ty,
     Cardinality.explicit, Payload.reinterpret]
 
 theorem inner_reinterpret_get2 :
@@ -258,7 +258,7 @@ theorem inner_reinterpret_get2 :
       = some (.optional (some (.bool true))) := by
   rw [Value.get?_reinterpret, innerR_get2, Option.map_some,
     Value.reinterpretAt_of_shared innerW_get2 innerV_get2]
-  simp [Val.reinterpret, optBool, oneofBool, Field.card, Field.ty,
+  simp [Slot.reinterpret, optBool, oneofBool, Field.card, Field.ty,
     Cardinality.explicit, Payload.reinterpret]
 
 theorem outer_reinterpret_get1 :
@@ -266,7 +266,7 @@ theorem outer_reinterpret_get1 :
       = some (.optional (some (.msg (Value.reinterpret innerW innerR innerV)))) := by
   rw [Value.get?_reinterpret, outerR_get1, Option.map_some,
     Value.reinterpretAt_of_shared outerW_get1 outerV_get1]
-  simp [Val.reinterpret, msgW, msgR, Field.card, Field.ty,
+  simp [Slot.reinterpret, msgW, msgR, Field.card, Field.ty,
     Cardinality.explicit, Payload.reinterpret]
 
 /-! ## The negation -/
@@ -285,10 +285,10 @@ theorem not_reinterpret_valid_one_layer :
     H outerW outerR outerV outerV_valid outerR_allWF outerR_legal outer_oneofPreserved
   have hm := hvalid.matches outer_reinterpret_get1 outerR_get1
   have hm' : Value.Valid innerR (Value.reinterpret innerW innerR innerV) := by
-    have : Val.Matches
+    have : Slot.Matches
         (.optional (some (.msg (Value.reinterpret innerW innerR innerV))))
         (Field.mk .optional (.msg innerR)) := hm
-    rwa [Val.Matches, Payload.Matches] at this
+    rwa [Slot.Matches, Payload.Matches] at this
   exact hm'.oneofOk 1 2 oneofBool oneofBool 0 (.bool true) (.bool true)
     (by norm_num) innerR_get1 innerR_get2 rfl rfl
     inner_reinterpret_get1 inner_reinterpret_get2

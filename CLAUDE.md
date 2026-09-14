@@ -79,10 +79,10 @@ lean/
         │                                   --   `explode` interface, WF/AllWF, sizes
         ├── SortedMap.lean               -- payload-parameterized sorted sigma-list theory,
         │                                   --   shared by Desc and Value
-        ├── Value.lean                   -- Value/Val/Payload, unsealed map interface, sizes,
+        ├── Value.lean                   -- Value/Slot/Payload, unsealed map interface, sizes,
         │                                   --   defaults, Field.init/Value.init, Value.Total
         ├── Validity.lean                -- Desc.Legal, Value.OneofOk, Payload.MatchesScalar,
-        │                                   --   Value.Valid/Val.Matches/Payload.Matches,
+        │                                   --   Value.Valid/Slot.Matches/Payload.Matches,
         │                                   --   Value.valid_of_get?, Value.init_valid
         ├── Transform.lean               -- Value.reinterpret: the value a cross-descriptor
         │                                   --   round trip yields, plus its `get?` spec,

@@ -19,7 +19,7 @@
   Each inductive must therefore write `List ((_ : Int) × ...)` out in full.
 
   The *theory*, however, shares fine: everything below is stated for a
-  general payload `β` and instantiated at `β := Field` and `β := Val`.
+  general payload `β` and instantiated at `β := Field` and `β := Slot`.
   Nothing here mentions either.
 
   `sortedInsert` is hand-rolled (single pass, replace on collision) rather

@@ -1,5 +1,5 @@
 #+title: Design notes: the descriptor kernel and value layer for Pollux.Proto
-#+author: recorded from the design sessions of 2026-08-26; recursion survey and oneof/map decisions folded in 2026-08-31; value layer 2026-09-04
+#+author: recorded from the design sessions of 2026-08-26; recursion survey and oneof/map decisions folded in 2026-08-31; value layer 2026-09-04; oneof compatibility audit 2026-09-11
 #+options: toc:2
 
 This document records the design decisions behind =Pollux/Proto/= — the sealed
@@ -93,7 +93,7 @@ constructor.
 The *theory*, however, shares fine, and that is where nearly all the lines were.
 =Pollux/Proto/SortedMap.lean= states =sortedInsert=, =WF=, the lookup laws and
 extensionality for a general payload =β=, and =Desc= and =Value= instantiate it at
-=β := Field= and =β := Val=; each inductive repeats only the constructor's list
+=β := Field= and =β := Slot=; each inductive repeats only the constructor's list
 type. This recovers the saving the prototype measured (§ Decision: sigma pairs)
 without the synonym.
 
@@ -489,7 +489,9 @@ reasons, in decreasing order of force:
    stated with that descriptor's own tags. That phrasing is forced in any
    representation (nested included, where "same group" means "same syntactic
    block"), because raw =oneof_index= is not evolution-stable: adding a oneof
-   shifts every later index.
+   shifts every later index. (The =↔= is too strong; what validity actually
+   needs is the reader-to-writer direction alone — see § What the oneof side
+   condition admits.)
 
 Where the folded view is genuinely wanted (a report figure, a pretty-printer,
 possibly an =Encodes= lemma), it is a /derived view/ — a =Desc.oneofs= grouping
@@ -500,12 +502,15 @@ the type are free; structure inside the type is what costs lemmas.
 
 - /Serializer validity/: the at-most-one-member-set constraint joins the
   =valueWf= analogue, pointwise over pairs of set keys (same group ⇒ same
-  key). The functional round-trip proofs are unchanged — our own serializer
-  never emits two members of a group.
+  key). The same-descriptor round-trip proofs are unchanged — our own
+  serializer never emits two members of a group /of its own descriptor/,
+  because its input is oneof-respecting. Across descriptors that qualifier is
+  exactly the loophole; see the correction below.
 - /=Encodes= and parser completeness/: cross-member last-wins (the last
   occurrence among /all/ of a group's field numbers wins and clears the rest)
-  activates only against foreign encoders; deferred with the rest of the
-  relational spec.
+  was recorded here as activating "only against foreign encoders", hence
+  deferrable with the rest of the relational spec. *That is wrong across
+  descriptors* — see § What the oneof side condition admits (2026-09-11).
 - /Compatibility/: the one place to expect trouble. Moving fields in or out
   of oneofs is wire-compatible but changes the reader's transform (a writer
   legitimately setting two ungrouped fields gets one cleared by a reader that
@@ -614,11 +619,16 @@ live in the pointwise field relation (already anticipated in § Decision: oneof)
 The presence wrapper sits *outside* the payload:
 
 #+begin_src lean
-inductive Val     | implicit (p : Payload)
+inductive Slot    | implicit (p : Payload)
                   | optional (p : Option Payload)
                   | repeated (ps : List Payload)
 inductive Payload | int | bool | string | bytes | float | double | msg (v : Value)
 #+end_src
+
+The wrapper is named =Slot= rather than =Val=: it is the value-side counterpart
+of =Field= — the descriptor declares a slot, the value fills it — and =Val= was one
+letter from =Value=, which also gave =valSize= beside =valueSize= (renamed
+2026-09-11).
 
 The Rocq development duplicated its =DecoVal= across all six =ValVal=
 constructors; factoring it out writes it once and makes a repeated message
@@ -787,11 +797,107 @@ what =OneofPreservedAll= is a first fragment of; when the Proto analogue of
 
 The alternative to assuming it is to make the transform implement protobuf's
 cross-member last-wins, clearing all but one member. That is what a
-spec-faithful parser does, and it is the honest fix; it is deferred with the
-rest of the relational =Encodes= work, since last-wins is only observable
-against foreign encoders. Which of the two survives is a decision the parser
-will force, and it is worth flagging in the report as an instance of the
-general pattern: the rule set is dictated by what the transform produces.
+spec-faithful parser does, and it is the honest fix. It was originally
+deferred here with the rest of the relational =Encodes= work, on the grounds
+that last-wins is only observable against foreign encoders; the next section
+corrects that. Which of the two survives is a decision the parser will force,
+and it is worth flagging in the report as an instance of the general pattern:
+the rule set is dictated by what the transform produces.
+
+** What the oneof side condition admits, and two corrections
+
+Recorded 2026-09-11, prompted by the question "will the transform have to
+handle an =optional= field being added to an existing oneof group?". The
+informal phrase covers three different evolutions; adding the dual (a reader
+that /un/-groups) makes four, and the answers differ:
+
+| evolution                                            | admitted? | why                                         |
+|------------------------------------------------------+-----------+---------------------------------------------|
+| new field number, reader-only, placed in a group     | yes, free | antecedent needs both keys in =d₁=: vacuous |
+| shared =optional= field moved into an existing group | *no*      | no common writer group =g₀=                 |
+| two writer groups merged into one reader group       | *no*      | same                                        |
+| reader splits a writer group into independent fields | yes, free | reader-side =.oneof g= antecedent fails     |
+
+Row 1 is the common protobuf evolution ("add a field to a oneof"), and it
+costs nothing. =Desc.OneofPreserved='s antecedent requires =d₁.get? k₁= /and/
+=d₁.get? k₂= to succeed, so no instance of the hypothesis mentions a key the
+reader has just added; and on the value side that key receives =Field.init=,
+which for =.oneof _= is =optional none=, while =Value.OneofOk= fires only on
+two keys /both/ holding =optional (some _)=. That vacuity is load-bearing and
+deserves a docstring sentence: reading the condition as "the reader may not
+group" invites weakening the antecedent, which would break precisely this
+case. Row 4 is free for the dual reason.
+
+Rows 2 and 3 are excluded, and *correctly* — the theorem is false for them,
+not merely unproven. A writer whose =d₁= leaves =k₁= and =k₂= independent may
+legally set both; a reader that groups them receives two set members. This is
+the =OneofCounterexample= witness at the top layer rather than one layer down.
+
+The transform /function/ already computes rows 2 and 3 without complaint:
+=Slot.reinterpret='s optional branches test only =c₁.explicit && c₂.explicit=,
+and =Cardinality.explicit= holds of =.optional= and =.oneof= alike, so the
+payload carries across. Nothing is missing from the function. The eventual fix
+is therefore not a new carry case but a *deletion* — last-wins clearing —
+which is worth stating plainly, because "expand the transform to handle
+oneofs" is the natural and wrong first guess.
+
+Upstream's own rule has the same shape: moving a /single/ field into a /new/
+oneof is documented as safe, while moving several in is safe only "if you are
+sure that no code sets more than one at a time". =OneofPreserved= is that soft
+caveat restated as a proof obligation. The formalization is not stricter than
+the wire format, only stricter than what protoc will let you write — which is
+the right place for a proof to be strict, and worth the report's attention as
+a case where a mechanized side condition lands exactly on a documented
+informal warning.
+
+*** Correction: last-wins is not foreign-encoder-only
+
+§ Where the semantics land claimed, and § The oneof side condition repeated,
+that cross-member last-wins "activates only against foreign encoders" and can
+therefore be deferred with =Encodes=. That holds under one descriptor and is
+*wrong across descriptors*. In row 2, =d₁= does not group =k₁= and =k₂=, so
+our own serializer emits both; =d₂= groups them; a conforming parser must
+clear one. No foreign encoder is involved.
+
+What this changes is *when the decision is forced*: not by =Encodes=, but by
+the cross-descriptor round-trip theorem — the next milestone — the moment it
+is stated without =OneofPreservedAll=.
+
+*** Correction: the partition condition is one-directional
+
+Reading 4 of § The rejected alternative phrases the side condition as
+=same-group-in-d₁ ↔ same-group-in-d₂=. The implemented =Desc.OneofPreserved=
+is the =→= direction only (reader-group ⇒ writer-group), and that is the
+correct minimal form: the converse would forbid row 4, which validity does not
+need, since an ungrouped reader pair fails =OneofOk='s =.oneof g= antecedent
+outright and the writer's own =OneofOk= already bounds what is set. The =↔=
+was written before the theorem existed to tell the two directions apart.
+
+*** Which fix, and when
+
+Keep =OneofPreservedAll= for the current milestone: it is sound, it is
+upstream's own caveat, and it costs only the evolutions upstream itself
+caveats. When the parser lands the choice is between two genuinely different
+answers, and the split is the part worth reproducing in the report:
+
+- Against /our functional serializer/ — which walks the sorted entry list, so
+  wire order is key order — last-wins is expressible as a post-pass on
+  =reinterpret='s output: per reader group, keep the largest-key set member
+  and reset the rest to =optional none=. That discharges the oneof conjunct
+  unconditionally and deletes =OneofPreservedAll= along with its
+  recursive-closure subtlety.
+- Against the relational =Encodes=, where a conforming parser must accept
+  fields in any order, /which/ member survives is genuinely nondeterministic.
+  No function is the round-trip answer for those values, and the theorem has
+  to become relational (∃ a result in the compatibility relation) rather than
+  an equality.
+
+The second is the real boundary of the transform-based strategy inherited from
+InterParse: the first class of values for which "compute what the reader gets"
+has no answer. That is a sharper thing to flag than the deferral as currently
+framed — and it is the same lesson as =M-Declare= and the drop rule once more,
+with the transform dictating the shape of the statement rather than the other
+way round.
 
 ** Deferred: scalar type changes
 
@@ -841,7 +947,7 @@ Four further files (2026-09-04) implement the value layer:
   =Value.Total=.
 - =Validity.lean= — =Desc.Legal= (protoc's schema rules), =Value.OneofOk=,
   =Payload.MatchesScalar= (type and range), and the =Value.Valid= /
-  =Val.Matches= / =Payload.Matches= block.
+  =Slot.Matches= / =Payload.Matches= block.
 - =Transform.lean= — =Value.reinterpret= and its specification.
 
 The definitions are complete and all recursions terminate. Five theorem
@@ -885,5 +991,5 @@ than incidental:
   existing =reinterpretAt_of_writer_missing=. The writer-missing and
   value-missing cases both land on =Field.init=, which is what makes the
   oneof conjunct tractable: only an explicitly-set optional can transform
-  into one (=Val.reinterpret_eq_optional_some=), so an output group conflict
+  into one (=Slot.reinterpret_eq_optional_some=), so an output group conflict
   can always be traced back to a writer group conflict.
