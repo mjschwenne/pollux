@@ -1,0 +1,464 @@
+\section{Intermediate Encoding Format}\label{sec:inter-parse}
+The simple parsing format described in Section~\ref{sec:simpl-parse} was
+designed to show that we could reason about nested messages. However, there are
+more complex parts of Protobuf we need to support before being able to verify
+the whole thing. Some of these features were introduced to an intermediate
+complexity encoding format, which we also implemented and verified.
+
+These important features were added to the intermediate encoding format:
+\begin{itemize}
+\item Variable number of fields per message.
+\item Encoding uses key-value pairs which can be serialized in any order.
+\item Drops unknown fields without issue.
+\item Does not encode, but can recover, missing / default values.
+\item Parsing requires a descriptor to differentiate values.
+\end{itemize}
+
+\subsection{Type Definitions}\label{sec:ip-types}
+Below is the Lean definitions for a descriptor and message. Unlike the original
+Rocq code, which use a \texttt{gmap} from the \texttt{stdpp}, Lean's finite maps
+cannot be nested into an inductive type. Instead, the intermediate format models
+the descriptors and a list of key-value pairs, then requires theorems over them
+maintain a well-formedness invariant that the list is sorted and contains no
+duplicates. Notice that these are mutually inductive types, with a
+\texttt{Field} able to hold a \texttt{Desc} for a nested message.
+
+\begin{minted}{lean}
+-- A descriptor maps field numbers (integers) to field types.
+-- Mutually defined with `Field` which may contain nested descriptors.
+--- Corresponds to `Desc`/`Field` from `InterParse/Descriptor.v`.
+mutual
+inductive Desc where
+  | mk (fs : List (Int × Field))
+inductive Field where
+  | msg (d : Desc)
+  | bool
+  | int
+end
+
+-- A value maps field numbers to typed values.
+-- Mutually defined with `Val` which may contain nested values.
+-- Corresponds to `Value`/`Val` from `InterParse/Descriptor.v`.
+mutual
+inductive Value where
+  | mk (vs : List (Int × Val))
+inductive Val where
+  | msg (v : Value)
+  | bool (b : Bool)
+  | int (z : Int)
+  | missing
+end
+\end{minted}
+
+Represented mathematically, you could describe these types like so:
+
+\vspace{1em}
+\begin{definition}[Intermediate Descriptor]\label{def:ip-desc}
+ An intermediate descriptor is a map from integers representing the field number
+ to a field definition, which can either be
+ \begin{itemize}
+ \item A tag denoting a nested message, which also has a nested intermediate descriptor.
+ \item A tag denoting a boolean.
+ \item A tag denoting an integer.
+ \end{itemize}
+\end{definition}
+
+\vspace{1em}
+\begin{definition}[Intermediate Message]\label{def:ip-msg}
+  An intermediate message is a map from integers representing the field number
+  to a values, which can either be
+  \begin{itemize}
+  \item A nested message, without any descriptor.
+  \item A boolean.
+  \item An integer.
+  \item A special missing value.
+  \end{itemize}
+\end{definition}
+
+The primary difference between descriptors and messages is that messages have
+real values in them while descriptors have tags without values and describe a
+potential shape of a message. You can thing of descriptors as defining a formal
+type of message.
+
+\subsection{Encoding}\label{sec:ip-encoding}
+
+When encoding a message under the intermediate format, each value is encoded
+accordingly:
+\begin{itemize}
+\item \textbf{Booleans:} Encoded into four little-endian bytes with zero for
+  false and any positive integer (typically 1) for true.
+\item \textbf{Integers:} Encoded into four little-endian bytes. Currently only
+  positive integers are supported, but wrapper functions could support negative
+  integers by converting them to the equivalent two's-complement positive
+  integer.
+\item \textbf{Nested Messages:} A length prefixed nested list of key-value
+  pairs. The length is encoded as a one byte integer, limiting the format's
+  ability to handle nested messages to messages which can be encoded into 255 or
+  fewer bytes. (Note that the top-level message can exceed 255 bytes, but that
+  couldn't later be put into a different message.)
+\end{itemize}
+
+Each field is then encoded first with the one byte field ID number, then the
+encoding described above. A message is a list of key-value pairs. Assuming every
+field you have encoded is in the descriptor, they can all be parsed in a
+self-contained manner.
+
+\vspace{1em}
+\begin{definition}[Intermediate Descriptor Well-Formedness]\label{def:inter-dwf}
+  A descriptor $d$ is considered well-formed, denoted $d \checkmark$, if
+  \begin{itemize}
+  \item The keys are stored in sorted order.
+  \item There are no duplicate keys.
+  \end{itemize}
+\end{definition}
+
+\vspace{1em}
+\begin{definition}[Intermediate Value Well-Formedness]\label{def:inter-vwf}
+  A message $m$ is well-formed, denoted $m \checkmark$, if
+  \begin{itemize}
+  \item All keys are in the range 0 to 256.
+  \item All values in the message are type-aligned with the descriptor
+    (i.e.\ integer fields in the descriptor have integer values in the message).
+  \item All integer payloads are within the range of a valid 32-bit unsigned
+    integer.
+  \item All nested messages are also well-formed.
+  \end{itemize}
+\end{definition}
+
+\subsection{Missing Values \& Descriptor Mismatches}\label{sec:ip-missing}
+The presence of missing values and a dependency on a descriptor complicates our
+definition of what it means to successfully serialize and parse. For example, we
+expect that if the message being serialized have a field id \emph{not} in the
+descriptor we're serializing under, that field will be omitted. If we then parse
+under the same descriptor, the recovered value won't be identical to one we put
+into the serializer; it will be missing that field.
+
+Recall that a serializer comes with a well-formed condition, and that the
+traditional definition for parser-serializer correctness is this:
+
+\vspace{1em}
+\begin{definition}[Parser Correctness]\label{def:base-pc}
+  A serializer $ser$ with well-formed condition $wf$ is correct with respect to
+  a parser $par$ if
+  \[\forall\ x\ enc\ rest,\;wf\ x \rightarrow ser\ x = \mathtt{Success}\ enc \rightarrow par\ (enc \mdoubleplus rest) =
+    \mathtt{Success}\ x\ rest \]
+\end{definition}
+
+To account for descriptor mismatches, and to pave the way for a compatibility
+respecting parser correctness definitions in the future, this definition can be
+expanded to
+
+\vspace{1em}
+\begin{definition}[Simple Relational Parser Correctness]\label{def:simp-pc}
+  A serializer $ser$ with well-formed condition $wf$ is relational correct with
+  respect to a parser $par$ and relation $R$ if
+  \[ \forall\ x\ enc\ rest,\;wf\ x \to ser\ x = \mathtt{Success}\ enc \rightarrow \exists\ x',\;par\ (enc
+    \mdoubleplus rest) = \mathtt{Success}\ x'\ rest \wedge R\ x\ x' \]
+\end{definition}
+
+Since our format requires a descriptor to differentiate between fields, and does
+not support arbitrary suffixes (since the top level message isn't length limited
+in any way and you could always have another field encoded in the suffix), we
+need a modified version of Definition~\ref{def:simp-pc}.
+
+\vspace{1em}
+\begin{definition}[Relational Parser Correctness]
+  A serializer $ser$ with well-formed condition $wf$ is relational correct with
+  respect to a parser $par$, descriptor $d$ and relation $R$ if
+  \[ \forall\ x\ enc,\;wf\ x \to ser\ d\ x = \mathtt{Success}\ enc \rightarrow \exists\ x',\;par\ d\ enc
+    = \mathtt{Success}\ x'\ \texttt{[]} \wedge R\ d\ x\ x' \]
+\end{definition}\label{def:rpc}
+
+This definition already looks like our definition of compatibility
+(Definition~\ref{def:compat}), with just an extra check that the serializer
+actually succeeds.
+
+\subsection{Schema-Correct Compatibility Relation}\label{sec:sc-id-compat}
+
+In order to simplify proof burdens for the moment, there is another important
+concept here: when a value is \emph{fully described} or \emph{schema correct} by
+a descriptor. Intuitively, this means that every value is the message has a
+corresponding field in the descriptor and vice versa. This relation is denoted
+as $\langle v : d \rangle$ and is defined with these two rules:
+
+\vspace{1em}
+\begin{definition}[Schema Correct]
+  A value $v$ is \emph{schema correct} with respect to a descriptor $d$ if
+  \begin{itemize}
+  \item Every value in $v$ is declared in $d$.
+  \item Every field in $d$ id present in $v$.
+  \item Every value in $v$ matches the type required by the corresponding field
+    in $d$.
+  \item All nested messages are schema correct with respect to the descriptors
+    embedded in $d$.
+  \end{itemize}
+\end{definition}
+
+\begin{mathpar}
+  \infer[SC-emp]{ }{\langle \emptyset : \emptyset \rangle}
+
+  \infer[SC-insert-bool]{ \langle m : d \rangle \\ k \not \in \dom{m} \\ k \not \in \dom{d}}
+  { \langle m[k \mapsto \mathtt{M\_BOOL}\ b] : d[k \mapsto \mathtt{F\_BOOL}] \rangle}
+
+  \infer[SC-insert-int]{ \langle m : d \rangle \\ k \not \in \dom{m} \\ k \not \in \dom{d}}
+  { \langle m[k \mapsto \mathtt{M\_INT}\ z] : d[k \mapsto \mathtt{F\_INT}] \rangle}
+
+  \infer[SC-insert-msg]{ \langle m : d \rangle \\ k \not \in \dom{m} \\ k \not \in \dom{d} \\ \langle
+    m' : d' \rangle}
+  { \langle m[k \mapsto \mathtt{M\_MSG}\ m'] : d[k \mapsto \mathtt{F\_MSG}\ d'] \rangle}
+\end{mathpar}
+
+This relation is designed to ensure that the related message and descriptor are
+in lock-step as new fields are added to it.
+
+We can now turn our attention to the compatibility relation built on top of
+this. While at the moment we're only interested in having the same descriptor on
+both sides of the compatibility relation, it's been written for maximum
+flexibility and to generalize to a more complex relation.
+
+\begin{mathpar}
+  \infer[Compat-Refl]{\langle m : d_1 \rangle \\ \langle m : d_2 \rangle}{\langle m : d_1 \preceq m : d_2 \rangle}
+
+  \infer[Compat-Add]{\langle m_1 : d_1 \preceq m_2 : d_2 \rangle \\\\ k \not \in \dom{m_1} \\ k \not \in
+    \dom{d_2} \\ k \not \in \dom{m_2} \\ k \not \in \dom{d_2} \\\\ v_1 = v_2 \\ f_1
+    = f_2}
+  { \langle m_1[k \mapsto v_1] : d[k \mapsto f_1] \preceq
+    m_2[k \mapsto v_2] : d_2[k \mapsto f_2] \rangle}
+\end{mathpar}
+
+That is also why the \textsc{Compat-Add} rule has premises $v_1 = v_2$ and $f_1
+= f_2$ for a more complex compatibility story, this was call out to the value
+relation (Section~\ref{sec:val-rel}) and type relation (Section~\ref{sec:typ-rel}).
+
+\vspace{1em}
+\begin{lemma}[Intermediate Schema Correct Equal]\label{lem:inter-sc-eq}
+  \[
+    \forall\ m_1, m_2, d_1, d_2.\ \langle m_1 : d_1 \preceq m_2 : d_2 \rangle
+    \rightarrow d_1 = d_2 \rightarrow v_1 = v_2
+  \] 
+\end{lemma}
+
+\vspace{1em}
+\begin{theorem}[Intermediate Schema Correct Round-trip]\label{thm:inter-schema-correct}
+  \[
+    \langle m_1 : d \rangle \rightarrow m_1 \checkmark \rightarrow \forall\ bs, \mathrm{ser}_d(m_1) =
+    bs \rightarrow \exists\ m_2, \mathrm{par}_d(bs) = m_2 \wedge \langle m_1
+    : d \preceq m_2 : d \rangle
+  \]
+\end{theorem}
+
+The immediate corollary of Lemma~\ref{lem:inter-sc-eq} and
+Theorem~\ref{thm:inter-schema-correct} is that the $m_1$ and $m_2$ in the
+theorem statement are equal.  
+
+\subsection{The Identity Compatibility Relation}\label{sec:id-compat}
+Naturally then, we can pose the descriptor mismatch problem in terms of a
+compatibility relation where the descriptor doesn't change. Since the descriptor
+is always related to itself, this is known as the \emph{identity compatibility
+  relation}. Let $\langle v_1 : d_1 \preceq v_2 : d_2 \rangle$ denote that $v_1$
+when interpreted under $d_1$ is compatible with $v_2$ under $d_2$.
+
+
+\subsubsection{Full Identity Compatibility Relation}\label{sec:full-id-compat}
+If we want to relax the requirement that the value is always fulled described by
+the paired descriptor, we have to allow for values to be dropped during
+serialization and missing values inserted during parsing. In this setting, it
+\emph{should} be the case that any field in both the value and descriptor have
+matching types.
+
+\begin{mathpar}
+  \infer[Empty]{ }{\langle \emptyset : \emptyset \preceq \emptyset : \emptyset \rangle}
+
+  \infer[Insert-Int]{d' = d[k \mapsto \mathtt{F\_INT}] \\ \langle m' : d \preceq m : d \rangle}{\langle m'[k \mapsto z]
+    : d' \preceq m[k \mapsto z] : d' \rangle}
+
+  \infer[Insert-Bool]{d' = d[k \mapsto \mathtt{F\_BOOL}] \\ \langle m' : d \preceq m : d \rangle}{\langle m'[k \mapsto b]
+    : d' \preceq m[k \mapsto b] : d' \rangle}
+
+  \infer[Insert-Msg]{d' = d[k \mapsto \mathtt{F\_MSG}\ d_n] \\\\ \langle m' : d \preceq m : d \rangle \\ \langle
+    m_n' : d_n \preceq m_n : d_n \rangle}{\langle m'[k \mapsto \mathtt{M\_MSG}\ m_n'] : d' \preceq m[k \mapsto
+    \mathtt{M\_MSG}\ m_n] : d' \rangle}
+
+  \infer[Drop]{k \not \in \dom{d} \\ k \not \in \dom{m} \\ \langle m' : d \preceq m : d \rangle}{\langle m'[k \mapsto z] : d \preceq m : d \rangle}
+
+  \infer[Add-Missing]{ k \not \in \dom{m} \\ d' = d[k \mapsto f] \\ \langle m' : d \preceq m :
+    d \rangle}{ \langle m' : d' \preceq m[k \mapsto \mathtt{M\_MISSING}] : d' \rangle}
+
+  \infer[Input-Missing]{k \not \in \dom{d} \\ k \not \in \dom{m} \\ k \not \in
+    \dom{m'} \\\\ d' = d[k \mapsto f]}{\langle m'[k \mapsto \mathtt{M\_MISSING}] : d' \preceq m[k \mapsto \mathtt{M\_MISSING}] : d' \rangle}
+\end{mathpar}
+
+\begin{theorem}[Intermediate Identity Compatibility]\label{thm:inter-id-compat}
+  \[
+    d \checkmark \rightarrow m_1 \checkmark \rightarrow \forall\ bs, \mathrm{ser}_d(m_1) =
+    bs \rightarrow \exists\ m_2, \mathrm{par}_d(bs) = m_2 \wedge \langle m_1
+    : d \preceq m_2 : d \rangle
+  \] 
+\end{theorem}
+
+Notice that this theorem has a much weaker precondition, just that the
+descriptor is well-formed rather than that the value is schema-correct and that
+the resulting statement uses a weaker compatibility relation which doesn't have
+a squeeze lemma like the schema correct compatibility relation did
+(Lemma~\ref{lem:inter-sc-eq}).
+
+\subsection{Full Compatibility Relation}\label{sec:ip-compat-rel}
+
+Now we develop the full compatibility relation for the intermediate encoding
+format. Like with the protobuf relations, this will be separated into a value
+relation, type relation and message relation.
+\begin{align*}
+  m &: \text{message} & v &: \text{value} \\
+  d &: \text{descriptor} & f &: \text{field} \\
+  k &: \text{field number}
+\end{align*}
+Below is a list of the relations about to be defined, along with an English
+explanation of how to read them.
+\begin{align*}
+  \prec &: \text{Value relation} & v_1 : \tau_1 \prec v_2 : \tau_2 &\rightarrow ``\text{value } v_1 : \tau_1 \text{ becomes } v_2 :
+                                           \tau_2 " \\
+  \propto &: \text{Field type relation} & f_1 \propto f_2 &\rightarrow ``f_1 \text{ is type-compatible with }
+                                          f_2" \\
+  \ll &: \text{Descriptor type relation} & d_1 \ll d_2 &\rightarrow ``d_1 \text{ is
+                                                     descriptor-compatible with } d_2" \\
+  \preceq &: \text{Message relation} & m_1 \preceq m_2 &\rightarrow ``\text{message } m_1 \text{ becomes } m_2"
+\end{align*}
+
+\subsubsection{Value Relation}\label{sec:ip-val-rel}
+Since booleans and integers are both encoded in a 32 bit little-endian way, we
+can convert between them. Message relation compatible messages can also be used
+to make updates to nested messages.
+
+\begin{mathpar}
+  \infer[V-Bool-Int]{v_2 = \mathbb{1}[v_1]}{v_1 : \mathtt{bool} \prec v_2 : \mathtt{int}}
+
+  \infer[V-Int-Bool]{v_2 = \left\{
+    {\begin{array}{l@{\quad:\quad}l}
+      \mathtt{false} & \mathrm{if}\ v_1 = 0 \\
+      \mathtt{true} & \mathrm{otherwise}
+    \end{array}}\right.}{v_1 : \mathtt{int} \prec v_2 : \mathtt{bool}}
+
+  \infer[V-Msg]{m_1 : d_1 \preceq m_2 : d_2}{\mathtt{M\_MSG}\ m_1 : \mathtt{F\_MSG}\
+    d_1 \prec \mathtt{M\_MSG}\ m_2 : \mathtt{F\_MSG}\ d_2}
+
+  \infer[V-Refl]{ }{v : f \prec v : f}
+
+  \infer[V-Trans]{v_1 : f_1 \prec v_2 : f_2 \\ v_2 : f_2 \prec v_3 : f_3}{v_1 : f_1 \prec v_3 : f_3}
+\end{mathpar}
+
+\subsubsection{Field Type Relation}\label{sec:ip-f-typ-rel}
+Just like with the value relation, we can freely convert between integer and
+boolean fields.
+
+\begin{mathpar}
+ \infer[F-Bool-Int]{ }{\mathtt{bool} \propto \mathtt{int}}
+
+ \infer[F-Int-Bool]{ }{\mathtt{int} \propto \mathtt{bool}}
+
+ \infer[F-Msg]{d_1 \ll d_2}{\mathtt{F\_MSG}\ d_1 \propto \mathtt{F\_MSG}\ d_2}
+
+ \infer[F-Refl]{ }{f \propto f}
+
+ \infer[F-Trans]{f_1 \propto f_2 \\ f_2 \propto f_3}{f_1 \propto f_3}
+\end{mathpar}
+
+The more complex thing here is handling the descriptors. We need to be able to
+reason about weather an update to those is compatible without considering
+values. I'm not sure if this would be better in a new relation, but for the
+moment I've decided to split them out.
+
+\subsubsection{Descriptor Type Relation}\label{sec:ip-d-typ-rel}
+
+\begin{mathpar}
+  {\color{red}
+  \infer[D-Update]{ \dom{d_{mand}} \supseteq \dom{d_{mand}'} \\ \forall\ k \in
+    \dom{d} \cap \dom{d'}.\ d[k] \propto d'[k] }{ d \ll d' }
+  }
+
+  \infer[D-Emp]{ }{\emptyset \ll \emptyset}
+
+  \infer[D-Add]{k \not \in \dom{d}}{d \ll d[k \mapsto f]}
+
+  \infer[D-Chg]{d[k] \propto f}{d \ll d[k \mapsto f]}
+
+  \infer[D-Refl]{ }{d \ll d}
+
+  \infer[D-Trans]{d_1 \ll d_2 \\ d_2 \ll d_3}{d_1 \ll d_3}
+\end{mathpar}
+
+Just like with the Protobuf relation, we can add fields or change existing
+fields. This is like width and depth sub-typing for record types. The
+\textsc{D-Update} incorporates both width and depth sub-typing on mandatory
+fields (not yet supported by the Pollux framework) and that all fields which
+align between the descriptors have a compatible type.
+
+It is worth noting that we \emph{cannot} add a \textsc{D-Drop} rule to this
+relation. When parsing a field that's not in the descriptor, there is currently
+no why to distinguish between a primitive (integer or Boolean) and a nested
+message in the wire format. We'd parse the field ID and realize we need to skip
+the field, but not know if the field is a 4 byte primitive or a nested message
+of dynamic length. This restriction will be fixed in a full protobuf
+implementation.
+
+\subsubsection{Message Relation}\label{sec:ip-msg-rel}
+
+\begin{mathpar}
+  \infer[M-Emp]{ }{\emptyset : \emptyset \preceq \emptyset : \emptyset}
+
+  {\color{red}\infer[M-Add]{m_1 : d_1 \preceq m_2 : d_2 \\ v : f \\\\ k \not \in \dom{m_1} \\ k \not \in
+    \dom{d_1}}{ m_1 : d_1 \preceq m_2[k \mapsto v] : d_2[k \mapsto f]}}
+
+  \infer[M-Missing]{m_1 : d_1 \preceq m_2 : d_2 \\\\ k \not \in \dom{m_1} \\ k \not \in
+    \dom{d_1}}{ m_1 : d_1 \preceq m_2[k \mapsto \mathtt{M\_MISSING}] : d_2[k \mapsto f]}
+
+  \infer[M-Declare]{m_1 : d_1 \preceq m_2 : d_2 \\\\ k \not \in \dom{d_1} \\ k \not \in
+    \dom{m_1} \\ f_1 \propto f_2}{ m_1 : d_1[k \mapsto f_1] \preceq m_2[k \mapsto \mathtt{M\_MISSING}] :
+    d_2[k \mapsto f_2]}
+
+  \infer[M-Update]{m_1 : d_1 \preceq m_2 : d_2 \\\\ m_1[k] : d_1[k] \prec v : f \\ d_1[k] \propto f}{ m_1 : d_1 \preceq m_2[k
+    \mapsto v] : d_2[k \mapsto f]}
+
+  \infer[M-Drop]{m_1 : d_1 \preceq m_2 : d_2 \\\\ k \not \in \dom{m_2} \\ k \not
+    \in \dom{d_2}}{ m_1[k \mapsto v] : d_1[k \mapsto f] \preceq m_2 : d_2 }
+
+  \infer[M-Drop-Unknown]{m_1 : d_1 \preceq m_2 : d_2 \\\\ k \not \in \dom{m_2} \\ k \not
+    \in \dom{d_2} \\ k \not \in \dom{d_1}}{ m_1[k \mapsto v] : d_1 \preceq m_2 : d_2 }
+
+  \infer[M-Refl]{ }{ m : d \preceq m : d}
+
+  \infer[M-Trans]{m_1 : d_1 \preceq m_2 : d_2 \\ m_2 : d_2 \preceq m_3 : d_3}{m_1 : d_1 \preceq
+    m_3 : d_3}
+\end{mathpar}
+
+We can add new key-value pairs to a message, or update the value in a message
+(assuming we keep the fields in the descriptor updated too). Note that the
+premise $v : f$ in the rule \textsc{M-Add} denotes that the value $v$ is aligns
+with the field $f$, i.e. $v$ is an integer and $f$ is \verb|F_INT|. It would not
+hold if $v = \mathtt{true}$ and $f$ was \verb|F_INT|.
+
+The highlighted rule would let the parser pull any correctly typed value out of
+thin air. Do we want this? No, the $\preceq$ relation defines how a message is
+transmuted during the serializer / parser round trip, and that's not how the
+parser would behave.
+
+In \textsc{M-Declare}, we require $f_1 \propto f_2$ so that we can handle examples
+were an empty message under a descriptor with one boolean parses to an empty
+field under a different, compatible type. This continues to mirror how the
+parser and serializer would actually behave.
+
+\vspace{1em}
+\begin{theorem}[Intermediate Compatibility]\label{thm:inter-compat}
+  \[
+    d_1 \checkmark \rightarrow m_1 \checkmark \rightarrow d_2 \checkmark
+    \rightarrow d_1 \ll d_2 \rightarrow \forall\ bs, \mathrm{ser}_{d_1}(m_1) =
+    bs \rightarrow \exists\ m_2, \mathrm{par}_{d_2}(bs) = m_2 \wedge \langle m_1
+    : d_1 \preceq m_2 : d_2 \rangle
+  \] 
+\end{theorem}
+
+% Local Variables:
+% citar-bibliography: ("../pollux.bib")
+% TeX-master: "../pollux.tex"
+% TeX-command-default: "Make"
+% jinx-local-words: "protobuf"
+% End:

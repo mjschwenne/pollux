@@ -1,0 +1,81 @@
+\section{Evaluation Data}
+\subsection{Protobuf}
+
+Data for analyzing Protobuf files was collected from 15 different GitHub
+repositories and is shown in Table~\ref{tbl:proto-sources}. In total, there are
+8,575 protobuf files which define at least one message with one field.
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{lc}
+    \toprule
+    GitHub Repository              & Number of Proto files               \\
+    \midrule
+    \texttt{googleapis/googleapis       } &  6430 \\
+    \texttt{bufbuild/buf                } &  1086 \\
+    \texttt{protocolbuffers/protobuf    } &   399 \\
+    \texttt{uber/prototool              } &   131 \\
+    \texttt{protocolbuffers/protobuf-go } &   128 \\
+    \texttt{google/protobuf.dart        } &   106 \\
+    \texttt{samchon/typia               } &    78 \\
+    \texttt{colinmarc/hdfs              } &    56 \\
+    \texttt{asynkron/protoactor-go      } &    36 \\
+    \texttt{streamdal/plumber           } &    35 \\
+    \texttt{googleapis/google-cloud-go  } &    25 \\
+    \texttt{twitchtv/twirp              } &    23 \\
+    \texttt{go-kratos/kratos            } &    17 \\
+    \texttt{google/rejoiner             } &    15 \\
+    \texttt{cloudwego/kitex             } &    10 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Overview of data sources for Protobuf evaluation.}\label{tbl:proto-sources}
+\end{table}
+
+\subsection{Go + JSON}
+
+Data for analyzing JSON encoding from Go was collected for 25 different GitHub
+repositories and is shown in Table~\ref{tbl:json-sources}. In total, there are
+12,954 files across these repositories which use JSON struct tags in top-level
+struct definitions. All repositories where selected from among the top 1000
+GitHub repositories when sorted by number of stars. 
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{lc}
+    \toprule
+    GitHub Repository              & Number of files with JSON tag               \\
+    \midrule
+    \texttt{kubernetes/kubernetes}           &  2926 \\
+    \texttt{elastic/go-elasticsearch}        &  2490 \\
+    \texttt{kubernetes/autoscaler}           &  1473 \\
+    \texttt{eksctl-io/eksctl}                &   919 \\
+    \texttt{rancher/rancher}                 &   805 \\
+    \texttt{googleapis/google-api-go-client} &   634 \\
+    \texttt{certimate-go/certimate}          &   392 \\
+    \texttt{containers/podman}               &   345 \\
+    \texttt{smartcontractkit/chainlink}      &   317 \\
+    \texttt{cubefs/cubefs}                   &   274 \\
+    \texttt{harness/harness}                 &   263 \\
+    \texttt{gravitational/teleport}          &   253 \\
+    \texttt{zitadel/zitadel}                 &   250 \\
+    \texttt{hashicorp/vault}                 &   207 \\
+    \texttt{fleetdm/fleet}                   &   186 \\
+    \texttt{OpenListTeam/OpenList}           &   179 \\
+    \texttt{ovh/cds}                         &   174 \\
+    \texttt{go-gitea/gitea}                  &   169 \\
+    \texttt{elastic/beats}                   &   137 \\
+    \texttt{keybase/client}                  &   132 \\
+    \texttt{caddyserver/caddy}               &    91 \\
+    \texttt{tailscale/tailscale}             &    87 \\
+    \texttt{cockroachdb/cockroach}           &    75 \\
+    \texttt{TencentBlueKing/bk-cmdb}         &    72 \\
+    \texttt{rclone/rclone}                   &    62 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Overview of data sources for JSON evaluation.}\label{tbl:json-sources}
+\end{table}
+
+% Local Variables:
+% citar-bibliography: ("../pollux.bib")
+% TeX-master: "../pollux.tex"
+% End:

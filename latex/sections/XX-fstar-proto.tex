@@ -1,0 +1,210 @@
+\section{\fstar{} Protobuf Representation}
+
+In order to reason about Protobuf compatibility, we need a way to represent both
+Protobuf values and descriptors. While the goal here isn't \emph{technically} to
+implement a Protobuf serializer and parser in \fstar{}, that is a natural step
+on the why to a protobuf compatibility checker.
+
+\subsection{Representing Protobuf Values}
+
+The most natural way to represent a protobuf message value would be a record
+type \cite{swamy2023proof}, but there is no mechanism to construct these types
+dynamically in \fstar{}. Limitations like this in most languages with Protobuf
+implementations coupled with the near-perfect fit of using a record for a
+message likely informed the choose of having a Protobuf compiler
+(\texttt{protoc}) which outputs code in the host language. Since Pollux is not
+interested in being a \texttt{protoc} plugin or anything like that, the record
+representation is not suitable for our purposes. Rather, Pollux defines a
+Protobuf message value with this type
+
+
+\begin{figure}[H]
+  \centering
+\begin{lstlisting}[language=caml]
+type vf = string & vty
+
+let sort_vf (v1:vf) (v2:vf) : bool = (bool_of_compare String.compare) v1._1 v2._1
+let msg_names (m:list vf) : list string = map fst m
+
+type msg = m:list vf{List.sorted sort_vf m /\ List.noRepeats (msg_names m)} 
+\end{lstlisting}
+
+  \caption[]{The \fstar{} type Pollux uses to represent a message value,
+    essentially a list of name value pairs, sorted by name with the additional
+    requirement that all the names are unique.}
+  \label{fig:fstar-proto-msg-type}
+\end{figure}
+
+In the \texttt{vf} type above, \texttt{vty} is a value of an individual
+field. At the moment, Pollux doesn't support nested messages, \texttt{oneof}
+fields, enums or \texttt{map} fields. However, all of the basic field types are
+supported. Table~\ref{tab:proto-scalars} shows how each of the scalar types as
+well as \texttt{string} and \texttt{bytes} types are represented with
+Pollux. Notice particularly for the integer types, how exactly the integer is
+encoded has been elided from the value representation. This is done
+intentionally, since those are encoding details that will not be visible to any
+protobuf host language.
+
+\begin{figure}[H]
+  \centering
+\begin{lstlisting}[language=caml]
+type dvty (v:Type) =
+| VIMPLICIT : v -> dvty v
+| VOPTIONAL : option v -> dvty v 
+| VREPEATED : list v -> dvty v
+
+type vty = 
+| VDOUBLE   : dvty double -> vty
+| VFLOAT    : dvty float -> vty
+| VINT      : dvty int -> vty 
+| VBOOL     : dvty bool -> vty 
+| VSTRING   : dvty string -> vty 
+| VBYTES    : dvty bytes -> vty 
+| VMSG      : dvty unit -> vty
+| VENUM     : dvty unit -> vty
+\end{lstlisting}
+
+  \caption[]{The \fstar{} types Pollux uses to represent values in a
+    message. The two-layer inductive structure ensures that programs can find
+    both the type of the value being stored and how it's modified (i.e.\
+    repeated or optional decorators).}
+  \label{fig:fstar-proto-val-type}
+\end{figure}
+
+\begin{table}[H]
+  \begin{subtable}[t]{0.3\textwidth}
+	\centering
+	\begin{tabular}{ll}
+      \toprule
+      \texttt{proto} & \fstar{}   \\
+      \midrule
+      Integers               & \texttt{int} type         \\
+      \texttt{string}        & \texttt{string}           \\
+      \texttt{message}       & \texttt{msg} type         \\
+      \texttt{bool}          & \texttt{bool}             \\
+      \texttt{bytes}         & \texttt{list U8.t}        \\
+      \texttt{double}        & \texttt{list U8.t}        \\
+      \texttt{float}         & \texttt{list U8.t}        \\
+      \texttt{optional}      & \texttt{option}           \\
+      \texttt{repeated}      & \texttt{list}             \\
+      \bottomrule
+	\end{tabular}
+
+	\vspace{4mm}
+	\caption[]{Since \fstar{} lacks floating point types, Pollux merely stores
+      them as a list of bytes refined to be the appropriate length.}
+    \label{tab:proto-scalars}
+  \end{subtable}%
+  \hspace{4mm}
+  \begin{subtable}[t]{0.65\textwidth}
+    \centering
+    \begin{tabular}{ll}
+      \toprule
+      \texttt{proto} & \fstar{} \\
+      \midrule
+      \texttt{map<K, V>}     & \texttt{list (K $\times$ V)} \\
+      \texttt{enum}          & \texttt{s:string\{Some? find ((=) s) d\}} \\
+      \texttt{oneof}         & \texttt{(s:string $\times$ vty)\{Some? find ((=) s) d\}} \\
+      \texttt{message}       & \texttt{msg} type \\
+      \texttt{option}        & ??? \\
+      \bottomrule
+    \end{tabular}
+    \vspace{4mm}
+    \caption[]{\texttt{proto} language features not currently supported by
+      Pollux, but listing my ideas about them}
+    \label{tab:proto-nonscalar}
+  \end{subtable}%
+  \caption[]{\texttt{proto} language features and the corresponding \fstar{}
+    representations.}
+  \label{tab:proto-fstar}
+\end{table}
+Notice that there are several unusual representations in the table. Below is
+some commentary on these features:
+
+\begin{itemize}
+	\item \texttt{map}: While \fstar{} does have maps, the construction is based
+      on functions, like you might find in a $\lambda$-calculus. This makes it
+      impossible to do things like iterate over all the keys or values of the
+      map. It may be beneficial to develop a map implementation based on lists
+      of tuples if these traditional map operations are required.
+    \item \texttt{enum}: Just like using records to represent message values, it
+      would make the most sense to use an inductive type to represent an
+      enum. However, there is also no what to dynamically create an inductive
+      type in \fstar{}. Instead, an enum can be represented as a string,
+      specifically the name of the set value, that uses \fstar{} refinement
+      types to ensure that a valid option from the enum descriptor is set. It is
+      worth noting that this potentially breaks from the established open enum
+      behavior of proto 3 \cite{EnumBehavior}.
+    \item \texttt{oneof}: Very similar to the \texttt{enum} case, except we
+      require that the name of the set field is in the descriptor of the
+      \texttt{oneof} field. The exact type written in
+      Table~\ref{tab:proto-nonscalar} isn't correct as the \texttt{find}
+      function will need to take the \texttt{fst} of the elements in \texttt{d}
+      an it should probably include some refinement on the \texttt{vty} as well.
+	\item \texttt{option}: This isn't an optional value, but rather top level
+      options used to set things like the \texttt{java} package. At the moment,
+      I'm not sure if or how changing values can impact protobuf compatibility.
+\end{itemize}
+
+A good completeness test might be encoding \texttt{descriptor.proto}, the proto
+file which can encode other protobuf schema.
+
+\subsection{Representing Protobuf Descriptors}
+
+\subsection{Compatibility Checking with \fstar{} Types}
+
+When a protobuf message is encoding, field names are stripped out in favor of
+field numbers and the type is reduced to a field tag, which are manually defined in the protobuf
+schema. Consider the two \texttt{proto} snippets below:
+
+\begin{figure}[H]
+	\centering
+	\begin{minipage}[bt]{0.4\textwidth}
+		\begin{lstlisting}[language=proto]
+message Foo {
+    int32 bar = 1;
+}\end{lstlisting}
+	\end{minipage}
+	\hspace{1cm}
+	\begin{minipage}[bt]{0.4\textwidth}
+		\begin{lstlisting}[language=proto]
+message Foo {
+    int32 bar = 2;
+}\end{lstlisting}
+	\end{minipage}
+
+	\caption[]{Example showing the importance of including proto field numbers in
+		compatibility checking.}
+\end{figure}
+Any invocation of \texttt{protoc} will generate exactly the same
+application-facing code, even though a message generated using the left proto
+file will be parsed to an empty message by the right proto file. This is an
+example why just looking at a message value isn't sufficient to check the
+compatibility between two messages. 
+
+Instead, Pollux chooses to 
+
+\[
+\begin{array}{rll}
+	\mathtt{desc}            & : Type & \text{Type of a Protobuf descriptor} \\
+	\mathtt{msg}             & : Type & \text{Type of a Protobuf message value}  \\
+    \mathtt{wf}              & : \mathtt{desc} \rightarrow \mathtt{msg} \to Prop &
+                               \text{well-formed proposition} \\
+	\llbracket \cdot \rrbracket & : \mathtt{m:msg\{wf\ d\ m\}} & \text{A message
+                              well-formed w.r.t a descriptor} \\
+	parse                       & : (d:\mathtt{Desc}) \rightarrow \mathtt{Bytes} \rightarrow option\
+	\llbracket d \rrbracket     & \text{Parse function} \\
+	serialize                   & : (d:\mathtt{Desc}) \rightarrow \llbracket d \rrbracket
+                                  \rightarrow \mathtt{Bytes} & \text{Serialize function}
+\end{array}
+\]
+
+Several shorthands arise from this, namely $parse_d : \mathtt{Bytes} \rightarrow option\
+	\llbracket d \rrbracket$ for the partial application of a descriptor $d$ to
+$parse$. The same thing can be done for $serialize_d : \llbracket d \rrbracket \rightarrow
+	\mathtt{Bytes}$, which naturally become more traditional definitions of a parser and serializer.
+
+% Local Variables:
+% citar-bibliography: ("../pollux.bib")
+% TeX-master: "../pollux.tex"
+% End:

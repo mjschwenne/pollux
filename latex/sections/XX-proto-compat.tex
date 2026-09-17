@@ -1,0 +1,70 @@
+\section{Protobuf Compatibility Definitions}~\label{sec:comp-def}
+
+\begin{definition}[Encoding Field]
+	An encoding field is a tuple $(id, tag, value)$ which encodes the field
+	number, tag and value of one field of a proto descriptor.
+\end{definition}
+
+Just like how the message descriptor is a sequence of field descriptors, the
+encoding type of a message is an ordered list of encoding fields.
+
+\vspace{1em}
+\begin{definition}[Field Compatibility]
+	For fields $f_1 = (id_1, tag_1, v_1)$ and $f_2 = (id_2, tag_2, v_2)$, $f_2$
+	with descriptor $d_2$ is a compatible update to $f_1$ with descriptor $d_1$ if
+	$id_1 = id_2$ and for all values $v_1$, $serialize_{d_1}\ f_1 = bs$ and there
+	exists a $v_2$ such that $parse_{d_2}\ bs = v_2$ and $v_1 \prec v_2$ according to
+	some relation $\prec$.
+\end{definition}
+
+An example value relation is given in Section~\ref{sec:val-rel}.
+
+\vspace{1em}
+\begin{definition}[Message Compatibility]
+	A protobuf message descriptor $d_2$ is a compatible update to $d_1$ if every
+	field in $d_1$ has a compatible field in $d_2$.
+\end{definition}
+
+Formally speaking, the message compatibility relation ($\preceq$) is given in
+Section~\ref{sec:comp-rel}.
+
+\vspace{1em}
+\begin{definition}[Tag Function]
+  The tag function $tag : \text{Type} \rightarrow \text{Tag}$ maps the \texttt{proto}
+  level type to the corresponding tag as listed in Table~\ref{tab:tags}.
+\end{definition}
+
+It is also important to understand the default values of each protobuf
+type. When a field is serialized with the default value or not set in the
+message, the parser places the default value in the resulting struct. The
+primary difference between an implicit field and an optional field is that the
+optional field can differentiate between the serialized field being omitted from
+the message or being present, but having the default value.
+
+\vspace{1em}
+\begin{definition}[Default Function]
+  The default function
+  $default: (t:\text{proto type}) \rightarrow \llbracket t \rrbracket$ returns the default
+  value for each type.
+  
+  \[ default(t) = \left\{ 
+    \begin{array}{l@{\quad:\quad}l}
+      0 & t \in \left\{\begin{array}{c}
+        \mathtt{int32}, \mathtt{int64}, \mathtt{uint32},
+        \mathtt{uint64}, \mathtt{sint32}, \mathtt{sint64}, \\ \mathtt{fixed32},
+        \mathtt{fixed64}, \mathtt{sfixed32}, \mathtt{sfixed64}, \mathtt{enum}
+      \end{array}\right\} \\
+      \mathtt{false} & t \text{ is } \mathtt{bool} \\
+      "" & t \text{ is } \mathtt{string} \\
+      % 0 width space needed so that the brackets don't parse as a distance to
+      % space out the elements of the array... for some unknown reason.
+      \hspace{0pt}[\;] & t \text{ is } \mathtt{bytes}
+    \end{array}\right.
+  \]
+\end{definition}
+
+% Local Variables:
+% citar-bibliography: ("../pollux.bib")
+% TeX-master: "../pollux.tex"
+% jinx-local-words: "protobuf"
+% End:

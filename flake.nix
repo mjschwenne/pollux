@@ -1,117 +1,112 @@
 {
-  description = "A Flake for Pollux development in Rocq";
+  description = "A Flake for Pollux; a Research Project on Data Descriptor Compatilbilty";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
+    flake-parts = {
+      url = "github:hercules-ci/flake-parts";
+      inputs.nixpkgs-lib.follows = "nixpkgs";
+    };
     perennial.url = "github:mit-pdos/perennial";
     lean4-nix.url = "github:lenianiva/lean4-nix";
   };
+
   outputs =
-    {
-      nixpkgs,
-      flake-utils,
-      perennial,
-      lean4-nix,
-      ...
-    }:
-    flake-utils.lib.eachDefaultSystem (
-      system:
-      let
-        pkgs = import nixpkgs {
-          inherit system;
-          config.allowUnfreePredicate =
-            pkg:
-            builtins.elem (pkgs.lib.getName pkg) [
-              "claude-code"
-              "claude-agent-acp"
-              "aristotlelib"
-            ];
-          overlays = [ (lean4-nix.readToolchainFile ./lean/lean-toolchain) ];
-        };
-        pollux-go = pkgs.callPackage ./pollux-go { };
-        inherit (perennial.packages.${system}) perennialPkgs;
-        perennial-pkg = perennial.packages.${system}.default;
-        rocq-build = pkgs.callPackage ./nix/pollux-rocq {
-          inherit perennialPkgs;
-          perennial = perennial-pkg;
-        };
-        lean-build = pkgs.callPackage ./nix/pollux-lean { };
-        aristotle = pkgs.python314Packages.callPackage ./lean/aristotle.nix { };
-      in
-      {
-        packages = {
-          inherit pollux-go rocq-build lean-build;
-          default = rocq-build;
-        };
-        devShells.default =
-          with pkgs;
-          mkShell {
-            buildInputs = [
+    inputs@{ flake-parts, ... }:
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "x86_64-darwin"
+        "aarch64-darwin"
+      ];
+
+      imports = [
+        ({ flake-parts-lib, ... }: {
+          options.perSystem = flake-parts-lib.mkPerSystemOption (
+            { lib, ... }: {
+              options.polluxNixpkgs = {
+                overlays = lib.mkOption {
+                  type = lib.types.listOf (
+                    lib.mkOptionType {
+                      name = "nixpkgs-overlay";
+                      check = builtins.isFunction;
+                      merge = lib.mergeOneOption;
+                    }
+                  );
+                  default = [ ];
+                };
+                allowUnfreeNames = lib.mkOption {
+                  type = lib.types.listOf lib.types.str;
+                  default = [ ];
+                };
+              };
+            }
+          );
+        })
+
+        ./eval/flake-module.nix
+        ./lean/flake-module.nix
+        ./pollux-go/flake-module.nix
+        ./latex/flake-module.nix
+        ./rocq/flake-module.nix
+      ];
+
+      perSystem =
+        {
+          config,
+          pkgs,
+          system,
+          lib,
+          ...
+        }:
+        {
+          # Configure the nixpkgs instance to use the overlays and unfree packages
+          _module.args.pkgs = import inputs.nixpkgs {
+            inherit system;
+            inherit (config.polluxNixpkgs) overlays;
+            config.allowUnfreePredicate =
+              pkg: builtins.elem (lib.getName pkg) config.polluxNixpkgs.allowUnfreeNames;
+          };
+
+          polluxNixpkgs.allowUnfreeNames = [
+            "claude-code"
+            "claude-agent-acp"
+          ];
+
+          # Output packages from Pollux
+          packages = {
+            default = config.packages.lean-build;
+          };
+
+          devShells.default = pkgs.mkShell {
+            buildInputs = with pkgs; [
               # Protobuf Deps
               protobuf
-              protoc-gen-go
               protoscope
               buf
 
-              # Go deps
-              go
-              gopls
-              pollux-go
-
               # Misc utilities
               just
-              nushell
               gnumake
-              xxd
-
-              # eval utilities
-              gh
-              jq
-              (python314.withPackages (
-                ps: with ps; [
-                  python-lsp-server
-                  pyright
-                  numpy
-                  # nptyping
-                  scipy
-                  pandas
-                  pandas-stubs
-                  polars
-                  altair
-                  vl-convert-python
-                  requests
-                  rich
-                  aristotle
-                ]
-              ))
-
-              # nushell is great for command line polars queries
-              nushell
-              nushellPlugins.polars
-
-              # lean proofwidgets dep
-              nodejs-slim
 
               # nix helpers
               nix-update
+
+              # AI "helpers"
               claude-code
               claude-agent-acp
-            ]
-            ++ (with perennialPkgs; [
-              rocq-runtime
-              rocq-stdlib
-              coq-coqutil
-              coq-record-update
-              rocq-stdpp
-              rocq-iris
-              iris-named-props
-              perennial-pkg
-            ])
-            ++ (with pkgs.lean; [
-              lean-all
-            ]);
+            ];
 
+            inputsFrom = [
+              config.devShells.lean
+              config.devShells.eval
+              config.devShells.go
+              config.devShells.latex
+              config.devShells.rocq
+            ];
+
+            # shellHook can't be sharded through inputsFrom, that only grabs buildInputs, not the hooks
             shellHook = ''
               export ROCQPATH=$COQPATH
               unset COQPATH
@@ -119,6 +114,6 @@
               export ARISTOTLE_API_KEY=$(cat ../aristotle.txt)
             '';
           };
-      }
-    );
+        };
+    };
 }

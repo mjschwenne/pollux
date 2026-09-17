@@ -1,0 +1,314 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{bbold}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\usepackage{amsthm}
+\usepackage{nicematrix}
+\usepackage{mathpartir}
+\usepackage{parskip}
+\usepackage{float}
+\usepackage[margin=1in]{geometry}
+\usepackage{tikz}
+\usetikzlibrary{positioning,calc,snakes,automata,arrows.meta}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{listings}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{stmaryrd}
+\usepackage{tcolorbox}
+\usepackage[backend=biber,sorting=ynt]{biblatex}
+\addbibresource{pollux.bib}
+\author{Matt Schwennesen}
+\title{Pollux: Finding the Right Tool for the Job}
+\date{}
+\hypersetup{
+ pdfauthor={Matt Schwennesen},
+ pdftitle={Pollux},
+ pdfkeywords={},
+ pdfsubject={},
+ pdflang={English},
+ colorlinks=true,
+ urlcolor=blue,
+}
+
+\newcommand{\fstar}{F$^\star$}
+\renewcommand{\emptyset}{\varnothing}
+
+\newtcolorbox{info}{colback=blue!5!white,colframe=blue!75!white,fonttitle=\bfseries,title={Information}}
+\newtcolorbox{risk}{colback=red!5!white,colframe=red!75!black,fonttitle=\bfseries,title={Risk}}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{Introduction \& Motivation}
+
+Pollux is my project aiming to perform compatibility checking on data
+descriptors, such as Protobuf, ASN1, CDDL, JSONschema, etc. The current first
+pass implementation uses the \fstar{} programming language, however given the
+slow development progress and some limitations in the language, it is time to
+re-examine if it's the right tool for the job.
+
+This document will explore the pros, cons, potential contributions, risks,
+limitations and future work of continuing development of Pollux in \fstar{} or
+moving to Rocq.
+
+General goals for an artifact produced from Pollux would include:
+\begin{itemize}
+\item Check compatibility between two input descriptors. 
+\item Show how a well-formed blob under the version 1 descriptor would be
+  transformed under the version 2 descriptor.
+\end{itemize}
+
+Either implementation would have to make a choice about a once-and-for-all
+verification or proof generating verification. I believe that regardless of
+which language is selected, a once-and-for-all approach is a stronger
+contribution. Grackle, which uses a proof generating approach, does not have a
+proof that it can generate correct proofs of all Protobuf descriptors using only
+supported features. Some odd combination of fields could cause issues that
+Grackle can't prove. That issue is resolved in the once-and-for-all case which
+would prove that all compatible descriptors are actually compatible and that
+false positives are not allowed.
+
+\section{\fstar{} Introspective}
+
+Pollux originally selected \fstar{} due to a combination of language strengths
+and prior work, namely Everparse \cite{ramananandroEverParseVerifiedSecure2019}
+and it's subsequent work ASN1$^{\star}$ and EverCBOR
+\cite{ramananandroSecureParsingSerializing2025,niASN1ProvablyCorrect2023}. Our
+hope was that an existing parser combinator library with several pre-written
+verified parsers would be a jumpstart on the \fstar{} development for Pollux. If
+the Pollux development could take any everparse parser with a suitable
+compatibility relation(s) and perform compatibility checks, it would be a huge
+benefit for quickly expanding compatibility checking into new formats. Other
+strengths of \fstar{} include a mature machine integer library with accompanying
+theory of bit-wise integer operators. \fstar{} itself can be extracted into an
+executable OCaml program by default or idiomatic C using Low$^{\star}$, the latter
+of which could be particularly interesting for publication to a systems
+conference or useful if Pollux wished to export a runtime parser and serializer
+for use by a host program.
+
+\section{\fstar{} Contributions}
+
+\begin{info}
+  This following sections imagines that the \fstar{} implementation is complete
+  and the technical challenges were resolved favorably. It is presented as a
+  hypothetical excerpt from a conference paper.
+\end{info}
+
+In this work, we wrote a verified compatibility checker for Protobuf and CBOR
+with CDDL using the \fstar{} proof programming language. In addition to the
+extracted artifact, we also provide the first compatibility relations for these
+formats to formally describe compatible updates, as well as formally defining
+parser compatibility. The latter is done via a value relation which captures how
+individual values are affected by the descriptor update. While treated by Pollux
+as part of the compatibility definition, the specific rules have been tested
+with property based testing against the Go protobuf implementation and everparse
+extracted CDDL and CBOR parser.
+
+\section{\fstar{} Implementation}
+
+Pollux is implemented in the \fstar{} programming language and takes advantage
+of the everparse library and some of the everparse developed parsers.  
+
+\begin{risk}
+  I don't know if it's possible to integrate into the existing everparse parsers
+  like this without a major rewrite or extension to the base everparse library.
+\end{risk}
+
+Some language limitations include a lack of any meaningful support for floating
+point numbers, although this is a minor limitation since floating point numbers
+have extremely limited compatibility with other fields. One benefit of using
+\fstar{} is the machine integer library and accompanying theory of bit-wise
+operators, which are prevalent in complex parsers. Even so, everparse isn't a
+perfect choice since it is focused on secure parsers and thus the developed
+parsers tend to have non-malleability requirements which isn't a required
+feature for the parsers used by Pollux. To provide at least one primary example
+without strong security considerations, our Protobuf parser is written with
+everparse but doesn't enforce these security properties.
+
+\begin{info}
+  The current \fstar{} Protobuf parser and serializer doesn't use any everparse
+  code, but I believe that the final result would be more compelling if it did.
+\end{info}
+
+\begin{risk}
+  The ASN1 parser doesn't actually preserve the parsed value, which limits it's
+  usefulness to Pollux since we care a lot that not only does parsing succeed,
+  the resulting value is transformed in a specific way.
+
+  \tcblower{}
+
+  The CDDL tool provided by Everparse appears to take a \texttt{protoc}
+  code-generation approach an claims to produce an \fstar{} file to with a
+  verified parser for the specific messages in the input CDDL file. However,
+  even using CDDL snippets directly from the CDDL
+  specification~\cite{birkholzConciseDataDefinition2019}, the tool throws error
+  messages without producing any output.
+\end{risk}
+
+Since everparse and the related Project Everest work have a strong security
+focus, they may be interested in compatibility from the prospective of how
+updates to instances of formats written in these data description languages are
+effected by updates to the format. One example might be the X509 certificate,
+which has undergone several updates over the decades. This would be particularly
+interesting for formats and standards were the version number isn't explicitly
+encoded in the payload~\footnote{It is worth noting that the X509 certificate
+  does include the version number. It was just a convenient example form the
+  ASN1$^{\star}$ paper.}. 
+
+\section{\fstar{} Future Work}
+
+There are a few directions which might yield interesting future work. The most
+obvious direction, however, is the least feasible. That would be to extend the
+scope of Pollux laterally and consider what happens to the host program if it
+ingests the related, updated value of a message. This would require an extensive
+program logic for any other language~\footnote{Except maybe \fstar{} itself, but
+  general purpose programs aren't typically written in \fstar{}.}, which is
+beyond the current scope of this work. Another promising avenue for future work
+could be to examine updates to parser internals. If two parsers both claim to be
+parsers for the same format, or perhaps an update to one parser, do they
+actually parse the same language? Perhaps they parse a related language? This
+would also likely need a program logic and everparse parsers aren't helpful here
+since they're formally verified, so any two implementations verified against the
+same specification will parse the same format. Finally, the data descriptor
+languages also get updated from time to time. It may be interesting to
+investigate the same descriptor ported across multiple descriptor languages with
+the same or nearly similarly compatible binary wire format. My instincts say
+it's unlikely to have a update like this which doesn't really change the
+encoding language, but the Protobuf 2 to Protobuf 3 update or some of the
+Protobuf editions updates might be compatible enough.
+
+\section{Rocq Introspective}
+
+While \fstar{} is an automated verification language backed by an SMT solver,
+Rocq is a manual proof assistant with proofs composed of a sequence of user
+provided tactics. Rocq (formerly known as Coq), is an established and mature
+proof assistant with decades of usage. It's also the proof assistant that my
+other project Grackle uses, and is the host proof assistant of perennial, a
+verification framework for Go programs.   
+
+\section{Rocq Contributions}
+
+\begin{info}
+  This following sections imagines that the Rocq implementation is complete
+  and the technical challenges were resolved favorably. It is presented as a
+  hypothetical excerpt from a conference paper.
+\end{info}
+
+In this work, we wrote a verified compatibility checker for Protobuf and CBOR
+with CDDL using the Rocq proof assistant. The artifact is extracted from the
+Rocq code to OCaml and builds on the Perennial verification
+framework. Accompanying the artifact is a verified Go protobuf library, using
+the formalized Protobuf specification, as well as a verified Go CBOR and CDDL
+library using the formalized specification for those languages. In addition to
+the extracted artifact and verified Go libraries, we provide first compatibility
+relations for these formats to formally describe compatible updates, as well as
+formally defining parser compatibility. The latter is done via a value relation
+which captures how individual values are affected by the descriptor
+update. While treated by Pollux as part of the compatibility definition, the
+specific rules have been tested with property based testing against the go
+protobuf implementation and CBOR + CDDL libraries.
+
+\begin{info}
+  You may notice that the \fstar{} section mentioned a different CBOR and CDDL
+  implementation (specifically the everparse one). While there are widely used
+  CBOR libraries, there doesn't seem to be a ``canonical'' CDDL validator
+  implementation. The best supported one seems to be the
+  \href{https://github.com/anweiss/cddl}{Rust library}, but there are also a
+  \href{https://github.com/HannesKimara/cddlc}{Go library}. The original CDDL
+  specification \cite{birkholzConciseDataDefinition2019} references a Ruby
+  implementation, and while that package is still on the
+  \href{https://rubygems.org/gems/cddl/versions/0.8.8}{Ruby gems repository} the
+  original repository for the tool seems to have been taken down.
+\end{info}
+
+\section{Rocq Implementation}
+
+Pollux is implemented in the Rocq proof assistant and takes advantage of the
+perennial verification framework. Some limitations of the implementation include
+limited support of the bit-wise operators~\footnote{I'm not actually sure if
+  this is true, but I've personally never seen any bit-wise operation in
+  perennial.} needed for performant parsers and floating point numbers within
+perennial itself, although Rocq itself does have libraries which provide these
+capabilities (including \href{https://gitlab.inria.fr/flocq/flocq/}{flocq} and
+\href{https://github.com/rocq-community/bits}{bits}). Support for these types of
+data was developed and improved in Perennial, enabling there use in the verified
+go libraries. Unlike using a parser combinator library such as everparse in the
+\fstar{} implementation, existing parsers for these formats are not part of the
+perennial ecosystem, requiring these parsers to be implemented from scratch. 
+
+\begin{risk}
+  Excluding floating point numbers, with limited or non-existent support in
+  either language, there is potentially more setup work required to the Rocq
+  implementation, such as bit-wise operators. While there is also no structured
+  parser combinator framework here, forcing me to write parsers manually, I do
+  have experience with that via Grackle.
+\end{risk}
+
+The extracted OCaml artifact uses the specification level implementation of the
+formats, which are also used to verify a pair of Go libraries using the
+Perennial framework. The specification level implementation has been tested
+against canonical or widely used protobuf and CBOR libraries.
+
+\section{Rocq Future Work}
+
+The Rocq implementation has several directions of potential future work, which
+largely mirror potential future work of the \fstar{} implementation. Perhaps the
+most interesting is to expand the work to consider the behavior of the
+surrounding code as it ingested an updated value from the parser. The data
+descriptor languages were originally chosen for this project since they
+represent a non-trivial silo of software updates without the full complexity of
+arbitrary software updates. While I would like to push the boundaries of this
+silo out, I don't think that Pollux can be expanded into arbitrary software
+updates directly. We would need to find another boundary which includes some
+arbitrary code, but code with a specific, unchanging purpose which informs the
+definition of compatibility. This would be much more feasible in Perennial with
+Rocq then in \fstar{}, which doesn't have any equivalent verification framework
+for reasoning about real world programming languages. Likewise, the \fstar{}
+future work about verifying two parsers parse the same language could be done in
+Perennial with the same amount or less work than in \fstar{}.
+
+\section{Conclusion}
+
+There are strong reasons to consider transitioning Pollux to use Rocq rather
+than \fstar{}. The strongest of these reasons lay in the future work sections,
+where \fstar{} is particularly hampered by not having a mature verification
+framework which would allow future work to consider the behavior of real world
+code. One other auxiliary advantage that Rocq holds over \fstar{} is that it
+that this work could be easily used to verify an actual Protobuf and CBOR Go
+implementation. My other project Grackle could also benefit from a verified
+Protobuf library.
+
+Not discussed above, but worth noting during the consideration of which proof
+assistant to use, is the availability of learning resources. \fstar{} has a book
+which effectively walks you through some interesting examples. On the other
+hand, Rocq has the \emph{Software Foundations} series, an excellent learning
+resource to learn the base proof assistant and numerous other textbooks based on
+the 36 year old proof assistant. More specifically, Everparse itself is a
+complicated code base with essentially no documentation or learning resources
+available. While Perennial doesn't have much official documentation, Tej
+Chajed's CS 839 course notes provide a nice introduction and he is also
+available to help me learn Perennial as an original author of Perennial and
+long-time contributor.
+
+\printbibliography{}
+\end{document}
+
+% Local Variables:
+% citar-bibliography: ("./pollux.bib")
+% jinx-local-words: "serializer"
+% End:

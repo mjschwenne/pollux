@@ -194,7 +194,7 @@ in
 stdenv.mkDerivation {
   pname = "pollux-lean";
   version = "unstable";
-  src = ../../lean;
+  src = lib.fileset.difference ./. (lib.fileset.fileFilter (f: f.hasExt "nix") ./.);
 
   nativeBuildInputs = [
     lean.lean-all

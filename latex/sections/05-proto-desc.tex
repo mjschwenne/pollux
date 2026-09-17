@@ -1,0 +1,417 @@
+\section{Protobuf Descriptor Design}\label{sec:proto-desc}
+
+The intermediate encoding format used a custom extensionality theorem over a
+descriptor structured as a list to show that descriptors were equal. This was
+required since Lean's finite maps (unlike Rocq's \texttt{gmap}) can't be placed
+inside of inductive types. That's a clunky choice which was not what I wanted
+when I told Aristotle ``I want extensionality on my descriptors'', but I kinda
+just lived with it. Well, the full protobuf descriptors we're taking a more
+principled approach that can fall back on the vast support of Mathlib.
+
+\subsection{Protobuf Descriptors in Lean}
+
+Instead, the full protobuf descriptors take a different approach, using a
+dependently typed list internally but exposing a view of the descriptor using a
+proper finite map.
+
+\begin{minted}{lean}
+inductive ScalarType where
+  | double | float | int32 | int64 | uint32 | uint64
+  | sint32 | sint64 | fixed32 | fixed64 | sfixed32 | sfixed64
+  | bool | string | bytes
+
+inductive Cardinality where
+  | singular | optional | repeated | oneof (group : Nat)
+
+mutual
+inductive Desc      where | mk (es : List ((_ : Int) × Field))
+inductive Field     where | mk (card : Cardinality) (ty : FieldType)
+inductive FieldType where | scalar (s : ScalarType) | msg (d : Desc)
+end
+\end{minted}
+
+Outside of Lean, we'll use this syntax for the Protobuf descriptors.
+
+\begin{figure}[H]
+  \centering
+  \begin{syntax}
+    \categoryFromSet[Naturals]{n}{\mathbb{N}}
+
+    \category[Scalar Type]{\tau_s}
+    \alternative{\double}
+    \alternative{\float}
+    \alternative{\ints}
+    \alternative{\intl}
+    \groupleft{
+        \alternative{\uints}
+        \alternative{\uintl}
+        \alternative{\sints}
+        \alternative{\sintl}
+    }
+    \groupleft{
+      \alternative{\fixeds}
+      \alternative{\fixedl}
+      \alternative{\sfixeds}
+      \alternative{\sfixedl}
+    }
+    \groupleft{
+      \alternative{\bool}
+      \alternative{\str}
+      \alternative{\byt}
+    }
+
+    \category[Cardinality]{c}
+    \alternative{\sig}
+    \alternative{\opt}
+    \alternative{\rep}
+    \alternative{\oneof{n}}
+
+    \category[Field]{f}
+    \alternative{\langle c, \tau_s \rangle}
+    \alternative{\langle c, d \rangle}
+
+    \category[Field List]{l}
+    \alternative{\texttt{[]}}
+    \alternative{(n, f) :: l}
+
+    \category[Reserved Set]{r}
+    \alternative{\varnothing_r}
+    \alternative{n, r}
+
+    \category[Descriptor]{d}
+    \alternative{\llangle r, l \rrangle}
+  \end{syntax}
+  \caption{Pollux syntax for Protobuf descriptors.}\label{fig:proto-desc-syn}
+\end{figure}
+
+An alternative representation of the reserved set is to insert an artificial
+empty type, which all other types can be updated to but cannot be updated to any
+other type itself. Then ``removing'' a field is updating a field to this empty
+type $\bot$ and that would prevent that field from ever being added again,
+enforcing the same mechanism as the reserved field set.
+
+The use of the sigma type is important, since it let's us tie into the existing
+Mathlib infrastructure for building a finite map from from the list
+internals. The basic idea is that the descriptor itself is \emph{sealed}, and we
+can explode one layer at a time to get a view of the descriptor through the lens
+of a finite map which should enable reasoning about the descriptor using the
+theory from Mathlib. This approach also is designed to respect these
+requirements:
+
+\begin{itemize}
+\item \textbf{Kernel Acceptance.} Clearly we need a representation that Lean can
+  handle. Under this choice, we're not storing the map directly but are still
+  able to indirectly access other theorems about it.
+\item \textbf{Extensionality.} The existing formulation certain variants of the
+  compatibility theorems state that we recover not an equivalent value, but an
+  \emph{equal} value, which \texttt{Finmap} provides.
+\item \textbf{Termination Measures.} Since we have nested messages, we need to
+  ensure that we can safely traverse the descriptor and recurse on the
+  descriptor. Pervious formats, like the intermediate one, defined a custom
+  termination metric by noting that the depth nested descriptor must be smaller
+  than the containing descriptor. This works well for tree-like descriptors, but
+  Protobuf does support recursive and mutually-recursive messages definitions,
+  which cannot be represented by this descriptor type.
+\item \textbf{Forward Compatibility.} Protobuf can represent it's own
+  descriptors, but not without recursive messages. Eventually we'll have to
+  support getting a descriptor into the Lean formalization, and one option is to
+  model a descriptor as a value of \texttt{descriptor.proto} and then build the
+  descriptor from that information. This is common in real-world protobuf
+  implementations, and the sealed design should still work for this approach.
+\end{itemize}
+
+There is a well-formedness requirement on descriptors, one coming from the
+internal structure of the descriptor in Lean (Definition~\ref{def:dwf}) and the
+other from the Protobuf compiler (Definition~\ref{def:dlegal}).
+
+\vspace{1em}
+\begin{definition}[Descriptor Well-Formedness]\label{def:dwf}
+  A descriptor $d$ is well-formed, denoted $d \checkmark_w$, if all fields in
+  the descriptor have a unique field number, the fields are stored in sorted
+  order, and all nested descriptors are also well-formed.
+\end{definition}
+
+\vspace{1em}
+\begin{definition}[Legal Descriptor]\label{def:dlegal}
+  A descriptor $d$ is legal, denoted $d \checkmark_l$, if
+  \begin{itemize}
+  \item All field numbers are between 1 and $2^{29}-1$, excluding the range
+    19,000 to 19,999, which are reserved by the Protobuf compiler.
+  \item Message fields are always explicitly marked as optional. This conforms
+    with Protobuf, which will generate a method to check message presence, and
+    will allow us to initialize recursive messages.
+  \item All nested descriptors within $d$ are also legal.
+  \end{itemize}
+\end{definition}
+
+In preparation for needing to support recursive messages, Pollux uses
+well-founded recursion on the size of the descriptor through the \texttt{get?}
+interface. We define a function to compute the size of the descriptor below.
+
+\vspace{1em}
+\begin{definition}[Descriptor Size]\label{def:dsize}
+  The size of a descriptor $d$ is defined as $\mathrm{size}_d$ below.
+  \begin{mathpar}
+
+    \mathrm{size}_d\left(\llangle r, l \rrangle\right) = 1 + \mathrm{size}_d(l)
+
+    \mathrm{size}_d(\langle \_, \tau_s \rangle) = 1
+    
+    \mathrm{size}_d(\langle \_, d \rangle) = 1 + \mathrm{size}_d(d) 
+
+    \mathrm{size}_d(l) =
+    \begin{cases}
+      0 & \text{if } l = \texttt{[]} \\
+      \mathrm{size}_d(f) + \mathrm{size}_d(l') & \text{if } l = (\_, f) :: l'
+    \end{cases}
+  \end{mathpar}
+\end{definition}
+
+Finally, the \texttt{oneof} cardinality needs some explanation. When looking at
+the syntactic structure of a Protobuf message in a \texttt{.proto} file, the
+logical way to model a \texttt{oneof} is likely to have a set of fields or some
+other similar grouped structure. However, this isn't how Protobuf actually
+models a \texttt{oneof} internally, and there are good reasons for Pollux to
+follow their lead. 
+
+\begin{itemize}
+\item Members of a \texttt{oneof} share a field number namespace with the rest
+  of the message. You can't define a field with identifier $n$ in two
+  \texttt{oneof}'s in the same message, and using the \texttt{oneof} cardinality
+  like we have it lets the well-formedness condition handle this automatically.
+\item A \texttt{oneof} field doesn't have a unique field number, so there is no
+  key available to insert a dedicated \texttt{oneof} representation into the
+  finite map the descriptor is modeled as.
+\item A field in a \texttt{oneof} can't be repeated, and \texttt{oneof}'s can't
+  be empty. Both of those requirements are structurally impossible.
+\item The Protobuf underlying \texttt{oneof} index isn't evolution stable, since
+  introducing a new \texttt{oneof} will shift the assigned index of everything
+  later. This complicates the \texttt{oneof} compatibility rules, but at least
+  by adopting the same representation, everything is transparent.
+\item If a program called \texttt{get?} with a field in a \texttt{oneof}, the
+  \texttt{get?} operation would need to explore the inside of the \texttt{oneof}
+  (via a mechanism perhaps similar to \texttt{explode}) anyways.
+\end{itemize}
+
+Fortunately, checking equality on the natural number included with each
+\texttt{oneof} cardinality provides the required information. Even with a nested
+or grouped representation, the parser would still have to manually unset the
+previously set field, so this representation doesn't add any unnecessary work.
+
+\subsection{Sealed \& Unsealed}
+
+While the descriptor internals use a sorted listed, the public interface should
+respect a \emph{seal} by convention (lean doesn't have great mechanisms to mark
+things private or opaque). The public interface is this: 
+
+\begin{minted}{lean}
+def explode (d : Desc) : Finmap (fun _ : Int => Field) :=
+    d.entries.toFinmap
+def get?    (d : Desc) (k : Int) : Option Field := d.explode.lookup k
+\end{minted}
+
+Where \texttt{explode} unwraps the outer-most descriptor into a Mathlib
+\texttt{Finmap}, enabling proofs to use the established \texttt{Finmap}
+theory. Because \texttt{Finmap} quotients over the ordering of values in the
+map, the sorted-list invariant is invisible most consumers of the interface, as
+long as they use the provided mechanisms when inserting into a descriptor. Some
+operations do still require the well-formed predicate, such as extensional
+equality, deletions and a helpful lemma which shows that if two descriptors have
+the same exploded result, they must be the same descriptor.
+
+Descriptors should be sealed. Looking at how the code for the intermediate
+format is structured, descriptors are never consumed more than one layer at a
+time. The serializer iterates values, not the descriptor. While looking at a
+message, we check against fields as we encounter them in the value.
+
+However, values do need to iterated over and are the basis for round-trip
+proofs. Sealing the values within the parser and serializer implementation would
+create more work than we desire, although the theorems will still be able to use
+a variant of the explode operator if it makes more sense.
+
+\subsection{Considerations about Ordering \& Determinism}
+
+The Protobuf spec permits serializing and parsing fields in any order, which
+seems at odd with the choice to represent the fields in a sorted list. It should
+be possible to explode a layer and use the undefined iteration order of the
+\texttt{Finmap} to be as generalize as possible with regards to that Protobuf
+spec. However,
+
+\begin{itemize}
+\item Having the serializer return data in any order would mean that it isn't a
+  pure function, which is difficult to represent in Lean. We could quotient over
+  the ordering of the fields, but then we'd have to prove that every other
+  function consuming the serialized output also respects the quotient type,
+  which is possible but a lot of work.
+\item The exact output from the parser is descriptor dependent as well as value
+  dependent (recall that we can't know what value is encoded without needing to
+  to a descriptor, see Section~\ref{sec:philosophy}). Having both align as an
+  ordered list reduces map equivalences to syntactic list equality.
+\item The Protobuf spec is also adding a requirement to the parser, that is has
+  to be able to handle encodings which were produced with the fields in an
+  arbitrary order, with last field wins semantics. The existing \texttt{ParseOk}
+  definition used for the intermediate formalization only requires the parser to
+  be correct on the output of our own serializer, not any possible encoding. It
+  will need to be extended with a relational specification which allows the
+  maximum possible amount of non-determinism. The soundness requirement for this
+  specification would require that our serializer produces values that satisfy
+  the relational spec while completeness would require that any encoding in the
+  relational specification can be parsed correctly.
+\end{itemize}
+
+\subsection{New Protobuf Features}
+
+There are three new, notable features in Protobuf that were missing from the
+intermediate formate entirely.
+
+\begin{itemize}
+\item \textbf{Cardinality.} The intermediate format only had scalar values, but
+  full Protobuf has repeated values. (Optional values and implicit values are
+  already extremely similar, so the addition of repeated values is the most
+  important). 
+\item \textbf{Maps.} Maps are easy to support since we can just desugar them, as
+  described in Section~\ref{sec:proto}, with a few additions for the
+  restrictions on map key type and the like.
+\item \textbf{Oneof.} On the wire, a \texttt{oneof} is invisible. There is no
+  information included in the wire level format to describe that a field is in a
+  \texttt{oneof}, it's another one of those things that we have to have a
+  descriptor to know about. Individual fields still have their own field number,
+  which is encoded, that comes from the name space of the whole message. The
+  \texttt{oneof} really adds a parser semantic requirement about clearing the
+  old field if we encounter a new encoded field in the same \texttt{oneof}, and
+  overall constraint on the final message that at most one of the fields will be
+  set. The \texttt{oneof} is then represented as a cardinality, with some extra
+  information to determine which \texttt{oneof} in the message this field
+  belongs to. This exactly mirrors how the \texttt{descriptor.proto} operates,
+  and we can use natural number equality to scan the value and clear old set
+  fields when needed. Since each field has exactly one cardinality, this already
+  enforces that we can't have repeated fields inside a oneof and that a oneof
+  can't be empty.
+\end{itemize}
+
+\subsection{Omitted Protobuf Features}
+
+At the moment, these features are \emph{not} modeled in Pollux. Adding support
+for them should be relatively straight-forward. If I've already developed
+relevant rules for them, they might be included in a different color.
+
+\textbf{Some of these features will likely be added before the work is complete.}
+
+\begin{itemize}
+\item \textbf{Reserved field numbers.} Protobuf doesn't recommend reusing field
+  numbers for new fields (i.e.\ removing a field, then later adding a field with
+  that same number), and that also poses a challenge to Pollux. If a field were
+  added which uses and old field number, Pollux would assume that the intent is
+  for the new field to be compatible with the old one. Since we expect the
+  compatibility relation to be transitive, any evolving derivation of that
+  message would attempt to force a connection between two fields that are
+  semantically unrelated.
+
+  Fortunately, Protobuf has a mechanism for this, reserved field numbers. You
+  can set specific field numbers as reserved, then the protobuf compiler will
+  ensure that you don't add a field with that number to the message in the
+  future. Pollux will also enforce this, even though the Lean formalization
+  doesn't track it \emph{yet}.
+
+\item \textbf{Field names.} Every Protobuf field has a name, which is used in
+  the generated code from \texttt{protoc}. These names aren't recorded at all in
+  the wire format, but do impact the compatibility of a change with the rest of
+  your code. At the moment, that's considered beyond the scope of Pollux.
+
+\item \textbf{Reserved field names.} Like reserved field numbers, you can also
+  reserve field names. Pollux's stance is that this is outside the domain we're
+  targeting, but could be added with mechanisms similar to the reserved field
+  number.
+
+\item \textbf{Recursive Messages.} Protobuf messages (and thus descriptors) can
+  be recursive. The current lean formalization enforces a tree structure on the
+  descriptors. This is nice for recursion over the descriptors, but does mean we
+  can't model all descriptors. The Protobuf data set does contain recursive and
+  mutually recursive descriptors. It seems that these are more common in tools
+  which analyze Protobuf descriptors, likely because \texttt{descriptor.proto},
+  which models Protobuf descriptors as a Protobuf struct, is recursive. If we
+  want to transmit protobuf descriptors into the Pollux lean formalization using
+  \texttt{descriptor.proto} (a reasonable choice), we'll have to expand the
+  descriptor representation to be a flat-map of named messages. See
+  Table~\ref{tab:recur-summary} and Table~\ref{tab:recur-repos} for information
+  about recursive messages in the Protobuf data set.
+
+\item \textbf{Enums.} Protobuf supports enums, which shouldn't be hard to
+  support in the future, but aren't present currently.
+
+\item \textbf{Groups.} This is a Protobuf 2 feature, which still has some
+  reserved encoding wire type implications. It's simply not used in Protobuf 3.
+
+\item \textbf{Explicit Maps.} Maps can be desugared to a \texttt{repeated}
+  key-value pair (See Section~\ref{sec:proto}), so no explicit representation is
+  needed. Ok, this is technically \emph{not} true, since maps have additional
+  requirements about the type of the key, but if we were to desugar a map to
+  it's internal representation, the user would need to also desugar it to create
+  something which might be problematic.
+
+\item \textbf{Packed Scalars.} Not really a concern of the descriptor, although
+  there are serious consequences of this.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcc}
+    \toprule
+    Metric & Count & Percentage \\
+    \midrule
+    Messages & 57,461 & \\
+    Recursive & 831 & 1.45\% \\
+    \bullet{} self-recursive & 425 & 0.74\% \\
+    \bullet{} mutually-recursive & 447 & 0.78\% \\
+    Contains recursion & 3,893 & 6.78\% \\
+    \bottomrule
+\end{tabular}
+\caption[Summary of recursive protobuf messages.]{Summary statistics of
+    recursive descriptor usage in the Protobuf data set. Here ``recursive''
+    means directly self-recursive or in a mutually recursive cycle while
+    ``contains recursion'' is any message which includes a recursive message in
+    it's transitive closure. Any message which contains recursive cannot be
+    represented by the current descriptor model. There are 533
+    mutually-recursive cycles with the longest containing 22 messages. Note
+    that there are 41 messages which are both self-recursive and
+    mutually-recursive.}\label{tab:recur-summary}
+\end{table}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccccc}
+    \toprule
+    Repository & Messages & Recursive & \% & Contains & \% \\
+    \midrule
+    \texttt{protocolbuffers/protobuf-go} & 605 & 110 & 18.18\% & 151 & 24.96\% \\
+    \texttt{cloudwego/kitex} & 34 & 4 & 11.76\% & 7 & 20.59\% \\
+    \texttt{go-kratos/kratos} & 94 & 8 & 8.51\% & 17 & 18.09\% \\
+    \texttt{bufbuild/buf} & 2,922 & 210 & 7.19\% & 371 & 12.70\% \\
+    \texttt{google/protobuf.dart} & 503 & 30 & 5.96\% & 59 & 11.73\% \\
+    \texttt{protocolbuffers/protobuf} & 2,372 & 172 & 7.25\% & 242 & 10.20\% \\
+    \texttt{googleapis/googleapis} & 49,370 & 289 & 0.59\% & 3,022 & 6.12\% \\
+    \texttt{streamdal/plumber} & 286 & 2 & 0.70\% & 13 & 4.55\% \\
+    \texttt{google/rejoiner} & 50 & 0 & 0.00\% & 2 & 4.00\% \\
+    \texttt{googleapis/google-cloud-go} & 134 & 3 & 2.24\% & 3 & 2.24\% \\
+    \texttt{uber/prototool} & 469 & 3 & 0.64\% & 6 & 1.28\% \\
+    \texttt{asynkron/protactor-go} & 149 & 0 & 0.00\% & 0 & 0.00\% \\
+    \texttt{colinmarc/hdfs} & 443 & 0 & 0.00\% & 0 & 0.00\% \\
+    \texttt{twitchtv/twirp} & 30 & 0 & 0.00\% & 0 & 0.00\% \\
+    \bottomrule
+\end{tabular}
+\caption[Per-repo recursive message breakdown]{A pre-repo breakdown of
+    recursive message and messages which contain recursion. Notice that tools
+    which work with protobuf descriptors have a higher percentage of recursive
+    messages than project which just use Protobuf. The aggregate numbers in
+    Table~\ref{tab:recur-summary} are dominated by
+    \texttt{googleapis/googleapis} since it contains 86\% of the data set. I
+    don't know what's happening with \texttt{google/rejoiner}, but it's
+    possible some messages didn't compile correctly.}\label{tab:recur-repos}
+\end{table}
+
+% Local Variables:
+% citar-bibliography: ("../pollux.bib")
+% TeX-master: "../pollux.tex"
+% TeX-command-default: "Make"
+% jinx-local-words: "protobuf"
+% End:

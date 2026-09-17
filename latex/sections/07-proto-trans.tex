@@ -1,0 +1,265 @@
+\section{Protobuf Transformation}\label{sec:proto-transform}
+
+At the core of the Protobuf compatibility methodology is a transformation which
+projects the view of a message under one descriptor to a related message under
+another descriptor.
+
+\subsection{Origins}
+
+Using a function to transform the value isn't an arbitrary technical choice, nor
+is it only useful to model potential descriptor changes to specific Protobuf
+value. It arises naturally from the proofs of the intermediate format, and that
+evolution is described here.
+
+The first and strongest intermediate parser compatibility theorem is the
+schema-correct one, Theorem~\ref{thm:inter-schema-correct}, where the relations
+at play are strong enough that we can directly prove that the resulting value
+from a serializer / parser round-trip under the same descriptor is equal. No
+transformation is needed here.
+
+However, the next step was to weak the compatibility antecedent to arrive at
+Theorem~\ref{thm:inter-id-compat} where the descriptor is still the same but can
+have no relation to the message being operated on. This is no longer possible
+with our new totality conditions (Section~\ref{sec:value-totality}), but led to
+the first example of a transformation function. The Intermediate ID
+Compatibility relation has the \textsc{M-Drop-Unknown} rule, with no constrain
+which value is dropped, and \textsc{M-Missing}, which can insert a new value
+into the resulting message. Because of these rules, the induction hypothesis of
+the theorem by itself is too weak to prove the whole theorem since the
+compatibility relation has multiple $m_2$ related to the same $m_1$, $d_1$ and
+$d_2$ so the proof must find a witness. Instead we use the transformation to
+strengthen the inductive hypothesis into naming that witness and prove that
+anything from the transformation will land inside the compatibility relation.
+
+The final intermediate format theorem, Theorem~\ref{thm:inter-compat},
+reinforces this. It uses the same technique with a much more complex
+transformation function that actually mirrors the Protobuf transformation. Both
+are a structural recursion on the reader's descriptor field list, building the
+new interpretation of the value under the new descriptor using the writer's
+descriptor. The Protobuf one also has the stronger justification of enforcing
+the totality requirement.
+
+\subsection{Definition}
+
+The full definition of the transformation function is omitted, since it is not
+fully defined at the time of this writing. However, it is broken down into
+levels, just like the various size functions.
+
+\begin{minted}{lean}
+Value.reinterpret        (d₁ d₂ : Desc) (v : Value) : Value
+Value.reinterpretEntries (d₁ : Desc) (v : Value) :
+    List ((_:Int) × Field) → List ((_:Int) × Val)
+Value.reinterpretAt      (d₁ : Desc) (v : Value) (k : Int) (f₂ : Field) : Val
+Slot.reinterpret         (f₁ f₂ : Field) (x : Val) : Option Val
+Payload.reinterpret      (t₁ t₂ : FieldType) (p : Payload) : Option Payload
+\end{minted}
+
+The \texttt{reinterpretEntries} function is basically a \texttt{map} over the
+internal association list, with the required termination metric.
+
+The \texttt{Option} in the last two function signatures is \emph{not} a
+message-level optional; returning a \texttt{none} means that the value is not
+carryable by the new type and the caller falls back to the default slot value,
+which is exactly what the reader sees when the writer's bytes do not populate
+the field at all or using the incorrect wire type.
+
+Mathematically, the transformation where a message $m$ at descriptor $d_1$ is
+transformed to $d_2$ is denoted $\transform{d_1}{m}{d_2}$.
+
+For each key in the reading descriptor, there are three cases.
+
+\begin{itemize}
+\item \textbf{Shared.} If both descriptors carry the payload, move it over to
+  the new message, transforming it if needed.
+\item \textbf{Reader only.} Inject the default value for that field.
+\item \textbf{Writer only.} This is a dropped field, and since we transform the
+  message by walking the \emph{reader's} fields, this case cannot arise.
+\end{itemize}
+
+The other possible cases are that there is a value in the message which isn't in
+the writing descriptor or that there is a field in the writing descriptor which
+isn't in the message. The totality assumption from
+Section~\ref{sec:value-totality} eliminates these cases from valid messages.
+
+The recursion here is driven by the reader's descriptor since we want to produce
+a message that's total over the reader's fields. Thus the termination metric is
+the size that descriptor alone, not dependent on the message being
+reinterpreted.
+
+Note that the intermediate compatibility relation didn't have a drop rule in
+$\ll$. That was because if we encountered a dropped value, we had no way to know
+if the next thing in the encoding was a scalar or a nested message and the
+parsing failed. Since Protobuf encoding the wire type into the value encoding,
+it's always possible to skip the unknown field without de-synchronizing the byte
+stream. The Protobuf drop rule will be scoped to only be applied only when
+$\dom{d_1} \not \subset \dom{d_2}$.
+
+One final note is that the measure chain used by all the transformation layers
+is only \emph{weakly} decreasing within one layer, so the measures are scaled by
+4 with a per-step offset to ensure that the termination metric will actually
+decrease with each application. 
+
+\vspace{1em}
+\begin{theorem}[Transformation Specification]
+  For all messages $m$ and descriptors $d_1$, $d_2$, each value of the
+  transformed message is equal to the result of transforming that value.
+  \[ \transform{d_1}{m}{d_2}[k] = \transform{d_1}{m[k]}{d_2} \]
+\end{theorem}
+
+\vspace{1em}
+\begin{theorem}[Transform WF]\label{thm:trans-wf}
+  \[ \forall\ m, d_1, d_2.\ d_2 \checkmark_w \rightarrow \transform{d_1}{m}{d_2} \checkmark_w \]
+\end{theorem}
+
+\vspace{1em}
+\begin{theorem}[Transform Total]\label{thm:trans-total}
+  \[ \forall\ m, d_1, d_2.\ \dom{d_2} = \dom{\transform{d_1}{m}{d_2}} \]
+\end{theorem}
+
+\vspace{1em}
+\begin{theorem}[Transform Self]\label{thm:trans-self}
+  \[ \forall\ m, d.\ d \checkmark \rightarrow m \checkmark^d \rightarrow \transform{d}{m}{d} = m \]
+\end{theorem}
+
+\vspace{1em}
+\begin{theorem}[Transform Valid]\label{thm:trans-valid}
+  \[ \forall\ m, d_1, d_2.\ m \checkmark^{d_1} \rightarrow d_2 \checkmark \rightarrow \mathrm{OneofPreservedAll}(d_1, d_2) \rightarrow \transform{d_1}{m}{d_2} \checkmark^{d_2} \] 
+  Where
+  \begin{itemize}
+  \item $\mathrm{OneofPreservedAll}(d_1, d_2) = \mathrm{OneofPreserved}(d_1, d_2) \wedge
+    \forall\ k, c_1, d_1', c_2, d_2'.\ d_1[k] = \langle c_1, d_1' \rangle \rightarrow d_2[k] = \langle c_2, d_2' \rangle \rightarrow
+    \mathrm{OneofPreservedAll}(d_1', d_2')$
+  \item $\mathrm{OneofPreserved}(d_1, d_2) = \forall\ k_1, k_2, f_1, f_1', f_2, f_2',
+    g. d_1[k_1] = f_1 \rightarrow d_1[k_2] = f_2 \rightarrow d_2[k_1] = f_1' \rightarrow d_2[k_2] = f_2' \rightarrow
+    f_1' = \langle \oneof{g}, \_ \rangle \rightarrow f_2' = \langle \oneof{g}, \_ \rangle \rightarrow \exists\ g_0. f_1 = \langle
+    \oneof{g_0}, \_ \rangle \wedge f_2 = \langle \oneof{g_0}, \_ \rangle$
+  \end{itemize}
+\end{theorem}
+
+The two important theorems here are Theorem~\ref{thm:trans-self}, which states
+that transforming a message against it's own transform produces the same
+message, and Theorem~\ref{thm:trans-valid} which we can use to show that a
+transformed value is valid.
+
+Most of the premises for these theorems should be evident, except the
+\texttt{oneof} conditions for Theorem~\ref{thm:trans-valid}. This premise is
+required, and to see why consider that a writer should legitimately set two
+fields outside a \texttt{oneof} and then transform to a reader where those two
+fields are part of the same \texttt{oneof}. The OneofPreserved function states
+that any two reader keys sharing a \texttt{oneof} group were already in a group
+together in the writer. Note that this is vacuous if either key is reader-only,
+so adding a new field to an existing \texttt{oneof} is acceptable, while moving
+an existing field into an existing \texttt{oneof} isn't. This is part of the
+Protobuf best practices guide~\cite{LanguageGuideProto}, represented as proof
+obligation here. The direction is also important, since it does allow us to
+split a \texttt{oneof} into multiple \texttt{oneof} groups without
+issue. Additionally, the recursive version is required to prevent the example
+case from appearing in a nested message.
+
+Now, it is possible to move an existing field into an existing \texttt{oneof} in
+a Protobuf descriptor. In that case, you'd need to be sure that the value didn't
+set multiple fields in a \texttt{oneof} of the reader (we'll know in advance
+that it can't have multiple fields set in a writer's \texttt{oneof}). Then you
+might be able to weaken the $\mathrm{OneofPreservedAll}(d_1, d_2)$ to 
+\[ \forall\ k_1, k_2, g.\ d_2[k_1] = \langle \oneof{g}, \_ \rangle \rightarrow d_2[k_2] = \langle \oneof{g}, \_ \rangle \to
+  m[k_1] = \mathtt{NONE} \vee m[k_2] = \mathtt{NONE} \]
+Which is wouldn't be true for all messages under $d_1$, but might be provable
+as a weakened version of Theorem~\ref{thm:trans-valid} for some systems.
+
+{\color{red} This is another place were the functional transformation breaks
+  down. In the lean serializer, everything is serialized in sorted field key
+  order, so the last writer wins rule (Section~\ref{sec:last-writer-wins}) would
+  be deterministic. However, since a real serializer could serialize in an
+  arbitrary order, this is actually a non-deterministic operation. The
+  relational encodes definition would allow this and further complicate the
+  non-canonical Protobuf encoding.}
+
+\subsection{UPDATE:\@ What's implemented right now}
+
+At the moment, the transformation supports width and depth changes to messages
+(i.e.\ adding new fields or changing nested messages) and moving fields between
+\texttt{optional} and \texttt{oneof}. Scalar retyping is not implemented yet,
+but will be.
+
+The one supported cardinality change, moving between an \texttt{optional} and
+\texttt{oneof} naturally requires that we enforce the \texttt{oneof} requirement
+that only one field in the \texttt{oneof} is set.
+
+\subsection{Faithfulness Theorem}
+
+The Protobuf compatibility framework might drop the message compatibility
+relation in favor of only having the transformation. In that case, we'd end up
+needing to argue that the transformation is total over all possible messages
+being converted between two descriptors, i.e. $\transform{d_1}{m}{d_2}$ produces
+some $m'$ for all $m \checkmark^{d_1}$.
+
+The current transformation function is \emph{always total} by falling back to
+injecting field type defaults, so in the context of Protobuf, we want to show
+that we can produce a total transformation without needing this behavior outside
+of injecting the new values for new fields (since any other place were a default
+value is injected would imply that something failed to reinterpret). Note that
+this theorem can't be solely stated about the output of
+$\transform{d_1}{m}{d_2}$ since the output can't differentiate between the
+default value naturally occurring and being injected due to a problematic
+update.
+
+\begin{minted}{lean}
+theorem Slot.reinterpret_isSome {f₁ f₂ : Field} {x : Slot}
+    (h : f₁ ∝ f₂) (hm : Slot.Matches x f₁) :
+    (Slot.reinterpret f₁ f₂ x).isSome
+\end{minted}
+
+Including \texttt{Slot.Matches} is important since incompatible cardinalities or
+types between the slot and the original descriptor would invoke the default
+value fallback anyways. This could be built into a faithfulness theorem.
+
+\vspace{1em}
+\begin{theorem}[Faithfulness]\label{thm:faith}
+  For two compatible descriptors, $d_1 \ll d_2$ and a valid value $m$ under
+  $d_1$, $m \checkmark^{d_1}$ such that for all keys $k$, $d_1[k] = f_1$ and $d_2[k] =
+  f_2$ there must exist a value $x$ and $y$ such that
+  \begin{itemize}
+  \item $m[k] = x$
+  \item $\transform{f_1}{m}{f_2} = y$
+  \item $\transform{d_1}{m}{d_2}[k] = y$
+  \end{itemize}
+\end{theorem}
+
+Which basically characterizes the reinterpretation process as point-wise over the
+message.
+
+\begin{minted}{lean}
+theorem Value.get?_reinterpret_of_compat {d₁ d₂ : Desc} {v : Value} {k f₁ f₂}
+    (h : d₁ ≪ d₂) (hv : Value.Valid d₁ v)
+    (h₁ : d₁.get? k = some f₁) (h₂ : d₂.get? k = some f₂) :
+    ∃ x y, v.get? k = some x ∧ Slot.reinterpret f₁ f₂ x = some y ∧
+      (Value.reinterpret d₁ d₂ v).get? k = some y
+\end{minted}
+
+Some corollaries from this include the fact that repeated slots don't drop
+values. If the scalar transformation is only the identity function, which is
+presently the case, we also have that
+$\transform{d_2}{\transform{d_1}{m}{d_2}}{d_{2}} = m$ since the newly injected
+fields are simply dropped in the backwards directly. This means that no data is
+lost, but the statement is too strong to handle scalar conversion and in
+particular integer width changes which might truncate values.
+
+\vspace{1em}
+\begin{theorem}[Point-wise Field Compatibility]\label{thm:pointwise-compat}
+  \[ d_1 \checkmark \rightarrow \forall\ k \in \dom{d_1} \cap \dom{d_2}. d_1[k] \propto d_2[k] \] 
+\end{theorem}
+
+Combined with Theorem~\ref{thm:faith}, Theorem~\ref{thm:pointwise-compat} states
+that the descriptor relation $\ll$ is a maximal relation or equivalently the
+weakest precondition for lossless data transmission. Again, this will be
+complicated by adding integer truncation. Once that feature is added, this
+concept is split into \emph{carriage}, which thinks about data being
+present, and \emph{lossless-ness} that the transformed view of the data is
+unique. 
+
+% Local Variables:
+% citar-bibliography: ("../pollux.bib")
+% TeX-master: "../pollux.tex"
+% TeX-command-default: "Make"
+% jinx-local-words: "protobuf"
+% End:

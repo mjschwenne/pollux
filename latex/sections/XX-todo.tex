@@ -1,0 +1,68 @@
+\section{TODO Tasks}\label{sec:TODO}
+
+This is an unordered list of tasks that still need to be done the Pollux Lean
+formalization.
+
+\begin{itemize}
+\item \textbf{Reserved field numbers.} Protobuf doesn't recommend reusing field
+  numbers for new fields (i.e.\ removing a field, then later adding a field with
+  that same number), and that also poses a challenge to Pollux. If a field were
+  added which uses and old field number, Pollux would assume that the intent is
+  for the new field to be compatible with the old one. Since we expect the
+  compatibility relation to be transitive, any evolving derivation of that
+  message would attempt to force a connection between two fields that are
+  semantically unrelated.
+
+  Fortunately, Protobuf has a mechanism for this, reserved field numbers. You
+  can set specific field numbers as reserved, then the protobuf compiler will
+  ensure that you don't add a field with that number to the message in the
+  future. Pollux will also enforce this, even though the Lean formalization
+  doesn't track it \emph{yet}.
+
+\item \textbf{Recursive Messages.} Protobuf messages (and thus descriptors) can
+  be recursive. The current lean formalization enforces a tree structure on the
+  descriptors. This is nice for recursion over the descriptors, but does mean we
+  can't model all descriptors. The Protobuf data set does contain recursive and
+  mutually recursive descriptors. It seems that these are more common in tools
+  which analyze Protobuf descriptors, likely because \texttt{descriptor.proto},
+  which models Protobuf descriptors as a Protobuf struct, is recursive. If we
+  want to transmit protobuf descriptors into the Pollux lean formalization using
+  \texttt{descriptor.proto} (a reasonable choice), we'll have to expand the
+  descriptor representation to be a flat-map of named messages. See
+  Table~\ref{tab:recur-summary} and Table~\ref{tab:recur-repos} for information
+  about recursive messages in the Protobuf data set. This should be explored as
+  a flat-map for descriptors (messages have to bottom-out, so this isn't a
+  concern there) and see Section~\ref{sec:type-theory} for a discussion on avoid
+  co-induction.
+
+\item \textbf{Enums.} Protobuf supports enums, which shouldn't be hard to
+  support in the future, but aren't present currently.
+
+\item \textbf{Strings as UTF-8.} All valid Protobuf strings are encoded as UTF-8
+  strings. Right now, the Lean formalization uses the built-in \texttt{String}
+  type, and it has the ability to check if something is valid UTF-8 with
+  \texttt{String.fromUTF8? (toUTF8 s) = some s}.
+
+\item \textbf{Protobuf Serializer.} We need to implement a Protobuf serializer
+  in Lean.
+
+\item \textbf{Protobuf Parser.} We need to implement a Protobuf parser in Lean.
+
+\end{itemize}
+
+These tasks need to be accomplished on the theory side.
+
+\begin{itemize}
+\item \textbf{Enums.} Protobuf supports enums, which shouldn't be hard to
+  support in the future, but aren't present currently.
+
+\item \textbf{Recursive Messages.} We need to decide on how to handle these on
+  the theory side.
+\end{itemize}
+
+% Local Variables:
+% citar-bibliography: ("../pollux.bib")
+% TeX-master: "../pollux.tex"
+% TeX-command-default: "Make"
+% jinx-local-words: "protobuf"
+% End:

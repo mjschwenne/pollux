@@ -1,0 +1,109 @@
+\section{Pollux Philosophy}~\label{sec:philosophy}
+
+Any data language with way to specify a schema for a particular type of message
+can have compatibility questions, simply put, does this encoded binary blob
+conform to the known specification of the message?
+
+\begin{definition}[Compatibility]\label{def:compat}
+  Two message descriptors compatible if and only if
+  \[ \forall\ m_1:d_1.\ \exists\ m_2:d_2.\ decode(encode(m_1)) = \mathtt{Some}\ m_2 \wedge m_1 \sim m_2 \]
+  according to some relation $\sim$. 
+\end{definition}
+
+This project maintains a separation between the data description language and
+the encoding format, enabling all parsing to be seen as two steps, one to parse
+as much data from a binary blob as possible and another to validate it against
+the data description. For formats like CBOR with CDDL, this is a natural fit
+since CBOR is self-contained and any valid CBOR blob can be decoded to a value
+and then compared against the CDDL specification. In that sense, the second step
+for CBOR is really a validation step, while protobuf needs the information in
+the descriptor to perform a series of type casting operations which can change
+the values in the record before validation occurs.
+
+However, this perspective isn't a natural fit for protobuf. Recall
+Table~\ref{tab:tags}, and notice that encoding any of the variable width integer
+fields in the proto language leads to the same tag value in the encoded
+struct. While parsing one a \texttt{VARINT} field, it is not possible to know
+the final integer value being encoded without referencing some specification to
+disambiguate between all the integer fields. However, that doesn't mean that
+protobuf cannot be parsed without a descriptor to validate against. The
+\texttt{protoscope} tool does this and is still able to provide some meaningful
+information about an unknown protobuf blob. Some considerations about each tag
+in the protoscope language are given below.
+
+\begin{itemize}
+\item All \texttt{varint} fields are unsigned integers which are then cast into
+  the correct type according to the rules and functions in
+  Section~\ref{sec:val-rel}.
+\item Tags (which would be types in \texttt{protoscope}, using the term to refer
+  to the language rather then the tool. Use context to differentiate.) for
+  \texttt{I32} and \texttt{I64} could only be interpreted as a list of bytes of
+  the correct length. Casting to either a \texttt{fixed}, \texttt{sfixed} or
+  floating point number would be part of the validation process.
+\item The tricky case here is clearly \texttt{LEN}, and more specifically nested
+  messages. Realistically, a tool like \texttt{protoscope} doesn't need to know
+  the schema of a nested message to produce a low level representation but it
+  does need to know that a \texttt{LEN} field is a nested message and not a
+  \texttt{string}, \texttt{bytes} or a packed \texttt{repeated} field. This
+  issue, particularly with nested messages, led the \texttt{protoscope}
+  developers to implement the \texttt{-all-fields-are-messages} command line
+  option, which attempts to recursively parse \texttt{LEN} fields. Note that all
+  valid nested messages can be parsed this way, but it is possible for one of
+  the other \texttt{LEN} fields to happen to be a valid protobuf message and
+  \texttt{protoscope} can't differentiate between these cases.
+\end{itemize}
+
+Represented visually, the process for both CBOR+CDDL and Protobuf would look
+like this:
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}[b]{\textwidth}
+    \centering
+    \begin{tikzpicture}
+      \node[draw] (blob) at (0, 0) {Binary Blob};
+      \node[draw] (ir) at (5, 0) {Low-Level Struct};
+      \node[draw] (fin) at (10, 0) {Final Struct};
+
+      \draw[-{LaTeX}] (blob) -- node[above]{Parsing} (ir);
+      \draw[-{LaTeX}] (ir) -- node[above]{Validation} (fin);
+    \end{tikzpicture}
+    \caption{Progression from binary blob to fully parsed and validated struct.}
+  \end{subfigure}
+
+  \begin{subfigure}[b]{0.4\textwidth}
+    \centering
+    \begin{tikzpicture}
+      \node[draw] (pp) at (0, 0) {P}; \node[draw] (pv) at (3, 0) {V};
+
+      \draw[-{LaTeX}] (pp) edge[bend right] (pv); \draw[-{LaTeX}] (pv) edge[bend right] (pp);
+    \end{tikzpicture}
+    \caption{Protobuf parse validation loop for nested messages.}
+  \end{subfigure}
+  \hspace{1cm}
+  \begin{subfigure}[b]{0.4\textwidth}
+    \centering
+    \begin{tikzpicture}
+      \node[draw] (cp) at (0, 0) {P}; \node[draw] (cv) at (3, 0) {V};
+
+      \draw[-{LaTeX}] (cp) -- (pv);
+    \end{tikzpicture}
+    \caption{CBOR parse validation flow. Tag 24 might require parsing again, but
+    that is expected to be trigger by the host application at a later time.}
+  \end{subfigure}
+
+  \caption{Splitting the Protobuf and CDDL parse process into two steps, parsing
+    and validating.}
+  \label{fig:parse-validate}
+\end{figure}
+
+While I claimed earlier that Protobuf forces Pollux to consider the binary
+encoding blob. Where is that expressed in any of the compatibility relations?
+\emph{It's not.} Basically all of the existing work for Pollux on Protobuf can
+be trivially lifted to operating on the protoscope level just by changing our
+mental framing around it.
+
+% Local Variables:
+% citar-bibliography: ("../pollux.bib")
+% TeX-master: "../pollux.tex"
+% End:

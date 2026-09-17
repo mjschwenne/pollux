@@ -1,0 +1,325 @@
+\section{Protobuf Primer}~\label{sec:proto}
+
+Protobuf, or protocol buffers, is a message description language and
+serialization protocol developed by Google. It is similar to other descriptive
+data formats like ASN1, and is commonly used as part of the gRPC remote
+procedure call system. Protobuf and gRPC are one of the most popular
+serialization formats.
+
+\subsection{The \texttt{proto} Language}~\label{sec:proto-lang}
+
+A high-level protobuf message description is written in a \texttt{.proto} file
+in the \texttt{proto} language. Each message is described by a \emph{message
+	descriptor} which declares each field and its corresponding type.
+
+\begin{figure}[H]
+	\begin{lstlisting}[language=proto]
+syntax = "proto3";
+
+message SearchRequest {
+  string query = 1;
+  int32 page_number = 2;
+  int32 results_per_page = 3;
+}\end{lstlisting}
+
+	\caption{Example protobuf message description from the protobuf documentation~\cite{LanguageGuideProto}.}
+	\label{fig:proto-ex}
+\end{figure}
+
+In figure~\ref{fig:proto-ex}, a message called \texttt{SearchRequest} is
+declared. This message contains three fields, the query, page number to display
+and number of results per page. Each field is assigned a \emph{field number},
+which is used in the serialized version of the message. Each field number must
+be unique, as they are used to identify the corresponding binary blob in the
+encoded message. A \texttt{.proto} file can define multiple messages, and
+messages can be embedded in another by using the name of that message as the
+type of a field in the other message.
+
+Each field is defined with a type, with the primitive types summarized in
+table~\ref{tbl:proto-prim}.
+
+\begin{table}[H]
+	\centering
+	\begin{tabular}{cl}
+		\toprule
+		Type              & Notes                                                    \\
+		\midrule
+		\texttt{double}   & Standard 64 bit double-precision floating point
+		number.                                                                      \\
+		\texttt{float}    & Standard 32 bit floating point number.                   \\
+		\texttt{int32}    & Variable-length signed 32 bit integer.                   \\
+		\texttt{int64}    & Variable-length signed 64 bit integer.                   \\
+		\texttt{uint32}   & Variable-length unsigned 32 bit integer.                 \\
+		\texttt{uint64}   & Variable-length unsigned 64 bit integer.                 \\
+		\texttt{sint32}   & Variable-length 32 bit integer with more
+		efficient encoding for negative numbers.                                     \\
+		\texttt{sint64}   & Variable-length 64 bit integer with more efficient
+		encoding for negative numbers.                                               \\
+		\texttt{fixed32}  & Four byte integer, more efficient than \texttt{uint32}
+		for values greater than $2^{38}$.                                            \\
+		\texttt{fixed64}  & Eight byte integer, more efficient than \texttt{uint64}
+		for values greater than $2^{56}$.                                            \\
+		\texttt{sfixed32} & Four byte signed integer.                                \\
+		\texttt{sfixed64} & Eight byte signed integer.                               \\
+		\texttt{bool}     & Boolean, encoded in one byte.                            \\
+		\texttt{string}   & A string of UFT-8 or 7-bit ASCII characters shorter than
+		$2^{32}$ bytes.                                                              \\
+		\texttt{bytes}    & An arbitrary sequence of less than $2^{32}$ bytes.       \\
+		\bottomrule
+	\end{tabular}
+	\caption{Summary of the protobuf scalar values.}
+	\label{tbl:proto-prim}
+\end{table}
+
+Any protobuf field can marked as \texttt{optional} or \texttt{repeated}. An
+\texttt{optional} field can be either set to a value or omitted from the
+message. Similarly, a \texttt{repeated} field can be repeated in the message
+zero or more times, functioning as a list now. A field without a cardinality
+modifier is known as an implicit field and can also be omitted from a message,
+just like an \texttt{optional} field. During de-serialization, a type-specific
+default value will be used (this is consistent with accessing the value of an
+unset \texttt{optional} field). The only difference between an implicit field
+and \texttt{optional} field is that the optional field can differentiate between
+an unset field and field set to the default value by providing a method which
+reports if the \texttt{optional} field is set.
+
+Since the protobuf language is designed to be both forward and backwards
+compatible, it is possible to remove or add fields. When removing fields, it is
+encouraged to reserve the field number to prevent reuse of the field in a
+future. It is also possible to reserved field names, which isn't important for
+the protobuf binary encoding format, this is important if you're using the JSON
+encoding of a protobuf message.
+
+\begin{figure}[H]
+	\begin{lstlisting}[language=proto]
+syntax = "proto3";
+
+message Foo {
+  reserved 2, 15, 9 to 11;
+  reserved "foo", "bar";
+}\end{lstlisting}
+
+	\caption{Example protobuf message using reserved fields~\cite{LanguageGuideProto}.}
+	\label{fig:proto-reserved}
+\end{figure}
+
+Protobuf also supports enumerations, for when a field may only take a finite
+number of values. Due to how default values work in protobuf, enums are required
+to have a value defined with a value zero and it should have either
+``UNSPECIFIED'' or ``UNKNOWN'' since that will be the default value.
+
+\begin{figure}[H]
+	\begin{lstlisting}[language=proto]
+syntax = "proto3";
+
+enum {
+  CORPUS_UNSPECIFIED = 0;
+  CORPUS_UNIVERSAL = 1;
+  CORPUS_WEB = 2;
+  CORPUS_IMAGES = 3;
+  CORPUS_LOCAL = 4;
+  CORPUS_NEWS = 5;
+  CORPUS_PRODUCTS = 6;
+  CORPUS_VIDEO = 7;
+}
+
+message SearchRequest {
+  string query = 1;
+  int32 page_number = 2;
+  int32 results_per_page = 3;
+  Corpus corpus = 4;
+}\end{lstlisting}
+
+	\caption{Example protobuf message using an enum~\cite{LanguageGuideProto}.}
+	\label{fig:proto-enum}
+\end{figure}
+
+There are two other features which need to be modeled, \texttt{map} and
+\texttt{oneof}. Maps can be thought of like a standard map in \texttt{go} or a
+\texttt{dict} in \texttt{python}. From a serialization perspective, this is an
+unordered map that could be modeled as a list of key-value pairs. A \texttt{map}
+field cannot be \texttt{repeated}, and repeated keys have the last occurrence
+win, as is standard with protobuf (see Section~\ref{sec:proto-enc}).
+
+\begin{figure}[H]
+	\centering
+	\begin{minipage}[bt]{0.43\textwidth}
+		\begin{lstlisting}[language=proto]
+message Foo {
+  map<int32, string> map_field = 1;
+}\end{lstlisting}
+	\end{minipage}
+	\hspace{0.5cm}
+	\begin{minipage}[bt]{0.48\textwidth}
+		\begin{lstlisting}[language=proto]
+message MapFieldEntry {
+  int32 key = 1;
+  string value = 2;
+}
+
+message Foo {
+  repeated MapFieldEntry map_field = 1;
+}\end{lstlisting}
+	\end{minipage}
+
+	\caption{Example of \texttt{map} syntax and the corresponding
+		wire-equivalent syntax~\cite{LanguageGuideProto}.}
+	\label{fig:proto-map}
+\end{figure}
+
+The final important feature of the proto language is a \texttt{oneof} field,
+which operates like a union in \texttt{C}. Setting any member of the
+\texttt{oneof} will clear any previously set field. A \texttt{oneof} field
+cannot contain a \texttt{repeated} field or a \texttt{map} and the
+\texttt{oneof} field itself cannot be \texttt{repeated}.
+
+\begin{figure}[H]
+	\begin{lstlisting}[language=proto]
+syntax = "proto3";
+
+message User {
+  oneof user_id {
+    string email = 4;
+    int32 phone = 2;
+  }
+}\end{lstlisting}
+
+	\caption{Example protobuf message using an enum~\cite{LanguageGuideProto}.}
+	\label{fig:proto-enum2}
+\end{figure}
+
+\subsection{The Protobuf Encoding}~\label{sec:proto-enc}
+
+Complimenting the Protobuf schema language is the protobuf encoding format. All
+valid protobuf messages written the the proto language will be eventually
+encoding into a binary blob in respecting this encoding.
+
+\subsubsection{Variable-Length Integers}~\label{sec:proto-vint}
+
+The heart of the protobuf encoding is the variable-length integer encoding,
+which represents a 32 or 64 bit integer in between one and ten bytes. The
+encoding format itself is relatively simple. The bits of the integer to be
+encoded are grouped into bundles of seven. The bundles are ordered in little
+endian order with the first bit of each byte set to one if the next byte is also
+part of the same integer.
+
+For example, consider the number 163, or 10100011 in binary. Splitting these
+into bundles of seven bits produces ``0000001'' and ``0100011''. These are
+reordered into little endian order, ``0000001'' then ``0100011''. Finally set
+the continuation bit on the first byte of the encoding and concatenate them
+together to get ``10000010100011''.
+
+\subsubsection{Field Identifiers}~\label{sec:proto-header}
+
+A message is serialized as a sequence of fields, in any order. Each field is
+encoded as a \emph{header-length-value} structure, although not every field has a
+dedicated length in the encoding. The tag consists of the field number as
+defined in the \texttt{proto} file, encoded in the variable length integer
+encoding discussed above. However, the tag isn't just the field number, it also
+includes information on the type of payload as detailed in
+Table~\ref{tab:tags}. The tag is stored in the last three bits of the
+field number varint, effectively encoded as \texttt{(field\_number << 3) | tag}.
+
+\begin{table}[H]
+	\centering
+	\begin{tabular}{cll}
+		\toprule
+		ID & Name            & Uses                                                 \\
+		\midrule
+		0  & \texttt{VARINT} & \texttt{int32}, \texttt{int64}, \texttt{uint32},
+		\texttt{uint64}, \texttt{sint32}, \texttt{sint64},
+		\texttt{bool}, \texttt{enum}                                                \\
+		1  & \texttt{I64}    & \texttt{fixed64}, \texttt{sfixed64}, \texttt{double} \\
+		2  & \texttt{LEN}    & \texttt{string}, \texttt{bytes}, embedded messages,
+		packed repeated fields                                                      \\
+		5  & \texttt{I32}    & \texttt{fixed32}, \texttt{sfixed32},
+		\texttt{float}                                                              \\
+		\bottomrule
+	\end{tabular}
+
+	\vspace{4mm}
+	\caption[]{Description of \texttt{proto} tag values. Note that values 3 and
+		4 correspond to \texttt{SGROUP} and \texttt{EGROUP}, tags used in protobuf
+		version 2 and deprecated in protobuf 3 \autocite{Encoding}.}\label{tab:tags}
+\end{table}
+
+\subsubsection{Length Delimited Fields}~\label{sec:proto-len}
+
+Nested messages, string and bytes are encoded with their payload length in bytes
+as a varint just after the tag. Despite being variable-length, varint fields
+aren't encoded with an explicit length since checking the length of the varint
+doesn't provide significance benefits when the maximum length varint is only 10
+bytes. Lengths are encoded in bytes so that deserializers can skip large unknown
+fields efficiently and know when exactly the unknown field ends.
+
+All variable length fields except varints are prefixed with a length and then
+the rest of the payload, with nested messages simply beginning with the tag for
+their first field and continuing from there. Since nested messages include the
+complete field encodings, it is important for the parser to be able to skip an
+unknown field exactly rather than incorrectly thinking a nested unknown field is
+setting field in the parent message.
+
+\subsubsection{Signed Integers}~\label{sec:proto-sint}
+
+The standard varint encoding is only for unsigned integers. Signed integers can
+be encoded in both \texttt{int32} and \texttt{int64} or \texttt{sint32} and
+\texttt{sint64} field types. The \texttt{intN} types uses standard two's
+complement to encode negative integers. However, since a negative two's
+compliment integer always has the sign bit set, any negative number will be
+encoded in a maximum length varint 10 bytes long.
+
+On the other hand, the \texttt{sintN} types use a ``ZigZag'' encoding to more
+efficiently represent smaller negative numbers~\cite{Encoding}. In this
+encoding, a positive value $p$ is encoded as $2 \times p$ while a negative value $n$
+is encoded as $2 \times |n| - 1$. Using bit-shift operators, this would be
+\verb|(n << 1) ^ (n >> 31)| or the naturally extended 64-bit version.
+
+\begin{table}[htbp]
+  \centering
+  \begin{tabular}{cc}
+    \toprule
+    Signed Original & Zig-Zag Encoding \\
+    \midrule
+    0 & 0 \\
+    -1 & 1 \\
+    1 & 2 \\
+    -2 & 3 \\
+    \vdots & \vdots \\
+    \bottomrule
+  \end{tabular}
+\caption{Some zig zag encoded integers}\label{tab:zigzag}
+\end{table}
+
+While the zig-zag encoding does save space for smaller negative values in
+particular, it does increase the amount of space required to encode large
+positive values, which is why it isn't the standard encoding for signed
+integers. 
+
+\subsubsection{Packed Values}\label{sec:packed}
+
+Starting with Proto 3 and holding true into the editions Protobuf ideology,
+\texttt{repeated} fields of scalar values are packed into one \texttt{LEN}
+field by default. This can be disabled by setting an attribute the field, i.e.:
+
+\begin{minted}{proto}
+repeated int32 samples = 4 [packed = false];
+\end{minted}
+
+\subsubsection{Last Writer Wins}\label{sec:last-writer-wins}
+
+For non-\texttt{repeated} fields, it's expected that a Protobuf serializer will
+not emit a field multiple times. However, the specification still requires that
+parsers are able to handle the case where it does.
+
+\begin{itemize}
+\item For a scalar field or a string, the last value to appear in the byte
+  stream is the value that's used.
+\item The specification doesn't state what happens with \texttt{byte} fields.
+\item \textbf{Messages are merged!}
+\end{itemize}
+
+% Local Variables:
+% citar-bibliography: ("../pollux.bib")
+% TeX-command-default: "Make"
+% TeX-master: "../pollux.tex"
+% End:

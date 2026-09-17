@@ -1,0 +1,316 @@
+\section{Protobuf Message Design}\label{sec:proto-msg}
+
+Mirroring the descriptors are the values, which carry actual data rather than
+describe the shape of a message.
+
+\subsection{Values in Lean}
+
+In the Lean formalization, the structure of a value matches the structure of
+descriptors across all three levels.
+
+\begin{itemize}
+\item A descriptor can be matched to a value.
+\item A field can be matched to a slot.
+\item A field type can be matched to a payload.
+\end{itemize}
+
+\begin{minted}{lean}
+mutual
+inductive Value   where | mk (es : List ((_ : Int) × Val))
+inductive Slot    where | implicit (p : Payload)
+                        | optional (p : Option Payload)
+                        | repeated (ps : List Payload)
+inductive Payload where | int (z : Int) | bool (b : Bool) | string (s : String)
+                        | bytes (bs : List UInt8) | float (bits : UInt32)
+                        | double (bits : UInt64) | msg (v : Value)
+end
+\end{minted}
+
+Notice that just like with the descriptor, the presence wrapper sites above the
+payload, and also reduces the number of constructor cases (marginally) and
+creates a regular structure for \texttt{optional} and \texttt{repeated} fields
+of an \texttt{option} / \texttt{list} of payloads rather than an \texttt{option}
+/ \texttt{list} with a specific instance type. Actual data is represented in
+Lean's native types. The \texttt{msg} payload constructor is the only major
+structural difference from the descriptor, since it sits in the \texttt{Payload}
+type rather than in a separate mutually inductive type. (I've eliminated some of
+the difference in the formal grammar, but the distinction on the lean side is
+worth noting.) However, the inductive structure \emph{does} match --- it's
+under the presence modifier, but still above the leaf of the descriptor or value
+--- and the descriptor's scalar type gains derivable equality by being outside the
+mutually recursive block. The way that the value \texttt{Payload}'s are used,
+this isn't required, they're compared against a field from the descriptor in a
+way to avoid this problem. Also, doubles and floats are represented as unsigned
+integers to get bit-level equality. Lean's formalization of IEEE 754 floating
+point numbers is opaque and the defined equality isn't reflexive (NaN $\ne$ NaN). 
+
+{\color{red} This might change. It's possible to pull the scalar payloads out if
+needed.}
+
+\begin{figure}[h]
+  \centering
+  \begin{syntax}
+    \categoryFromSet[Integers]{z}{\mathbb{Z}}
+
+    \categoryFromSet[Booleans]{b}{\mathbb{B}}
+
+    \abstractCategory[Byte Strings]{bs}
+
+    \abstractCategory[Strings]{\mathrm{s}}
+
+    \categoryFromSet[32-bit Unsigned Integers]{\mathrm{u^{32}}}{[0, 2^{32})}
+
+    \categoryFromSet[64-bit Unsigned Integers]{\mathrm{u^{64}}}{[0, 2^{64})}
+
+    \category[Payload]{p}
+    \alternative{z}
+    \alternative{b}
+    \alternative{\mathrm{s}}
+    \alternative{bs}
+    \alternative{\mathrm{u^{32}}}
+    \alternative{\mathrm{u^{64}}}
+    \alternative{v}
+
+    \category[Slot]{s}
+    \alternative{\impt{p}}
+    \alternative{\optt{\text{none}}}
+    \alternative{\optt{p}}
+    \alternative{\rept{[p_1; \dots; p_m]}}
+
+    \category[Value List]{l}
+    \alternative{\texttt{[]}}
+    \alternative{(n, s) :: l}
+
+    \category[Value]{v}
+    \alternative{\llangle l \rrangle_v}
+  \end{syntax}
+  \caption{Pollux syntax for Protobuf values.}\label{fig:proto-val-syn}
+\end{figure}
+
+\subsection{Value Totality}\label{sec:value-totality}
+
+In real-world Protobuf implementations, a value always has the exact same domain
+as the descriptor which generated it. If a message has a missing field (for any
+reason) and that field is marked as implicit in the descriptor, the default
+value is automatically populated into the field. Pollux matches this model by
+requiring that when a value is linked to a specific descriptor, the domains of
+the two match exactly. This will be part of the value well-formedness
+conditions. Pollux will model a missing field using either the default value for
+that type, \texttt{none} for optional values and an empty list for
+\texttt{repeated} ones, just like Protobuf.
+
+This choice strengthens the connection between a descriptor and values under it,
+since rather then being able to mix and match the two arbitrarily --- something
+that no real-world Protobuf implementation allows --- the assumptions made by
+Pollux closely model the data assumptions of Protobuf.
+
+However, on the proof aspect of Pollux both directions are important and worth
+concerning.
+\begin{itemize}
+\item \textbf{Declared implies present.} A field being declared in the
+  descriptor implies that something is present here in the matching value. This
+  is the \emph{no omissions requirement}.
+\item \textbf{Present implies declared.} Likewise a value being present in the
+  message implies that it was declared in the descriptor. This is the \emph{no
+    unknown values requirement}.
+\end{itemize}
+
+Starting with the first case, this requirement arises from some trouble with the
+intermediate parsing format's compatibility relation, specifically the
+\textsc{M-Declare} rule, where the writer's descriptor carries a field that
+isn't present in the value, and the reader gets a missing value (a
+intermediate format feature not present in Protobuf, this would become the
+default for the type of the field).
+\[
+  \infer[M-Declare]{m_1 : d_1 \preceq m_2 : d_2 \\\\ k \not \in \dom{d_1} \\ k \not \in
+    \dom{m_1} \\ f_1 \propto f_2}{ m_1 : d_1[k \mapsto f_1] \preceq m_2[k \mapsto \mathtt{M\_MISSING}] :
+    d_2[k \mapsto f_2]}
+\]
+For that format, this rule was required since without it, the message
+compatibility relation could not follow the ID compatibility relation which
+characterizes what could happen to a value being serialized and parsed under the
+same descriptor. The well-formedness condition on the values in the intermediate
+format only constrained the value without regard for a descriptor.
+
+Under the new totality requirement, this rule is vacuous. But why is removing it
+a good thing?
+\begin{enumerate}
+\item This doesn't happen under the Protobuf data model, which would have
+  inserted the default value when creating or parsing the value originally. This
+  rule only exists since the well-formedness condition of the intermediate
+  format was too weak, but becomes a case in every proof about the message
+  compatibility relation that describes a case that Protobuf will never express.
+\item Without totality, the intermediate format never had message equality when
+  serializing and parsing under the same descriptor, and this requirement
+  simplifies the proofs and theorem statements.
+\end{enumerate}
+
+In the second case, the no unknown fields requirement does two important
+things:
+
+\begin{enumerate}
+\item The transformations output (Section~\ref{sec:proto-transform}) will always
+  have a domain of $\dom(d_2)$ since we want to provide a value when viewed
+  against $d_2$. So the keys that we lose when transforming a value $v$ are
+  exactly $\dom{v} \setminus \dom{d_2}$. Having exact domain equality between
+  $v$ and $d_1$ means that this is the same as $\dom{d_1} \setminus \dom{d_2}$
+  and enables the descriptor level compatibility relation to characterize the
+  value-level transformation. The drop rule in both the descriptor compatibility
+  relation and the message one for Protobuf will be applied only at write-only
+  descriptor key. Allowing unknown fields to exist in the value would break
+  this, and a descriptor analysis wouldn't be able to meaningful reason about
+  what happens at the value level.
+\item Transforming a value from it's linked descriptor to that same descriptor
+  should yield exactly the same value. Without this requirement, an unknown field
+  would be dropped since Pollux doesn't track unknown fields explicitly
+  (Protobuf actually does, for largely this reason, motivated by a potential
+  man-in-the-middle where the sender and receiver both have a larger descriptor
+  then the relay).
+\end{enumerate}
+
+At the byte level, the serializer will never emit a tag that the parser using
+the same descriptor can't understand, so our prospective is that an unknown
+field must come from a schema difference in the descriptors (or some
+modification made to the value on the network; well outside our scope).
+
+\subsection{Cardinality and Scalar Carriers}
+
+The presence marker in the value layer has three constructors, while the
+cardinality marker in the descriptor layer has four, with \texttt{oneof} being
+the missing one. Be default in Protobuf, all \texttt{oneof} fields are treated
+as \texttt{optional}, which Pollux also respects. The requirement that only one
+is set is a cross-field constraint, which will live in value's legal predicate.
+
+Additionally, while the descriptor scalar types enumerate all Protobuf type, the
+value collapses several of these into a shared carrier. Specifically for all the
+various integer types, the value uses a mathematical integer when the Protobuf
+scalar types change in encoding and range. The legal predicate for values will
+enforce the range requirement while the encoding choice is only relevant
+during the serialization and parsing process, not the final values.
+
+\subsection{Value Initialization}
+
+Since messages have to match their descriptor, it's important that we're able to
+generate initial, empty messages to establish this invariant. Notice that the
+\texttt{Field.init} function takes the cardinality information in addition to the
+type information. This is what lets the initialization process differentiate
+between the default value of a repeated field (an empty list), optional field
+(\texttt{none}) and scalar field.
+
+\begin{minted}{lean}
+def Field.init : Field → Val
+  | .mk .singular (.scalar s) => .implicit (ScalarType.defaultPayload s)
+  | .mk .singular (.msg _)    => .optional none   -- unreachable when Legal
+  | .mk .optional _           => .optional none
+  | .mk .repeated _           => .repeated []
+  | .mk (.oneof _) _          => .optional none
+
+def Value.init (d : Desc) : Value := ⟨d.entries.map
+    (fun e => ⟨e.1, Field.init e.2⟩)⟩
+
+theorem Value.get?_init (d : Desc) (k : Int) :
+    (Value.init d).get? k = (d.get? k).map Field.init
+\end{minted}
+
+This is one of two places where the descriptor seal is broken and (recursive) iteration over
+the descriptor is performed, the other being the injection of missing fields
+during parsing. 
+
+\subsection{Value Validity} 
+
+Descriptor validity broke down into two requirements, a Lean specific invariant
+on the internal structure of our representation, and the Legal predicate that
+enforces some particular requirements of the Protobuf compiler. A value being
+well-formed is a bit more complex since we require that it's well-formed
+\emph{against} a descriptor. The value well-formedness predicate will be used as
+the output well-formedness predicate of the Protobuf serializer, meaning we'll
+be able to assume that a value input to the serializer is well-formed and
+use that in combination progress theorem that all well-formed values will
+serialize. Validity on the value is the precondition for the top-level
+round-trip theorems, and are encoded into the type of the serializer from our
+serializer combinator library. The actual contents of the validity predicate are
+stronger than needed to show that the serialization will always succeed, but can
+be weakened to imply the needed combinator well-formedness conditions throughout the
+combinator library.
+
+\vspace{1em}
+\begin{definition}[Valid Message]\label{def:vvalid}
+  A message $m$ is valid against a descriptor $d$, denoted $v \checkmark^d$ if
+  both $v \checkmark_w$ and $v \checkmark_l^d$. 
+\end{definition}
+
+\vspace{1em}
+\begin{definition}[Message Well-Formedness]\label{def:vwf}
+  A message $m$ is well-formed, denoted $m \checkmark_w$, if all fields in
+  the message have a unique field number, the fields are stored in sorted
+  order, and all nested messages are also well-formed.
+\end{definition}
+
+\vspace{1em}
+\begin{definition}[Legal Message]\label{def:vlegal}
+  A message $m$ is legal with regards to descriptor $d$, denoted $m
+  \checkmark_l^d$, if
+  \begin{itemize}
+  \item Totality, $\dom{m} = \dom{d}$.
+  \item For all values in the message
+    \begin{itemize}
+    \item The presence of the field agrees with the cardinality in the
+      descriptor.
+    \item The type of the value agrees with the type of the field in the
+      descriptor. For integer scalars, this condition also enforces the range
+      bounds associated with the various Protobuf integer types (i.e.\ \ints{},
+      \uintl{}, etc.) while for nested messages, that means $v' \checkmark^{d'}$.
+    \end{itemize}
+  \item At most one key in a \texttt{oneof} group defined in the descriptor is
+    set. This is the only non-pairwise requirement that a well-formed message has
+    to respect.
+  \end{itemize}
+\end{definition}
+
+Descriptor legality (Definition~\ref{def:dlegal}), specifically the fact that
+messages have to be \texttt{optional}, is important here since it makes it
+possible to initialize a recursive message, and we can assume that anytime a
+message is present, it's a non-default. This means that the Pollux check for if
+a value is a default can be decidable, even though descriptors and fields don't
+have a decidable equality instance defined.
+
+\vspace{1em}
+\begin{lemma}
+  For all descriptors $d$, $\mathrm{init}(d) \checkmark^d$.
+\end{lemma}
+
+\vspace{1em}
+\begin{definition}[Message Size]\label{def:vsize}
+  The size of a message, $\mathrm{size}_v$, is defined below. 
+  \begin{mathpar}
+    \mathrm{size}_v(\llangle l \rrangle) = 1 + \mathrm{size}_v(l)
+
+    \mathrm{size}_v(l) =
+    \begin{cases}
+      0 & \text{if } l = \texttt{[]} \\
+      \mathrm{size}_v(v) + \mathrm{size}_v(l') & \text{if } l = (\_, v) :: l'
+    \end{cases}
+
+    \mathrm{size}_v(v) =
+    \begin{cases}
+      1 + \mathrm{size}_v(p) & \text{if } v = \impt{p} \\
+      1 & \text{if } v = \optt{\text{none}} \\
+      1 + \mathrm{size}_v(p) & \text{if } v = \optt{p} \\
+      1 + \mathrm{size}_v(p_1) + \dots + \mathrm{size}_v(p_n) & \text{if } v = \rept{[p_1;\dots;p_n]}
+    \end{cases}
+
+    \mathrm{size}_v(p) =
+    \begin{cases}
+      \mathrm{size}_v(\llangle l' \rrangle) & \text{if } p = \llangle l'
+                                              \rrangle \\
+      1 & \text{otherwise}
+    \end{cases}
+  \end{mathpar}
+\end{definition}
+
+% Local Variables:
+% citar-bibliography: ("../pollux.bib")
+% TeX-master: "../pollux.tex"
+% TeX-command-default: "Make"
+% jinx-local-words: "protobuf"
+% End:

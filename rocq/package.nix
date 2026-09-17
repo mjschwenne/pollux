@@ -1,4 +1,5 @@
 {
+  lib,
   stdenv,
   perennial,
   perennialPkgs,
@@ -8,7 +9,14 @@ stdenv.mkDerivation {
   pname = "pollux-rocq";
   version = "unstable";
 
-  src = ../../.;
+  src = lib.fileset.toSource {
+    root = ./.;
+    fileset = lib.fileset.difference ./. (
+      # Tests.v doesn't build in the nix sandbox for some wierd memory layout bug with 
+      # vm_compute. Builds find locally.
+      lib.fileset.fileFilter (f: f.hasExt "nix" || f.hasExt "md" || f.name == "Tests.v") ./.
+    );
+  };
 
   nativeBuildInputs = with perennialPkgs; [
     rocq-runtime
@@ -26,13 +34,16 @@ stdenv.mkDerivation {
   enableParallelBuilding = true;
 
   buildPhase = ''
+    runHook preBuild
+    ulimit -s unlimited
     export ROCQPATH=$COQPATH
     unset COQPATH
     make -j$NIX_BUILD_CORES
+    runHook postBuild
   '';
 
   installPhase = ''
-    mkdir -p $out/lib/coq/9.1.0/user-contrib
-    cp -r rocq $out/lib/coq/9.1.0/user-contrib/Pollux
+    mkdir -p $out/lib/coq/9.1.0/user-contrib/Pollux
+    cp -r . $out/lib/coq/9.1.0/user-contrib/Pollux
   '';
 }

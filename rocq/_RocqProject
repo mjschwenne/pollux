@@ -1,5 +1,5 @@
 # Pollux
--Q rocq Pollux
+-Q . Pollux
 
 # Warnings, taken from Perennial
 -arg -w -arg -ssr-search-moved

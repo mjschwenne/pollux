@@ -1,0 +1,89 @@
+\section{A Type-Theoretic Approach}\label{sec:type-theory}
+
+Consider the addition of recursive descriptors to the Pollux formalization. With
+a descriptor rule like this one
+\[
+  \infer[D-Update]{ \dom{d} \subseteq \dom{d'} \\ \forall\ k \in
+    \dom{d} \cap \dom{d'}.\ d[k] \propto d'[k] }{ d \ll d' }
+\]
+the descriptor relation would become co-inductive since an update to this
+descriptor would would require showing $d_1[k] \propto d_2[k]$ if $k$ is the field
+were we see the recursive type and the field relation would include:
+\[ \infer[F-Msg]{ d_1[k] \ll d_2[k] }{ \langle k, d_1[k] \rangle \propto \langle k, d_2[k] \rangle } \]
+So a derivation that $d_1[k] \ll d_2[k]$ would need to include a derivation of
+itself! The natural solution here is to make $\ll$ co-inductive. 
+
+However, if we more closely model the descriptors as proper recursive types, it
+might be possible to avoid that. Consider this Protobuf descriptor:
+\begin{minted}{proto}
+message Stream {
+  int hd = 1;
+  Stream tl = 2;
+}
+\end{minted}
+Note first that while it's called \texttt{Stream}, since all Protobuf fields can
+be omitted and message fields always have an explicit presence indicator, we
+actually have a \texttt{List} definition rather than a true co-inductive stream.
+
+From the prospective of algebraic type theory, this type is $F\ X = \mathtt{int}
++ \mathtt{int} \times F\ X$. If we were to add a \texttt{bool} field to this
+descriptor, the algebraic type would update to $G\ X = \mathtt{int} \times
+\mathtt{bool} + \mathtt{int} \times \mathtt{bool} \times G\ X$. 
+
+Then the descriptor relation I'm proposing would be a small proof system where
+we want to show that two descriptors are compatible if $\varnothing \vdash d \ll d'$, but we could
+\emph{define} what it means for two descriptor to be compatible as 
+\begin{mathpar}
+  d_1 := \mu\ X.\ F\ X 
+
+  d_2 := \mu\ X.\ G\ X 
+
+  d_1 \ll d_2 := \exists\ f: A \rightarrow B.\ \forall\ m \checkmark^{d_1}.\ \exists\ bs.\ \mathrm{Encodes}_{d_1}(m, bs) = bs \wedge
+  \mathrm{parse}_{d_2}(bs) = f(m)
+\end{mathpar}
+
+In English, then the definition of two descriptors being compatible is that
+there exists a transformation such that for all valid messages under descriptor
+$d_1$, we can serialize that message into some encoding that can be parsed to
+produce the image of $m$ under the transformation. Rather than trying to prove
+$\varnothing \vdash d_1 \ll d_2$, which would require co-induction, we show that 
+\[ \mu\ F \ll \mu\ G \vdash F (\mu\ F) \ll G (\mu\ G) \]
+which can be done with normal induction. This should be equivalent to the
+original statement using the relation-based definition, when viewed through the
+right lens of folding and unfolding recursive types.
+
+If the descriptor relation is a static typing judgment, then the transformation
+is the semantic type judgment. This would allow us to avoid co-induction, 
+
+However, we even if we present this framework first, we probably still want to
+have a relation on the descriptors. The above definition doesn't provide any
+insight into how to write the transformation, while we've observed that having
+the relation provides a structure that the transformation mirrors. Additionally,
+I personally think that the relation on descriptors provides a nice way to check
+compatibility without having to construct the transformation directly.
+
+We can take this view even farther though, and make the argument that Pollux
+become a type system which can characterize functions over messages has a
+compatible transformation.
+
+\[ \vDash f : d_1 \preceq d_2 \rightarrow \forall\ m \checkmark^{d_1}.\ \exists\ bs.\ \mathrm{Encodes}_{d_1}(m, bs) \wedge
+  \mathrm{parse}_{d_2}(bs) = f(m) \]
+
+Then we end up with a syntactic typing judgment on the descriptors themselves,
+related to what we can convert between, and a semantic typing judgment on the
+transformation between the descriptors. Pulling in the recursive type view of
+the descriptors, we'd end up with a typing rule something like this (likely
+\emph{not} actually correct):
+
+\[ \infer{ X : \mu\ F \preceq \mu\ G \vdash f : F(\mu\ F) \preceq G(\mu\ G) }{\vDash \mu\ X.f : \mu\ F \preceq \mu\ G} \]
+
+This is basically a logical relation in disguise. We want to prove something
+about the transformation functions (which is an infinite family of functions),
+and to do so we build the descriptor relation as a guide.
+
+% Local Variables:
+% citar-bibliography: ("../pollux.bib")
+% TeX-master: "../pollux.tex"
+% TeX-command-default: "Make"
+% jinx-local-words: "protobuf"
+% End:

@@ -1,0 +1,98 @@
+\section{Compatibility Relation Examples}~\label{sec:comp-ex}
+
+Consider these two Protobuf descriptors
+
+\begin{figure}[H]
+	\centering
+	\begin{minipage}[bt]{0.43\textwidth}
+		\begin{lstlisting}[language=proto]
+// v1.proto -- A base proto for the
+// example software. Tracks some
+// basic information about an item,
+// with the ledger itself basically
+// being a list of items.
+syntax = "proto3";
+
+message Location {
+  string loc = 2;
+}
+
+message Item {
+  string name = 2;
+  string description = 3;
+  int32 value = 4;
+  Location loc = 5;
+}
+
+message Ledger {
+  int32 version = 1;
+  string world_name = 2;
+  repeated Item log = 3;
+}\end{lstlisting}
+	\end{minipage}
+	\hspace{0.5cm}
+	\begin{minipage}[bt]{0.48\textwidth}
+		\begin{lstlisting}[language=proto]
+// v2.proto -- build off v1.proto by
+// adding some extra fields to the
+// item, such as item level, and
+// split descriptions and locations
+syntax = "proto3";
+
+message Location {
+  string loc = 2;
+}
+
+message Item {
+  string name = 2;
+  string public_description = 3;
+  string private_description = 7;
+  int64 value = 4;
+  int32 level = 6;
+  Location origin_loc = 5;
+  Location current_loc = 8;
+}
+
+message Ledger {
+  int32 version = 1;
+  string world_name = 2;
+  repeated Item log = 3;
+}\end{lstlisting}
+	\end{minipage}
+
+	\caption{Example Protobuf descriptors for a hypothetical piece of software
+      which tracks TTRPG items, showing the original version on the left and an
+      updated version on the right.}
+	\label{fig:proto-ttrpg}
+\end{figure}
+
+Clearly these descriptors are different, but are they \emph{compatible}?
+Evidence of their compatibility is a derivation of the compatibility relation.
+First, use the Message Relation (Section~\ref{sec:msg-rel}) to show that the base
+descriptors are compatible. Since the \texttt{Location} and \texttt{Ledger}
+messages are the same, one application of the reflexivity rule shows these to be
+compatible. Focus on the \texttt{item} message then. 
+\begin{align*}
+  &\msg{\emptyset}{f} \\
+  &\left\{f(3) = (\lb{description}, \str) \right\} \\
+  &\msg{\emptyset}{f[3 \mapsto \field{public\_description}{\str}]} = \msg{\emptyset}{f_1} \\
+  &\left\{ \ints \propto \intl \right\} \\
+  &\msg{\emptyset}{f_1[4 \mapsto \field{value}{\intl}]} = \msg{\emptyset}{f_2} \\
+  &\left\{ f_2(5) = \field{loc}{\mathtt{Location}} \right\} \\
+  &\msg{\emptyset}{f_2[5 \mapsto \field{current\_loc}{\mathtt{Location}}]} = \msg{\emptyset}{f_3} \\
+  &\left\{ 6 \not \in \dom{f_3} \right\} \\
+  &\msg{\emptyset}{f_3[6 \mapsto \field{level}{\ints}]} = \msg{\emptyset}{f_4} \\
+  &\left\{ 7 \not \in \dom{f_4} \right\} \\
+  &\msg{\emptyset}{f_4[7 \mapsto \field{private\_description}{\str}]} = \msg{\emptyset}{f_5} \\
+  &\left\{ 8 \not \in \dom{f_5} \right\} \\
+  &\msg{\emptyset}{f_5[8 \mapsto \field{current\_loc}{\mathtt{Location}}]}
+\end{align*}
+
+If we had concrete values for these descriptors, it would also be possible to
+show that those two values were related using the value relation.
+
+% Local Variables:
+% citar-bibliography: ("../pollux.bib")
+% TeX-master: "../pollux.tex"
+% jinx-local-words: "protobuf"
+% End:

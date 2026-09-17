@@ -1,0 +1,214 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{fontspec}
+\setmonofont{JetBrainsMono Nerd Font}[SizeFeatures={Size=10}]
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{bbold}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\usepackage{amsthm}
+\usepackage{nicematrix}
+\usepackage{mathpartir}
+\usepackage{mathtools}
+\usepackage{parskip}
+\usepackage{float}
+\usepackage[margin=1in]{geometry}
+\usepackage{tikz}
+\usetikzlibrary{positioning,calc,snakes,automata,arrows.meta}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{listings}
+\usepackage{minted}
+\newmintinline[lean]{lean4}{bgcolor=white}
+\newminted[leancode]{lean4}{fontsize=\footnotesize}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{stmaryrd}
+\usepackage[backend=biber,sorting=ynt]{biblatex}
+\usepackage{subfiles}
+\usepackage{xpatch}
+\usepackage{pl-syntax}
+% \usepackage{MnSymbol}
+
+\addbibresource{pollux.bib}
+\author{Matt Schwennesen}
+\title{Pollux: Parser Compatibility Checking}
+\date{}
+\hypersetup{
+ pdfauthor={Matt Schwennesen},
+ pdftitle={Pollux},
+ pdfkeywords={},
+ pdfsubject={},
+ pdflang={English}
+}
+\lstdefinelanguage{proto}{
+  keywords={message,double,float,int32,int64,uint32,uint64,sint32,sint64,fixed32,fixed64,sfixed32,sfixed64,bool,string,bytes,oneof,enum}
+}
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+\lstdefinestyle{pollux}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{blue},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+
+\lstset{style=pollux}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\theoremstyle{lemma}
+\newtheorem{lemma}{Lemma}[section]
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+
+\makeatletter
+\newsavebox{\@brx}
+\newcommand{\llangle}[1][]{\savebox{\@brx}{\(\m@th{#1\langle}\)}%
+  \mathopen{\copy\@brx\mkern2mu\kern-0.9\wd\@brx\usebox{\@brx}}}
+\newcommand{\rrangle}[1][]{\savebox{\@brx}{\(\m@th{#1\rangle}\)}%
+  \mathclose{\copy\@brx\mkern2mu\kern-0.9\wd\@brx\usebox{\@brx}}}
+\makeatother
+
+\newcommand{\fstar}{F$^\star$}
+\renewcommand{\emptyset}{\varnothing}
+\renewcommand{\mod}{\;\%\;}
+
+\newcommand{\impt}[1]{\mathtt{IMP}\ #1}
+\newcommand{\sigt}[1]{\mathtt{SIG}\ #1}
+\newcommand{\optt}[1]{\mathtt{OPT}\ #1}
+\newcommand{\rept}[1]{\mathtt{REP}\ #1}
+\newcommand{\imp}{\mathtt{IMP}}
+\newcommand{\sig}{\mathtt{SIG}}
+\newcommand{\opt}{\mathtt{OPT}}
+\newcommand{\rep}{\mathtt{REP}}
+\newcommand{\oneof}[1]{\texttt{ONE}\ #1}
+
+% Using "s" and "l" as "short" and "long" since LaTeX commands can't contain
+% numbers in their names...
+\newcommand{\ints}{\texttt{int32}}
+\newcommand{\intl}{\texttt{int64}}
+\newcommand{\intn}[1]{\texttt{int}[\texttt{#1}]}
+\newcommand{\uints}{\texttt{uint32}}
+\newcommand{\uintl}{\texttt{uint64}}
+\newcommand{\uintn}[1]{\texttt{uint}[\texttt{#1}]}
+\newcommand{\sints}{\texttt{sint32}}
+\newcommand{\sintl}{\texttt{sint64}}
+\newcommand{\sintn}[1]{\texttt{sint}[\texttt{#1}]}
+\newcommand{\fixeds}{\texttt{fixed32}}
+\newcommand{\fixedl}{\texttt{fixed64}}
+\newcommand{\fixedn}[1]{\texttt{fixed}[\texttt{#1}]}
+\newcommand{\sfixeds}{\texttt{sfixed32}}
+\newcommand{\sfixedl}{\texttt{sfixed64}}
+\newcommand{\sfixedn}[1]{\texttt{sfixed}[\texttt{#1}]}
+\newcommand{\bool}{\texttt{bool}}
+\newcommand{\true}{\texttt{true}}
+\newcommand{\false}{\texttt{false}}
+\newcommand{\enum}[1]{\texttt{enum}\ #1}
+\newcommand{\str}{\texttt{string}}
+\newcommand{\byt}{\texttt{bytes}}
+\newcommand{\double}{\texttt{double}}
+\newcommand{\float}{\texttt{float}}
+
+\newcommand{\some}[1]{\texttt{Some}\ #1}
+\newcommand{\none}{\texttt{None}}
+
+\newcommand{\lb}[1]{``\mathrm{#1}"}
+\newcommand{\field}[2]{(``\mathrm{#1}",#2)}
+\newcommand{\map}[2]{#1 \rightharpoonup{} #2}
+
+\newcommand{\ptag}[1]{\texttt{#1}}
+\newcommand{\msg}[2]{(#1,#2)}
+
+\newcommand{\dom}[1]{\mathrm{dom}(#1)}
+\newcommand{\denote}[1]{\llbracket{} #1 \rrbracket{}}
+\newcommand{\transform}[3]{\prescript{}{#1}{\llbracket{} #2 \rrbracket{}}_{#3}}
+
+% Varint encode/decode pipeline (Section 5 integer rules).
+% Bare forms for signatures and composition; applied forms for everything else.
+\newcommand{\encop}[1]{\mathrm{enc}_{#1}}
+\newcommand{\decop}[1]{\mathrm{dec}_{#1}}
+\newcommand{\enc}[2]{\encop{#1}\left(#2\right)}
+\newcommand{\dec}[2]{\decop{#1}\left(#2\right)}
+
+\newcommand{\zzop}{\mathrm{zz}}
+\newcommand{\unzzop}{\mathrm{zz}^{-1}}
+\newcommand{\zz}[1]{\zzop\left(#1\right)}
+\newcommand{\unzz}[1]{\unzzop\left(#1\right)}
+
+\newcommand{\tosignedop}[1]{\sigma_{#1}}
+\newcommand{\tosigned}[2]{\tosignedop{#1}\left(#2\right)}
+
+\newcommand{\vints}{\mathcal{V}}
+\newcommand{\payload}{\left[0, 2^{64}\right)}
+\newcommand{\ind}[1]{\mathbb{1}\left[#1\right]}
+\newcommand{\fdiv}[2]{\left\lfloor #1 / #2 \right\rfloor}
+
+\newcommand\doubleplus{+\kern-1.3ex+\kern0.8ex}
+\newcommand\mdoubleplus{\ensuremath{\mathbin{+\mkern-10mu+}}}
+
+\begin{document}
+\maketitle
+
+This is the \LaTeX{} report accompanying my Lean development for Pollux,
+a verification project focused on the compatibility of data
+descriptors.
+
+\tableofcontents
+\input{sections/01-intro.tex}
+
+\input{sections/02-proto-primer.tex}
+
+\input{sections/03-philosophy.tex}
+
+% \input{section/04-???} Something about the Pollux framework which is format agnostic
+
+\input{sections/05-proto-desc.tex}
+
+\input{sections/06-proto-msg.tex}
+
+\input{sections/07-proto-trans.tex}
+
+\input{sections/08-proto-relations.tex}
+
+\input{sections/09-type-theoretic.tex}
+
+\input{sections/10-eval.tex}
+
+\input{sections/11-simpl-parse.tex}
+
+\input{sections/12-inter-parse.tex}
+
+\input{sections/XX-todo.tex}
+
+\printbibliography{}
+\end{document}
+
+% Local Variables:
+% citar-bibliography: ("./pollux.bib")
+% TeX-command-default: "Make"
+% jinx-local-words: "proto protobuf protoc protoscope"
+% End:
