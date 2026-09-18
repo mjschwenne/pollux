@@ -4,6 +4,7 @@ ALL_DVI = $(patsubst %.tex,%.dvi,$(wildcard *.tex))
 ALL_PS = $(patsubst %.tex,%.ps,$(wildcard *.tex))
 SECTIONS = $(shell find ./sections -type f -name "*.tex")
 
+.PHONY: all clean mrproper help pdf dvi ps
 
 # makes everything that can be made
 # default is pdf
@@ -20,7 +21,7 @@ pollux.pdf: pollux.tex $(SECTIONS)
 	latexmk -lualatex -shell-escape $*.tex
 
 %.dvi : %.tex
-	latexmk -dvi $*.tex 
+	latexmk -dvi $*.tex
 
 %.ps : %.tex
 	latexmk -ps $*.tex
@@ -46,6 +47,3 @@ mrproper_% : clean_%
 
 help :
 	cat README.md
-
-
-.PHONY: all clean mrproper help pdf dvi ps

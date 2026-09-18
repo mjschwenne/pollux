@@ -1,0 +1,2 @@
+report:
+	latexmk -lualatex -shell-escape pollux.tex
