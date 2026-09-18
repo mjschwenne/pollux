@@ -103,7 +103,8 @@
               config.devShells.eval
               config.devShells.go
               config.devShells.latex
-              config.devShells.rocq
+              # Rocq shell causes issues with GLIBC version on the go side
+              # config.devShells.rocq
             ];
 
             # shellHook can't be sharded through inputsFrom, that only grabs buildInputs, not the hooks

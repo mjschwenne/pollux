@@ -40,4 +40,3 @@ nix build .#pollux-go                              # from the repo root
 
 - **`vendorHash` in `package.nix` must change whenever `go.mod`/`go.sum` do.** The Nix build fails with a hash mismatch that prints the correct value.
 - `eval/` calls whatever `pollux` is on `PATH`. The dev shell's copy is the Nix-built package, so `go build` alone does not change what `eval` runs. Rebuild the package and re-enter the shell. Parquet column changes ripple into `eval` (see `eval/CLAUDE.md`).
-- Observed 2026-09-18: outside the Go dev shell, `go test ./protobuf` failed with a glibc `undefined symbol: __nptl_change_stack_perm` error, while `internal/desclib` passed. The package links tree-sitter through cgo, so a Go/C toolchain mismatch between shells is the likely cause. Try the Go dev shell before debugging code.
