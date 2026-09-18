@@ -1,298 +1,74 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository. Each component has its own `CLAUDE.md`, loaded when you work in that directory; this one holds what applies everywhere.
 
 ## Project Overview
 
-Pollux is a formally verified Protocol Buffers parser and serializer. Active development is now in **Lean 4** (`lean/`); the older Rocq development is retained for reference (`rocq/`) and documented separately in `CLAUDE-rocq.md`.
+Pollux is a verification project on the compatibility of data descriptors: when can bytes written under one Protocol Buffers schema be read under another, and what does the reader get? It pairs a written report with a Lean 4 formalization, plus tooling that grounds both in real-world protobuf usage.
 
-The Lean port covers:
+| Directory    | What it is                                                                      | Guide                 |
+|--------------|---------------------------------------------------------------------------------|-----------------------|
+| `latex/`     | The report: **the single source of truth**. Read-only for Claude               | `latex/CLAUDE.md` (author-maintained) |
+| `lean/`      | Lean 4 formalization of the report                                              | `lean/CLAUDE.md`; the frozen InterParse layer has `lean/Pollux/InterParse/CLAUDE.md` |
+| `pollux-go/` | Go `pollux` CLI: varint cross-checks, corpus statistics, recursion analysis     | `pollux-go/CLAUDE.md` |
+| `eval/`      | Python pipeline that mines real-world `.proto` corpora for the report's numbers | `eval/CLAUDE.md`      |
+| `notes/`     | Claude's write-ups for the author: findings, drift reports, reviews            | `notes/README.md`     |
+| `rocq/`      | Legacy Rocq development, reference only                                         | `rocq/CLAUDE.md`      |
 
-- The abstract parser/serializer framework (`Pollux.Parse`)
-- The intermediate tagged key-value format (`Pollux.InterParse`)
-- The real protobuf layer (`Pollux.Proto`) — **in progress**: the sealed descriptor kernel and the value layer are in place; the parser, serializer and compatibility relations are not
+Also: `proto/` holds versioned schemas (v1–v5) for evolution tests via `buf`; `ocaml/` is the Rocq extraction target and not part of the Lean workflow.
 
-The `InterParse` layer is **complete and frozen**: all three top-level correctness theorems (`schemaCorrectInterParseOk`, `idInterParseOk`, and the cross-descriptor `compatInterParseOk`) are fully proven, and the layer is kept as the v1 artifact documented in the written report. Don't refactor it — new correctness work targets `Pollux.Proto`, which replaces the toy encoding with the actual wire format (Rocq's `ProtoParse`/`Varint`/`SimplParse` have still not been ported; `Pollux.Proto` is their successor, not a port). The design rationale for the Proto layer's descriptor representation lives in `lean/proto-design.org`.
+## The Workflow: The Report Leads, Lean Follows
 
-## Build System and Commands
+One principle governs this repository: **the LaTeX report in `latex/` is the single source of truth, and the Lean formalization is an implementation of the setup and techniques the report describes.** The author works in the report. Claude and Aristotle complete the formalization behind it.
 
-The project uses `lake` for Lean and Nix for reproducible builds.
+### Only the author modifies the report
+
+- Never create, edit, move, or delete anything under `latex/`. That covers the `.tex` sections, `pollux.bib`, `makefile`, `latexmkrc`, `flake-module.nix`, `latex-pl-syntax/`, and build outputs. It holds for shell commands too (`sed -i`, redirects, `mv`, `rm`, `git checkout -- latex/…`), not only the edit tools. `.claude/settings.json` denies `Edit`/`Write` under `latex/`; nothing mechanically stops a shell command, so that part is on you.
+- Don't build the report (`make`, `latexmk`). Builds write into `latex/`, and the author runs them.
+- Reading it is expected: read the relevant section before any formalization work.
+- When the report should change, write that up in `notes/`. Suggested wording or LaTeX is welcome there. The author decides and edits. The same goes for `latex/CLAUDE.md`: it lives in the author's directory, so propose changes to it in a note.
+
+### What "Lean follows the report" means
+
+The report fixes the **mechanisms**: data representations, definitions, relations and their rules, theorem statements and their hypotheses, and proof strategies (e.g. transform-then-relate, a sealed descriptor observed through `explode`). Lean implements those. The report does **not** fix Lean's file layout, module structure, or declaration names.
+
+- **Claude's call** (below the report's level of detail): helper lemmas, termination measures, tactics, file and module organization, naming, and refactors that leave every statement unchanged.
+- **Needs the report first**: a new definition or a change in one's meaning, a theorem statement or its hypotheses, a relation rule, a change of data representation, and a proof strategy the report would describe differently.
+
+### When they disagree: stop and write a finding
+
+If the report's approach doesn't work in Lean (a theorem is false as stated, a definition doesn't typecheck or terminate as described, a hypothesis is missing), or Lean needs a decision the report doesn't make:
+
+1. Stop work on the affected piece. Don't diverge from the report to get unblocked, and never quietly weaken or strengthen a statement.
+2. Write a finding in `notes/` (format in `notes/README.md`). Say what the report says (cite its `\label`), what goes wrong, and the evidence, then lay out candidate fixes with their trade-offs. The best evidence is a Lean counterexample, as `lean/Pollux/Proto/OneofCounterexample.lean` is for the one-layer oneof condition.
+3. Tell the author, and carry on with unaffected work.
+
+Existing divergence is handled the same way. Parts of the report were written after the Lean, so they differ in places, and a mismatch alone doesn't tell you which side is stale. Record it (`/report-drift`) instead of "fixing" either side. Once the author settles it, either by revising the report or by confirming the report's version, bring Lean in line.
+
+### Aristotle proves; it does not design
+
+[Aristotle](https://aristotle.harmonic.fun) (Harmonic's automated prover) fills `sorry`s in statements Claude has already written to match the report. Integrating its output includes checking that no statement or definition changed. Use `/aristotle`.
+
+### Skills
+
+| Skill                         | Use it to                                                                 |
+|-------------------------------|---------------------------------------------------------------------------|
+| `/formalize <report item>`    | Implement a report definition, theorem, relation, or mechanism in Lean    |
+| `/report-drift [section]`     | Compare a report section with the Lean and write a drift note             |
+| `/aristotle <prepare\|status\|integrate>` | Hand `sorry`s to Aristotle and integrate the results          |
+| `/lean-check`                 | Build, scan for `sorry`/`native_decide`, and check axioms                 |
+
+## Build System
+
+The flake uses `flake-parts`. Each component contributes a `flake-module.nix` (`lean/`, `eval/`, `pollux-go/`, `latex/`, `rocq/`), and the root `flake.nix` merges them.
 
 ```bash
-# Inside lean/: build everything
-cd lean && lake build
-
-# Nix entry point
-nix build .#lean-build           # CI-style hermetic build
-nix develop                      # dev shell (lean, mathlib cache, aristotle, etc.)
+nix develop               # everything (merges every component shell)
+nix develop .#lean        # or .#eval, .#go, .#latex, .#rocq
+nix build                 # = .#lean-build (hermetic Lean build)
+nix build .#pollux-go     # Go CLI;  .#rocq-build for the legacy proofs
 ```
 
-Toolchain: `leanprover/lean4:v4.28.0`, single dep is mathlib pinned to `v4.28.0` (see `lean/lean-toolchain` and `lean/lakefile.toml`).
+The default shell's hook exports `GITHUB_TOKEN` and `ARISTOTLE_API_KEY` from `../gh_pat.txt` and `../aristotle.txt`, files outside the repository. Never print, copy, or commit their contents.
 
-The Nix build (`nix/pollux-lean/default.nix`) is non-trivial: it uses an FOD to fetch mathlib's pre-compiled `.olean` cache (`lake exe cache get`), reconstructs minimal git stubs so Lake's cache validity checks pass, and pre-fetches the ProofWidgets npm tarball. Update the `outputHash` whenever `lake-manifest.json` changes.
-
-CI lives at `.github/workflows/lean.yml` (Linux + macOS, both run `nix build -L .#lean-build`).
-
-## Repository Layout
-
-```
-lean/
-├── lakefile.toml, lean-toolchain, lake-manifest.json
-├── proto-design.org                     -- design rationale for the Proto descriptor kernel
-├── Pollux.lean                          -- root (imports Parse + InterParse + Proto)
-└── Pollux/
-    ├── Parse.lean                       -- umbrella for the abstract framework
-    ├── Parse/
-    │   ├── Input.lean                   -- `Input` typeclass + `List UInt8` instance
-    │   ├── Result.lean                  -- `Level`, `Data`, `Result`, `resultEquiv`
-    │   ├── Parser.lean                  -- parser combinators
-    │   ├── Serializer.lean              -- dual serializer combinators (phantom `wf`)
-    │   └── Theorems.lean                -- `ParseOk` family + combinator correctness
-    ├── InterParse.lean                  -- umbrella for the intermediate format
-    └── InterParse/
-        ├── Descriptor.lean              -- Desc/Field, Value/Val, sorted-map ops, valid/wf, sizes
-        ├── Parser.lean                  -- byte parsers, `parseValue`
-        ├── Serializer.lean              -- byte serializers, `serialValue`
-        ├── Theorems.lean                -- re-exports Theorems/
-        └── Theorems/
-            ├── Primitives.lean          -- byte/unsigned/nat/z32/bool roundtrips
-            ├── SortedHelpers.lean       -- sortedInsert/sortedErase commutativity
-            ├── Validity.lean            -- validDropFirst, validInsert, depth/length,
-            │                               `valid'` + `valueWf` decomposition lemmas
-            ├── SchemaCorrect.lean       -- `SchemaCorrect` relation + sc_* lemmas
-            ├── SchemaCorrectCompatible.lean  -- `SchemaCorrectCompatible` + schemaCorrectCompatibleEqual
-            ├── ValList.lean             -- valList filter + listToValue roundtrip
-            ├── IdCompatible.lean        -- `IdCompatible` relation + `idCompatTransform`
-            ├── IdCompatibleHelpers.lean -- sorted-cons smart constructors + transform lemmas
-            ├── IdCompatibleRoundTrip.lean -- `idCompatRoundTrip`
-            ├── Serialization.lean       -- willEncode + weakening + serializer inversion
-            ├── Compatible.lean          -- full cross-descriptor ≺/∝/≪/≼, `≪` structure,
-            │                               `msgCompat_of_idCompatible`
-            ├── CompatTransform.lean     -- `compatTransform d₁ d₂ v` (cross-descriptor
-            │                               analogue of `idCompatTransform`) + lookup/WF lemmas
-            ├── CompatRoundTrip.lean     -- `compatRoundTrip`: the transform lands in `≼`
-            └── InterParseOk.lean        -- `parseOk_wf` + `schemaCorrectInterParseOk` +
-                                            --   `idInterParseOk` + `compatInterParseOk`
-    ├── Proto.lean                       -- umbrella for the protobuf layer (in progress)
-    └── Proto/
-        ├── Descriptor.lean              -- sealed descriptor kernel: Desc/Field/FieldType,
-        │                                   --   `explode` interface, WF/AllWF, sizes
-        ├── SortedMap.lean               -- payload-parameterized sorted sigma-list theory,
-        │                                   --   shared by Desc and Value
-        ├── Value.lean                   -- Value/Slot/Payload, unsealed map interface, sizes,
-        │                                   --   defaults, Field.init/Value.init, Value.Total
-        ├── Validity.lean                -- Desc.Legal, Value.OneofOk, Payload.MatchesScalar,
-        │                                   --   Value.Valid/Slot.Matches/Payload.Matches,
-        │                                   --   Value.valid_of_get?, Value.init_valid
-        ├── Transform.lean               -- Value.reinterpret: the value a cross-descriptor
-        │                                   --   round trip yields, plus its `get?` spec,
-        │                                   --   Desc.OneofPreserved{,All}, reinterpret_self,
-        │                                   --   reinterpret_valid
-        └── OneofCounterexample.lean     -- why reinterpret_valid needs the *recursive*
-                                            --   oneof condition: an explicit witness
-```
-
-Outside `lean/`: `rocq/` (legacy proofs), `pollux-go/` (reference Go implementation), `proto/` (schema versions for evolution tests), `ocaml/` (Rocq extraction target — does not apply to Lean).
-
-## Core Abstractions
-
-### `Input` typeclass (`Parse/Input.lean`)
-
-Lean's replacement for the Rocq module functors. Abstracts over the concrete byte-sequence representation by bundling:
-
-- An element type `C` and operations (`length`, `view`, `toInput`, `charAt`, `app`, `drop`, `slice`)
-- Algebraic laws relating them (`app_assoc`, `drop_app`, `slice_app`, `view_length`, …)
-- `IsRemaining input remaining` — the suffix relation used everywhere a parser threads input
-
-The single concrete instance is `Input (List UInt8)` (the project's `ByteInput`). Everything in `Parse` and `InterParse` is written generically against `[Input ι]` until the InterParse layer fixes `ι := List UInt8`.
-
-### `Result ι α` (`Parse/Result.lean`)
-
-The unified return type for parsers and serializers:
-
-- `success result enc` — `result : α`, `enc : ι` is the remaining input (parser) or produced encoding (serializer)
-- `failure level data` — `level : Level` is `fatal` or `recoverable`; `data : Data ι` is a linked error chain
-
-`resultEquiv` (`≡ᵣ`) is the equivalence used in correctness proofs — it ignores error messages so that proofs aren't coupled to specific error strings.
-
-### `Parser ι α` and `Serializer ι α wf` (`Parse/Parser.lean`, `Parse/Serializer.lean`)
-
-```
-abbrev Parser ι α            := ι → Result ι α
-abbrev Serializer ι α (_wf)  := α → Result ι Unit
-```
-
-Serializers carry a **phantom well-formedness predicate** `wf : α → Prop`. Computationally it does nothing; in theorem statements it specifies which values the serializer is allowed to encode. Combinators compose these predicates (e.g. `concatWf wfα wfβ = fun (a, b) => wfα a ∧ wfβ b`, `bindWf`, `repWf`, …).
-
-The combinator set includes the usual suspects: `bind`/`bindSucceeds`/`bindResult`, `concat`/`depConcat`/`concatMap`, `or`, `opt`, `rep`/`repN`, `map`/`partMap`, `len`/`len'`, `recursiveState`/`recurSt` (recursion threading state, with a measure for termination).
-
-### `Desc`/`Field` and `Value`/`Val` (`InterParse/Descriptor.lean`)
-
-The intermediate format. Schemas (`Desc`) map integer field numbers to types (`Field`); values (`Value`) map integer field numbers to typed payloads (`Val`). Both are mutually inductive so they can contain nested messages:
-
-```
-mutual
-  inductive Desc  | mk (fs : List (Int × Field))
-  inductive Field | msg (d : Desc) | bool | int
-end
-mutual
-  inductive Value | mk (vs : List (Int × Val))
-  inductive Val   | msg (v : Value) | bool (b : Bool) | int (z : Int) | missing
-end
-```
-
-**Why `List (Int × _)` and not a proper map?** Lean's positivity checker rejects mutual inductives that go through `AList`/`Finmap`/`TreeMap`. The fix: store the fields as a list and impose a **sorted, no-duplicate-keys** invariant via `WF`:
-
-- `Desc.Sorted` / `Desc.NodupKeys` / `Desc.WF = Sorted ∧ NodupKeys` (and the same for `Value`)
-- `sortedInsert` / `sortedErase` preserve `WF`
-- `ext_lookup` is the payoff: well-formed descriptors (resp. values) with the same `get?` are equal
-
-Every constructor in the codebase (`∅`, `insert`, `erase`) preserves `WF`; lemmas use this throughout.
-
-**Lookup after insert carries no `WF` side condition.** `Desc.get?_insert_same` / `get?_insert_ne` and their `Value` analogues (plus `isSome_get?_insert`) hold for *any* underlying list, because `sortedInsert k x` only ever adds or replaces an entry whose key is `k` and leaves every other lookup alone. They are proved from `lookup_sortedInsert_self` / `lookup_sortedInsert_ne`. Prefer them over threading `WF` — several relations (`MsgCompat` especially) carry no well-formedness premises at all, and needing one used to be the only reason `descCompat_isSome` / `descCompat_field` / `descCompat_msg` took a `d₁.WF` argument. Lookup after *erase* still requires `WF`.
-
-The file also defines several derived metrics and predicates that downstream proofs depend on:
-
-- `descSize` / `fieldSize` / `valueSize` / `valSize` — for well-founded recursion
-- `valueDepth` — strictly decreases at nested messages, used as the serializer termination measure
-- `valueEncLen`, `valueEncLen'` — encoding-length bounds
-- `valid d v` / `valid'` — "every field in the descriptor exists in the value (resp. vice-versa)"
-- `valueWf d v` — bound-respecting well-formedness used by `serialValue`
-- `willEncode d kv` — per-entry condition: the field exists in `d` and the pair is `valWf`
-- `valList d v` / `listToValue d vs` — filter and merge between values and their key-list view
-
-### Compatibility relations
-
-These are the heart of the schema-evolution story; understanding them is essential before touching anything in `InterParse/Theorems/`.
-
-**`SchemaCorrect d v`** (`Theorems/SchemaCorrect.lean`, notation `⟨ v ∷ d ⟩`)
-
-A value is *schema-correct* against a descriptor when every entry in `v` exactly matches the type declared in `d`, there are no `V_MISSING` entries, and there are no extra entries. The inductive presentation builds this up by repeated `insert` on disjoint keys with matching field-value types (`fieldValMatch`), recursing structurally on `.msg` fields.
-
-This is the strict relation. The top-level `parseValue`/`serialValue` roundtrip is stated for schema-correct values.
-
-**`SchemaCorrectCompatible d₁ d₂ v₁ v₂`** (`Theorems/SchemaCorrectCompatible.lean`, notation `⟨ v₁ ∷ d₁ ⟩≼⟨ v₂ ∷ d₂ ⟩`)
-
-The schema-evolution relation: when two `(descriptor, value)` pairs both correspond to the "same" message under potentially different schemas. Two constructors:
-
-- `refl` — both pairs are identical and both are schema-correct
-- `add` — extend both pairs symmetrically with a new field at the same key, same value, same type
-
-`schemaCorrectCompatibleEqual` is the load-bearing lemma: if `d₁ = d₂` then `v₁ = v₂`. This is what lets the top-level theorem squeeze a `Compatible`-flavored conclusion down to a true roundtrip equality.
-
-**`IdCompatible d v₁ v₂`** (`Theorems/IdCompatible.lean`, notation `⟨ v₁ ≼ v₂ ⟩∷ d`)
-
-Two values compatible under the *same* descriptor, dropping the schema-correct requirement that `SchemaCorrectCompatible` imposes on both sides. The input value may carry fields outside the descriptor (dropped on parse) or omit declared fields (re-injected as `.missing` on parse). Seven constructors: `emp`, `insertInt` / `insertBool` / `insertMsg` (type-matched entries, recursing at nested messages), `drop` (key absent from the descriptor — no constraint on the dropped value), `addMissing` (key declared but absent from the input), and `inputMissing` (`.missing` on both sides at a declared key).
-
-Alongside the relation, `idCompatTransform d v` computes the value a round trip actually yields — drop unknown keys, `.missing` for unmatched declared keys, recurse into nested messages. `idCompatRoundTrip` (`Theorems/IdCompatibleRoundTrip.lean`) proves the transform always lands in the relation; the top-level theorem proves parsing *produces* the transform, then composes. `IdCompatibleWrapper` is the `δ → δ → α → α → Prop` shim that lets it slot into `LimitParseOkCompat''`.
-
-Two caveats worth knowing before extending this:
-
-- `idInterParseOk` is stated under `valueWf d v` alone (it used to also require `valid' d v`, which forbade real values at unknown keys and so left the drop case only half-proven). `valueWf` is vacuous on keys outside the descriptor, which is exactly what makes `drop` reachable.
-- `valueWf` still sends `some f, .missing` to `False`, so **`inputMissing` is unreachable from `idInterParseOk`** — `IdCompatible.inputMissing_cons` is currently dead code, and `roundTrip_case4b`'s `.missing` branch is discharged by `valWfFold_missing_elim`. Relaxing that arm of `valueWf` (the serializer already handles the case: `valListFilterP` drops it, `mergeFieldVal` re-injects it) would make the constructor live, but `valueWf` is `serialValue`'s phantom wf, so the change also touches `schemaCorrectInterParseOk` and the `Serialization.lean` inversion lemmas.
-
-The `≼` in both notations is suggestive: these are partial orders on the schema-extension lattice. Neither is the cross-descriptor "full compatibility relation" from the written report — that lives in `Theorems/Compatible.lean`, below.
-
-**The full compatibility relation** (`Theorems/Compatible.lean`)
-
-Four mutually-recursive relations transcribing `sec:ip-compat-rel` of the report: `ValCompat v₁ f₁ v₂ f₂` (`≺`, notation `⟨ v₁ ∷ f₁ ⟩≺⟨ v₂ ∷ f₂ ⟩`), `FieldCompat f₁ f₂` (`∝`), `DescCompat d₁ d₂` (`⋘`, the report's `≪`), and `MsgCompat m₁ d₁ m₂ d₂` (notation `⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩`, the report's `≼`). They must share one `mutual` block: `V-Msg → ≼`, `F-Msg → ≪`, `D-Chg → ∝`, `M-Update → ≺` and `∝`. `MsgCompatWrapper` is the shim into `LimitParseOkCompat''`.
-
-The round-trip theorem is **not** here — only the relations plus the `DescCompat` structure lemmas that `limitRecursiveStateCompat_correct` consumes (`descCompat_isSome`, `descCompat_field`, `descCompat_msg`, `fieldCompat_msg_inv`, `fieldCompat_scalar_inv`). The theorem itself is proven as `compatInterParseOk` in `InterParseOk.lean` (via `Theorems/CompatTransform.lean` and `Theorems/CompatRoundTrip.lean`), which is where it consumes them: `LimitParseOkCompat''` already takes two descriptors, and `limitRecursiveStateCompat_correct` takes a `linkedState : σ → σ → Prop` that the two same-descriptor theorems instantiate with `(· = ·)` and that `≪` fills.
-
-Things to know before touching this file:
-
-- **`≼` has eight rules, and they are not the report's eight.** `M-Declare` (writer declares a field its own value leaves unset; reader gets `.missing`) was added — without it `≼` cannot follow `IdCompatible.addMissing`, and the cross-descriptor round-trip theorem is false already at `d₁ = d₂`, since `valueWf` permits a value that omits a declared key. It relates the two field types by `f₁ ∝ f₂` rather than equating them, which is also forced: a `D-Chg` on a declared-but-unset key retypes the `V_MISSING` the reader injects, and with `f₁ = f₂` the resulting judgment is underivable (`≺` cannot carry a `.missing` across a type change, and `M-Update` needs the writer's key populated). `F-Refl` recovers the equal-type rule. `M-Add` (reader gains an arbitrary type-matching value at a key the writer never declared) was removed — no round trip produces it, `M-Missing` covers the real case, and keeping it would stop `≼` being readable as a specification of what parsing produces. Both changes are safe in the same direction: `≼` occurs only *positively* in `LimitParseOkCompat''`.
-- **`≪` is the asymmetric one.** It occurs *negatively*, as the `linkedState` hypothesis, and has no drop rule. Adding one would make the top-level theorem false: `parseVal`'s `none` branch consumes the tag byte but not the payload, so a reader whose descriptor lacks a key the writer encoded desynchronizes the stream. Consequently `⟨ m₁ ∷ d₁ ⟩⪯⟨ m₂ ∷ d₂ ⟩` does *not* imply `d₁ ⋘ d₂`.
-- **`≼` constrains no domains.** `not_msgCompat_dom` proves the natural domain invariant false: composing `M-Declare` with `M-Drop` yields `⟨ ∅ ∷ {0 ↦ int} ⟩⪯⟨ ∅ ∷ ∅ ⟩`. Don't try to recover facts about `dom(m₂)` or `dom(d₁)` from a `≼` derivation.
-- **Induction needs the hand-rolled eliminators.** Lean's `induction` tactic refuses mutually inductive types, so use `MsgCompat.ind` / `DescCompat.ind` / `FieldCompat.ind`, which specialize the joint recursor with `True` motives for the other three relations. This works for any motive that doesn't need to *inspect* the sibling relations. All three feed `.rec` one `?_` per constructor across the whole block — currently 5 + 5 + 5 + 8 = 23; adding a rule anywhere breaks all three with a confusing "application type mismatch", and the fix is one more `?_`, not a motive change.
-- `msgCompat_of_idCompatible` is the sanity check that `≼` generalizes `IdCompatible` at `d₁ = d₂`. `idCompatible_eq_of_schemaCorrect` records why that check is weak on schema-correct writers: `SchemaCorrect` makes `IdCompatible` degenerate to equality, so the subsumption there is just `M-Refl`.
-- `descCompat_wf` lifts `Desc.WF` along `≪`; `not_descCompat_allWF` shows the recursive `AllWF` does *not* lift, because `D-Add` inserts an unconstrained field. So `d₂.AllWF` has to be an explicit hypothesis of the eventual top-level theorem rather than something recovered from `d₁`.
-
-### `ParseOk` family (`Parse/Theorems.lean`)
-
-The correctness statements for parser/serializer pairs, parameterized over the phantom `wf`:
-
-```
-ParseOk''' par ser x enc rest := wf x → ser x = success () enc
-                                  → par (app enc rest) = success x rest
-ParseOk''  par ser x enc      := ∀ rest, ParseOk''' …          -- fix x, enc
-ParseOk'   par ser x          := ∀ enc rest, …                 -- fix x
-ParseOk    par ser            := ∀ x enc rest, …               -- full
-```
-
-`LimitParseOk*` are the no-trailing-data variants. `LenOk` says the declared length function matches the actual encoding size. These compose: most combinator lemmas (`bind_correct`, `concat_correct`, `rep_correct`, …) take `ParseOk`s on subparts and produce a `ParseOk` on the whole.
-
-### Top-level theorems (`Theorems/InterParseOk.lean`)
-
-```
-theorem schemaCorrectInterParseOk (v : Value) (d : Desc) :
-  ⟨ v ∷ d ⟩ →
-  LimitParseOkCompat'' SchemaCorrectCompatible parseValue serialValue d d v
-
-theorem idInterParseOk (v : Value) (d : Desc) :
-  d.AllWF → v.AllWF →
-  LimitParseOkCompat'' IdCompatibleWrapper parseValue serialValue d d v
-
-theorem compatInterParseOk (v : Value) (d₁ d₂ : Desc) :
-  d₁.AllWF → v.AllWF → d₂.AllWF → d₁ ⋘ d₂ →
-  LimitParseOkCompat'' MsgCompatWrapper parseValue serialValue d₁ d₂ v
-```
-
-The first: for any schema-correct value, `serialValue` followed by `parseValue` recovers a value that is `SchemaCorrectCompatible` with the original under the same descriptor — which, by `schemaCorrectCompatibleEqual`, equals the original.
-
-The second drops schema correctness for `AllWF` (recursive sortedness/no-dups) plus the `valueWf` already carried by `serialValue`, and concludes with the looser `IdCompatible`. It goes through `idCompatTransform`: prove the strengthened statement "parsing yields exactly `idCompatTransform d v`", then compose with `idCompatRoundTrip`.
-
-Both reduce to `limitRecursiveStateCompat_correct` plus per-step correctness; the per-step arguments (`parseVal_serialVal_correct` and `parseVal_serialVal_transform`) are the bulk of the file and use `repCorrectWeakFull` / `repCorrectWeakFullMap` to lift per-entry correctness through `Parser.rep`.
-
-The third is the cross-descriptor generalization, proven by the same two-step strategy as `idInterParseOk`: `Theorems/CompatTransform.lean` defines `compatTransform d₁ d₂ v` — the value a cross-descriptor round trip actually yields, a structural recursion over the *reader's* field list reading the writer's descriptor and value by key lookup — the strengthened statement "parsing produces exactly `compatTransform d₁ d₂ v`" goes through `limitRecursiveStateCompat_correct` with `linkedState := fun a b => a ⋘ b ∧ b.AllWF`, and `compatRoundTrip` (`Theorems/CompatRoundTrip.lean`) shows the transform always lands in `≼`, assembling the derivation key by key in increasing key order (the reader's field list drives the walk, since `≪` never removes a key). `d₂.AllWF` is carried in `linkedState` because `validState` is threaded on the writer's descriptor only and `AllWF` does not lift along `≪` (`not_descCompat_allWF`).
-
-## The Proto layer (`Pollux/Proto/`) — in progress
-
-`Pollux.Proto` is the real-protobuf successor to `InterParse`. Two pieces exist: the **sealed descriptor kernel** (`Proto/Descriptor.lean`) and the **value layer** (`SortedMap.lean`, `Value.lean`, `Validity.lean`, `Transform.lean`), both `sorry`-free. The parser, serializer and compatibility relations are still absent. The design rationale, including the experiments that ruled out the alternatives, is in `lean/proto-design.org` (source material for the report). Operative rules:
-
-- **The list encoding is sealed by convention.** `Desc` stores its field map as a sorted sigma list, but outside `Proto/Descriptor.lean` nothing may mention `Desc.entries`, `sortedInsert`, or any list lemma. The public interface is `explode : Desc → Finmap (fun _ : Int => Field)` — a one-layer unwrap into a genuine mathlib map with nested message descriptors staying sealed `Desc` handles — plus `get?`/`insert`/`erase`/`ofList`/`∅`. This is possible because positivity constrains constructor arguments, not functions out of the type. Lean's `private` is file-scoped, so the seal is enforced by review, not the language; the parser/serializer implementation files may reach the representation, theorem *statements* may not.
-- **WF discipline**: `Desc.WF` is a single `Pairwise` (sortedness; no-dup keys is derived, `WF.nodupKeys`). Interface lemmas are WF-free wherever possible — `explode_insert` and both `get?_insert` lemmas hold unconditionally because the `Finmap` quotient absorbs the invariant; only the `erase` laws at the erased key and `eq_of_explode_eq` (WF descriptors are canonical representatives) need `WF`.
-- **Recursion through descriptors goes through the interface**: `descSize_lt_of_get?_msg` is the termination lemma — anything recursing into a nested message obtained via `get?` uses well-founded recursion on `descSize`. `Desc.AllWF` is *defined* this way, directly in its one-layer form; there is no structural `fieldListAllWF` analogue to keep in sync.
-- Field numbers are `Int` (continuity with the InterParse relations); the protobuf range bounds (1 to 2^29−1, reserved 19000–19999) belong in the serializer-layer validity predicate, like `valueWf`'s bounds in InterParse.
-- Oneof membership is a **presence mode**, not structure: `Cardinality.oneof (group : Nat)` transcribes `FieldDescriptorProto.oneof_index` (descriptor form is flat; the folded `.proto` block is surface syntax protoc desugars). Group tags are only ever compared *within* one descriptor — tag-equality is the grouping; cross-descriptor compatibility will compare induced partitions, never raw tags. At-most-one-member-set belongs to the serializer validity predicate, cross-member last-wins to the future `Encodes` spec; the tag is dormant until those exist. Synthetic proto3-`optional` oneofs import as `.optional`. Map fields need no descriptor support: the wire format defines `map<K,V>` as `repeated MapEntry`, so they arrive pre-desugared (key-type restrictions go to the validity predicate).
-- Values are **unsealed** — they are the induction skeleton of the round-trip proofs. The seal asymmetry is deliberate: descriptors are observed one layer at a time; values are traversed. `Value.entries` is public and `Value.get?` is plain `dlookup`, with no `Finmap` in between.
-- **The container type cannot be shared, but the theory can.** A parameterized synonym (`abbrev SortedList (β : Type) := List ((_ : Int) × β)`) used as a constructor argument is rejected by the kernel — for `abbrev` as well as `def`, since the declaration reaching the kernel still names the synonym. Each inductive writes `List ((_ : Int) × _)` out in full; `Proto/SortedMap.lean` carries `sortedInsert`/`WF`/lookup laws/extensionality for a general payload and both instantiate it.
-- **Values are total over their descriptor.** `Value.Total d v` is exact domain equality: a valid value has an entry for every declared field, with absence expressed *inside* the presence wrapper (`optional none`, `repeated []`). This is protobuf's data model, not an artifact — implicit presence means the default is indistinguishable from unset. `Value.init d` is the value denoted by silence, and totality is what makes the same-descriptor round trip an identity rather than a transform. Totality is **descriptor-relative**, so evolution is fine: `Total d₁ v` is a hypothesis, `Total d₂ (reinterpret d₁ d₂ v)` a lemma. Do not look for a state in which a value is "not yet total".
-- The value shape is **three-valued** though `Cardinality` is four-valued: oneof members are `optional`-shaped, and at-most-one-member-set is the cross-field `Value.OneofOk`, quantified over *pairs* of keys.
-- **Scalar carriers**: the twelve integer types share one `Int` carrier (they differ only in encoding and range, both recorded by the descriptor; ranges go to `Payload.MatchesScalar`), and `float`/`double` carry IEEE-754 **bits** (`UInt32`/`UInt64`), never Lean's `Float` — it is opaque, has no equational theory, and IEEE equality is not reflexive. Bit carriers are width-exact, so they need no range condition. `string` is `String` provisionally; the fallback is bytes plus a UTF-8 conjunct.
-- **Implicit presence applies only to scalars** (proto3 singular message fields have explicit presence). Recorded in `Desc.FieldOk`; it is why `Payload.isDefault` needs no `DecidableEq` and why `Field.init`'s `singular`/`msg` arm is unreachable.
-- Schema rules live descriptor-side (`Desc.Legal`: field-number range, the presence rule, recursive via `descSize`), value well-formedness value-side (`Value.Valid`, structural on the value with the descriptor consulted by `get?` — InterParse's `valueWf` pattern, so no termination measure needed).
-- **The drop rule is back.** Real tags carry a wire type, so unknown fields are skippable and `Value.reinterpret` drops writer-only keys by construction — unlike InterParse's `≪`, which had no drop rule because `parseVal` desynchronized. Unknown-field *preservation* (protobuf ≥ 3.5) is deliberately not implemented; it would put unparsed bytes in the induction skeleton.
-- `Value.reinterpret` is driven by the **reader's** field list (it must produce a value total over `d₂`), terminating on `descSize d₂` via `fieldSize_lt_of_mem` — the first real consumer of the kernel's termination interface. Measures are scaled by 4 with per-step offsets; a lexicographic pair does not work. Scalar *retyping* is deferred: only equal scalar types carry across today.
-- **The oneof side condition on `reinterpret_valid` must be recursive.** `Desc.OneofPreserved d₁ d₂` is one-layer — it quantifies over pairs of keys of `d₁` and `d₂` themselves — but the transform recurses into nested message fields, where the reader may group fields the writer left independent. With only the one-layer hypothesis the theorem is **false**, and `Proto/OneofCounterexample.lean` proves it so: a witness with no oneof at the top layer and two `bool` fields grouped only by the reader one layer down, satisfying every hypothesis while the transform's output violates `Value.OneofOk` inside the nested message. Strengthening the *writer* side does not help — the same witness has `d₁.AllWF` and `d₁.Legal`. The hypothesis in force is `Desc.OneofPreservedAll`, the recursive closure, defined by well-founded recursion on `descSize d₂` in the `AllWF`/`Legal` style and recursing exactly at shared keys where **both** sides declare `.msg`, which is exactly where the transform recurses. Where writer and reader disagree on a key's shape the reader gets `Field.init`, which is never `optional (some _)` (`Field.init_ne_optional_some`), so no oneof obligation arises there. The one-layer form is kept because the counterexample needs it to state the refutation; use `OneofPreservedAll.oneLayer` to get from one to the other.
-- **Build values with `Value.valid_of_get?`, not `valid_of_mem`.** Both are introduction rules for `Value.Valid`, but `valid_of_mem`'s payload hypothesis ranges over `v.entries`, and since both `Value.init` and `Value.reinterpret` are *defined* by mapping over the descriptor's entry list, discharging it drags the proof through `Desc.get?_eq_dlookup` — a seal breach in a file whose business is statements. `valid_of_get?` states the same condition through `get?` on both sides (totality supplies the declaration per entry, `v.WF` turns membership into a lookup), which lines up with the `get?`-form specs the callers already have (`Value.get?_init`, `Value.get?_reinterpret`). Both consumers are shorter for it.
-- Planned but not yet present (see `proto-design.org`): varint primitives and the rest of the wire format, a *relational* encoding spec `Encodes` (spec-compliant parsers must accept arbitrary field order — the functional serializer becomes its soundness leg), enums (they need a name table), and the flat symbol-table representation for recursive message types — the 2026-08 corpus survey (in `proto-design.org`) settled when it's needed: not for the current milestone (~93% of surveyed real-world messages are tree-representable), but unavoidably once the `FileDescriptorSet` import path arrives, since `descriptor.proto` is itself recursive (`explode` is the interface that makes that swap non-breaking).
-
-## Working in This Project
-
-### When extending proofs
-
-- The `Theorems/` subdirectory is **layered** for incremental compilation; respect the dependency order (`Primitives → SortedHelpers → Validity → SchemaCorrect → SchemaCorrectCompatible → ValList → IdCompatible → IdCompatibleHelpers → IdCompatibleRoundTrip → Serialization → Compatible → CompatTransform → CompatRoundTrip → InterParseOk`). Note `IdCompatibleHelpers` imports `ValList`, so `ValList` precedes the `IdCompatible*` group; `Serialization` needs only `Primitives`/`Validity`/`SchemaCorrect` and `Compatible` only those plus `IdCompatible`, so both are otherwise free-floating. `CompatTransform` needs the `IdCompatible*` group, `ValList`, and `Compatible`; `CompatRoundTrip` needs `CompatTransform` and `IdCompatibleRoundTrip`.
-- Anything that needs schema correctness should go through `⟨ v ∷ d ⟩`. Anything about same-descriptor evolution should go through `IdCompatible`; `SchemaCorrectCompatible` is the stricter schema-correct variant. Anything genuinely cross-descriptor goes through `MsgCompat`/`DescCompat`. Don't reach into the underlying lists if you can use `get?` / `ext_lookup` / `get?_insert_same` / `get?_insert_ne` / `insert_wf` / `erase_wf` instead — those abstractions exist precisely so callers can ignore the sorted-list encoding.
-- `valid'` and `valueWf` overlap: on keys *in* the descriptor `valueWf` is strictly stronger (type match plus bounds plus recursive `valueWf`); on keys *outside* it `valid'` demands `.missing` while `valueWf` demands nothing. Prefer `valueWf` in new statements — it comes for free as `serialValue`'s phantom wf. `Validity.lean` carries parallel decomposition lemmas for both (`valid'_cons` / `valueWf_cons`, `valid'_entry_head` / `valueWf_entry_head`, …), plus `valWfFold_{bool,int,msg}_field` and `valWfFold_missing_elim` for reading a field type off `valWfFold` once the key is known to be in the descriptor. `valid'` survives mainly for `valueEncLength_length` and as the Rocq `Valid'` counterpart; several of its helpers in `IdCompatibleHelpers.lean` are now unused.
-- New mutually-recursive functions on `Desc`/`Value` should follow the existing pattern: define the structural size or depth, then prove the relevant `*_smaller` lemma so they can be used as termination measures.
-- **Keep the axiom set standard.** Every theorem in `lean/Pollux` depends only on `propext`, `Classical.choice` and `Quot.sound`; check with `#print axioms`. In particular don't reach for `native_decide` — it pulls in `Lean.ofReduceBool` and `Lean.trustCompiler`, and the one place that used it (`sc_dom_eq`'s base case) turned out to be `rfl`.
-
-### Aristotle
-
-Some proofs in this codebase were generated/completed with [Aristotle](https://aristotle.harmonic.fun), an automated theorem prover. Its style is heavy on `grind`, `aesop`, `simp_all +decide`, and `exact?`. The `lean/aristotle.nix` derivation packages the Python client; `ARISTOTLE_API_KEY` is read from `../aristotle.txt` by the dev-shell hook.
-
-When editing an Aristotle-generated proof, expect dense tactic blocks. They tend not to be very legible — feel free to rewrite for clarity if you understand what's going on, but the existing form is usually load-bearing.
-
-### Rocq cross-reference
-
-If a Rocq counterpart exists, each Lean file's header docstring names it. `lean/README.org` has the full mapping table, and `lean/rocq-to-lean-guide.org` is a longer porting guide for the syntax/tactic differences. `CLAUDE-rocq.md` (formerly the project CLAUDE.md) documents the legacy Rocq tree.
-
-### Multi-language layout
-
-- **Lean** (`lean/`) — formal specification, current focus of correctness work
-- **Rocq** (`rocq/`) — legacy formal development, retained for reference
-- **Go** (`pollux-go/`) — reference implementation for cross-checking wire format
-- **Protobuf schemas** (`proto/`) — versioned schemas (v1–v5) for schema-evolution testing via `buf`
-
-The OCaml extraction target (`ocaml/`) was for Rocq and is not part of the Lean workflow.
+CI: `.github/workflows/lean.yml` (`leanprover/lean-action` on Linux and macOS, on pushes touching `**/*.lean`) and `.github/workflows/rocq.yml` (`nix build -L`).
