@@ -35,7 +35,6 @@ stdenv.mkDerivation {
 
   buildPhase = ''
     runHook preBuild
-    ulimit -s unlimited
     export ROCQPATH=$COQPATH
     unset COQPATH
     make -j$NIX_BUILD_CORES
