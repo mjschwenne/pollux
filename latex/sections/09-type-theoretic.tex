@@ -1,14 +1,80 @@
 \section{A Type-Theoretic Approach}\label{sec:type-theory}
 
+If we view descriptors as record types (which they clearly are), we can borrow
+concepts from Programming Languages theory.
+
+\subsection{Pollux as a Logical Relation}
+
+Pollux's goal is to be able to look at a pair of data descriptors and
+characterize what happens to values under the first descriptor when parsed under
+the updated one. We can split this cleanly into two parts, a syntactic property
+of ``compatible descriptors'' that operates solely on the descriptors and a
+semantic property that values under the original descriptor are meaningful and
+interpretable when parsed under the updated one. More specifically, we want to
+prove that all descriptor pairs with the syntactic property have a
+transformation which the semantic property. By definition, that is a logical
+relation.
+
+Pollux then becomes a type system which can characterize functions between
+messages as a compatible transformation.
+
+\[ \vDash f : d_1 \preceq d_2 \rightarrow \forall\ m \checkmark^{d_1}, bs.\ \mathrm{Encodes}_{d_1}(m, bs) \rightarrow
+  \mathrm{parse}_{d_2}(bs) = f(m) \]
+
+Then we end up with a syntactic typing judgment on the descriptors themselves,
+related to what we can convert between, and a semantic typing judgment on the
+transformation between the descriptors. Pulling in the recursive type view of
+the descriptors, we'd end up with a typing rule something like this (likely
+\emph{not} actually correct):
+\[ \infer{ X : \mu\ F \preceq \mu\ G \vdash f : F(\mu\ F) \preceq G(\mu\ G) }{\vDash \mu\ X.f : \mu\ F \preceq \mu\ G} \]
+In the structure of $f$, we expect that the bound variable $X$ will be used
+exactly at where $f$ makes a recursive call, and exists after restructuring a
+message so the lean kernel clearly sees the syntactic well-foundedness of the
+recursive call. This also aligns with logical relation step-indexing, were each
+index is the size of the current message. Since this is also structural, both
+techniques would work.
+
+This framing is complicated slightly by what happens when fields can be dropped,
+which is already implemented in Section~\ref{sec:proto-transform}. We naturally
+expect transitivity from descriptor updates, but consider this sequence of
+transformations.
+
+\begin{minted}{proto}
+  message Msg {
+    int32 field = 1;
+    int32 other = 2;
+  } 
+
+  message Msg' {
+    int32 other = 2;
+  }
+
+  message Msg'' {
+    string field = 1;
+    int32 other = 2;
+  }
+\end{minted}
+
+Now we have a sequence of two valid updates, dropping a field and then adding a
+new field, but it doesn't compose correctly since we can't move directly from
+\texttt{Msg} to \texttt{Msg''} since the wire types of field 1 are different.
+Fortunately, Protobuf has a mechanism for this, reserved field numbers, which
+would disallow this and restore our ability to compose updates.
+
+\subsection{Adding Recursion}
+
 Consider the addition of recursive descriptors to the Pollux formalization. With
 a descriptor rule like this one
 \[
   \infer[D-Update]{ \dom{d} \subseteq \dom{d'} \\ \forall\ k \in
     \dom{d} \cap \dom{d'}.\ d[k] \propto d'[k] }{ d \ll d' }
 \]
-the descriptor relation would become co-inductive since an update to this
-descriptor would would require showing $d_1[k] \propto d_2[k]$ if $k$ is the field
-were we see the recursive type and the field relation would include:
+(Note that for mandatory messages, which aren't supported in Protobuf, we'd need
+that $\dom{d_{mand}} \supseteq \dom{d_{mand}}$, i.e.\ that mandatory fields can
+become optional.) the descriptor relation would become co-inductive since an
+update to this descriptor would would require showing $d_1[k] \propto d_2[k]$ if
+$k$ is the field were we see the recursive type and the field relation would
+include:
 \[ \infer[F-Msg]{ d_1[k] \ll d_2[k] }{ \langle k, d_1[k] \rangle \propto \langle k, d_2[k] \rangle } \]
 So a derivation that $d_1[k] \ll d_2[k]$ would need to include a derivation of
 itself! The natural solution here is to make $\ll$ co-inductive. 
@@ -17,7 +83,7 @@ However, if we more closely model the descriptors as proper recursive types, it
 might be possible to avoid that. Consider this Protobuf descriptor:
 \begin{minted}{proto}
 message Stream {
-  int hd = 1;
+  int32 hd = 1;
   Stream tl = 2;
 }
 \end{minted}
@@ -25,21 +91,32 @@ Note first that while it's called \texttt{Stream}, since all Protobuf fields can
 be omitted and message fields always have an explicit presence indicator, we
 actually have a \texttt{List} definition rather than a true co-inductive stream.
 
-From the prospective of algebraic type theory, this type is $F\ X = \mathtt{int}
-+ \mathtt{int} \times F\ X$. If we were to add a \texttt{bool} field to this
-descriptor, the algebraic type would update to $G\ X = \mathtt{int} \times
-\mathtt{bool} + \mathtt{int} \times \mathtt{bool} \times G\ X$. 
+From the prospective of algebraic type theory, this type is
+$F\ X = \ints \times \optt{X}$. Note that Protobuf always generates nested messages as
+if they were optional, with a host language default (i.e. \texttt{nil} in Go)
+and a some mechanism to explicitly check the presence of the nested message. If
+we were to add a \texttt{bool} field to this descriptor, the algebraic type
+would update to
+$G\ X = \mathtt{int} \times \mathtt{bool} \times \optt{X}$.
+
+\begin{minted}{proto}
+message Stream' {
+  int32 hd = 1;
+  bool other = 3;
+  Stream tl = 2;
+}
+\end{minted}
 
 Then the descriptor relation I'm proposing would be a small proof system where
-we want to show that two descriptors are compatible if $\varnothing \vdash d \ll d'$, but we could
+we want to show that two descriptors are compatible if $\Sigma, \varnothing \vdash d \ll d'$, but we could
 \emph{define} what it means for two descriptor to be compatible as 
 \begin{mathpar}
   d_1 := \mu\ X.\ F\ X 
 
   d_2 := \mu\ X.\ G\ X 
 
-  d_1 \ll d_2 := \exists\ f: A \rightarrow B.\ \forall\ m \checkmark^{d_1}.\ \exists\ bs.\ \mathrm{Encodes}_{d_1}(m, bs) = bs \wedge
-  \mathrm{parse}_{d_2}(bs) = f(m)
+  d_1 \ll d_2 := \exists\ f: \denote{d_1} \rightarrow \denote{d_2}.\ \forall\ m \checkmark^{d_1}, bs.\
+  \mathrm{Encodes}_{d_1}(m, bs) \rightarrow \mathrm{parse}_{d_2}(bs) = f(m)
 \end{mathpar}
 
 In English, then the definition of two descriptors being compatible is that
@@ -50,36 +127,129 @@ $\varnothing \vdash d_1 \ll d_2$, which would require co-induction, we show that
 \[ \mu\ F \ll \mu\ G \vdash F (\mu\ F) \ll G (\mu\ G) \]
 which can be done with normal induction. This should be equivalent to the
 original statement using the relation-based definition, when viewed through the
-right lens of folding and unfolding recursive types.
+right lens of folding and unfolding recursive types, and is in fact a
+Amadio-Cardelli style rule for subtyping equi-recursive types {\color{red}
+  Citation needed}.
+
+However, the lean formalization doesn't use the $\mu$-bound version of descriptor
+types (See Section~\ref{sec:log-rel-lean}), but instead a flat symbol table
+$\Sigma$. This symbol table is global and fixed by the \texttt{.proto} file,
+containing names and descriptors for all the cycles the descriptor of interest
+is part of. Additionally, there is $A$, a set of name pairs currently assumed to
+be compatible; it grows as the derivation descends. The judgment is then $\Sigma; A
+\vdash d_1 \ll d_2$, with two rules for names:
+
+\begin{mathpar}
+  \infer[N-Assum]{ (n_1, n_2) \in A }{ \Sigma; A \vdash n_1 \ll n_2 }
+
+  \infer[N-Unfold]{ (n_1, n_2) \notin A \\
+    \Sigma; A \cup \{(n_1, n_2)\} \vdash \Sigma(n_1) \ll \Sigma(n_2) }{
+    \Sigma; A \vdash n_1 \ll n_2 }
+\end{mathpar}
+
+Compatibility of the top level descriptors is $\Sigma; \varnothing \vdash d_1 \ll d_2$. The
+\textsc{N-Unfold} rule is equivalent to $\mu$ unfolding, with a side condition
+that $A$ grows.
+
+Co-induction is avoided for two independent finiteness facts:
+\begin{enumerate}
+\item Syntactically, a cyclic descriptor using a symbol table is representable
+  in finite syntax. A symbol table stores \texttt{Stream}'s second field as the
+  \emph{name} \texttt{Stream} rather than a copy of the descriptor. This is
+  equivalent to the $\mu$-bound version. What is infinite is what the descriptor
+  unfolds to, and that unfolding is a regular tree. The checker exploit this by
+  carrying an assumption set $A$ of pairs of message names where
+  $(n_1, n_2) \in A$ records that $\Sigma(n_1) \ll \Sigma(n_2)$ has already been assumed. It
+  is what the $\varnothing$ in $\varnothing \vdash d \ll d'$ is referencing and grows
+  over the course of a derivation. Before recursing on a pair of names
+  encountered while checking compatibility, the checker checks if that pair is
+  already in $A$ and immediately succeeds if so, adding the pair
+  otherwise. Every recursive call can add a pair so $A$ never shrinks so $A$ can
+  grow to at most
+  $|\dom{\Sigma} \times \dom{\Sigma}| = \mathcal{O}(\dom{\Sigma}^2)$ before every recursive call would
+  immediately succeed. Thus the derivation is finite.
+
+  Thinking about this with the \texttt{Stream} example, checking \texttt{Stream}
+  against \texttt{Stream'} takes two steps. In the initial check,
+  $(\mathtt{Stream}, \mathtt{Stream'}) \not \in A$ so it is added and both
+  descriptors are unfolded once. Field 1 gives $\ints \propto \ints$ and field 2
+  reduces to $\Sigma, A \vdash \mathtt{Stream} \ll \mathtt{Stream'}$ which is now in $A$.
+\item Semantically, all Protobuf values are finite even under a cyclic
+  schema. Specifically, all nested messages can be omitted since they have
+  presence checks and all official Protobuf implementations only traverse 100
+  layers deep into a message (or 10,000 for the Go implementation for some
+  reason)\footnote{https://protobuf.dev/programming-guides/proto-limits/} after
+  which all parsing attempts will fail. Since our definitions always work with
+  the idea that parsing will succeed, we can actually assume that the messages
+  are finite and even use fuel in the proofs if needed. When the soundness proof
+  re-encounters an assumed message, it has necessarily descended down at least
+  one layer. Soundness can then use strong induction on the writer's message
+  size. This fuel approach is also the step-indexing piece of a logical relation
+  argument. We saw this with the \texttt{Stream} example, which reveals an
+  important semantic fact we can take advantage of rather than a naming
+  discrepancy.
+\end{enumerate}
+
+Note that an earlier definition of this featured $\exists\ bs$, which is a weaker
+statement than the current version. Under the $\exists$ version, we know that there is
+some way to encode $m$ so that we get $f(m)$ but for some sequence of bytes, we
+won't know if a serializer was used which happens to produce that encoding. What
+we really want to say is that every possible way to encode $m$ with a
+spec-complaint Protobuf encoding would produce the same, known semantically
+compatible value after parsing.
 
 If the descriptor relation is a static typing judgment, then the transformation
-is the semantic type judgment. This would allow us to avoid co-induction, 
+is the semantic type judgment.
 
-However, we even if we present this framework first, we probably still want to
-have a relation on the descriptors. The above definition doesn't provide any
-insight into how to write the transformation, while we've observed that having
-the relation provides a structure that the transformation mirrors. Additionally,
-I personally think that the relation on descriptors provides a nice way to check
-compatibility without having to construct the transformation directly.
+However, we even if we present this framework first, we still want to have a
+relation on the descriptors for several reasons. First, the above definition
+doesn't provide any insight into how to write the transformation, while we've
+observed that having the relation provides a structure that the transformation
+mirrors. Additionally, I personally think that the relation on descriptors
+provides a nice way to check compatibility without having to construct the
+transformation directly. But what is the relationship between the compatibility
+relation and the transformation based definition above? The compatibility
+relation is a \emph{sound} check for the semantic definition:
+\[ \Sigma; \varnothing \vdash d_1 \ll d_2 \implies\ \vDash
+  \transform{d_1}{\cdot}{d_2} : d_1 \preceq d_2 \]
+Completeness, on the other hand, would say that every pair of descriptors
+admitting \emph{some} compatible transformation is accepted by the relation. We
+do not claim completeness for the logical relation, which would be harder to
+prove and less useful. The compatibility relation exists to be checked, and is
+intentionally conservative to rule out technically wire-compatible updates that
+are undesirable like converting from \double{} to \fixeds{}. This is common with
+semantic typing techniques like logical relations where the syntactic rules are
+proved sound against a meaning assigned independently from them.
 
-We can take this view even farther though, and make the argument that Pollux
-become a type system which can characterize functions over messages has a
-compatible transformation.
+\subsection{Formalizing in Lean}\label{sec:log-rel-lean}
 
-\[ \vDash f : d_1 \preceq d_2 \rightarrow \forall\ m \checkmark^{d_1}.\ \exists\ bs.\ \mathrm{Encodes}_{d_1}(m, bs) \wedge
-  \mathrm{parse}_{d_2}(bs) = f(m) \]
+Lean doesn't have co-inductive types, unlike Rocq, and only limited support in
+newer versions for co-inductive predicates and no built-in support for things
+like parameterized co-induction. While the native support for co-inductive
+predicates might be enough to prove what Pollux cares about, we'd be close of
+the boundaries of what lean supports, and if we exceed what the built-in
+co-induction mechanisms support, it quickly devolves into having to hand create
+a greatest fix-point manually and state bisimulation principles manually. Rather
+than that, I'd like to avoid co-induction entirely, which we've just argued is
+possible.
 
-Then we end up with a syntactic typing judgment on the descriptors themselves,
-related to what we can convert between, and a semantic typing judgment on the
-transformation between the descriptors. Pulling in the recursive type view of
-the descriptors, we'd end up with a typing rule something like this (likely
-\emph{not} actually correct):
+The lean formalization could use a $\mu$-binder to actually model and interact
+with recursive types, however this would be a lot of formalization and machinery
+which isn't really needed. Instead, the lean formalization can use an additional
+context $\Sigma$ which maps a name to a descriptor. All (mutually) recursive messages
+are stored using their names in $\Sigma$ and fetched as needed. {\color{red} Would we
+want all the nested messages to always be in $\Sigma$? The chains could get a lot
+larger than just the 533 cycles with a maximum size of 22, but the theory should
+still work out.} The compatibility relation for Protobuf
+(Section~\ref{sec:proto-relations}) would need to include the $\Sigma$ context.
 
-\[ \infer{ X : \mu\ F \preceq \mu\ G \vdash f : F(\mu\ F) \preceq G(\mu\ G) }{\vDash \mu\ X.f : \mu\ F \preceq \mu\ G} \]
+Additionally, the reinterpret function's termination metric should be switched
+to the writer's value's size and \texttt{Desc.OneofPreservedAll} becomes a
+finite conjunction over reachable pairs which mirrors the structure of the
+relation itself.  % TODO
 
-This is basically a logical relation in disguise. We want to prove something
-about the transformation functions (which is an infinite family of functions),
-and to do so we build the descriptor relation as a guide.
+It's worth noting that since messages can always be omitted, having a cyclic
+descriptor cyclic doesn't complicate Definition~\ref{def:vvalid}.
 
 % Local Variables:
 % citar-bibliography: ("../pollux.bib")

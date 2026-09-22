@@ -13,6 +13,7 @@ This directory holds what Claude writes for the author. The report in `latex/` i
 | `review`    | The author asked for a critique of a report section.                                                           |
 | `rationale` | Lean-side design reasoning worth carrying into the report (the role `lean/proto-design.org` used to play).     |
 | `eval`      | A change in `eval/` or `pollux-go/` moved a number or figure the report cites.                                 |
+| `reading`   | The author asked for background sources on material a report section or note draws on.                         |
 
 ## Header
 

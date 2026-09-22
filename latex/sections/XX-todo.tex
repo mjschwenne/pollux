@@ -19,6 +19,9 @@ formalization.
   future. Pollux will also enforce this, even though the Lean formalization
   doesn't track it \emph{yet}.
 
+\item \textbf{Scalar Conversion.} No scalar conversion is currently supported,
+  but we should be able to move between all the VARINT fields, etc.
+
 \item \textbf{Recursive Messages.} Protobuf messages (and thus descriptors) can
   be recursive. The current lean formalization enforces a tree structure on the
   descriptors. This is nice for recursion over the descriptors, but does mean we

@@ -174,17 +174,6 @@ as a weakened version of Theorem~\ref{thm:trans-valid} for some systems.
   relational encodes definition would allow this and further complicate the
   non-canonical Protobuf encoding.}
 
-\subsection{UPDATE:\@ What's implemented right now}
-
-At the moment, the transformation supports width and depth changes to messages
-(i.e.\ adding new fields or changing nested messages) and moving fields between
-\texttt{optional} and \texttt{oneof}. Scalar retyping is not implemented yet,
-but will be.
-
-The one supported cardinality change, moving between an \texttt{optional} and
-\texttt{oneof} naturally requires that we enforce the \texttt{oneof} requirement
-that only one field in the \texttt{oneof} is set.
-
 \subsection{Faithfulness Theorem}
 
 The Protobuf compatibility framework might drop the message compatibility

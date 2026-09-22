@@ -126,14 +126,14 @@ other from the Protobuf compiler (Definition~\ref{def:dlegal}).
 
 \vspace{1em}
 \begin{definition}[Descriptor Well-Formedness]\label{def:dwf}
-  A descriptor $d$ is well-formed, denoted $d \checkmark_w$, if all fields in
+  A descriptor $d$ is well-formed, denoted $\wfd{d}$, if all fields in
   the descriptor have a unique field number, the fields are stored in sorted
   order, and all nested descriptors are also well-formed.
 \end{definition}
 
 \vspace{1em}
 \begin{definition}[Legal Descriptor]\label{def:dlegal}
-  A descriptor $d$ is legal, denoted $d \checkmark_l$, if
+  A descriptor $d$ is legal, denoted $\legald{d}$, if
   \begin{itemize}
   \item All field numbers are between 1 and $2^{29}-1$, excluding the range
     19,000 to 19,999, which are reserved by the Protobuf compiler.

@@ -1,0 +1,7 @@
+syntax = "proto3";
+option go_package = "Pollux/Rec";
+
+message Stream {
+  int32 hd = 1;
+  Stream tl = 2;
+}

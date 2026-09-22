@@ -1,4 +1,4 @@
-\section{Protobuf Compatibility Relations}~\label{sec:comp-rel}
+\section{Protobuf Compatibility Relations}~\label{sec:proto-relations}
 
 Compatibility between protobuf entities is defined with a series of
 relations. The first and most self-contained relation is the value relation,
@@ -29,10 +29,10 @@ explanation of how to read them.
 
 \begin{align*}
   \prec &: \text{Value relation} & v_1 : \tau_1 \prec v_2 : \tau_2 &\rightarrow ``v_1 : \tau_1 \text{ becomes } v_2 :
-                                           \tau_2 " \\
+                                           \tau_2 '' \\
   \propto &: \text{Type relation} & \tau_1 \propto \tau_2 &\rightarrow ``\tau_1\text{ is type-compatible with }
-                                          \tau_2" \\
-  \preceq &: \text{Message relation} & m_1 \preceq m_2 &\rightarrow ``m_1 \text{ is compatible with } m_2"
+                                          \tau_2'' \\
+  \preceq &: \text{Message relation} & m_1 \preceq m_2 &\rightarrow ``m_1 \text{ is compatible with } m_2''
 \end{align*}
 
 
