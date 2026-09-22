@@ -3,5 +3,8 @@
     "deny": [
       "Edit(/latex/**)"
     ]
+  },
+  "enabledPlugins": {
+    "lean4@lean4-skills": true
   }
 }

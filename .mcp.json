@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "lean-lsp": {
+      "type": "stdio",
+      "command": "lean-lsp-mcp",
+      "args": [],
+      "env": {}
+    }
+  }
+}

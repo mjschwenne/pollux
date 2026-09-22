@@ -12,6 +12,8 @@
         lean.lean-all
         # lean proofwidgets dep
         nodejs-slim
+        # Help Claude out
+        lean-lsp-mcp
       ];
     };
   };
