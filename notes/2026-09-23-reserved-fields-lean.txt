@@ -1,0 +1,150 @@
+ ▐▛███▛█   Claude Code v2.1.272
+▝▜██████▀  Opus 5 · Claude Pro
+  ▝▝ ▝▝    ~/workspace/pollux
+
+  Get to finished work sooner with Opus 5.5. Update Claude Code to try it.
+
+❯ I believe that the theory for protobuf will require implementing the reserved 
+  field number feature of Protobuf. Look at how the values are currently        
+  modelled and propose at least 2 ways to implement this protobuf feature in    
+  the lean formalization. @lean/Pollux/Proto/Value.lean                         
+  ⎿  Read lean/Pollux/Proto/Value.lean (322 lines)
+  ⎿  Loaded lean/CLAUDE.md
+
+  Searched for 1 pattern, read 1 file, listed 1 directory, ran 7 shell commands (ctrl+o to expand)
+
+● I've reviewed the report's treatment of reserved sets and the descriptor
+  kernel. Now I'll assess how much code each design would touch before drafting
+  the proposals. · summarized
+
+  Searched for 1 pattern, listed 1 directory, ran 1 shell command (ctrl+o to expand)
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ I believe that the theory for protobuf will require implementing the reserved 
+  field number feature of Protobuf. Look at how the values are currently        
+  modelled and propose at least 2 ways to implement this protobuf feature in    
+  the lean formalization. @lean/Pollux/Proto/Value.lean                         
+  ⎿  Read lean/Pollux/Proto/Value.lean (unchanged)
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● You're right that the theory needs it. The place it's needed is narrow,
+  though, and that affects which design fits best.
+
+  What reserved does and doesn't change
+
+  For a single writer→reader step, nothing changes. A reserved number is simply
+  not declared. The wire parser skips bytes at that number as unknown,
+  Value.Total already rules out a slot for it, and Value.reinterpret already
+  drops writer-only keys. So none of the current Value.lean/Transform.lean
+  theorems move.
+
+  It matters when evolution steps are chained, i.e. Trans-M. Right now
+  reinterpret doesn't compose:
+
+  d₁ = {5 ↦ ⟨optional, int32⟩}   d₂ = ∅   d₃ = d₁   v = {5 ↦ optional (some 7)}
+
+  reinterpret d₁ d₃ v                      = {5 ↦ optional (some 7)}   -- shared
+  arm
+  reinterpret d₂ d₃ (reinterpret d₁ d₂ v)  = {5 ↦ optional none}       --
+  reinterpretAt fallback
+
+  If field 5 in d₃ has a new meaning, the direct path carries the old value into
+  an unrelated field. That's exactly what reserved exists to prevent. Any
+  soundness proof for ≼ gets stuck at the Trans-M case. The theorem you need is
+  a no-resurrection lemma: if a key is declared in d₁ and d₃, it is declared in 
+  d₂. reserved lets you check that condition one pair of descriptors at a time,
+  so you don't need the full history. The three options differ in where that
+  summary of history is kept.
+
+  Option A: a reserved set on Desc (the report's fig:proto-desc-syn, ⟨⟨r, l⟩⟩)
+
+  lean
+  /-- `DescriptorProto.ReservedRange`: start inclusive, end exclusive. -/
+  structure ReservedRange where (start stop : Int)
+
+  inductive Desc where
+    | mk (es : List ((_ : Int) × Field)) (rs : List ReservedRange)
+
+  def Desc.Reserved (d : Desc) (k : Int) : Prop := ∃ r ∈ d.ranges, r.start ≤ k ∧
+  k < r.stop
+  -- Desc.FieldOk / Legal gains:  d.Reserved k → d.get? k = none
+
+  - Value.lean: no change. Value.init, Total, the sizes and the transform all go
+    through d.entries/get?. ReservedRange doesn't mention Desc, so the kernel
+    accepts it as a constructor argument.
+  - Descriptor kernel: insert/erase pass rs through, and explode stays
+    field-only. descSize ignores rs, which already matches def:dsize
+    (size(⟨⟨r,l⟩⟩) = 1 + size(l)). eq_of_explode_eq needs a second hypothesis,
+    but nothing outside Descriptor.lean uses it.
+  - Why ranges rather than a Finset: reserved 1000 to max; is legal protobuf,
+    and ranges mirror what the FileDescriptorSet import will hand you. The cost
+    is that equality only holds up to normalizing the ranges.
+  - Relation rules: Field-Add gains id ∉ r. A new Field-Remove takes ⟨r,f⟩ ≼ ⟨r 
+    ∪ {id}, f∖id⟩. Keep Reserved-Add and drop Reserved-Rm (review B7). Two facts
+    follow by induction on ≼: dom d₁ ⊆ dom d₂ ∪ r₂ and r₁ ⊆ r₂. Together with
+    dom d₃ ∩ r₃ = ∅, these give the no-resurrection lemma in about three lines.
+    These rules match buf's FIELD_NO_DELETE_UNLESS_NUMBER_RESERVED and
+    RESERVED_MESSAGE_NO_DELETE.
+
+  Option B: tombstone fields (the report's "artificial empty type ⊥")
+
+  lean
+  inductive FieldType where
+    | scalar (s : ScalarType) | msg (d : Desc) | reserved   -- ⊥
+
+  Removing a field becomes a retype to ⊥, with τ ∝ ⊥ for every τ and no rule out
+  of ⊥. Transitivity then comes from ∝, the relation stays a single map, and "a
+  number is declared or reserved, never both" follows from NodupKeys at no
+  cost.
+
+  This option hits Value.lean hard:
+  - Totality: a tombstone is a declared key, so Total requires a slot for it.
+    Either Slot gets a fourth constructor, or Total stops meaning exact domain
+    equality. With a new constructor, every Slot match grows an arm: slotSize,
+    Field.init, Slot.Matches, Slot.reinterpret, and the case splits in
+    reinterpret_self/reinterpret_valid.
+  - Every consumer of get? has to tell live fields from dead ones: Legal,
+    OneofOk, OneofPreserved.
+  - ⊥ isn't empty on the wire. Old writers still send bytes at that number, and
+    the parser must skip them rather than reject them. So ⊥ is a type that
+    decodes everything to nothing, not an uninhabited type.
+  - It can't handle ranges. reserved 1000 to max would need about 5×10⁸ entries,
+    so the import path breaks.
+
+  Option C: leave Desc alone and state the condition as a hypothesis
+
+  This follows the pattern of OneofPreservedAll: define Desc.NoResurrectAll d₁ 
+  d₂ d₃ recursively on descSize and prove reinterpret composes under it.
+  - Pros: zero changes to the kernel or Value.lean, and it's the smallest thing
+    that unblocks a composition theorem.
+  - Cons: it doesn't model the feature. reserved_range gets discarded on import,
+    and the condition involves three descriptors, so a chain of n steps needs
+    it for every triple. That's the non-locality reserved was designed to
+    remove.
+
+  Recommendation
+
+  Go with A, and use C's condition as the intermediate lemma: prove that A's
+  rules imply NoResurrectAll, then prove composition from that. A is what
+  protobuf itself does (DescriptorProto.reserved_range), and it's what the
+  report's syntax already says. It leaves the value layer untouched and handles
+  ranges. Reserved names would extend it naturally once field names exist; B
+  can't express names at all. Your evolution test schemas already use it too:
+  reserved 8 appears in proto/v4/ledger.proto and proto/v5/ledger.proto.
+
+  Per the repo rules, the report goes first, even though it has already chosen
+  ⟨⟨r, l⟩⟩. You'd need to:
+  - drop or demote the ⊥ paragraph in sec:proto-desc;
+  - add the disjointness bullet to def:dlegal;
+  - add Field-Remove and the id ∉ r premise in sec:comp-rel, and remove
+    Reserved-Rm.
+
+  I can write this up as a notes/ finding with suggested LaTeX, or build the
+  composition counterexample above as a ReservedCounterexample.lean in the
+  OneofCounterexample.lean style. I derived it from reinterpretAt's definition
+  but haven't checked it in Lean.
+
+✻ Baked for 2m 23s · done Tuesday 11:26 AM
+
+※ recap: You asked for ways to model protobuf's reserved field numbers in the Lean formalization, and I proposed three, recommending storing reserved ranges on `Desc`. Next step: tell me whether you want that written up as a `notes/` finding or built as a Lean counterexample file. (disable recaps in /config)

@@ -32,7 +32,7 @@ explanation of how to read them.
                                            \tau_2 '' \\
   \propto &: \text{Type relation} & \tau_1 \propto \tau_2 &\rightarrow ``\tau_1\text{ is type-compatible with }
                                           \tau_2'' \\
-  \preceq &: \text{Message relation} & m_1 \preceq m_2 &\rightarrow ``m_1 \text{ is compatible with } m_2''
+  \ll &: \text{Descriptor relation} & d_1 \ll d_2 &\rightarrow ``d_1 \text{ is compatible with } d_2''
 \end{align*}
 
 
@@ -77,7 +77,7 @@ as bytes $bs$ under type $\tau$. \\
 \begin{definition}[Value Relation]
   A protobuf value at the specification level $v_1$ with protobuf type $\tau_1$ is
   related to another value $v_2$ at type $\tau_2$, denoted $v_1 : \tau_1 \prec v_2 : \tau_2$
-  if $\forall\ bs, E_{\tau}(v_1, bs) \rightarrow parse_{\tau_2}(bs) = v_2$.
+  if $\forall\ bs, E_{\tau_1}(v_1, bs) \rightarrow parse_{\tau_2}(bs) = v_2$.
 \end{definition}
 
 \subsubsection{Basic Rules}
@@ -466,9 +466,9 @@ contain extra information, no depth rules is allowed.
 The main field-level compatibility theorem is stated below.
 \\
 \begin{theorem}[Protobuf Compatibility]
-  If $d_1 \preceq d_2$ and $d_2$ is well-formed, then for all binary strings
-  $bs$ such that $\mathtt{parse}_{d_1}\ bs = \mathtt{Some}\ v_1$,
-  $\mathtt{parse}_{d_2}\ bs = \mathtt{Some}\ v_2$ and $v_1 \prec v_2$
+  If $d_1 \ll d_2$ and $d_2$ is well-formed, then for all binary strings
+  $bs$ such that $\mathtt{parse}_{d_1}\ bs = \mathtt{Some}\ m_1$,
+  $\mathtt{parse}_{d_2}\ bs = \mathtt{Some}\ m_2$ and $m_1 \preceq m_2$
 \end{theorem}
 
 % Local Variables:

@@ -188,7 +188,7 @@ scalar types change in encoding and range. The legal predicate for values will
 enforce the range requirement while the encoding choice is only relevant
 during the serialization and parsing process, not the final values.
 
-\subsection{Value Initialization}
+\subsection{Value Initialization}\label{sec:msg-init}
 
 Since messages have to match their descriptor, it's important that we're able to
 generate initial, empty messages to establish this invariant. Notice that the
