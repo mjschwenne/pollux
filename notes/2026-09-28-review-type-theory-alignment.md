@@ -44,6 +44,14 @@ the fact that `limitRecursiveStateCompat_correct` already is this combinator. It
 also adds one correction the earlier draft got wrong by inheritance: the index
 should be **depth**, not value size.
 
+*Expanded again 2026-09-29:* the author has since absorbed `def:sem-compat`,
+`def:sem-assum`, `thm:fundamental` and `cor:compat-sound` into the section
+(`09-type-theoretic.tex:79`--`112`), on depth rather than size, so section 2's
+suggested LaTeX below is now a record of what landed rather than a proposal.
+The new subsection "Whether the rules should carry the index" answers the
+follow-up question about indexing \textsc{N-Assum}, \textsc{N-Unfold} and
+\textsc{F-Msg}.
+
 ## 1. Scorecard against `2026-09-22-review-type-theory-gaps.md`
 
 | Item | Status | Where |
@@ -207,6 +215,281 @@ descends only at `Payload.reinterpret`'s `.msg`/`.msg` arm
 submessage. That triple alignment is the `Field.init` observation of section 3
 seen from the proof side.
 
+### Whether the rules should carry the index
+
+*Added 2026-09-29, answering the author's question.* First, why the index is on
+the semantic side at all, since that is what makes the asymmetry look odd. The
+two sides are different kinds of object and each carries its own well-founded
+measure. The syntactic judgment is inductively defined, so a derivation is
+already a finite object to recurse on, and $A$ is what keeps it finite under
+recursion. The semantic statement quantifies over an unbounded set of writer
+values, so its proof recurses on values, and $\vDash_n$ is that recursion's
+variable made visible in the statement. Without it, `thm:fundamental` is not in a
+form strong induction on depth can consume, and `def:sem-assum` cannot say
+"assumed at strictly smaller depth", which is the entire content of the Löb step.
+
+The index is eliminable, and `def:sem-compat` already says so: $\vDash$ is
+$\vDash_n$ at every depth, and every value has a finite depth, so nothing is lost
+at the end. That is the difference from Appel--McAllester, where the index is
+forced by the semantics because the domain equation has no solution and the
+unindexed relation does not exist. Here the semantics is fine unindexed; the
+index is forced by the *proof*. Recording that distinction in the section is
+worth a sentence, because the section calls the argument step-indexed and a
+reader who knows the step-indexing literature will expect the stronger reason.
+
+The same point sizes the two sides. The semantic definition needs the whole
+natural number, since it quantifies over all depths. The rules need at most one
+bit, "here" versus "one below", and that bit is already recoverable from the
+judgment form. So erasing the subscript from the rules costs nothing, while
+erasing it from `def:sem-compat` would destroy the statement.
+
+*Added 2026-09-29, answering the author's question.* The off-by-one above is
+resolved by a fact about the whole rule system (the guard), not by anything
+readable at \textsc{N-Assum}. Putting an index on the judgment would make it
+local. There are two ways to get that, and the cheaper one is already available.
+
+**(a) Index the judgment.** Write $\Sigma; A \vdash_n d_1 \ll d_2$, make
+\textsc{F-Msg} the only rule that moves $n$, and tag each assumption with the
+index at which it was added: $A$ holds triples $(a_1, a_2, i)$, \textsc{N-Unfold}
+adds $(n_1, n_2, n)$ at its own $n$, and \textsc{N-Assum} carries the premise
+$(n_1, n_2, i) \in A$ **with $n < i$**. Then `def:sem-assum` becomes
+$\forall (a_1,a_2,i) \in A.\ \forall j < i.\ \vDash_j \ldots$, and \textsc{N-Assum}
+is sound by reading the rule. This is Löb made explicit: the pair is assumed
+*later* and is usable only strictly later. The cost is that $\ll$ stops being a
+single relation and becomes an indexed family, so "compatible" has to mean
+"derivable at every $n$", and section 3's cheap-checker argument has to be
+restated over that family. Amadio--Cardelli and Brandt--Henglein both keep the
+rule system unindexed for exactly this reason: the index is a device of the
+soundness proof, not part of the specification.
+
+**(b) Stratify `thm:fundamental` by judgment form instead.** The system already
+has two judgment forms and the report writes both with $\ll$:
+
+| Form | Concluded by | Premise of |
+|------|--------------|------------|
+| name judgment $\Sigma; A \vdash n_1 \ll n_2$ | \textsc{N-Assum}, \textsc{N-Unfold} | \textsc{F-Msg} only |
+| descriptor judgment $\Sigma; A \vdash d_1 \ll d_2$ | \textsc{D-Update} | \textsc{N-Unfold} |
+
+Under a symbol table `FieldType` is `msg (n : Name)` rather than today's
+`msg (d : Desc)` (`05-proto-desc.tex:29`), so $d_1[k]$ in \textsc{F-Msg}
+(`:139`) *is* a name and that rule's premise is always a name judgment. So state
+the theorem at two tiers:
+
+- descriptor judgment $\Rightarrow$ $\vDash_n$, i.e. writer values of depth $\le n$;
+- name judgment $\Rightarrow$ $\vDash_{n-1}$, i.e. writer values of depth $< n$.
+
+Every case then closes without a path argument. \textsc{N-Assum}'s goal is at
+$< n$ and `def:sem-assum` supplies exactly that. \textsc{N-Unfold} concludes a
+name judgment at $< n$ from a descriptor judgment at $\le n$, which is a
+weakening since $\vDash_n$ is downward closed. \textsc{F-Msg} takes a name
+judgment at $< n$ and concludes a field statement at $\le n$, which matches
+because a nested message has depth strictly below its parent's.
+\textsc{D-Update} stays at $\le n$ throughout.
+
+**Recommendation: (b).** It gives the same local soundness as (a), costs nothing
+in the statement of $\ll$ or in the checker, and needs no new syntax — only a
+sentence naming the two judgment forms and a two-tier statement of
+`thm:fundamental`. The index is then visible as the tier, and the tier is
+visible in the rule.
+
+**What \textsc{F-Msg} looks like under (b).** It carries no index, which is the
+point: the tier is read off the judgment form, so nothing is annotated. The only
+edit is to the two components the rule currently gets wrong: the premise is a
+name judgment, and the second component of each pair is a field *type* rather
+than $d_i[k]$. The cardinality stays, and stays equal on both sides, since
+cardinality changes are other $\propto$ rules' business:
+\[ \infer[F-Msg]{ \Sigma; A \vdash a_1 \ll a_2 }{
+     \Sigma; A \vdash \langle c, \mathtt{F\_MSG}\ a_1 \rangle \propto
+                      \langle c, \mathtt{F\_MSG}\ a_2 \rangle } \]
+against the indexed variant under (a), which is the same rule with the
+subscripts written in:
+\[ \infer[F-Msg]{ \Sigma; A \vdash_n a_1 \ll a_2 }{
+     \Sigma; A \vdash_{n+1} \langle c, \mathtt{F\_MSG}\ a_1 \rangle \propto
+                            \langle c, \mathtt{F\_MSG}\ a_2 \rangle } \]
+The two are the same rule, because the subscript is recoverable from whether the
+judgment is about a name or about a field or descriptor. That is the whole
+content of the recommendation.
+
+The obligation the rule generates in the proof: the name-tier hypothesis gives
+compatibility of $\Sigma(a_1)$ with $\Sigma(a_2)$ on writer values of depth
+$< n$, the value in field $k$ is a nested message whose depth is $<$ its
+parent's, and the parent has depth $\le n$, so the two meet. This is the step
+that consumes the index, and it is the only one.
+
+Three notational consequences if the author takes this:
+
+- Field types gain a name form, $\tau ::= \tau_s \mid \mathtt{F\_MSG}\ a$,
+  replacing the syntax figure's $\langle c, d \rangle$ field alternative
+  (`05-proto-desc.tex:69`--`70`) with $\langle c, \tau \rangle$ throughout. This
+  is the symbol-table change `sec:proto-desc:333`--`335` already promises.
+- If field types keep an inline-descriptor form alongside the name form,
+  \textsc{F-Msg} splits in two. The descriptor form stays at the descriptor tier
+  and needs no drop, and it does not endanger the guard, since the guard
+  constrains only name judgments.
+- **Names need a syntactic category, which the report does not yet have.** The
+  syntax figure (`05-proto-desc.tex:35`--`85`) declares naturals, scalar types,
+  cardinality, field, field list, reserved set and descriptor, and no names, so
+  the $n_1, n_2$ of \textsc{N-Assum} and \textsc{N-Unfold}
+  (`09-type-theoretic.tex:66`--`71`) and the $a_1, a_2$ of `def:sem-assum` are
+  both currently undeclared meta-variables. Worse, $n$ is the figure's own
+  meta-variable for the naturals (`:38`), and it is also the depth index of
+  `def:sem-compat`, so the same letter carries three meanings in one section.
+  The fix is one category and one line about $\Sigma$:
+
+  ```latex
+  \category[Name]{a}
+  \alternative{\mathit{id}}
+  ```
+
+  with $\Sigma$ a finite map from names to descriptors, $\dom{\Sigma}$ its key
+  set, and *closed* meaning every name occurring in a field type of some
+  $\Sigma(a)$ lies in $\dom{\Sigma}$, which is the hypothesis `thm:fundamental`
+  already states (`:101`). Then names are $a$ throughout, the naturals keep $n$
+  for field numbers, and the depth index keeps $n$ in the semantic definitions
+  where no name appears. Field types become
+  $\tau ::= \tau_s \mid \mathtt{F\_MSG}\ a$ as above.
+
+**Stating the stratified theorem.** Two tiers, not three: descriptor and field
+judgments sit at $\le n$, name judgments at $< n$, and \textsc{F-Msg} is the
+crossing. Scalar field obligations do not shrink, so the field tier has to travel
+with the descriptor tier; the drop happens inside \textsc{F-Msg}, between its
+conclusion and its premise.
+
+The statement needs two things the report does not have yet. First, depth, which
+`def:sem-compat` still marks `%TODO` at `:88`. Taking it from `valueDepth`
+(`InterParse/Descriptor.lean:686`--`693`) so the two agree:
+\[ \mathrm{depth}_v(m) = \max_{(k,v) \in m} \mathrm{depth}_f(v), \qquad
+   \mathrm{depth}_f(v) = \begin{cases}
+     0 & v \text{ scalar or missing} \\
+     \mathrm{depth}_v(m') + 1 & v = \mathtt{F\_MSG}\ m'
+   \end{cases} \]
+with the max over an empty field list taken as $0$, so a message with no
+message-typed field has depth $0$, and with $\mathrm{depth}_f$ of a repeated
+field the max over its elements. Second, a field-level companion to
+`def:sem-compat`, which can reuse the value-level encodes relation
+`sec:proto-relations` already has (`08-proto-relations.tex:74`):
+
+```latex
+\begin{definition}[Semantic compatibility, field level]\label{def:sem-compat-fld}
+  A function $g : \denote{\tau_1} \rightarrow \denote{\tau_2}$ \emph{carries
+  $\tau_1$ into $\tau_2$ up to depth $n$}, written $\vDash_n g : \tau_1 \propto
+  \tau_2$, when
+  \[ \forall\ v \checkmark^{\tau_1} \text{ with } \mathrm{depth}_f(v) \le n,\
+    \forall\ bs.\ \mathrm{E}_{\tau_1}(v, bs) \rightarrow
+    \mathrm{parse}_{\tau_2}(bs) = \some{g(v)}. \]
+\end{definition}
+```
+
+Then the theorem is one strong induction on $n$ wrapping one mutual induction
+over the three derivation forms:
+
+```latex
+\begin{theorem}[Fundamental Theorem]\label{thm:fundamental}
+  Let $\Sigma$ be a closed symbol table and let
+  $A \subseteq \dom{\Sigma} \times \dom{\Sigma}$. Fix $n$ and assume
+  $\vDash_n A$. Then
+  \begin{enumerate}
+    \item if $\Sigma; A \vdash d_1 \ll d_2$ with $d_1 \checkmark_w$ and
+      $d_2 \checkmark_w$, then
+      $\vDash_n \transform{d_1}{\cdot}{d_2} : d_1 \ll d_2$;
+    \item if $\Sigma; A \vdash \tau_1 \propto \tau_2$, then
+      $\vDash_n \transform{\tau_1}{\cdot}{\tau_2} : \tau_1 \propto \tau_2$;
+    \item if $\Sigma; A \vdash a_1 \ll a_2$, then $\vDash_n \{(a_1, a_2)\}$.
+  \end{enumerate}
+\end{theorem}
+```
+
+Clause 3 is the move that makes the stratification pay. Its conclusion is
+`def:sem-assum` at the singleton, so the name tier is not a new notion at all: it
+is the same predicate the assumption set is read by. \textsc{N-Assum} then closes
+in one step, since $(a_1,a_2) \in A$ and $\vDash_n A$ give $\vDash_n
+\{(a_1,a_2)\}$ by definition, and the off-by-one never arises because the strict
+$<$ is inside $\vDash_n$ on both sides. Written as $\vDash_{n-1}$ instead, clause
+3 would need truncated subtraction at $n = 0$ and would stop matching
+`def:sem-assum` syntactically.
+
+The rules then discharge as follows, and only the third line touches the outer
+induction hypothesis:
+
+| Rule | Has | Needs | Step |
+|------|-----|-------|------|
+| \textsc{D-Update} | field tier at $n$ | descriptor tier at $n$ | fields of a message of depth $\le n$ have $\mathrm{depth}_f \le n$ |
+| \textsc{F-Msg} | name tier at $n$, i.e. $\vDash_j$ for all $j < n$ | field tier at $n$ | the field value is $m'$ with $\mathrm{depth}_v(m') + 1 \le n$, so $j = n-1$ serves |
+| \textsc{N-Unfold} | descriptor tier at $n$ under $A \cup \{(a_1,a_2)\}$ | name tier at $n$ | needs $\vDash_n (A \cup \{(a_1,a_2)\})$, the auxiliary induction above |
+| \textsc{N-Assum} | $\vDash_n A$ | name tier at $n$ | immediate, $(a_1,a_2) \in A$ |
+
+`cor:compat-sound` is unchanged: $\vDash_n \varnothing$ holds at every $n$, so
+clause 1 at every $n$ gives $\vDash \transform{d_1}{\cdot}{d_2} : d_1 \ll d_2$.
+
+Clause 2 needs a field-level transform to exhibit. `Payload.reinterpret`
+(`Transform.lean:132`) is it, so the report's $\transform{\cdot}{\cdot}{\cdot}$
+notation should be declared at both levels rather than only at descriptors.
+
+**What the field tier actually contributes, since its message case looks
+vacuous.** The author's observation is correct for a singular message field:
+clause 2 at $\langle c, \mathtt{F\_MSG}\ a_1 \rangle$ unfolds almost at once into
+clause 3. The residue is small but not empty, and it is worth naming, because it
+is where the second measure of `Parse/Theorems.lean:740`--`741` lives.
+
+- **Framing.** A message field encodes as tag, length, body. Clause 3 speaks only
+  about the body. So the message case of clause 2 is the lemma that framing is
+  transparent: the length prefix is copied rather than reinterpreted, and the
+  reader's parser consumes exactly the declared length, leaving the right
+  remainder. That is the parser leg of the triple alignment above, and it is the
+  only place the byte-length decrease appears. It is also the leg that needs the
+  $\mathrm{E}$ relation the report has at value level and Lean does not have at
+  all (section 5).
+- **Cardinality.** This is the part that is not thin. `sec:proto-desc`'s syntax
+  and Lean both keep cardinality beside the field type (`05-proto-desc.tex:69`,
+  `:29`), so a repeated message field's value is several entries at one key and
+  clause 2 quantifies over all of them. The message case then needs an
+  element-wise lift of clause 3 plus the concatenation lemma for repeated
+  encoding, which is genuinely more than an unfolding. Presence is the same story
+  in miniature: the `.optional none` case never reaches clause 3 at all, which is
+  the `Field.init` observation of section 3.
+- **The scalar rules are the real content.** \textsc{F-Bool-Int},
+  \textsc{F-Int-Bool} and the integer width rules
+  (`08-proto-relations.tex`, `sec:proto-compat-ints`) have nothing to do with
+  messages, and they are where field compatibility does its work. Clause 2 looks
+  degenerate only if one reads its message case first.
+
+Two structural consequences. First, clause 2 cannot be folded into clause 1:
+$\propto$ has its own rules, including \textsc{F-Trans} and \textsc{F-Refl}
+(`12-inter-parse.tex:360`--`362`), so the mutual induction needs a clause per
+judgment form whether or not one of them is thin. Second, and this is the pleasing
+part, the devolution lands on clause 3 rather than clause 1, and clause 3 is the
+tier below. So the rule that does the least semantic work is the rule that does
+all of the index work. That is not a coincidence: a rule can only be semantically
+thin at a message boundary, and a message boundary is the only place the depth can
+drop.
+
+**`sec:proto-relations` folds cardinality into $\tau$ and nothing else does.**
+Line 44--46 says protobuf decorators, "technically part of the field level
+specification, have been incorporated into the type level", so $\tau$ there
+carries presence and repetition. `sec:proto-desc`'s syntax figure (`:69`--`70`)
+and Lean's `Field.mk card ty` (`:29`) keep them separate, and
+`sec:type-theory`'s \textsc{F-Msg} (`:139`) writes the separated form. Recommend
+the separated form everywhere, since two of the three already use it and it is
+what Lean will carry; then `sec:proto-relations` owes a line retiring the folded
+reading. This matters here because it decides whether the repeated case above
+sits inside clause 2 or above it.
+
+Under (b) the guard of the previous subsection restates as a rule-table
+property that can be checked by eye rather than by tracing derivations:
+
+> \textsc{F-Msg} is the only rule with a name judgment as a premise, and its
+> conclusion is about a value one message-nesting deeper.
+
+That is still a standing constraint on new rules, but a reader can now verify it
+from the rules alone. The shape that breaks it is a rule concluding a descriptor
+judgment from a name judgment without descending into the value; a transitivity
+or drop rule stated at the wrong level is exactly that shape, which is section
+4's item 1 again.
+
+Either way the report should write \textsc{F-Msg}'s premise as a name judgment
+once the symbol table lands, which also fixes the $\langle c, \tau \rangle$
+mismatch flagged in section 6 at line 139.
+
 ### Less prospective than it looks: the combinator already exists
 
 `limitRecursiveStateCompat_correct` (`Parse/Theorems.lean:730`--`760`) is already
@@ -336,6 +619,16 @@ Note this corrects the gaps note, which says $A$ is "bounded by the SCC size,
 which `sec:proto-desc` measures at 22" (item 3, and again in item 7). $A$ holds
 *pairs*, so the bound is the product. The conclusion survives — 484 is still
 nothing — but the report should not print 22 as the bound on $|A|$.
+
+## 4b. Spotted 2026-09-29
+
+**The 484 figure landed on $\Sigma$ instead of on $A$.** Lines 319--320 now read
+"recursive cycle contains 22 with a maximum $\Sigma$ size of $22 \times 22 = 484$
+messages". The product bounds $|A|$, not $|\Sigma|$: $A$ holds *pairs* of names
+drawn from the two cycles, while $\Sigma$ holds the messages themselves and is
+bounded by the schema's size. Section 3 of this note is the source of the 484 and
+states it of $A$. As written the sentence also still attaches the number to
+storage cost rather than to checking cost, which is item 7's actual point.
 
 ## DONE 4. Report-internal inconsistencies in the new text
 

@@ -28,12 +28,75 @@ semantic typing judgment on the transformation between the descriptors. Pulling
 in the recursive type view of the descriptors, we'd end up with a typing rule
 something like this:
 \[ \infer{ x : \mu\ F \ll \mu\ G \vdash body : F(\mu\ F) \ll G(\mu\ G) }{\vDash \mathsf{fix}\ x.\ body : \mu\ F \ll \mu\ G} \]
-In the structure of $f$, we expect that the bound variable $X$ will be used
-exactly at where $f$ makes a recursive call, and exists after restructuring a
+In the structure of $f$, we expect that the bound variable $x$ will be used
+exactly at where $f$ makes a recursive call, and exists after de-structuring a
 message so the lean kernel clearly sees the syntactic well-foundedness of the
 recursive call. This also aligns with logical relation step-indexing, where each
-index is the size of the current message. Since this is also structural, both
-techniques would work.
+index is the depth of the current message. Since this is also structural, both
+techniques would work. Note that only the semantic side carries the index. The
+syntactic derivation is inductive and can be recursed on directly while the
+semantic proper operates over an unbounded collection of messages, which could
+be fed into the transformation.
+
+Start with the view that the descriptors are recursive record types (some
+examples are discussed in Section~\ref{sec:recursive-types}).
+Then the descriptor relation I'm proposing would be a small proof system where
+we want to show that two descriptors are compatible using the judgment $\Sigma;
+\varnothing \vdash d_1 \ll d_2$ (explained below), but we could
+\emph{define} what it means for two descriptor to be compatible as 
+\begin{mathpar}
+  d_1 := \mu\ X.\ F\ X 
+
+  d_2 := \mu\ X.\ G\ X 
+
+  \vDash d_1 \ll d_2 := \exists\ f: \denote{d_1} \rightarrow \denote{d_2}.\ \forall\ m \checkmark^{d_1}, bs.\
+  \mathrm{E}_{d_1}(m, bs) \rightarrow \mathrm{parse}_{d_2}(bs) = f(m)
+\end{mathpar}
+
+In English, then the definition of two descriptors being compatible is that
+there exists a transformation such that for all valid messages under descriptor
+$d_1$, we can serialize that message into some encoding that can be parsed to
+produce the image of $m$ under the transformation.
+
+However, the lean formalization doesn't use the $\mu$-bound version of descriptor
+types (See Section~\ref{sec:log-rel-lean}), but instead a flat symbol table
+$\Sigma$. This symbol table is global and fixed by the \texttt{.proto} file,
+containing names and descriptors for all the cycles the descriptor of interest
+is part of. Additionally, there is $A$, a set of name pairs currently assumed to
+be compatible; it grows as the derivation descends. The judgment is then $\Sigma; A
+\vdash d_1 \ll d_2$, with two rules for the assumption set $A$:
+\begin{mathpar}
+  \infer[N-Assum]{ (a_1, a_2) \in A }{ \Sigma; A \vdash a_1 \ll a_2 }
+
+  \infer[N-Unfold]{ (a_1, a_2) \notin A \\
+    \Sigma; A \cup \{(a_1, a_2)\} \vdash \Sigma(a_1) \ll \Sigma(a_2) }{
+    \Sigma; A \vdash a_1 \ll a_2 }
+\end{mathpar}
+
+Compatibility of the top level descriptors is $\Sigma; \varnothing \vdash d_1 \ll d_2$. The
+\textsc{N-Unfold} rule is equivalent to $\mu$ unfolding, with a side condition
+that $A$ grows.
+
+Using that framing, we can define a logical relation as such:
+
+\vspace{1em}
+\begin{definition}[Message Depth]\label{def:msg-depth}
+\[ \mathrm{depth}_v(m) = \max_{(k,v) \in m} \mathrm{depth}_f(v), \qquad
+   \mathrm{depth}_f(v) = \begin{cases}
+     0 & v \text{ scalar or missing} \\
+     \mathrm{depth}_v(m') + 1 & v = \mathtt{F\_MSG}\ m'
+   \end{cases} \]
+\end{definition}
+
+\vspace{1em}
+\begin{definition}[Semantic compatibility, field level]\label{def:sem-compat-fld}
+  A function $g : \denote{\tau_1} \rightarrow \denote{\tau_2}$ \emph{carries
+  $\tau_1$ into $\tau_2$ up to depth $n$}, written $\vDash_n g : \tau_1 \propto
+  \tau_2$, when
+  \[ \forall\ v \checkmark^{\tau_1} \text{ with } \mathrm{depth}_f(v) \le n,\
+    \forall\ bs.\ \mathrm{E}_{\tau_1}(v, bs) \rightarrow
+    \mathrm{parse}_{\tau_2}(bs) = \some{g(v)}. \]
+\end{definition}
 
 \vspace{1em}
 \begin{definition}[Semantic compatibility]\label{def:sem-compat}
@@ -45,7 +108,14 @@ techniques would work.
   It \emph{carries $d_1$ into $d_2$}, written $\vDash f : d_1 \ll d_2$, when
   it does so at every depth, and $\vDash d_1 \ll d_2$ abbreviates
   $\exists\ f.\ \vDash f : d_1 \ll d_2$.
-\end{definition} %TODO define depth$_v$
+\end{definition}
+
+While the last two definitions looks \emph{really} similar, something important
+is happening here; the field-level compatibility definition will handle the
+encoding of the field number and message length, while the message level
+semantic compatibility only deals with the body of the message. Remember that
+placing an encoded messages into a field encoding changes the message being
+encoded. This captures those differences.
 
 \vspace{1em}
 \begin{definition}[Semantic reading of an Assumption Set]\label{def:sem-assum}
@@ -57,47 +127,57 @@ techniques would work.
 
 \vspace{1em}
 \begin{theorem}[Fundamental Theorem]\label{thm:fundamental}
-  Let $\Sigma$ be a closed symbol table, let $d_1 \checkmark_w$ and
-  $d_2 \checkmark_w$, and let $A \subseteq \dom{\Sigma} \times \dom{\Sigma}$.
-  Then for every $n$,
-  \[ \Sigma; A \vdash d_1 \ll d_2 \ \wedge\ \vDash_n A \implies\ \vDash_n
-    \transform{d_1}{\cdot}{d_2} : d_1 \ll d_2. \]
+  Let $\Sigma$ be a closed symbol table and let
+  $A \subseteq \dom{\Sigma} \times \dom{\Sigma}$. Fix $n$ and assume
+  $\vDash_n A$. Then
+  \begin{enumerate}
+    \item if $\Sigma; A \vdash d_1 \ll d_2$ with $d_1 \checkmark_w$ and
+      $d_2 \checkmark_w$, then
+      $\vDash_n \transform{d_1}{\cdot}{d_2} : d_1 \ll d_2$;
+    \item if $\Sigma; A \vdash \tau_1 \propto \tau_2$, then
+      $\vDash_n \transform{\tau_1}{\cdot}{\tau_2} : \tau_1 \propto \tau_2$;
+    \item if $\Sigma; A \vdash a_1 \ll a_2$, then $\vDash_n \{(a_1, a_2)\}$.
+  \end{enumerate}
 \end{theorem}
 
+\vspace{1em}
 \begin{corollary}[Soundness of the compatibility relation]\label{cor:compat-sound}
   $\vDash_n \varnothing$ holds vacuously at every $n$, so
   \[ \Sigma; \varnothing \vdash d_1 \ll d_2 \implies\ \vDash
     \transform{d_1}{\cdot}{d_2} : d_1 \ll d_2. \]
 \end{corollary}
 
-This framing is complicated slightly by what happens when fields can be dropped,
-which is already implemented in Section~\ref{sec:proto-transform}. We naturally
-expect transitivity from descriptor updates, but consider this sequence of
-transformations.
+A proof of these theorems would require strong induction on $n$, since a nested
+message might be of any depth less than the current message. At each inductive
+step of depth $n$, a nested induction on the derivation of the descriptor
+relation would be required. 
 
-\begin{minted}{proto}
-  message Msg {
-    int32 field = 1;
-    int32 other = 2;
-  } 
+\begin{itemize}
+\item Induction on the $\Sigma; A \vdash d_1 \ll d_2$ derivation itself is not enough, due to
+  \textsc{N-Assum}. When doing induction on the derivation, the inductive
+  hypothesis would state that the conclusion holds for all sub-derivations,
+  which \textsc{N-Assum} doesn't have. We get the fact that $(a_1, a_2) \in A$ but
+  not anything else to prove a semantic fact about the descriptors referenced by
+  those names.
+\item Induction on the depth of the message also doesn't work. The message depth
+  is only decreased when we de-structure a nested message, but there are many
+  different ways (like the \textsc{F-Msg} rule below) which update sibling
+  fields that doesn't decrease the depth. Without the depth decreasing, the
+  inductive hypothesis can't be applied.
+\end{itemize}
+However both approaches used together would be able to discharge the proof, with
+the outer induction on message depth able to handle when we step into a nested
+message and the inner induction on the derivation able to walk all the sibling
+fields being updated without a change in index.
 
-  message Msg' {
-    int32 other = 2;
-  }
+\subsection{Adding Recursion}\label{sec:recursive-types}
 
-  message Msg'' {
-    string field = 1;
-    int32 other = 2;
-  }
-\end{minted}
-
-Now we have a sequence of two valid updates, dropping a field and then adding a
-new field, but it doesn't compose correctly since we can't move directly from
-\texttt{Msg} to \texttt{Msg''} since the wire types of field 1 are different.
-Fortunately, Protobuf has a mechanism for this, reserved field numbers, which
-would disallow this and restore our ability to compose updates.
-
-\subsection{Adding Recursion}
+Rather than trying to prove
+$\Sigma; \varnothing \vdash d_1 \ll d_2$, which would require co-induction, we show that 
+\[ \mu\ F \ll \mu\ G \vdash F (\mu\ F) \ll G (\mu\ G) \]
+which can be done with normal induction. This should be equivalent to the
+original statement using the relation-based definition, when viewed through the
+right lens of folding and unfolding recursive types.
 
 Consider the addition of recursive descriptors to the Pollux formalization. With
 a descriptor rule like this one
@@ -110,7 +190,7 @@ become optional.) the descriptor relation would become co-inductive since an
 update to this descriptor would require showing $d_1[k] \propto d_2[k]$ if
 $k$ is the field where we see the recursive type and the field relation would
 include:
-\[ \infer[F-Msg]{ d_1[k] \ll d_2[k] }{ \langle c, d_1[k] \rangle \propto \langle c, d_2[k] \rangle } \]
+\[ \infer[F-Msg]{ \Sigma; A \vdash a_1 \ll a_2 }{ \langle c, a_1 \rangle \propto \langle c, a_2 \rangle } \]
 So a derivation that $d_1[k] \ll d_2[k]$ would need to include a derivation of
 itself! The natural solution here is to make $\ll$ co-inductive. 
 
@@ -142,51 +222,8 @@ message Stream' {
 }
 \end{minted}
 
-Then the descriptor relation I'm proposing would be a small proof system where
-we want to show that two descriptors are compatible using the judgment $\Sigma;
-\varnothing \vdash d \ll d'$ (explained below), but we could
-\emph{define} what it means for two descriptor to be compatible as 
-\begin{mathpar}
-  d_1 := \mu\ X.\ F\ X 
-
-  d_2 := \mu\ X.\ G\ X 
-
-  \vDash d_1 \ll d_2 := \exists\ f: \textrm{Msg} \rightarrow \textrm{Msg}.\ \forall\ m \checkmark^{d_1}, bs.\
-  \mathrm{E}_{d_1}(m, bs) \rightarrow \mathrm{parse}_{d_2}(bs) = f(m)
-\end{mathpar}
-
-In English, then the definition of two descriptors being compatible is that
-there exists a transformation such that for all valid messages under descriptor
-$d_1$, we can serialize that message into some encoding that can be parsed to
-produce the image of $m$ under the transformation. Rather than trying to prove
-$\varnothing \vdash d_1 \ll d_2$, which would require co-induction, we show that 
-\[ \mu\ F \ll \mu\ G \vdash F (\mu\ F) \ll G (\mu\ G) \]
-which can be done with normal induction. This should be equivalent to the
-original statement using the relation-based definition, when viewed through the
-right lens of folding and unfolding recursive types, and is in fact a
-Amadio-Cardelli style rule for subtyping equi-recursive types {\color{red}
-  Citation needed}.
-
-However, the lean formalization doesn't use the $\mu$-bound version of descriptor
-types (See Section~\ref{sec:log-rel-lean}), but instead a flat symbol table
-$\Sigma$. This symbol table is global and fixed by the \texttt{.proto} file,
-containing names and descriptors for all the cycles the descriptor of interest
-is part of. Additionally, there is $A$, a set of name pairs currently assumed to
-be compatible; it grows as the derivation descends. The judgment is then $\Sigma; A
-\vdash d_1 \ll d_2$, with two rules for names:
-\begin{mathpar}
-  \infer[N-Assum]{ (n_1, n_2) \in A }{ \Sigma; A \vdash n_1 \ll n_2 }
-
-  \infer[N-Unfold]{ (n_1, n_2) \notin A \\
-    \Sigma; A \cup \{(n_1, n_2)\} \vdash \Sigma(n_1) \ll \Sigma(n_2) }{
-    \Sigma; A \vdash n_1 \ll n_2 }
-\end{mathpar}
-
-Compatibility of the top level descriptors is $\Sigma; \varnothing \vdash d_1 \ll d_2$. The
-\textsc{N-Unfold} rule is equivalent to $\mu$ unfolding, with a side condition
-that $A$ grows.
-
-Co-induction is avoided by two independent finiteness facts:
+The flat symbol table representation avoids co-induction using two independent
+finiteness facts:
 \begin{enumerate}
 \item Syntactically, a cyclic descriptor using a symbol table is representable
   in finite syntax. A symbol table stores \texttt{Stream}'s second field as the
@@ -194,7 +231,7 @@ Co-induction is avoided by two independent finiteness facts:
   equivalent to the $\mu$-bound version. What is infinite is what the descriptor
   unfolds to, and that unfolding is a regular tree. The checker exploit this by
   carrying an assumption set $A$ of pairs of message names where
-  $(n_1, n_2) \in A$ records that $\Sigma(n_1) \ll \Sigma(n_2)$ has already been assumed. It
+  $(a_1, a_2) \in A$ records that $\Sigma(a_1) \ll \Sigma(a_2)$ has already been assumed. It
   is what the $\varnothing$ in $\varnothing \vdash d \ll d'$ is referencing and grows
   over the course of a derivation. Before recursing on a pair of names
   encountered while checking compatibility, the checker checks if that pair is
@@ -257,6 +294,33 @@ are undesirable like converting from \double{} to \fixeds{}. This is common with
 semantic typing techniques like logical relations where the syntactic rules are
 proved sound against a meaning assigned independently from them.
 
+This framing is complicated slightly by what happens when fields can be dropped,
+which is already implemented in Section~\ref{sec:proto-transform}. We naturally
+expect transitivity from descriptor updates, but consider this sequence of
+transformations.
+
+\begin{minted}{proto}
+  message Msg {
+    int32 field = 1;
+    int32 other = 2;
+  } 
+
+  message Msg' {
+    int32 other = 2;
+  }
+
+  message Msg'' {
+    string field = 1;
+    int32 other = 2;
+  }
+\end{minted}
+
+Now we have a sequence of two valid updates, dropping a field and then adding a
+new field, but it doesn't compose correctly since we can't move directly from
+\texttt{Msg} to \texttt{Msg''} since the wire types of field 1 are different.
+Fortunately, Protobuf has a mechanism for this, reserved field numbers, which
+would disallow this and restore our ability to compose updates.
+
 \subsection{Formalizing in Lean}\label{sec:log-rel-lean}
 
 Lean doesn't have co-inductive types, unlike Rocq, and only limited support in
@@ -278,14 +342,6 @@ might be large for a large corpus, the number of mutually-recursive messages is
 much smaller. The largest cycle observed in the data set is 22
 mutually-recursive message descriptors, so $|A| = 22 \times 22 = 484$
 
-If the formalization
-is able to store only the recursive messages in the $\Sigma$ context and embed the
-rest of them in the descriptors directly, the fact we have a maximum mutually
-recursive cycle contains 22 with a maximum $\Sigma$ size of $22 \times 22 = 484$ messages
-makes this a reasonably cheap option as well. The compatibility relation for
-Protobuf (Section~\ref{sec:proto-relations}) would need to include the $\Sigma$
-context.
-
 With the Lean formalizing using the symbol table approach, unfolding of the
 descriptors corresponds to the explode operation (Section~\ref{sec:proto-desc})
 and the induction rule for proving things on the descriptor is modeled with the
@@ -301,6 +357,9 @@ reinterpret function's termination metric should be switched to the writer's
 value's depth and \texttt{Desc.OneofPreservedAll} becomes a finite conjunction
 over reachable pairs which mirrors the structure of the relation itself. % TODO
 
+Also, the lean parser combinator and theorem
+\texttt{limitRecursiveStateCompat\_Correct} already handle most of the indexing
+happening here.
 
 % Local Variables:
 % citar-bibliography: ("../pollux.bib")

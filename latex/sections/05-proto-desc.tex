@@ -37,6 +37,9 @@ Outside of Lean, we'll use this syntax for the Protobuf descriptors.
   \begin{syntax}
     \categoryFromSet[Naturals]{n}{\mathbb{N}}
 
+    \category[Message Name]{a}
+    \alternative{\mathit{id}}
+    
     \category[Scalar Type]{\tau_s}
     \alternative{\double}
     \alternative{\float}
@@ -68,7 +71,7 @@ Outside of Lean, we'll use this syntax for the Protobuf descriptors.
 
     \category[Field]{f}
     \alternative{\langle c, \tau_s \rangle}
-    \alternative{\langle c, d \rangle}
+    \alternative{\langle c, a \rangle}
 
     \category[Field List]{l}
     \alternative{\texttt{[]}}
