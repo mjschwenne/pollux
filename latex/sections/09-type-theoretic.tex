@@ -1,42 +1,158 @@
 \section{A Type-Theoretic Approach}\label{sec:type-theory}
 
 If we view descriptors as record types (which they clearly are), we can borrow
-concepts from Programming Languages theory.
+concepts from Programming Languages theory. Specifically, taking the view that
+serializing then parsing under a different descriptor is a coercion and can be
+modeled as such, we can draw some literature on subtyping as
+coercions~\cite{breazu-tannenInheritanceImplicitCoercion1991,brandtCoinductiveAxiomatizationRecursive1998}. 
 
-\subsection{Pollux as a Logical Relation}
+\subsection{Compatibility as Coercion}
 
 Pollux's goal is to be able to look at a pair of data descriptors and
 characterize what happens to values under the first descriptor when parsed under
-the updated one. We can split this cleanly into two parts, a syntactic property
-of ``compatible descriptors'' that operates solely on the descriptors and a
-semantic property that values under the original descriptor are meaningful and
-interpretable when parsed under the updated one. More specifically, we want to
-prove that all descriptor pairs with the syntactic property have a
-transformation which satisfies the semantic property. By definition, that is a
-logical relation.
+the updated one. Our derivations, of the form $\Sigma; \varnothing \vdash d_1 \ll d_2$
+provide more than a certificate of compatibility between the descriptors: read
+rule by rule, it is a program $c : \denote{d_1} \rightarrow \denote{d_2}$, a coercion the
+reader applies to the writer's message.
 
-Pollux then becomes a type system which can characterize functions between
-messages as a compatible transformation.
+\vspace{1em}
+\begin{definition}[Well-behaved Transformation]\label{def:well-behaved}
+  A function $f : \denote{d_1} \to \denote{d_2}$ is \emph{well-behaved} when,
+  for all $m \checkmark^{d_1}$ and all $bs$ with $\mathrm{Encodes}_{d_1}(m, bs)$,
+  \[ \mathrm{parse}_{d_2}(bs) = \some{(f(m), U)} \quad\text{with}\quad
+    U \subseteq \dom{d_1} \setminus \dom{d_2}. \]
+\end{definition}
 
-\[ \vDash f : d_1 \ll d_2 := \forall\ m \checkmark^{d_1}, bs.\ \mathrm{E}_{d_1}(m, bs) \rightarrow
-  \mathrm{parse}_{d_2}(bs) = f(m) \]
+Here $U$ is the set of fields skipped during parsing (i.e.\ where defaults are
+injected during parsing). The second condition that
+$U \subseteq \dom{d_1} \setminus \dom{d_2}$ is essential to this definition. Wire-soundness,
+that the message parses, would admit something like $\ints \ll \str$ when the
+reader skips the mistyped record and injects the default \str{} value. This
+condition rules out the trivial transformation which always injects the default
+values for all fields.
 
-Where E is the message level lift of the encodes relation in
-Section~\ref{sec:val-rel}. Then we end up with a syntactic typing judgment on
-the descriptors themselves, related to what we can convert between, and a
-semantic typing judgment on the transformation between the descriptors. Pulling
-in the recursive type view of the descriptors, we'd end up with a typing rule
-something like this:
-\[ \infer{ x : \mu\ F \ll \mu\ G \vdash body : F(\mu\ F) \ll G(\mu\ G) }{\vDash \mathsf{fix}\ x.\ body : \mu\ F \ll \mu\ G} \]
-In the structure of $f$, we expect that the bound variable $x$ will be used
-exactly at where $f$ makes a recursive call, and exists after de-structuring a
-message so the lean kernel clearly sees the syntactic well-foundedness of the
-recursive call. This also aligns with logical relation step-indexing, where each
-index is the depth of the current message. Since this is also structural, both
-techniques would work. Note that only the semantic side carries the index. The
-syntactic derivation is inductive and can be recursed on directly while the
-semantic proper operates over an unbounded collection of messages, which could
-be fed into the transformation.
+\subsubsection{Pollux Judgements}
+
+A Pollux judgment has the form $\Sigma; \Gamma \vdash d_1 \ll d_2 \coerce c$ where
+\begin{itemize}
+\item $\Sigma$ is a symbol table, mapping names of descriptors to descriptor
+  values. Representing this as a table allows us to store (mutually) recursive
+  descriptors in finite syntax and mirrors Protobuf's own
+  \texttt{FileDescriptorSet} construct.
+\item $\Gamma$ is the assumption context, which stores pairs of descriptor names
+  which are assumed to be compatible with each other. It maps pairs of
+  descriptor names to \emph{assumption variables} which will hold the coercion
+  between those descriptors in the completed derivation. An alternative
+  formulation would be so that $\Gamma$ maps a pair of descriptors to a value of type
+  $x : \denote{\Sigma(a_1)} \rightarrow \denote{\Sigma(a_2)}$ 
+\item $c$ is a function $c : \denote{\Sigma(d_1)} \rightarrow \denote{\Sigma(d_2)}$, the coercion
+  built by the derivation.
+\end{itemize}
+
+This is actually a stratified definition, yielding slightly different coercions
+for each type of object:
+\begin{align*}
+  &\Sigma; \Gamma \vdash d_1 \ll d_2 \coerce c
+  && c : \denote{d_1} \to \denote{d_2} \text{ (message bodies)} \\
+  &\Sigma; \Gamma \vdash f_1 \propto f_2 \coerce c
+  && c : \mathrm{Slot}(f_1) \to \mathrm{Slot}(f_2) \text{ (fields: cardinality and type)} \\
+  &\Sigma; \Gamma \vdash \tau_1 \propto \tau_2 \coerce c
+  && c : \denote{\tau_1} \to \denote{\tau_2} \text{ (payloads)}
+\end{align*}
+
+\subsubsection{Names \& Recursion}
+
+\begin{mathpar}
+  \infer[N-Assum]
+    { (a_1, a_2) \mapsto x \in \Gamma }
+    { \Sigma; \Gamma \vdash a_1 \ll a_2 \coerce x }
+
+  \infer[N-Unfold]
+    { (a_1, a_2) \notin \dom{\Gamma} \\
+      \Sigma; \Gamma, (a_1, a_2) \mapsto x \vdash \Sigma(a_1) \ll \Sigma(a_2) \coerce c }
+    { \Sigma; \Gamma \vdash a_1 \ll a_2 \coerce \mathsf{fix}\ x.\ c }
+\end{mathpar}
+
+The fix-point operator $\mathsf{fix}$ is well founded on the writer's value
+since the $x$ is only ever applied under the \textsc{F-Msg} rule, which means
+it's applied to a nested message of strictly smaller depth.
+
+\subsubsection{Descriptors}
+
+\begin{mathpar}
+  \infer[D-Update]
+    { \forall k \in \dom{d_1} \cap \dom{d_2}.\ \Sigma; \Gamma \vdash d_1[k] \propto d_2[k] \coerce c_k \\
+      \mathrm{OneofPreserved}(d_1, d_2) }
+    {
+      \Sigma; \Gamma \vdash d_1 \ll d_2 \coerce \lambda m.\
+      \forall\ k \in d_2.
+      {\begin{cases}
+        k \mapsto c_k(m[k]) & k \in \dom {d_1} \cap \dom{d_2} \\
+        k \mapsto \init(d_2[k]) & k \in \dom{d_2} \setminus \dom{d_1}
+      \end{cases}}
+     }
+\end{mathpar}
+
+The coercion between messages is complex to state, but simple to understand. If
+each field at a key shared between the descriptors has a coercion, those
+coercions are applied. For new keys in the reader, a default value is
+injected. Keys that only the writer has are ignored, since the reader will skip
+them using the wire type in the tag during parsing.
+
+The OneofPreserved definition is part of Theorem~\ref{thm:trans-valid}. Placing
+the one layer definition here means that a derivation $\Sigma; \Gamma \vdash d_1 \ll d_2 \coerce
+c$ already contains OneofPreservedAll over every pair that it actually touches
+during the derivation.
+
+Once descriptors model the reserved set, a premise will need to be added to
+\textsc{D-Update} requiring that the reserved set of $d_1$ is a subset of the
+reserved set of $d_2$. % TODO
+
+\textbf{Example.}
+
+\begin{minted}{proto}
+message Tree {
+  int32 val = 1; Tree child = 2;
+}
+message Tree' {
+  int64 val = 1; Tree' child = 2;
+}
+\end{minted}
+
+\begin{enumerate}
+\item \textsc{N-Unfold} on $(\mathtt{Tree}, \mathtt{Tree'})$ gives $\Gamma =
+  (\mathtt{Tree}, \mathtt{Tree'}) \mapsto x$.
+\item \textsc{D-Update} handles the shared keys 1 and 2.
+  \begin{itemize}
+  \item \textbf{Key 1.} \textsc{T-Varint} gives
+    $\decop{\intl} \circ \encop{\ints}$, lifted by the IMP/IMP row
+    of the cardinality table.
+  \item \textbf{Key 2.} \textsc{F-Msg}, then \textsc{N-Assum}, gives $x$, lifted to the OPT slot as ``map $x$''.
+  \end{itemize}
+\item Result: $\mathsf{fix}\ x.\ \lambda m.\ \{1 \mapsto \decop{\intl}\circ\encop{\ints}(m[1]),\ 2 \mapsto \mathrm{map}\ x\ (m[2])\}$
+\end{enumerate}
+
+This is the recursive function you would write by hand. $x$ is only ever applied
+to m[2], which is a nested message of strictly smaller depth. That's why the
+note says the $\mathsf{fix}$ is well founded on the writer's value.
+
+\subsubsection{Fields \& Cardinality}
+
+To prove $\Sigma; \Gamma \vdash \field{c_1}{\tau_1} \ll \field{c_2}{d_2}$, we'll need $\Sigma; \Gamma \vdash \tau_1 \propto
+\tau_2 \coerce c$ as a premise and some statement that the cardinality pair 
+
+\subsection{Not a Logical Relation}
+
+In past version of Pollux attempted to state this as a logical relation. That
+was the wrong framing for this project. A logical relation is a family of
+relations defined via induction on types. Typically, a logical relation wants to
+relate two different terms to the same semantic type. The semantic compatibility
+definition I stated did not have those features, it was a flat statement that a
+the encoded version of any message (of bounded depth) would parse to the
+transformed value. The step indexing (a.k.a depth bounding) was just a strong
+induction on the depth of the message and the ``fundamental theorem'' stated the
+soundness of the syntactic judgment on descriptors against an independent
+semantics capturing the coercion as already formalized above.
 
 Start with the view that the descriptors are recursive record types (some
 examples are discussed in Section~\ref{sec:recursive-types}).
@@ -89,40 +205,11 @@ Using that framing, we can define a logical relation as such:
 \end{definition}
 
 \vspace{1em}
-\begin{definition}[Semantic compatibility, field level]\label{def:sem-compat-fld}
-  A function $g : \denote{\tau_1} \rightarrow \denote{\tau_2}$ \emph{carries
-  $\tau_1$ into $\tau_2$ up to depth $n$}, written $\vDash_n g : \tau_1 \propto
-  \tau_2$, when
-  \[ \forall\ v \checkmark^{\tau_1} \text{ with } \mathrm{depth}_f(v) \le n,\
-    \forall\ bs.\ \mathrm{E}_{\tau_1}(v, bs) \rightarrow
-    \mathrm{parse}_{\tau_2}(bs) = \some{g(v)}. \]
-\end{definition}
-
-\vspace{1em}
-\begin{definition}[Semantic compatibility]\label{def:sem-compat}
-  A function $f : \denote{d_1} \rightarrow \denote{d_2}$ \emph{carries $d_1$ into
-  $d_2$ up to depth $n$}, written $\vDash_n f : d_1 \ll d_2$, when
-  \[ \forall\ m \checkmark^{d_1} \text{ with } \mathrm{depth}_v(m) \le n,\
-    \forall\ bs.\ \mathrm{Encodes}_{d_1}(m, bs) \rightarrow
-    \mathrm{parse}_{d_2}(bs) = \some{f(m)}. \]
-  It \emph{carries $d_1$ into $d_2$}, written $\vDash f : d_1 \ll d_2$, when
-  it does so at every depth, and $\vDash d_1 \ll d_2$ abbreviates
-  $\exists\ f.\ \vDash f : d_1 \ll d_2$.
-\end{definition}
-
-While the last two definitions looks \emph{really} similar, something important
-is happening here; the field-level compatibility definition will handle the
-encoding of the field number and message length, while the message level
-semantic compatibility only deals with the body of the message. Remember that
-placing an encoded messages into a field encoding changes the message being
-encoded. This captures those differences.
-
-\vspace{1em}
 \begin{definition}[Semantic reading of an Assumption Set]\label{def:sem-assum}
   $\vDash_n A$ holds when every assumed pair is semantically compatible at every
   strictly smaller depth:
   \[ \forall\ (a_1, a_2) \in A.\ \forall\ j < n.\ \vDash_j
-    \transform{\Sigma(a_1)}{\cdot}{\Sigma(a_2)} : \Sigma(a_1) \ll \Sigma(a_2). \]
+    \coercion{\Sigma(a_1)}{\cdot}{\Sigma(a_2)} : \Sigma(a_1) \ll \Sigma(a_2). \]
 \end{definition}
 
 \vspace{1em}
@@ -133,9 +220,9 @@ encoded. This captures those differences.
   \begin{enumerate}
     \item if $\Sigma; A \vdash d_1 \ll d_2$ with $d_1 \checkmark_w$ and
       $d_2 \checkmark_w$, then
-      $\vDash_n \transform{d_1}{\cdot}{d_2} : d_1 \ll d_2$;
+      $\vDash_n \coercion{d_1}{\cdot}{d_2} : d_1 \ll d_2$;
     \item if $\Sigma; A \vdash \tau_1 \propto \tau_2$, then
-      $\vDash_n \transform{\tau_1}{\cdot}{\tau_2} : \tau_1 \propto \tau_2$;
+      $\vDash_n \coercion{\tau_1}{\cdot}{\tau_2} : \tau_1 \propto \tau_2$;
     \item if $\Sigma; A \vdash a_1 \ll a_2$, then $\vDash_n \{(a_1, a_2)\}$.
   \end{enumerate}
 \end{theorem}
@@ -144,7 +231,7 @@ encoded. This captures those differences.
 \begin{corollary}[Soundness of the compatibility relation]\label{cor:compat-sound}
   $\vDash_n \varnothing$ holds vacuously at every $n$, so
   \[ \Sigma; \varnothing \vdash d_1 \ll d_2 \implies\ \vDash
-    \transform{d_1}{\cdot}{d_2} : d_1 \ll d_2. \]
+    \coercion{d_1}{\cdot}{d_2} : d_1 \ll d_2. \]
 \end{corollary}
 
 A proof of these theorems would require strong induction on $n$, since a nested
@@ -284,7 +371,7 @@ transformation directly. But what is the relationship between the compatibility
 relation and the transformation based definition above? The compatibility
 relation is a \emph{sound} check for the semantic definition:
 \[ \Sigma; \varnothing \vdash d_1 \ll d_2 \implies\ \vDash
-  \transform{d_1}{\cdot}{d_2} : d_1 \ll d_2 \]
+  \coercion{d_1}{\cdot}{d_2} : d_1 \ll d_2 \]
 Completeness, on the other hand, would say that every pair of descriptors
 admitting \emph{some} compatible transformation is accepted by the relation. We
 do not claim completeness for the compatibility relation, which would be harder to

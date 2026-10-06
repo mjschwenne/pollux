@@ -139,7 +139,7 @@
 \newcommand{\none}{\texttt{None}}
 
 \newcommand{\lb}[1]{``\mathrm{#1}"}
-\newcommand{\field}[2]{(``\mathrm{#1}",#2)}
+\newcommand{\field}[2]{\langle#1, #2\rangle}
 \newcommand{\map}[2]{#1 \rightharpoonup{} #2}
 
 \newcommand{\ptag}[1]{\texttt{#1}}
@@ -147,7 +147,9 @@
 
 \newcommand{\dom}[1]{\mathrm{dom}(#1)}
 \newcommand{\denote}[1]{\llbracket{} #1 \rrbracket{}}
-\newcommand{\transform}[3]{\prescript{}{#1}{\llbracket{} #2 \rrbracket{}}_{#3}}
+\newcommand{\coerce}{\rightsquigarrow}
+\newcommand{\init}{\mathrm{init}}
+\newcommand{\coercion}[3]{\prescript{}{#1}{\llbracket{} #2 \rrbracket{}}_{#3}}
 
 % Varint encode/decode pipeline (Section 5 integer rules).
 % Bare forms for signatures and composition; applied forms for everything else.

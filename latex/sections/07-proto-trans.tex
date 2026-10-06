@@ -64,7 +64,7 @@ which is exactly what the reader sees when the writer's bytes do not populate
 the field at all or using the incorrect wire type.
 
 Mathematically, the transformation where a message $m$ at descriptor $d_1$ is
-transformed to $d_2$ is denoted $\transform{d_1}{m}{d_2}$.
+transformed to $d_2$ is denoted $\coercion{d_1}{m}{d_2}$.
 
 For each key in the reading descriptor, there are three cases.
 
@@ -103,27 +103,27 @@ decrease with each application.
 \begin{theorem}[Transformation Specification]
   For all messages $m$ and descriptors $d_1$, $d_2$, each value of the
   transformed message is equal to the result of transforming that value.
-  \[ \transform{d_1}{m}{d_2}[k] = \transform{d_1}{m[k]}{d_2} \]
+  \[ \coercion{d_1}{m}{d_2}[k] = \coercion{d_1}{m[k]}{d_2} \]
 \end{theorem}
 
 \vspace{1em}
 \begin{theorem}[Transform WF]\label{thm:trans-wf}
-  \[ \forall\ m, d_1, d_2.\ d_2 \checkmark_w \rightarrow \transform{d_1}{m}{d_2} \checkmark_w \]
+  \[ \forall\ m, d_1, d_2.\ d_2 \checkmark_w \rightarrow \coercion{d_1}{m}{d_2} \checkmark_w \]
 \end{theorem}
 
 \vspace{1em}
 \begin{theorem}[Transform Total]\label{thm:trans-total}
-  \[ \forall\ m, d_1, d_2.\ \dom{d_2} = \dom{\transform{d_1}{m}{d_2}} \]
+  \[ \forall\ m, d_1, d_2.\ \dom{d_2} = \dom{\coercion{d_1}{m}{d_2}} \]
 \end{theorem}
 
 \vspace{1em}
 \begin{theorem}[Transform Self]\label{thm:trans-self}
-  \[ \forall\ m, d.\ d \checkmark \rightarrow m \checkmark^d \rightarrow \transform{d}{m}{d} = m \]
+  \[ \forall\ m, d.\ d \checkmark \rightarrow m \checkmark^d \rightarrow \coercion{d}{m}{d} = m \]
 \end{theorem}
 
 \vspace{1em}
 \begin{theorem}[Transform Valid]\label{thm:trans-valid}
-  \[ \forall\ m, d_1, d_2.\ m \checkmark^{d_1} \rightarrow d_2 \checkmark \rightarrow \mathrm{OneofPreservedAll}(d_1, d_2) \rightarrow \transform{d_1}{m}{d_2} \checkmark^{d_2} \] 
+  \[ \forall\ m, d_1, d_2.\ m \checkmark^{d_1} \rightarrow d_2 \checkmark \rightarrow \mathrm{OneofPreservedAll}(d_1, d_2) \rightarrow \coercion{d_1}{m}{d_2} \checkmark^{d_2} \] 
   Where
   \begin{itemize}
   \item $\mathrm{OneofPreservedAll}(d_1, d_2) = \mathrm{OneofPreserved}(d_1, d_2) \wedge
@@ -179,7 +179,7 @@ as a weakened version of Theorem~\ref{thm:trans-valid} for some systems.
 The Protobuf compatibility framework might drop the message compatibility
 relation in favor of only having the transformation. In that case, we'd end up
 needing to argue that the transformation is total over all possible messages
-being converted between two descriptors, i.e. $\transform{d_1}{m}{d_2}$ produces
+being converted between two descriptors, i.e. $\coercion{d_1}{m}{d_2}$ produces
 some $m'$ for all $m \checkmark^{d_1}$.
 
 The current transformation function is \emph{always total} by falling back to
@@ -188,7 +188,7 @@ that we can produce a total transformation without needing this behavior outside
 of injecting the new values for new fields (since any other place were a default
 value is injected would imply that something failed to reinterpret). Note that
 this theorem can't be solely stated about the output of
-$\transform{d_1}{m}{d_2}$ since the output can't differentiate between the
+$\coercion{d_1}{m}{d_2}$ since the output can't differentiate between the
 default value naturally occurring and being injected due to a problematic
 update.
 
@@ -209,8 +209,8 @@ value fallback anyways. This could be built into a faithfulness theorem.
   f_2$ there must exist a value $x$ and $y$ such that
   \begin{itemize}
   \item $m[k] = x$
-  \item $\transform{f_1}{m}{f_2} = y$
-  \item $\transform{d_1}{m}{d_2}[k] = y$
+  \item $\coercion{f_1}{m}{f_2} = y$
+  \item $\coercion{d_1}{m}{d_2}[k] = y$
   \end{itemize}
 \end{theorem}
 
@@ -228,7 +228,7 @@ theorem Value.get?_reinterpret_of_compat {d₁ d₂ : Desc} {v : Value} {k f₁ 
 Some corollaries from this include the fact that repeated slots don't drop
 values. If the scalar transformation is only the identity function, which is
 presently the case, we also have that
-$\transform{d_2}{\transform{d_1}{m}{d_2}}{d_{2}} = m$ since the newly injected
+$\coercion{d_2}{\coercion{d_1}{m}{d_2}}{d_{2}} = m$ since the newly injected
 fields are simply dropped in the backwards directly. This means that no data is
 lost, but the statement is too strong to handle scalar conversion and in
 particular integer width changes which might truncate values.

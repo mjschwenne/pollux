@@ -4,7 +4,7 @@ This directory holds what Claude writes for the author. The report in `latex/` i
 
 ## Naming
 
-`YYYY-MM-DD-<kind>-<slug>.md`, dated when written. The kinds:
+`YYYY-MM-DD-<kind>-<slug>.md`, dated when written. A note heavy in math (inference rules, theorem statements, derivations) is `.org` instead, so the author can preview the math in Emacs: open it with `#+STARTUP: latexpreview` and `#+LATEX_HEADER:` lines loading `mathpartir` and any report macros it uses (see `2026-09-30-review-coercion-framing.org`). Keep the header lines below as plain text right after `#+TITLE`. The kinds:
 
 | Kind        | Written when                                                                                                   |
 |-------------|----------------------------------------------------------------------------------------------------------------|

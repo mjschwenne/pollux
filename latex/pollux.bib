@@ -1,5 +1,5 @@
 @online{achimAristotleIMOLevel2025,
-  title = {Aristotle: {{IMO-level Automated Theorem Proving}}},
+  title = {Aristotle: {{IMO}}-Level {{Automated Theorem Proving}}},
   shorttitle = {Aristotle},
   author = {Achim, Tudor and Best, Alex and Bietti, Alberto and Der, Kevin and Fédérico, Mathïs and Gukov, Sergei and Halpern-Leistner, Daniel and Henningsgard, Kirsten and Kudryashov, Yury and Meiburg, Alexander and Michelsen, Martin and Patterson, Riley and Rodriguez, Eric and Scharff, Laura and Shanker, Vikram and Sicca, Vladmir and Sowrirajan, Hari and Swope, Aidan and Tamas, Matyas and Tenev, Vlad and Thomm, Jonathan and Williams, Harold and Wu, Lawrence},
   date = {2025-10-10},
@@ -42,6 +42,23 @@
   abstract = {Parser combinator libraries represent parsers as functions and, using higher-order functions, define a DSL of combinators allowing users to quickly put together programs capable of handling complex recursive grammars. When moving to total functional languages such as Agda, these programs cannot be directly ported: there is nothing in the original definitions guaranteeing termination. In this paper, we will introduce a 'guarded' modal operator acting on types and show how it allows us to give more precise types to existing combinators thus guaranteeing totality.},
   keywords = {higher-order functions,total functional languages,total parser combinators},
   file = {/home/mjs/Zotero/storage/ES99R23M/Allais - 2018 - Agdarsec - total parser combinators Vingt-neuviemes Journees Francophones des Langages Applicatifs,.pdf}
+}
+
+@article{amadioSubtypingRecursiveTypes1993,
+  title = {Subtyping Recursive Types},
+  author = {Amadio, Roberto M. and Cardelli, Luca},
+  date = {1993-09-01},
+  journaltitle = {ACM Trans. Program. Lang. Syst.},
+  volume = {15},
+  number = {4},
+  pages = {575--631},
+  issn = {0164-0925},
+  doi = {10.1145/155183.155231},
+  url = {https://dl.acm.org/doi/10.1145/155183.155231},
+  urldate = {2026-09-30},
+  abstract = {We investigate the interactions of subtyping and recursive types, in a simply typed λ-calculus. The two fundamental questions here are whether two (recursive)types are in the subtype relation and whether a term has a type. To address the first question, we relate various definitions of type equivalence and subtyping that are induced by a model, an ordering on infinite trees, an algorithm, and a set of type rules. We show soundness and completeness among the rules, the algorithm, and the tree semantics. We also prove soundness and a restricted form of completeness for the model. To address the second question, we show that to every pair of types in the subtype relation we can associate a term whose denotation is the uniquely determined coercion map between the two types. Moreover, we derive an algorithm that, when given a term with implicit coercions, can infer its least type whenever possible.},
+  keywords = {not_read},
+  file = {/home/mjs/Zotero/storage/HMNCTM8G/Amadio and Cardelli - 1993 - Subtyping recursive types.pdf}
 }
 
 @standard{ASN1EncodingRules2021,
@@ -96,6 +113,25 @@
   file = {/home/mjs/Zotero/storage/8YS6A2MV/Bormann and Hoffman - 2020 - Concise Binary Object Representation (CBOR).pdf}
 }
 
+@article{brandtCoinductiveAxiomatizationRecursive1998,
+  title = {Coinductive {{Axiomatization}} of {{Recursive Type Equality}} and {{Subtyping}}},
+  author = {Brandt, Michael and Henglein, Fritz},
+  date = {1998-04-01},
+  journaltitle = {Fundamenta Informaticae},
+  volume = {33},
+  number = {4},
+  pages = {309--338},
+  publisher = {SAGE Publications},
+  issn = {0169-2968},
+  doi = {10.3233/FI-1998-33401},
+  url = {https://journals.sagepub.com/action/showAbstract},
+  urldate = {2026-09-30},
+  abstract = {We present new sound and complete axiomatizations of type equality and subtype inequality for a first-order type language with regular recursive types. The rules are motivated by coinductive characterizations of type containment and type equality via simulation and bisimulation, respectively. The main novelty of the axiomatization is the fixpoint rule (or coinduction principle). It states that from A,P \textbackslash (\textbackslash vdash\textbackslash ) P one may deduce A \textbackslash (\textbackslash vdash\textbackslash ) P, where P is either a type equality τ = τ' or type containment τ ≤ τ' and the proof of the premise must be contractive in a sense we define in this paper. In particular, a proof of A, P \textbackslash (\textbackslash vdash\textbackslash ) P using the assumption axiom is not contractive. The fixpoint rule embodies a finitary coinduction principle and thus allows us to capture a coinductive relation in the fundamentally inductive framework of inference systems. The new axiomatizations are more concise than previous axiomatizations, particularly so for type containment since no separate axiomatization of type equality is required, as in Amadio and Cardelli's axiomatization. They give rise to a natural operational interpretation of proofs as coercions. In particular, the fixpoint rule corresponds to definition by recursion. Finally, the axiomatization is closely related to (known) efficient algorithms for deciding type equality and type containment. These can be modified to not only decide type equality and type containment, but also construct proofs in our axiomatizations efficiently. In connection with the operational interpretation of proofs as coercions this gives efficient (O(n2) time) algorithms for constructing efficient coercions from a type to any of its supertypes or isomorphic types. More generally, we show how adding the fixpoint rule makes it possible to characterize inductively a set that is coinductively defined as the kernel (greatest fixed point) of an inference system.},
+  langid = {english},
+  keywords = {not_read},
+  file = {/home/mjs/Zotero/storage/XAJQEXXD/Brandt and Henglein - 1998 - Coinductive Axiomatization of Recursive Type Equality and Subtyping.pdf}
+}
+
 @report{brayJavaScriptObjectNotation2017,
   title = {The {{JavaScript Object Notation}} ({{JSON}}) {{Data Interchange Format}}},
   author = {Bray, Tim},
@@ -108,6 +144,24 @@
   abstract = {JavaScript Object Notation (JSON) is a lightweight, text-based, language-independent data interchange format. It was derived from the ECMAScript Programming Language Standard. JSON defines a small set of formatting rules for the portable representation of structured data. This document removes inconsistencies with other specifications of JSON, repairs specification errors, and offers experience-based interoperability guidance.},
   pagetotal = {16},
   file = {/home/mjs/Zotero/storage/RNPK4R8U/Bray - 2017 - The JavaScript Object Notation (JSON) Data Interchange Format.pdf}
+}
+
+@article{breazu-tannenInheritanceImplicitCoercion1991,
+  title = {Inheritance as Implicit Coercion},
+  author = {Breazu-Tannen, Val and Coquand, Thierry and Gunter, Carl A. and Scedrov, Andre},
+  date = {1991-07-01},
+  journaltitle = {Information and Computation},
+  series = {Selections from 1989 {{IEEE Symposium}} on {{Logic}} in {{Computer Science}}},
+  volume = {93},
+  number = {1},
+  pages = {172--221},
+  issn = {0890-5401},
+  doi = {10.1016/0890-5401(91)90055-7},
+  url = {https://www.sciencedirect.com/science/article/pii/0890540191900557},
+  urldate = {2026-09-30},
+  abstract = {We present a method for providing semantic interpretations for languages with a type system featuring inheritance polymorphism. Our approach is illustrated on an extension of the language Fun of Cardelli and Wegner, which we interpret via a translation into an extended polymorphic lambda calculus. Our goal is to interpret inheritances in Fun via coercion functions which are definable in the target of the translation. Existing techniques in the theory of semantic domains can be then used to interpret the extended polymorphic lambda calculus, thus providing many models for the original language. This technique makes it possible to model a rich type discipline which includes parametric polymorphism and recursive types as well as inheritance. A central difficulty in providing interpretations for explicit type disciplines featuring inheritance in the sense discussed in this paper arises from the fact that programs can type-check in more than one way. Since interpretations follow the type-checking derivations, coherence theorems are required: that is, one must prove that the meaning of a program does not depend on the way it was type-checked. Proofs of such theorems for our proposed interpretation are the basic technical results of this paper. Interestingly, proving coherence in the presence of recursive types, variants, and abstract types forced us to reexamine fundamental equational properties that arise in proof theory (in the form of commutative reductions) and domain theory (in the form of strict vs. non-strict functions).},
+  keywords = {complete},
+  file = {/home/mjs/Zotero/storage/LBF466UC/Breazu-Tannen et al. - 1991 - Inheritance as implicit coercion.pdf;/home/mjs/Zotero/storage/NYYA59IC/0890540191900557.html}
 }
 
 @inproceedings{caiVestVerifiedSecure2025a,
@@ -185,8 +239,7 @@
   shorttitle = {Narcissus},
   author = {Delaware, Benjamin and Suriyakarn, Sorawit and Pit-Claudel, Clément and Ye, Qianchuan and Chlipala, Adam},
   date = {2019-07-26},
-  journaltitle = {Virtual machine and source code for Narcissus: Correct-by-Construction Derivation of Decoders and Encoders from Binary Formats},
-  shortjournal = {Proc. ACM Program. Lang.},
+  journaltitle = {Proc. ACM Program. Lang.},
   volume = {3},
   pages = {82:1--82:29},
   doi = {10.1145/3341686},
@@ -325,8 +378,7 @@
   title = {Live {{Verification}} in an {{Interactive Proof Assistant}}},
   author = {Gruetter, Samuel and Fukala, Viktor and Chlipala, Adam},
   date = {2024-06-20},
-  journaltitle = {Code Artifact for Live Verification in an Interactive Proof Assistant},
-  shortjournal = {Proc. ACM Program. Lang.},
+  journaltitle = {Proc. ACM Program. Lang.},
   volume = {8},
   pages = {209:1535--209:1558},
   doi = {10.1145/3656439},
@@ -440,6 +492,40 @@
   file = {/home/mjs/Zotero/storage/2KYJD6YX/Li et al. - 2024 - Characterizing Ethereum Upgradable Smart Contracts and Their Security Implications.pdf}
 }
 
+@article{luoCoerciveSubtyping1999,
+  title = {Coercive Subtyping},
+  author = {Luo, Z},
+  date = {1999-02-01},
+  journaltitle = {J Logic Computation},
+  volume = {9},
+  number = {1},
+  pages = {105--130},
+  issn = {0955-792X},
+  doi = {10.1093/logcom/9.1.105},
+  url = {https://doi.org/10.1093/logcom/9.1.105},
+  urldate = {2026-09-30},
+  abstract = {We propose and study coercive subtyping, a formal extension with subtyping of dependent type theories such as Martin-Löf's type theory and the type theory UTT. In this approach, subtyping with specified implicit coercions is treated as a feature at the level of the logical framework; in particular, the meaning of an object being in a supertype is given by coercive definition rules for the definitional equality. This provides a conceptually simple and uniform framework to understand subtyping and inheritance relations in type thoeries with sophisticated type structures such as inductive types and universes. The use of coercive subtyping in formal development and in reasoning about subsets of objects is discussed in the context of computer-assisted formal reasoning.Key words: Type theory, subypting, coercion, formal reasoning, logical framework.},
+  keywords = {not_read},
+  file = {/home/mjs/Zotero/storage/LWCSC6ZU/Luo - 1999 - Coercive subtyping.pdf;/home/mjs/Zotero/storage/GBFWLEHZ/9.1.html}
+}
+
+@article{luoCoerciveSubtypingTheory2013,
+  title = {Coercive Subtyping: {{Theory}} and Implementation},
+  shorttitle = {Coercive Subtyping},
+  author = {Luo, Z. and Soloviev, S. and Xue, T.},
+  date = {2013-02-01},
+  journaltitle = {Information and Computation},
+  volume = {223},
+  pages = {18--42},
+  issn = {0890-5401},
+  doi = {10.1016/j.ic.2012.10.020},
+  url = {https://www.sciencedirect.com/science/article/pii/S0890540112001757},
+  urldate = {2026-09-30},
+  abstract = {Coercive subtyping is a useful and powerful framework of subtyping for type theories. The key idea of coercive subtyping is subtyping as abbreviation. In this paper, we give a new and adequate formulation of T[C], the system that extends a type theory T with coercive subtyping based on a set C of basic subtyping judgements, and show that coercive subtyping is a conservative extension and, in a more general sense, a definitional extension. We introduce an intermediate system, the star-calculus T[C]⁎, in which the positions that require coercion insertions are marked, and show that T[C]⁎ is a conservative extension of T and that T[C]⁎ is equivalent to T[C]. This makes clear what we mean by coercive subtyping being a conservative extension, on the one hand, and amends a technical problem that has led to a gap in the earlier conservativity proof, on the other. We also compare coercive subtyping with the ‘ordinary’ notion of subtyping – subsumptive subtyping, and show that the former is adequate for type theories with canonical objects while the latter is not. An improved implementation of coercive subtyping is done in the proof assistant Plastic.},
+  keywords = {Coercive subtyping,Conservativity,Definitional extension,not_read,Subsumptive subtyping,Type theory},
+  file = {/home/mjs/Zotero/storage/PN2HFVG6/Luo et al. - 2013 - Coercive subtyping Theory and implementation.pdf;/home/mjs/Zotero/storage/X3KBFMZH/S0890540112001757.html}
+}
+
 @book{lynch1988introduction,
   title = {An Introduction to Input/Output Automata},
   author = {Lynch, Nancy A and Tuttle, Mark R},
@@ -478,7 +564,7 @@
 }
 
 @inproceedings{niASN1ProvablyCorrect2023,
-  title = {{{ASN1}}*: {{Provably Correct}}, {{Non-malleable Parsing}} for {{ASN}}.1 {{DER}}},
+  title = {{{ASN1}}*: {{Provably Correct}}, {{Non}}-Malleable {{Parsing}} for {{ASN}}.1 {{DER}}},
   shorttitle = {{{ASN1}}*},
   booktitle = {Proceedings of the 12th {{ACM SIGPLAN International Conference}} on {{Certified Programs}} and {{Proofs}}},
   author = {Ni, Haobin and Delignat-Lavaud, Antoine and Fournet, Cédric and Ramananandro, Tahina and Swamy, Nikhil},
@@ -635,8 +721,7 @@
   shorttitle = {Interaction Trees},
   author = {Xia, Li-yao and Zakowski, Yannick and He, Paul and Hur, Chung-Kil and Malecha, Gregory and Pierce, Benjamin C. and Zdancewic, Steve},
   date = {2019-12-20},
-  journaltitle = {Library presented in the paper: Interaction Trees},
-  shortjournal = {Proc. ACM Program. Lang.},
+  journaltitle = {Proc. ACM Program. Lang.},
   volume = {4},
   pages = {51:1--51:32},
   doi = {10.1145/3371119},
@@ -652,8 +737,7 @@
   shorttitle = {Biparsers},
   author = {Xie, Ruifeng and Schrijvers, Tom and Hu, Zhenjiang},
   date = {2025-01-09},
-  journaltitle = {Artifact for POPL'25: Biparsers: Exact Printing for Data Synchronisation},
-  shortjournal = {Proc. ACM Program. Lang.},
+  journaltitle = {Proc. ACM Program. Lang.},
   volume = {9},
   pages = {74:2205--74:2231},
   doi = {10.1145/3704910},

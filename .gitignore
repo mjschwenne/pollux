@@ -375,3 +375,6 @@ tmp
 
 # Claude Code: personal settings stay local; .claude/settings.json and skills are shared
 .claude/settings.local.json
+
+# Emacs LaTeX snippets
+ltximg
