@@ -248,15 +248,6 @@ Generally speaking, we can introduce, eliminate {\color{red} (It's clear what
 underlying type of each decorator. Implicit fields require no special
 consideration.
 
-{\color{red} There really should be a rule which can introduce a \texttt{None},
-  but since implicit fields are modeled as just the spec type, this is
-  difficult. I will likely need to model both implicit and optional fields with
-  an \texttt{option}, add an annotation to the protobuf type and provide a
-  function which introduces a default value for each type. Alternatively, I
-  could have a \texttt{MISSING} value and a get function, which if it encounters
-  the \texttt{MISSING} just returns the default value. That would align with the
-  descriptor setup in my intermediate parse setup.}
-
 \begin{mathpar}
   \infer[Rep-Pass]{v_1:\tau_1 \prec v_1':\tau_2 \\ \cdots \\ v_n:\tau_1 \prec v_n':\tau_2}{[v_1; \dots;
     v_n]: \rept{\tau_1} \prec [v_1'; \dots; v_n']: \rept{\tau_2}}

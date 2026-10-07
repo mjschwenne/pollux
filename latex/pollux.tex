@@ -108,6 +108,11 @@
 \newcommand{\opt}{\mathtt{OPT}}
 \newcommand{\rep}{\mathtt{REP}}
 \newcommand{\oneof}[1]{\texttt{ONE}\ #1}
+\newcommand{\kle}[2]{\preceq_{#1,#2}}
+\newcommand{\comb}[1]{\oplus_{#1}}
+\newcommand{\packable}{\mathrm{Packable}}
+\newcommand{\assemble}{\mathrm{assemble}}
+\newcommand{\encodes}{\mathrm{Encodes}}
 
 % Using "s" and "l" as "short" and "long" since LaTeX commands can't contain
 % numbers in their names...
@@ -137,6 +142,7 @@
 
 \newcommand{\some}[1]{\texttt{Some}\ #1}
 \newcommand{\none}{\texttt{None}}
+\newcommand{\slot}[2]{\langle #1, #2 \rangle}
 
 \newcommand{\lb}[1]{``\mathrm{#1}"}
 \newcommand{\field}[2]{\langle#1, #2\rangle}
@@ -203,9 +209,9 @@ descriptors.
 
 \input{sections/10-eval.tex}
 
-\input{sections/11-simpl-parse.tex}
+% \input{sections/11-simpl-parse.tex}
 
-\input{sections/12-inter-parse.tex}
+% \input{sections/12-inter-parse.tex}
 
 \input{sections/XX-todo.tex}
 

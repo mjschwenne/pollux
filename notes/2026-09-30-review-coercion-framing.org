@@ -16,8 +16,12 @@
 #+LATEX_HEADER: \newcommand{\parse}{\mathrm{parse}}
 #+LATEX_HEADER: \newcommand{\unk}{\mathrm{unk}}
 #+LATEX_HEADER: \newcommand{\coerce}{\rightsquigarrow}
+#+LATEX_HEADER: \newcommand{\kle}[2]{\trianglelefteq_{#1,#2}}
+#+LATEX_HEADER: \newcommand{\comb}[1]{\oplus_{#1}}
+#+LATEX_HEADER: \newcommand{\packable}{\mathrm{Packable}}
+#+LATEX_HEADER: \newcommand{\assemble}{\mathrm{assemble}}
 
-Status: open
+Status: closed
 Report: sec:type-theory, def:sem-compat, def:sem-assum, thm:fundamental, cor:compat-sound, sec:proto-transform, thm:faith, thm:trans-valid, sec:val-rel @ 77a0189
 Lean:   Pollux/Proto/Transform.lean (Value.reinterpretAt, Slot.reinterpret, Payload.reinterpret) @ 77a0189
 
@@ -156,10 +160,11 @@ premise on =D-Update= once the reserved set $r$ is in the descriptor.
 
 ** Fields: cardinality
 
-For $\Sigma; \Gamma \vdash \langle c_1, \tau_1 \rangle \propto \langle c_2, \tau_2 \rangle$,
+For $\Sigma; \Gamma \vdash \langle \kappa_1, \tau_1 \rangle \propto \langle \kappa_2, \tau_2 \rangle$,
 the premise is $\Sigma; \Gamma \vdash \tau_1 \propto \tau_2 \coerce c$, and the
 cardinality pair lifts $c$ to slots. Oneof members count as $\opt$ here; the
-group constraint lives in =D-Update=.
+group constraint lives in =D-Update=. The next subsection turns this table into
+rules.
 
 | writer  | reader  | slot coercion                                              | status                                    |
 |---------+---------+------------------------------------------------------------+-------------------------------------------|
@@ -169,7 +174,7 @@ group constraint lives in =D-Update=.
 | OPT     | IMP     | $\none \mapsto \init$, $\some{p} \mapsto \imp\ (c\ p)$                   | fine                                      |
 | IMP     | OPT     | $\imp\ p \mapsto$ if $p = \init$ then $\none$ else $\some{(c\ p)}$ | *open*, see below                           |
 | IMP/OPT | REP     | empty $\mapsto [\,]$, $p \mapsto [c\ p]$                                | same caveat as IMP → OPT                  |
-| REP     | IMP/OPT | last element (last writer wins)                            | *open* for packed writers                   |
+| REP     | IMP/OPT | combine all elements: last for scalars, merge for messages | *open* for packed writers                   |
 
 The IMP → OPT coercion is *not* =Some p=, even though the old =Opt-Intro= rule
 says it is. Proto3 doesn't serialize an implicit field that holds its default,
@@ -177,6 +182,175 @@ so the reader sees =None=. If =Encodes= also allows an encoding that writes the
 default explicitly (parsers must accept one), then two encodings of the same
 $m$ parse to =None= and =Some init=. The rule is then not wire-sound under
 $\forall bs$. The answer depends on how =Encodes= is defined.
+
+** Fields: the cardinality judgment
+
+The table mixes two independent things: the payload coercion
+$c : \denote{\tau_1} \to \denote{\tau_2}$, which comes from the payload rules,
+and a way to lift $c$ to whole slots, which depends only on the cardinality pair
+and on a few facts about $\tau_1$ and $\tau_2$. One alternative is a separate
+field rule per row, each repeating the payload premise. Instead, factor the
+lifting into its own judgment, which doesn't involve $\Sigma$ or $\Gamma$:
+\[ \kappa_1 \kle{\tau_1}{\tau_2} \kappa_2 \coerce L
+   \qquad L : (\denote{\tau_1} \to \denote{\tau_2}) \to
+              \mathrm{Slot}_{\kappa_1}(\tau_1) \to \mathrm{Slot}_{\kappa_2}(\tau_2) \]
+Then a single field rule puts the two together:
+\begin{mathpar}
+  \inferrule*[right=F-Field]
+    { \Sigma; \Gamma \vdash \tau_1 \propto \tau_2 \coerce c \\
+      \kappa_1 \kle{\tau_1}{\tau_2} \kappa_2 \coerce L }
+    { \Sigma; \Gamma \vdash \langle \kappa_1, \tau_1 \rangle \propto \langle \kappa_2, \tau_2 \rangle \coerce L(c) }
+\end{mathpar}
+
+*** Why the judgment is indexed by $\tau_1, \tau_2$
+
+Every axiom is stated at an arbitrary $\tau_1, \tau_2$, but some of them use the
+index:
+
+- *Defaults.* =K-OptImp= needs the reader's default $\init_{\tau_2}$.
+  =K-ImpOpt= needs the writer's default $\init_{\tau_1}$, and the comparison
+  happens *before* $c$. It's the writer's serializer omitting its own default
+  that decides whether any bytes exist. With =uint64= → =uint32=, the writer
+  value $2^{32}$ isn't the default, so it's written, and the reader sees
+  $\some{0}$. If the comparison came after $c$, the result would be $\none$.
+- *Combining repeated records.* A singular reader that sees several records for
+  its key combines them with $\comb{\tau}$. That's last-wins when $\tau$ is a
+  scalar, and $\mathrm{merge}$ in $\Sigma(a)$ when $\tau = \mathtt{msg}\ a$.
+  Parsers merge repeated occurrences of a singular message field; they don't
+  overwrite them. The combine happens on the reader's side, after parsing, so
+  it's $\comb{\tau_2}$.
+- *Packing.* $\packable(\tau)$ holds for the varint and fixed-width scalar
+  types. A singular scalar reader treats a packed (=LEN=) record as a wire-type
+  mismatch and skips it, so =REP= → singular needs a side condition on
+  $\tau_1$.
+
+Implicit presence on a message type ($\langle \imp, \mathtt{msg}\ a \rangle$)
+doesn't exist in proto3. Descriptor well-formedness should exclude it, so the
+$\imp$ axioms don't have to handle it.
+
+*** The axioms
+
+Same cardinality:
+\begin{mathpar}
+  \inferrule*[right=K-Imp]{ }
+    { \imp \kle{\tau_1}{\tau_2} \imp \coerce
+      \lambda c.\ \lambda (\imp\ p).\ \imp\ (c\ p) }
+
+  \inferrule*[right=K-Opt]{ }
+    { \opt \kle{\tau_1}{\tau_2} \opt \coerce
+      \lambda c.\ \mathrm{map}_{\mathrm{Option}}\ c }
+
+  \inferrule*[right=K-Rep]{ }
+    { \rep \kle{\tau_1}{\tau_2} \rep \coerce
+      \lambda c.\ \mathrm{map}_{\mathrm{List}}\ c }
+\end{mathpar}
+
+Between singular cardinalities:
+\begin{mathpar}
+  \inferrule*[right=K-OptImp]{ }
+    { \opt \kle{\tau_1}{\tau_2} \imp \coerce
+      \lambda c.\ \lambda s.\ \mathbf{case}\ s\ \mathbf{of}\
+        \none \Rightarrow \imp\ \init_{\tau_2} \mid
+        \some{p} \Rightarrow \imp\ (c\ p) }
+
+  \inferrule*[right=K-ImpOpt\ (open)]{ }
+    { \imp \kle{\tau_1}{\tau_2} \opt \coerce
+      \lambda c.\ \lambda (\imp\ p).\
+        \mathbf{if}\ p = \init_{\tau_1}\ \mathbf{then}\ \none\
+        \mathbf{else}\ \some{(c\ p)} }
+\end{mathpar}
+
+Into and out of $\rep$:
+\begin{mathpar}
+  \inferrule*[right=K-OptRep]{ }
+    { \opt \kle{\tau_1}{\tau_2} \rep \coerce
+      \lambda c.\ \lambda s.\ \mathbf{case}\ s\ \mathbf{of}\
+        \none \Rightarrow [\,] \mid \some{p} \Rightarrow [c\ p] }
+
+  \inferrule*[right=K-RepOpt]
+    { \neg\packable(\tau_1) }
+    { \rep \kle{\tau_1}{\tau_2} \opt \coerce
+      \lambda c.\ \lambda l.\ \mathbf{case}\ l\ \mathbf{of}\
+        [\,] \Rightarrow \none \mid
+        p :: ps \Rightarrow \some{(\mathrm{foldl}\ \comb{\tau_2}\ (c\ p)\ (\mathrm{map}\ c\ ps))} }
+\end{mathpar}
+
+The two remaining rows are composites. They can be derived as lemmas or stated
+for readability:
+\begin{mathpar}
+  \inferrule*[right=K-ImpRep\ (open)]{ }
+    { \imp \kle{\tau_1}{\tau_2} \rep \coerce
+      \lambda c.\ \lambda (\imp\ p).\
+        \mathbf{if}\ p = \init_{\tau_1}\ \mathbf{then}\ [\,]\ \mathbf{else}\ [c\ p] }
+
+  \inferrule*[right=K-RepImp]
+    { \neg\packable(\tau_1) }
+    { \rep \kle{\tau_1}{\tau_2} \imp \coerce
+      \lambda c.\ \lambda l.\ \mathbf{case}\ l\ \mathbf{of}\
+        [\,] \Rightarrow \imp\ \init_{\tau_2} \mid
+        p :: ps \Rightarrow \imp\ (\mathrm{foldl}\ \comb{\tau_2}\ (c\ p)\ (\mathrm{map}\ c\ ps)) }
+\end{mathpar}
+=K-ImpRep= is =K-OptRep= after =K-ImpOpt=, and =K-RepImp= is =K-OptImp= after
+=K-RepOpt=. Composing at this level is safe, unlike the =Trans= rule rejected
+below. Each lifting only moves values between containers, and the single $c$
+still does all of the payload conversion.
+
+Notes on the axioms:
+
+- *Naturality.* Every axiom except the two marked /open/ has the form
+  $L(c) = \eta \circ \mathrm{map}\ c$ (with $\comb{\tau_2}$ folded in for
+  =K-RepOpt=), where $\eta$ never inspects a payload. =K-ImpOpt= and =K-ImpRep=
+  compare against $\init_{\tau_1}$. That's exactly why their soundness depends
+  on what =Encodes= allows.
+- *=K-Rep= needs no packing condition.* Every payload rule takes packable types
+  to packable types: =T-Refl= trivially, =T-Varint= between varints, and
+  =T-StrByt=, =T-BytStr= and =F-Msg= between non-packable types. A =REP= reader
+  accepts both packed and unpacked encodings, so any writer works.
+- *The =REP= → singular condition is conservative.* $\neg\packable(\tau_1)$
+  excludes repeated scalars entirely, because proto3 packs them by default. To
+  allow a writer marked =[packed = false]=, the field descriptor would need a
+  packed flag, and the side condition would be on $f_1$ instead of $\tau_1$.
+  That would change the judgment's index from $(\tau_1, \tau_2)$ to
+  $(f_1, f_2)$.
+- *Oneof members* are $\opt$ here, as above.
+
+*** Slot-level semantics and the proof obligations
+
+The report has semantic judgments for single fields ($\vDash_n g : \tau_1 \propto \tau_2$,
+=def:sem-compat-fld=) and for message bodies ($\vDash_n f : d_1 \ll d_2$). The
+middle judgment $f_1 \propto f_2 \coerce c$ has no semantic counterpart, and it
+needs one. Write $\mathrm{Encodes}^k_{f}(s, rs)$ for "$rs$ is a sequence of
+records for key $k$ that an encoding of a message may contain when slot $k$
+holds $s$". Write $\assemble^k_{f}(rs)$ for how the reader builds its slot from
+those records:
+
+- absence gives $\imp\ \init_\tau$, $\none$ or $[\,]$;
+- singular slots combine the parsed records with $\comb{\tau}$;
+- $\rep$ slots concatenate the parsed records, packed or unpacked.
+
+Then:
+\[ \vDash_n g : f_1 \propto f_2 \iff
+   \forall s \checkmark^{f_1},\ \mathrm{depth}(s) \le n,\ \forall rs.\
+   \mathrm{Encodes}^k_{f_1}(s, rs) \to
+   \assemble^k_{f_2}(rs) = \some{(g\ s)} \text{ and no record of } rs \text{ is skipped.} \]
+The last clause is F2, restricted to one shared key.
+
+The =F-Field= case of the inner induction then reduces to one lemma per axiom,
+none of which mentions $\Sigma$, $\Gamma$ or the depth induction:
+\[ \text{if } \forall j \le n.\ \vDash_j c : \tau_1 \propto \tau_2
+   \text{ and } \kappa_1 \kle{\tau_1}{\tau_2} \kappa_2 \coerce L,
+   \text{ then } \vDash_n L(c) : \langle \kappa_1, \tau_1 \rangle \propto \langle \kappa_2, \tau_2 \rangle. \]
+
+For message payloads, these lemmas need $c$ to be a merge homomorphism,
+$c(\mathrm{merge}\ m\ m') = \mathrm{merge}\ (c\ m)\ (c\ m')$. That's required
+in =K-RepOpt= and =K-RepImp=. It's also required in =K-Opt= if =Encodes= may
+split a singular message across several records. The property probably comes
+for free, like coherence does. Suppose =Encodes= is closed under concatenation:
+if $bs$ encodes $m$ and $bs'$ encodes $m'$, then $bs \mathbin{+\!\!+} bs'$
+encodes $\mathrm{merge}\ m\ m'$. That's the Protobuf spec's definition of
+merging. Then (W) applied to $bs \mathbin{+\!\!+} bs'$, together with $\parse$
+respecting concatenation, forces the equation on valid messages. Validity of
+$\mathrm{merge}\ m\ m'$ needs checking for oneofs, where the later member wins.
 
 ** Payloads
 
@@ -292,9 +466,18 @@ waits on =Encodes= and a Proto-layer $\parse$, both still planned.
 1. *F2 needs unknown fields in the model.* Should $\parse$ return the skipped
    field numbers, or should =Value= keep unknown fields as Protobuf runtimes
    do? F1 is the fallback, but it leaves IMP → IMP type changes unchecked.
-2. *IMP → OPT and IMP → REP depend on =Encodes=.* May an encoding write an
-   implicit field that holds its default? If so, those rules aren't wire-sound
-   under $\forall bs$ and have to go.
+2. *Several cardinality axioms depend on what =Encodes= allows.* Parsers accept
+   more than serializers produce, so it matters which encodings $\forall bs$
+   ranges over.
+   - May an encoding write an implicit field that holds its default? If so,
+     =K-ImpOpt= and =K-ImpRep= aren't wire-sound and have to go.
+   - May an encoding repeat a singular field's record? If so, =K-OptRep= is
+     unsound too, because a =REP= reader keeps every copy. =K-ImpRep= has the
+     same problem.
+   - May an encoding split a singular message across several records? If so,
+     =K-Opt= needs the merge-homomorphism lemma for message payloads.
+   One option is to define =Encodes= as the canonical serializer's output plus
+   field reordering. That would answer all three with "no".
 3. *REP → singular with a packed writer.* The red note in =sec:proto-relations=
    still applies. Either leave the rule out, or require an unpacked writer.
 4. *Naming.* "Coercion", "reinterpretation" and "transformation" all appear in

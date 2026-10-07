@@ -31,6 +31,15 @@ reader skips the mistyped record and injects the default \str{} value. This
 condition rules out the trivial transformation which always injects the default
 values for all fields.
 
+There are two conditions part of Definition~\ref{def:well-behaved}, wire
+soundness and faithfulness. Wire soundness states that a valid encoding of a
+message under $d_1$ will parse to the coerced version under $d_2$. Faithfulness
+states that there are no skipped fields during parsing.  An immediate
+consequence of this definition is that coherence is free. Wire soundness pins
+$f$ down on every valid message that has at least one encoding. So if
+$\encodes_{d_1}$ is total on valid messages (i.e. a serializer exists), any two
+derivations of the same judgment yield coercions that agree on valid messages.
+
 \subsubsection{Pollux Judgements}
 
 A Pollux judgment has the form $\Sigma; \Gamma \vdash d_1 \ll d_2 \coerce c$ where
@@ -64,7 +73,7 @@ for each type of object:
 
 \begin{mathpar}
   \infer[N-Assum]
-    { (a_1, a_2) \mapsto x \in \Gamma }
+    { \Gamma((a_1, a_2)) \mapsto x }
     { \Sigma; \Gamma \vdash a_1 \ll a_2 \coerce x }
 
   \infer[N-Unfold]
@@ -138,8 +147,284 @@ note says the $\mathsf{fix}$ is well founded on the writer's value.
 
 \subsubsection{Fields \& Cardinality}
 
-To prove $\Sigma; \Gamma \vdash \field{c_1}{\tau_1} \ll \field{c_2}{d_2}$, we'll need $\Sigma; \Gamma \vdash \tau_1 \propto
-\tau_2 \coerce c$ as a premise and some statement that the cardinality pair 
+To prove $\Sigma; \Gamma \vdash \field{\kappa_1}{\tau_1} \ll \field{\kappa_2}{d_2}$, we'll need $\Sigma; \Gamma \vdash \tau_1 \propto
+\tau_2 \coerce c$ as a premise and some statement that the cardinality pair.
+
+The slot holds both the payload type an a cardinality marker. In order to
+coerce a slot, we need to know that the payload types are compatible and lift
+that to the whole slot.
+
+\[ \kappa_1 \preceq_{\tau_1,\tau_2} \kappa_2 \coerce \left( L : (\denote{\tau_1} \to \denote{\tau_2}) \rightarrow
+    \mathrm{Slot}{\kappa_1}(\tau_1) \rightarrow \mathrm{Slot}{k_2}(\tau_2) \right) \]
+
+The judgment here is indexed by both types since
+\begin{itemize}
+\item Some rules need to access the default for a type, like converting from an
+  implicit field to an optional one. If the input payload has the default, we
+  need to convert that to \texttt{None}. 
+\item Message merge semantics need to trigger if the payload types are
+  messages. More generally, there are several cases where a single payload can
+  be split or combined with others. For some types, that's a last-write-wins
+  operation, but messages merge. To accomplish this, we use a \emph{combine}
+  operator $\comb{\tau}$ which takes the right argument for last-write-wins types
+  and merges messages.
+\item If the payload is a packed scalar type, converting from repeated to
+  implicit might cause a wire type mismatch.
+\end{itemize}
+Also note that implicit presence on a message field doesn't exist in Proto3, and
+descriptor well-formedness excludes it (Definition~\ref{def:dwf}), so the rule
+doesn't need to handle this.
+
+\[ \infer[F-Field]{ \Sigma; \Gamma \vdash \tau_1 \propto \tau_2 \coerce c \\ \kappa_1 \preceq_{\tau_1,\tau_2} \kappa_2 \coerce L
+  }{ \Sigma; \Gamma \vdash \langle \kappa_1, \tau_1 \rangle \propto \langle \kappa_2, \tau_2 \rangle \coerce L(c) } \]
+
+Then, we introduce Protobuf cardinality rules
+
+\begin{mathpar}
+  \infer[K-Imp]{ }{ \imp \kle{\tau_1}{\tau_2} \imp \coerce \lambda\ c.\ \lambda\ (\impt{p}). \impt{(c\ 
+      p)} }
+
+  \infer[K-Opt]{ }{ \opt \kle{\tau_1}{\tau_2} \opt \coerce \lambda\
+    c.\ \mathrm{map}_{\mathtt{option}}\ c}
+
+  \infer[K-Rep]{ }{ \rep \kle{\tau_1}{\tau_2} \rep \coerce \lambda\ c.\
+    \mathrm{map}_{\mathtt{List}}\ c}
+
+  {\color{red}
+  \infer[K-OptImp]{ } { \opt \kle{\tau_1}{\tau_2} \imp \coerce \lambda c.\ \lambda s.\
+    \mathbf{case}\ s\ \mathbf{of}\ \none \Rightarrow \imp\ \init_{\tau_2} \mid \some{p} \Rightarrow \imp\ (c\
+    p) }
+  }
+
+  {\color{red}
+  \infer[K-ImpOpt\ (open)]{ } { \imp \kle{\tau_1}{\tau_2} \opt \coerce \lambda c.\ \lambda
+    (\imp\ p).\ \mathbf{if}\ p = \init_{\tau_1}\ \mathbf{then}\ \none\
+    \mathbf{else}\ \some{(c\ p)} }
+  }
+
+  {\color{red}
+  \infer[K-OptRep]{ }
+    { \opt \kle{\tau_1}{\tau_2} \rep \coerce
+      \lambda c.\ \lambda s.\ \mathbf{case}\ s\ \mathbf{of}\
+        \none \Rightarrow [\,] \mid \some{p} \Rightarrow [c\ p] }
+   }
+
+  {\color{red}
+  \infer[K-RepOpt]
+    { \neg\packable(\tau_1) }
+    { \rep \kle{\tau_1}{\tau_2} \opt \coerce
+      \lambda c.\ \lambda l.\ \mathbf{case}\ l\ \mathbf{of}\
+        [\,] \Rightarrow \none \mid
+        p :: ps \Rightarrow \some{(\mathrm{foldl}\ \comb{\tau_2}\ (c\ p)\ (\mathrm{map}\ c\ ps))} }
+  }
+
+  {\color{red}
+  \infer[K-ImpRep\ (open)]{ }
+    { \imp \kle{\tau_1}{\tau_2} \rep \coerce
+      \lambda c.\ \lambda (\imp\ p).\
+        \mathbf{if}\ p = \init_{\tau_1}\ \mathbf{then}\ [\,]\ \mathbf{else}\ [c\ p] }
+   }
+
+  {\color{red}
+  \infer[K-RepImp]
+    { \neg\packable(\tau_1) }
+    { \rep \kle{\tau_1}{\tau_2} \imp \coerce
+      \lambda c.\ \lambda l.\ \mathbf{case}\ l\ \mathbf{of}\
+        [\,] \Rightarrow \imp\ \init_{\tau_2} \mid
+        p :: ps \Rightarrow \imp\ (\mathrm{foldl}\ \comb{\tau_2}\ (c\ p)\ (\mathrm{map}\ c\ ps)) }
+   }
+\end{mathpar}
+
+The red rules are unsound and should not be included in the official
+formalization. However, I think it's a good idea to include them somewhere since
+it's possible that custom Protobuf implementations make it possible to
+re-introduce some of them.
+\begin{itemize}
+\item An encoding can write an implicit field that holds its default. Thus,
+  \textsc{K-ImpOpt} and \textsc{K-ImpRep} aren't wire-sound and have to go.
+\item An encoding can repeat a singular field's record. Thus, \textsc{K-OptRep}
+  is unsound too, because a $\rep$ reader keeps every copy. \textsc{K-ImpRep}
+  has the same problem.
+\item We have to disallow \textsc{K-RepImp} for packable fields since it isn't
+  possible to write a function which can handle packed and unpacked lists of
+  scalars. Either we have a wire type mismatch and the field is skipped or the
+  last element of the list becomes the singular value but there is no way to
+  know which encoding the serializable will pick. (OK, it \emph{should} always
+  be the packed representation for Proto3, but I'd be willing to bet that not
+  all serializes are strictly spec compliant here.)
+\item An encoding can split a singular message across several records. Thus
+  \textsc{K-Opt} needs the merge-homomorphism lemma for message payloads.
+\end{itemize}
+
+The last two rules, \textsc{K-ImpRep} and \textsc{K-RepImp} are composite rules
+which can be derived. They're stated here for clarity.
+
+Some notes on the cardinality rules:
+\begin{itemize}
+\item Every axiom except the two marked open have the form
+  $L(c) = \eta \circ \mathrm{map}\ c$ (or could be rewritten into the form) where
+  $\eta$ is a function that never inspects the payload. \textsc{K-ImpRep} and
+  \textsc{K-ImpOpt} involve comparisons against the initial value for that type,
+  which is why their soundness depends on what the encoding relation allows.
+\item \textsc{K-Rep} doesn't need a $\packable(\tau_1)$ premise since the payload
+  rules (defined below) \emph{never} allow us to cross from packable types to
+  unpackable types and vice versa.
+\item \textsc{K-RepImp} excludes all packed scalars, which might be overly
+  conservative. However, Protobuf 3 packs scalars by default, which will produce
+  a wire type mismatch. An easy extension to this work would be to add a packed
+  flag to a field and add a side condition that only unpacked fields can go from
+  repeated to implicit cardinalities. This would also lift the whole judgment to
+  fields rather than just types, but that should be trivial.
+\item A oneof field is represented here as an $\opt{}$ and don't have explicit
+  rules. Remember that a oneof is an $\opt{}$ with an extra condition, handled in
+  \textsc{D-Update}, that only one in a set can be non-\texttt{None}.
+\end{itemize}
+
+\subsubsection{Payloads}
+
+\begin{mathpar}
+  \infer[T-Refl]{ }{ \Sigma; \Gamma \vdash \tau \propto \tau \coerce \mathrm{id} }
+
+  \infer[T-Varint]
+    { \tau_1, \tau_2 \in \vints }
+    { \Sigma; \Gamma \vdash \tau_1 \propto \tau_2 \coerce \decop{\tau_2} \circ \encop{\tau_1} }
+
+  \infer[T-StrByt]{ }{ \Sigma; \Gamma \vdash \mathtt{string} \propto \mathtt{bytes} \coerce \mathrm{id} }
+
+  \infer[T-BytStr]{ \text{bytes are UTF-8} }{ \Sigma; \Gamma \vdash \mathtt{bytes} \propto \mathtt{string} \coerce \mathrm{id} }
+
+  \infer[F-Msg]
+    { \Sigma; \Gamma \vdash a_1 \ll a_2 \coerce c }
+    { \Sigma; \Gamma \vdash \mathtt{msg}\ a_1 \propto \mathtt{msg}\ a_2 \coerce c }
+\end{mathpar}
+
+Pairs of wire-compatible but undesirable rules, such as $\double$ to $\fixedl$
+get no rule.
+
+Once again, there is no transitivity rule, which would allow us to arbitrarily
+compose coercions. That is wire unsafe, for reasons explained
+elsewhere. Transitivity can be a lemma about the plain relation (without
+coercions) although that might not be useful. It cannot be a rule with a
+coercion and thus can't be stated into the relation.
+
+\subsection{Definitions \& Theorems}
+
+To start with, we have to define compatibility for every level of our
+compatibility relation. A type is semantically compatible with another if for
+all values of that type, up to depth $n$, the coercion can perfectly translate
+to the new type.
+
+\vspace{1em}
+\begin{definition}[Semantic compatibility, type level]\label{def:sem-compat-typ}
+  A coercion $g : \denote{\tau_1} \rightarrow \denote{\tau_2}$ \emph{carries
+  $\tau_1$ into $\tau_2$ up to depth $n$}, written $\vDash_n g : \tau_1 \propto
+  \tau_2$, when
+  \[ \forall\ v \checkmark^{\tau_1} \text{ with } \mathrm{depth}_f(v) \le n,\
+    \forall\ bs.\ \mathrm{Encodes}_{\tau_1}(v, bs) \rightarrow
+    \mathrm{parse}_{\tau_2}(bs) = \some{g(v)}. \]
+\end{definition}
+
+\vspace{1em}
+\begin{definition}[Semantic compatibility, field level]\label{def:sem-compat-fld}
+  A coercion $g : \denote{s_1} \rightarrow \denote{s_2}$ \emph{carries $s_1$ into $s_2$ up
+  to depth $n$}, written $\vDash_n g : s_1 \ll s_2$, when 
+\[ \forall\ s \checkmark^{f_1}, rs.\ \mathrm{depth}(s) \le n \rightarrow \mathrm{Encodes}_{f_1}^k(s, rs) \rightarrow
+  \assemble_{f2}^k(rs) = \some{(g\ s)} \]
+and no record of $rs$ is skipped.
+\end{definition}
+
+% TODO: Should this really introduce a new assemble notation or do something
+% like what Ethan referenced once were we restrict the byte sting to only be the
+% fragments that matter to this slot?
+
+Here $\mathrm{Encodes}_f^k(s, rs)$ means that $rs$ is a sequence of records for
+key $k$ that an encoding of a message may contain when slot $k$ holds
+$s$. Basically, the slot-level version of the primary Encodes
+relation. Additionally, $\assemble_f^k(rs)$ represents how the reader builds its
+slot from these records:
+\begin{itemize}
+\item An empty sequence gives $\init_{\tau}$, $\none$ or $[\,]$.
+\item Singular slots combine the parsed records with $\comb{\tau}$
+\item Repeated slots concatenate the parse records, regardless of it they're
+  packed or unpacked.
+\end{itemize}
+
+The \textsc{F-Field} case of the inner induction reduces to one lemma per axiom,
+none of which require the $\Sigma$ or $\Gamma$ context. If $\forall\ j \le n. \vDash_j c : \tau_1 \propto \tau_2$
+and $\kappa_1 \kle{\tau_1}{\tau_2} \coerce L$ then $\vDash_n L(c) : \slot{\kappa_1}{\tau_1} \propto \slot{\kappa_2}{\tau_2}$. 
+
+For message payloads, those lemmas would need $c$ to be a merge homomorphism,
+$c(\mathrm{merge}\ m\ m') = \mathrm{merge}\ (c\ m)\ (c\ m')$. It's required when
+updating from a repeated field to a singular one, i.e. \textsc{K-RepOpt} and
+\textsc{K-RepImp}. It would also be required in \textsc{K-Opt} if Encodes may
+split a singular message across several records (which is can, this is the merge
+semantics of Protobuf). This property may come for free naturally, like
+coherence.
+
+There are also considerations here about if Encodes is closed under
+concatenation. If some byte string $bs$ encodes $m$ and $bs'$ encodes $m'$, then
+$bs ++ bs'$ encodes $\mathsf{merge}(m, m')$. Then wire-soundness
+applied to the concatenated byte string, together with $\mathsf{parse}$
+respecting concatenation forces this equation on all valid messages. Validity of
+$\mathsf{merge}(m, m')$ would need to check for oneofs, where the late member
+wins.
+
+\vspace{1em}
+\begin{definition}[Semantic compatibility]\label{def:sem-compat}
+  A function $f : \denote{d_1} \rightarrow \denote{d_2}$ \emph{carries $d_1$ into
+  $d_2$ up to depth $n$}, written $\vDash_n f : d_1 \ll d_2$, when
+  \[ \forall\ m \checkmark^{d_1} \text{ with } \mathrm{depth}_v(m) \le n,\
+    \forall\ bs.\ \mathrm{Encodes}_{d_1}(m, bs) \rightarrow
+    \mathrm{parse}_{d_2}(bs) = \some{f(m)}. \]
+  It \emph{carries $d_1$ into $d_2$}, written $\vDash f : d_1 \ll d_2$, when
+  it does so at every depth, and $\vDash d_1 \ll d_2$ abbreviates
+  $\exists\ f.\ \vDash f : d_1 \ll d_2$.
+\end{definition}
+
+\vspace{1em}
+\begin{definition}[Semantic reading of an Assumption Set]\label{def:sem-assum}
+  $\vDash_n A$ holds when every assumed pair is semantically compatible at every
+  strictly smaller depth:
+  \[ \forall\ (a_1, a_2) \in A.\ \forall\ j < n.\ \vDash_j
+    \coercion{\Sigma(a_1)}{\cdot}{\Sigma(a_2)} : \Sigma(a_1) \ll \Sigma(a_2). \]
+\end{definition}
+
+\vspace{1em}
+\begin{definition}[Soundness]\label{def:soundness}
+  \[ \Sigma; \varnothing \vdash d_1 \ll d_2 \coerce c \implies \wfd{d_1} \implies \wfd{d_2}
+    \implies c \text{ is well behaved} \]
+\end{definition} % TODO link this definition with semantic compatibility
+
+\vspace{1em}
+\begin{corollary}[Soundness of the compatibility relation]\label{cor:compat-sound}
+  $\vDash_n \varnothing$ holds vacuously at every $n$, so
+  \[ \Sigma; \varnothing \vdash d_1 \ll d_2 \implies\ \vDash
+    \coercion{d_1}{\cdot}{d_2} : d_1 \ll d_2. \]
+\end{corollary}
+
+
+A proof of these theorems would require strong induction on $n$, since a nested
+message might be of any depth less than the current message. At each inductive
+step of depth $n$, a nested induction on the derivation of the descriptor
+relation would be required. 
+
+\begin{itemize}
+\item Induction on the $\Sigma; \Gamma \vdash d_1 \ll d_2$ derivation itself is not enough, due to
+  \textsc{N-Assum}. When doing induction on the derivation, the inductive
+  hypothesis would state that the conclusion holds for all sub-derivations,
+  which \textsc{N-Assum} doesn't have. We get the fact that $(a_1, a_2) \in \Gamma$ but
+  not anything else to prove a semantic fact about the descriptors referenced by
+  those names.
+\item Induction on the depth of the message also doesn't work. The message depth
+  is only decreased when we de-structure a nested message, but there are many
+  different ways (like the \textsc{F-Msg} rule) which update sibling
+  fields that doesn't decrease the depth. Without the depth decreasing, the
+  inductive hypothesis can't be applied.
+\end{itemize}
+However both approaches used together would be able to discharge the proof, with
+the outer induction on message depth able to handle when we step into a nested
+message and the inner induction on the derivation able to walk all the sibling
+fields being updated without a change in index.
 
 \subsection{Not a Logical Relation}
 
@@ -205,14 +490,6 @@ Using that framing, we can define a logical relation as such:
 \end{definition}
 
 \vspace{1em}
-\begin{definition}[Semantic reading of an Assumption Set]\label{def:sem-assum}
-  $\vDash_n A$ holds when every assumed pair is semantically compatible at every
-  strictly smaller depth:
-  \[ \forall\ (a_1, a_2) \in A.\ \forall\ j < n.\ \vDash_j
-    \coercion{\Sigma(a_1)}{\cdot}{\Sigma(a_2)} : \Sigma(a_1) \ll \Sigma(a_2). \]
-\end{definition}
-
-\vspace{1em}
 \begin{theorem}[Fundamental Theorem]\label{thm:fundamental}
   Let $\Sigma$ be a closed symbol table and let
   $A \subseteq \dom{\Sigma} \times \dom{\Sigma}$. Fix $n$ and assume
@@ -226,36 +503,6 @@ Using that framing, we can define a logical relation as such:
     \item if $\Sigma; A \vdash a_1 \ll a_2$, then $\vDash_n \{(a_1, a_2)\}$.
   \end{enumerate}
 \end{theorem}
-
-\vspace{1em}
-\begin{corollary}[Soundness of the compatibility relation]\label{cor:compat-sound}
-  $\vDash_n \varnothing$ holds vacuously at every $n$, so
-  \[ \Sigma; \varnothing \vdash d_1 \ll d_2 \implies\ \vDash
-    \coercion{d_1}{\cdot}{d_2} : d_1 \ll d_2. \]
-\end{corollary}
-
-A proof of these theorems would require strong induction on $n$, since a nested
-message might be of any depth less than the current message. At each inductive
-step of depth $n$, a nested induction on the derivation of the descriptor
-relation would be required. 
-
-\begin{itemize}
-\item Induction on the $\Sigma; A \vdash d_1 \ll d_2$ derivation itself is not enough, due to
-  \textsc{N-Assum}. When doing induction on the derivation, the inductive
-  hypothesis would state that the conclusion holds for all sub-derivations,
-  which \textsc{N-Assum} doesn't have. We get the fact that $(a_1, a_2) \in A$ but
-  not anything else to prove a semantic fact about the descriptors referenced by
-  those names.
-\item Induction on the depth of the message also doesn't work. The message depth
-  is only decreased when we de-structure a nested message, but there are many
-  different ways (like the \textsc{F-Msg} rule below) which update sibling
-  fields that doesn't decrease the depth. Without the depth decreasing, the
-  inductive hypothesis can't be applied.
-\end{itemize}
-However both approaches used together would be able to discharge the proof, with
-the outer induction on message depth able to handle when we step into a nested
-message and the inner induction on the derivation able to walk all the sibling
-fields being updated without a change in index.
 
 \subsection{Adding Recursion}\label{sec:recursive-types}
 
@@ -427,12 +674,32 @@ context $\Sigma$ which maps a name to a descriptor. All (mutually) recursive mes
 are stored using their names in $\Sigma$ and fetched as needed. While $\Sigma$ itself
 might be large for a large corpus, the number of mutually-recursive messages is
 much smaller. The largest cycle observed in the data set is 22
-mutually-recursive message descriptors, so $|A| = 22 \times 22 = 484$
+mutually-recursive message descriptors, so $|\Gamma| = 22 \times 22 = 484$
 
 With the Lean formalizing using the symbol table approach, unfolding of the
 descriptors corresponds to the explode operation (Section~\ref{sec:proto-desc})
 and the induction rule for proving things on the descriptor is modeled with the
-assumption set $A$. 
+assumption context $\Gamma$.
+
+The paper formalization can use the derivation of $\Sigma; \Gamma \vdash d_1 \ll d_2 \coerce c$
+to build the coercion, but lean can't eliminate a \texttt{Prop} into a
+coercion. There are two alternatives here.
+\begin{itemize}
+\item Put the derivation into \texttt{Type}. Define \texttt{coerce : Deriv Σ Γ
+    d₁ d₂ → Env Γ → Value → Value} by well-founded recursion on (value depth,
+  derivation). This is a faithful rendering of the report, but it duplicates
+  \texttt{Value.reinterpret}, and every lemma about \texttt{reinterpret} would
+  have to be re-proved for \texttt{coerce}.
+\item Keep the existing \texttt{Value.reinterpret}. Keep the relation as a
+  \texttt{Prop} and prove agreement: a derivation implies that on valid
+  messages, \texttt{Value.reinterpret d₁ d₂} equals the coercion the rules
+  describe. In practice, the \texttt{getD} fallback at in the coercion function
+  never fires on shared keys. That's the \texttt{Slot.reinterpret\_isSome} lemma
+  already sketched in Section~\ref{sec:proto-transform}. The report presents the
+  coercion rules as the specification, and Lean implements them with a function
+  defined on the descriptors. Coherence is automatic because
+  \texttt{reinterpret} doesn't depend on the derivation.
+\end{itemize}
 
 It's worth noting that since messages can always be omitted, having a cyclic
 descriptor doesn't complicate message initialization,
@@ -452,5 +719,5 @@ happening here.
 % citar-bibliography: ("../pollux.bib")
 % TeX-master: "../pollux.tex"
 % TeX-command-default: "Make"
-% jinx-local-words: "protobuf"
+% jinx-local-words: "cardinality protobuf"
 % End:
