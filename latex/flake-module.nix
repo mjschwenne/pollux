@@ -74,6 +74,7 @@
         buildInputs = with pkgs; [
           texliveFull
           latexminted
+          texlab
         ];
       };
     };
