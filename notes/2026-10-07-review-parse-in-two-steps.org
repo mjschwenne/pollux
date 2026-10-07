@@ -1,0 +1,478 @@
+#+TITLE: Parsing in two steps: sec:philosophy, the assemble TODO, and other formats
+#+STARTUP: latexpreview
+#+LATEX_HEADER: \usepackage{amsmath,amssymb,mathtools,mathpartir,stmaryrd}
+#+LATEX_HEADER: \newcommand{\dom}[1]{\mathrm{dom}(#1)}
+#+LATEX_HEADER: \newcommand{\denote}[1]{\llbracket{} #1 \rrbracket{}}
+#+LATEX_HEADER: \newcommand{\imp}{\mathtt{IMP}}
+#+LATEX_HEADER: \newcommand{\opt}{\mathtt{OPT}}
+#+LATEX_HEADER: \newcommand{\rep}{\mathtt{REP}}
+#+LATEX_HEADER: \newcommand{\some}[1]{\texttt{Some}\ #1}
+#+LATEX_HEADER: \newcommand{\none}{\texttt{None}}
+#+LATEX_HEADER: \newcommand{\init}{\mathrm{init}}
+#+LATEX_HEADER: \newcommand{\comb}[1]{\oplus_{#1}}
+#+LATEX_HEADER: \newcommand{\assemble}{\mathrm{assemble}}
+#+LATEX_HEADER: \newcommand{\records}{\mathrm{records}}
+#+LATEX_HEADER: \newcommand{\accepts}{\mathrm{accepts}}
+#+LATEX_HEADER: \newcommand{\parse}{\mathrm{parse}}
+#+LATEX_HEADER: \newcommand{\Encodes}{\mathrm{Encodes}}
+#+LATEX_HEADER: \newcommand{\groups}{\mathrm{groups}}
+#+LATEX_HEADER: \newcommand{\restr}[2]{#1|_{#2}}
+
+Status: open
+Report: sec:philosophy, fig:parse-validate, def:compat (removed in the working copy), sec:type-theory, def:well-behaved, def:sem-compat-fld (the TODO after it), def:sem-compat, def:soundness, sec:inter-parse @ cefe03c (03-philosophy.tex has uncommitted edits)
+Lean:   Pollux/InterParse/Parser.lean (parseVal, parseValue'), Pollux/Parse/Theorems.lean (LimitParseOkCompat''), Pollux/Proto/Value.lean, Pollux/Proto/Transform.lean (Value.reinterpret, Desc.OneofPreserved) @ cefe03c
+
+* Summary
+
+=sec:philosophy= says that parsing can be split into two steps:
+
+1. Read the bytes into a plain, low-level form, without looking at a
+   descriptor.
+2. Use the descriptor to turn that low-level form into the final message.
+
+The Lean doesn't do this today. Every parser in it reads and interprets in
+one pass.
+
+The TODO after =def:sem-compat-fld= asks whether the report should introduce a
+new $\assemble$ notation, or instead restrict the byte string to "the fragments
+that matter to this slot". This note argues that these are the same answer,
+and that the answer is the two steps of =sec:philosophy=:
+
+- *Step one* turns bytes into a list of *records*. A record is one tag plus
+  its raw payload. It needs no descriptor.
+- *"The fragments that matter to this slot"* are simply the records with that
+  slot's field number.
+- *$\assemble$* is step two for a single field: it builds the reader's slot
+  from that field's records.
+
+Seen this way, the philosophy section and the type-theory section describe the
+same thing, and the two-step split does real work in the proofs. It is what
+lets message-level compatibility (=def:sem-compat=) be proven one field at a
+time from field-level compatibility (=def:sem-compat-fld=). The note also
+argues that the split should be *optional* in the general framework, because
+some formats, including Avro and the report's own InterParse format, have no
+step one.
+
+* The two steps for protobuf
+
+** Step one: bytes to records
+
+A protobuf message on the wire is a sequence of *records*. Each record is a tag
+followed by a payload. The tag holds two things: the field number $k$, and the
+*wire type* $w$, which says how long the payload is. The payload's content
+depends on the wire type:
+
+| Wire type | What the record holds               |
+|-----------+-------------------------------------|
+| =VARINT=    | an unsigned number, up to $2^{64} - 1$ |
+| =I64=       | exactly 8 bytes                     |
+| =I32=       | exactly 4 bytes                     |
+| =LEN=       | a length, then that many bytes      |
+
+(The deprecated group wire types =SGROUP= and =EGROUP= are left out, as the
+report's descriptors leave out groups.)
+
+Because the wire type always says where the payload ends, the whole byte
+string can be cut into records without knowing anything about the message.
+Write that function as
+\[ \records : \mathrm{Bytes} \to \mathrm{Option}\ (\mathrm{List}\ (k, w, p)). \]
+It fails only on malformed input: a truncated payload, an unknown wire type, or
+field number 0. The list keeps the records in the order they appear.
+
+The important choice is to *keep every =LEN= payload as raw bytes*. A =LEN=
+payload could be a string, raw bytes, a packed list of numbers, or a nested
+message, and the bytes alone can't say which. =sec:philosophy= describes how
+=protoscope= copes with this by guessing (its =-all-fields-are-messages=
+option), and how the guess can be wrong. Step one doesn't need to guess. It
+leaves the question for step two, where the descriptor answers it.
+
+One piece of notation: for a set of field numbers $K$, $\restr{rs}{K}$ means
+"the records of $rs$ whose field number is in $K$, in their original order".
+For one field, $\restr{rs}{k}$ is short for $\restr{rs}{\{k\}}$.
+
+** Step two: records to a message
+
+Step two looks at the reader's descriptor $d$ and builds the message one field
+at a time.
+
+*Which records belong to a field.* A field accepts a record when the record's
+wire type fits the field's type. For example, an =int32= field accepts
+=VARINT=, and a =string= field accepts =LEN=. A *repeated* field of a type that
+can be packed (numbers and =bool=) accepts both its own wire type and =LEN=,
+because protobuf requires readers to take a repeated number field in either
+packed or unpacked form. Write this as $\accepts(f, w)$. A record that no field
+accepts is *skipped*. Either its field number isn't in $d$, or its wire type
+doesn't fit the field with that number.
+
+*Reading one record.* Each accepted record gives one or more values of the
+field's type $\tau$:
+- a =VARINT= record gives one number, converted to $\tau$. For example, an
+  =int32= field takes the low 32 bits as a signed number, and a =sint32= field
+  undoes zig-zag. This is where the conversions of =T-Varint= happen;
+- an =I32= or =I64= record gives one value from its 4 or 8 bytes;
+- a =LEN= record for a =string= or =bytes= field gives one value;
+- a =LEN= record for a packed repeated field gives a list of values;
+- a =LEN= record for a message field gives one nested message. To get it, the
+  reader runs both steps again on the payload bytes, using the nested
+  descriptor. This is the parse/validate loop drawn in =fig:parse-validate=.
+
+*Building one field's slot.* Given the accepted records $rs$ for a field
+$f = \langle \kappa, \tau \rangle$, the reader's slot is $\assemble_f(rs)$:
+\begin{align*}
+  \assemble_{\langle \imp, \tau \rangle}(rs) &=
+    \begin{cases}
+      \imp\ \init_\tau & rs = [\,] \\
+      \imp\ (v_1 \comb{\tau} \cdots \comb{\tau} v_n) & \text{otherwise}
+    \end{cases} \\
+  \assemble_{\langle \opt, \tau \rangle}(rs) &=
+    \begin{cases}
+      \opt\ \none & rs = [\,] \\
+      \opt\ (\some{(v_1 \comb{\tau} \cdots \comb{\tau} v_n)}) & \text{otherwise}
+    \end{cases} \\
+  \assemble_{\langle \rep, \tau \rangle}(rs) &= \rep\ (\text{all values of all records of } rs, \text{ in order})
+\end{align*}
+Here $v_1, \dots, v_n$ are the values read from the records of $rs$, in order.
+$\comb{\tau}$ is the report's combine operator: for scalars the later value
+wins, and for messages the two are merged. $\assemble$ fails if reading any
+record fails, for example on a nested message that doesn't parse.
+
+*Oneof groups.* Fields in the same oneof can't be built independently. When a
+record for one member arrives, protobuf clears the other members. So the reader
+treats a whole oneof group as one unit. It finds the member $k^*$ of the last
+record in the group, gives every other member $\opt\ \none$, and builds $k^*$'s
+slot from the final unbroken run of $k^*$'s records. (Records for $k^*$ that
+came before a different member were cleared.) Every field that isn't in a oneof
+is a unit on its own. Write $\groups(d)$ for these units: each oneof's field
+numbers form one group, and every other field number is a group of one.
+
+*The whole parser.*
+\[
+  \parse_d(bs) = \some{(m, U)} \quad\text{where}\quad
+  \begin{aligned}[t]
+    rs &= \records(bs), \\
+    m &= \text{for each group } B \in \groups(d), \text{ the slots built from } \restr{rs}{B}, \\
+    U &= \text{the field numbers of the records of } rs \text{ that were skipped}.
+  \end{aligned}
+\]
+
+** The property that matters: each group reads only its own records
+
+Because $\parse$ is built this way, *the slots of group $B$ depend only on
+$\restr{\records(bs)}{B}$*. Records for other fields, and the order of records
+across different fields, can't affect them. This is what the TODO's
+"restricting the byte string to the fragments that matter to this slot" means,
+made precise. Bytes can't be restricted directly; records can.
+
+* Answering the TODO after def:sem-compat-fld
+
+** Defining Encodes record by record
+
+=def:sem-compat-fld= uses $\Encodes_f^k(s, rs)$, "the records an encoding may
+contain for key $k$ when the slot holds $s$". With step one, the
+message-level $\Encodes$ can be *defined* from this field-level one, instead of
+the field-level one being described in words after the fact:
+\[
+  \Encodes_d(m, bs) \iff
+  \records(bs) = \some{rs}
+  \ \wedge\ \text{every record of } rs \text{ has a field number in } \dom{d}
+  \ \wedge\ \forall k \in \dom{d}.\ \Encodes_{d[k]}^k(m[k],\ \restr{rs}{k}).
+\]
+In words: cut the bytes into records. Then each field's own records, read in
+order, must encode that field's value. Nothing constrains how records of
+*different* fields are ordered relative to each other, so this automatically
+allows fields to be written in any order, which protobuf permits.
+
+The field level, $\Encodes_f^k(s, rs)$, says that every record of $rs$ has
+field number $k$ and:
+- for $s = \imp\ p$: either $rs$ is empty and $p = \init_\tau$, or $rs$ is
+  non-empty, each record holds a valid encoding of a value of $\tau$, and
+  combining those values with $\comb{\tau}$ gives $p$;
+- for $s = \opt\ \none$: $rs$ is empty;
+- for $s = \opt\ (\some{p})$: as the non-empty case of $\imp$;
+- for $s = \rep\ ps$: putting together the values of all the records, in
+  order, gives $ps$. For a packable type each record may be packed or unpacked,
+  and the two forms may be mixed.
+
+A nested message $v$ inside a =LEN= record is encoded when
+$\Encodes_{d'}(v, p)$ holds for the payload bytes $p$, so the definition refers
+to itself one level down. This matches the report's list of what an encoding
+may do (=sec:type-theory=, the list after the cardinality rules): it may write
+an implicit field that holds its default, repeat a singular field's record,
+split a singular message across several records, and pick packed or unpacked
+form.
+
+** A revised def:sem-compat-fld, with no new notation
+
+$\assemble$ is no longer an invented notation. It is the piece of $\parse$
+that handles one field. The field-level definition becomes:
+\[
+  \vDash_n g : f_1 \propto f_2 \iff
+  \forall s \checkmark^{f_1},\ rs.\
+  \mathrm{depth}(s) \le n \rightarrow
+  \Encodes^k_{f_1}(s, rs) \rightarrow
+  \bigl(\forall (k, w, p) \in rs.\ \accepts(f_2, w)\bigr)
+  \ \wedge\ \assemble_{f_2}(rs) = \some{(g\ s)}.
+\]
+The first conjunct is "no record of $rs$ is skipped", stated exactly. It is the
+field-level form of the faithfulness condition in =def:well-behaved=.
+
+** The message-level statement follows from the field-level one
+
+This is the payoff. The per-group property above turns the =D-Update= case of
+the soundness proof into a field-by-field argument.
+
+*Lemma (message from fields).* Suppose
+- $\mathrm{OneofPreserved}(d_1, d_2)$,
+- for every shared field number $k \in \dom{d_1} \cap \dom{d_2}$,
+  $\vDash_n g_k : d_1[k] \propto d_2[k]$, and
+- $f$ is the coercion =D-Update= builds from the $g_k$: it applies $g_k$ at
+  shared keys and $\init(d_2[k])$ at keys only $d_2$ has.
+
+Then for every $m \checkmark^{d_1}$ with $\mathrm{depth}_v(m) \le n$ and every
+$bs$ with $\Encodes_{d_1}(m, bs)$,
+\[ \parse_{d_2}(bs) = \some{(f(m), U)} \quad\text{with}\quad U \subseteq \dom{d_1} \setminus \dom{d_2}. \]
+
+*Why it holds.* Let $rs = \records(bs)$, and look at each field number $k$ of
+$d_2$:
+- *$k$ is shared.* $\restr{rs}{k}$ encodes $m[k]$ under $d_1[k]$, by the
+  definition of $\Encodes_{d_1}$. The field-level assumption says every one of
+  these records is accepted, and $\assemble_{d_2[k]}$ gives $g_k(m[k])$.
+- *Only $d_2$ has $k$.* The writer only writes records for its own fields, so
+  $\restr{rs}{k}$ is empty, and $\assemble$ gives $\init(d_2[k])$.
+- *Only $d_1$ has $k$.* These records match no field of $d_2$, so they're
+  skipped and their field number goes into $U$. They are the only skipped
+  records, because the first case showed that every record of a shared field is
+  accepted. So $U \subseteq \dom{d_1} \setminus \dom{d_2}$.
+
+Oneof groups need one more step, and it is exactly what $\mathrm{OneofPreserved}$
+provides. Suppose $d_2$ puts two shared fields in one oneof group.
+$\mathrm{OneofPreserved}$ says $d_1$ had them in one group too. A valid writer
+message sets at most one member of each of its groups, so at most one member of
+the reader's group has records. The group step then reduces to the single-field
+step for that member. Every other member gets $\opt\ \none$, which is also what
+the coercion gives, since =K-Opt= maps $\none$ to $\none$. Without
+$\mathrm{OneofPreserved}$, the reader could see records for two members and
+clear one of them, and the lemma would be false. The Lean comment on
+=Desc.OneofPreserved= (=Transform.lean:341=) predicts this.
+
+This lemma also gives =def:soundness= its link to semantic compatibility, which
+is what the =% TODO= after =def:soundness= asks for. The lemma's conclusion is
+=def:sem-compat= (the equation) together with the faithfulness half of
+=def:well-behaved= (the bound on $U$). So the outer induction on depth, applied
+to it, proves both at once.
+
+** A small wording issue in def:well-behaved
+
+The text after =def:well-behaved= describes $U$ as "the set of fields skipped
+during parsing (i.e. where defaults are injected during parsing)". These are
+two different sets. Records are skipped at fields only the writer has.
+Defaults are injected at fields only the reader has, which have no records at
+all, so nothing there is skipped. The condition
+$U \subseteq \dom{d_1} \setminus \dom{d_2}$ is about the first set. Suggested
+wording: "$U$ is the set of field numbers whose records the reader skipped,
+because the field number is unknown to it or the wire type doesn't fit."
+
+* What this means for sec:philosophy
+
+** How the section lines up with the two steps
+
+| sec:philosophy says                                 | In the two-step reading                                                                                             |
+|-----------------------------------------------------+---------------------------------------------------------------------------------------------------------------------|
+| =VARINT= fields are unsigned numbers, converted later | Correct. Step one stores the unsigned number; reading a record converts it to the field's type                      |
+| =I32= / =I64= are only bytes until validation           | Correct. Step one stores 4 or 8 bytes                                                                               |
+| =LEN= is the tricky case; protoscope has to guess     | No guess needed. Step one keeps the bytes; step two knows what they are                                             |
+| Parse and validate loop for nested messages         | Reading a message-typed =LEN= record runs both steps again on its payload                                             |
+| The compatibility relations never mention the bytes | Correct for the relations. The semantic definitions mention records, and only $\records$ and $\Encodes$ touch bytes |
+
+The last row is the honest version of the section's closing claim. "The work
+lifts trivially to the protoscope level" undersells it. The field-level
+definitions in =sec:type-theory= are *already* stated at the protoscope level,
+because records are what protoscope shows.
+
+One caution about the word "validation". For protobuf, step two does much more
+than check. It converts numbers between types, combines repeated records,
+decides what each =LEN= payload is, and parses nested messages. All of protobuf's
+interesting compatibility behaviour happens there: =int32= vs. =int64= on
+negative numbers, =sint32= vs. =int32=, =bool= reading a wider number,
+=string= vs. =bytes=, packed vs. unpacked. Calling step two "decoding" or
+"assembly" would set the right expectation. Calling it "validation" fits CBOR
+with CDDL, where step two really only checks.
+
+** Smaller things in the section
+
+- With =def:compat= removed in the working copy, =12-inter-parse.tex:173= still
+  says =Definition~\ref{def:compat}=, and the layout tables in =CLAUDE.md= and
+  =latex/CLAUDE.md= still list =def:compat= under this section. See the next
+  part for whether to restore a version of it.
+- "While I claimed earlier that Protobuf forces Pollux to consider the binary
+  encoding blob" refers to a claim that is no longer earlier in the section.
+- In the CBOR subfigure of =fig:parse-validate=, =\draw[-{LaTeX}] (cp) -- (pv);=
+  points at =pv=, a node in the protobuf subfigure. It should probably be
+  =(cv)=.
+
+* Other formats
+
+The point of keeping the split is that Pollux should apply to formats other
+than protobuf. Here is how a few formats fit:
+
+| Format              | Is there a step one?                                                                  | What step two does                         |
+|---------------------+---------------------------------------------------------------------------------------+--------------------------------------------|
+| Protobuf            | Yes: records                                                                          | converts, combines, parses nested messages |
+| CBOR + CDDL         | Yes: any well-formed CBOR item decodes on its own                                     | checks the item against the CDDL rule      |
+| Avro                | No: the bytes have no tags or lengths; the writer's schema is needed to read anything | (no split)                                 |
+| InterParse (report) | No: a tag has no wire type, so an unknown field can't be skipped                      | (no split)                                 |
+
+InterParse is worth pointing out. Its reader can't skip a field it doesn't know,
+because the tag doesn't say how long the payload is. That is why its
+compatibility relation has no rule for dropping fields, and why its proofs work
+on whole messages (=compatInterParseOk=), not one field at a time.
+
+So the recommendation is in two layers:
+
+1. *The part every format provides.* Descriptors, values that are valid for a
+   descriptor, the compatibility relation with its coercion, and one
+   format-specific promise: the message-level statement of =def:sem-compat=
+   (every encoding under $d_1$ parses under $d_2$ to the coerced message). This
+   is the role =def:compat= used to play. I'd restore it in this form, as the
+   format-independent definition, rather than drop it.
+2. *An extra the format can offer.* When a format has a step one (a
+   descriptor-free $\records$) and a step two built group by group, the
+   message-level statement follows from field-level ones, as in the lemma
+   above. Protobuf and CBOR offer it. Avro and InterParse don't, and they still
+   fit layer 1.
+
+* Lean
+
+*Today.* Nothing in the Lean follows the two steps.
+- InterParse's =parseVal= (=InterParse/Parser.lean:62=) reads a tag, looks it
+  up in the descriptor, and only then knows how to read the payload. Its
+  =parseValue'= does have a small second step: =listToValue= combines the
+  parsed =(key, Val)= list according to the descriptor.
+- The Proto layer has no parser yet, and its =Value= is the final form of the
+  message, not records.
+- =Value.reinterpret= is the =D-Update= coercion, so the lemma above is about
+  it once a Proto parser exists.
+
+*Once the report settles this*, the Proto parser can be built to match.
+Naming and file layout are Lean-side choices; the definitions themselves wait
+on the report.
+- A record type and =records : List UInt8 → Option (List Record)=.
+- A per-field =assemble=, handling oneof groups as one unit.
+- =parse d= defined as the composition of the two. Then "each group reads only
+  its own records" is true by definition rather than a lemma to prove.
+- =Encodes= defined record by record, as above.
+
+Two side benefits:
+- *Termination is easy.* Step one only consumes bytes, and every nested parse
+  runs on a =LEN= payload strictly shorter than the bytes it came from. So the
+  parser terminates by byte length, whatever the descriptor looks like. That
+  holds for recursive descriptors too (=sec:recursive-types=).
+- *Unknown fields come for free.* The skipped records are already at hand.
+  Returning their field numbers gives $U$. Returning the records themselves
+  would model protobuf's unknown-field preservation, which is question F2 in
+  =2026-09-30-review-coercion-framing.org=.
+
+Nothing in the Lean is blocked by this note.
+
+* Questions for the author
+
+1. *How generous should $\Encodes$ be?* The definition above allows everything
+   real parsers accept: repeated records for a singular field (with arbitrary
+   earlier values), messages split across records, and packed and unpacked
+   records mixed. The soundness theorem quantifies over every encoding, so a
+   more generous $\Encodes$ gives a stronger theorem, and the cardinality rules
+   that are already marked unsound (=K-ImpOpt=, =K-OptRep=, …) are exactly
+   those this generosity breaks. Two smaller cases aren't settled: number
+   encodings padded with extra bytes, and empty packed records.
+2. *Should $U$ hold field numbers or whole records?* Field numbers are enough
+   for faithfulness. Records are needed if Pollux ever models unknown-field
+   preservation.
+3. *Restore =def:compat=?* In the format-independent form described under
+   "Other formats", or point =sec:inter-parse= at =def:sem-compat= instead.
+4. *Name for step two.* "Validation" fits CBOR but undersells protobuf.
+   "Assembly" matches the existing $\assemble$.
+
+* Suggested report text
+
+For =sec:philosophy=, replacing the =LEN= bullet and the closing paragraph.
+=\records=, =\accepts=, and =\restr= are new macros; =\assemble= already
+exists.
+
+#+begin_src latex
+% preamble
+\newcommand{\records}{\mathrm{records}}
+\newcommand{\accepts}{\mathrm{accepts}}
+\newcommand{\restr}[2]{#1|_{#2}}
+
+% sec:philosophy, replacing the LEN bullet
+\item \texttt{LEN} is the tricky case: its bytes could be a string, raw bytes,
+  a packed list of numbers, or a nested message. \texttt{protoscope} guesses
+  (\texttt{-all-fields-are-messages}) and can guess wrong. Pollux does not
+  guess. The first step keeps every \texttt{LEN} payload as raw bytes, and the
+  second step, which has the descriptor, decides what they are. For a nested
+  message this means running both steps again on the payload, which is the loop
+  in Figure~\ref{fig:parse-validate}.
+
+% sec:philosophy, replacing the closing paragraph
+For Protobuf, the first step cuts the bytes into \emph{records}: a field
+number, a wire type, and a raw payload. The wire type says where each payload
+ends, so this needs no descriptor:
+\[ \records : \mathrm{Bytes} \to \mathrm{Option}\ (\mathrm{List}\ (k, w, p)). \]
+The second step builds the reader's message one field at a time. The slot for
+field $k$ is $\assemble_{d[k]}$ applied to $\restr{\records(bs)}{k}$, the
+records with field number $k$. A oneof group is handled as one unit, since a
+record for one member clears the others. Records whose field number is unknown
+to the reader, or whose wire type doesn't fit, are skipped. For Protobuf this
+second step does more than validate: it converts numbers between types,
+combines repeated records, and parses nested messages, and that is where all of
+Protobuf's compatibility behaviour lives.
+
+The compatibility relations never mention bytes. The semantic definitions of
+Section~\ref{sec:type-theory} mention records, and only $\records$ and
+$\mathrm{Encodes}$ mention bytes. Because each field's slot depends only on
+that field's records, compatibility of whole messages follows from
+compatibility of their fields.
+
+Not every format has a first step. Avro needs the writer's schema to read
+anything, and the format of Section~\ref{sec:inter-parse} cannot skip an
+unknown field because its tags carry no wire type. Pollux's definition of
+compatibility (Definition~\ref{def:compat}) does not depend on the split. The
+split is an extra that makes field-by-field proofs possible when a format
+offers it.
+#+end_src
+
+For =sec:type-theory=, replacing the TODO and the paragraph that defines
+$\Encodes_f^k$ and $\assemble$:
+
+#+begin_src latex
+Here $\mathrm{Encodes}_f^k(s, rs)$ says that $rs$, a list of records with field
+number $k$, is a valid encoding of slot $s$. The message-level relation is
+defined from it:
+\[
+  \mathrm{Encodes}_d(m, bs) \iff
+  \records(bs) = \some{rs}
+  \wedge \forall (k, w, p) \in rs.\ k \in \dom{d}
+  \wedge \forall k \in \dom{d}.\ \mathrm{Encodes}_{d[k]}^k(m[k], \restr{rs}{k}).
+\]
+Records of different fields may appear in any order. $\assemble_f(rs)$ is the
+part of $\mathrm{parse}$ that builds one slot from that field's records
+(Section~\ref{sec:philosophy}):
+\begin{itemize}
+\item An empty list gives $\init_\tau$, $\none$, or $[\,]$.
+\item Singular slots combine the records' values with $\comb{\tau}$.
+\item Repeated slots concatenate the records' values, packed or unpacked.
+\end{itemize}
+"No record of $rs$ is skipped" means
+$\forall (k, w, p) \in rs.\ \accepts(f_2, w)$.
+
+\begin{lemma}[Message from fields]\label{lem:msg-from-fields}
+  Suppose $\mathrm{OneofPreserved}(d_1, d_2)$, and
+  $\vDash_n g_k : d_1[k] \propto d_2[k]$ for every
+  $k \in \dom{d_1} \cap \dom{d_2}$. Let $f$ be the coercion
+  \textsc{D-Update} builds from the $g_k$. Then for all
+  $m \checkmark^{d_1}$ with $\mathrm{depth}_v(m) \le n$ and all $bs$ with
+  $\mathrm{Encodes}_{d_1}(m, bs)$,
+  \[ \mathrm{parse}_{d_2}(bs) = \some{(f(m), U)} \quad\text{with}\quad
+     U \subseteq \dom{d_1} \setminus \dom{d_2}. \]
+\end{lemma}
+#+end_src

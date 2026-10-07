@@ -4,12 +4,6 @@ Any data language with way to specify a schema for a particular type of message
 can have compatibility questions, simply put, does this encoded binary blob
 conform to the known specification of the message?
 
-\begin{definition}[Compatibility]\label{def:compat}
-  Two message descriptors compatible if and only if
-  \[ \forall\ m_1:d_1.\ \exists\ m_2:d_2.\ decode(encode(m_1)) = \mathtt{Some}\ m_2 \wedge m_1 \sim m_2 \]
-  according to some relation $\sim$. 
-\end{definition}
-
 This project maintains a separation between the data description language and
 the encoding format, enabling all parsing to be seen as two steps, one to parse
 as much data from a binary blob as possible and another to validate it against
@@ -106,4 +100,5 @@ mental framing around it.
 % Local Variables:
 % citar-bibliography: ("../pollux.bib")
 % TeX-master: "../pollux.tex"
+% TeX-command-default: "Make"
 % End:
