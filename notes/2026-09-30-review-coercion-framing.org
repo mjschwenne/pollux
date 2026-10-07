@@ -1,0 +1,327 @@
+#+TITLE: Reframing sec:type-theory: a syntactic relation with a coercion reading
+#+STARTUP: latexpreview
+#+LATEX_HEADER: \usepackage{amsmath,amssymb,mathtools,mathpartir,stmaryrd}
+#+LATEX_HEADER: \newcommand{\dom}[1]{\mathrm{dom}(#1)}
+#+LATEX_HEADER: \newcommand{\denote}[1]{\llbracket{} #1 \rrbracket{}}
+#+LATEX_HEADER: \newcommand{\transform}[3]{\prescript{}{#1}{\llbracket{} #2 \rrbracket{}}_{#3}}
+#+LATEX_HEADER: \newcommand{\imp}{\mathtt{IMP}}
+#+LATEX_HEADER: \newcommand{\opt}{\mathtt{OPT}}
+#+LATEX_HEADER: \newcommand{\rep}{\mathtt{REP}}
+#+LATEX_HEADER: \newcommand{\some}[1]{\mathtt{Some}\ #1}
+#+LATEX_HEADER: \newcommand{\none}{\mathtt{None}}
+#+LATEX_HEADER: \newcommand{\encop}[1]{\mathrm{enc}_{#1}}
+#+LATEX_HEADER: \newcommand{\decop}[1]{\mathrm{dec}_{#1}}
+#+LATEX_HEADER: \newcommand{\vints}{\mathcal{V}}
+#+LATEX_HEADER: \newcommand{\init}{\mathrm{init}}
+#+LATEX_HEADER: \newcommand{\parse}{\mathrm{parse}}
+#+LATEX_HEADER: \newcommand{\unk}{\mathrm{unk}}
+#+LATEX_HEADER: \newcommand{\coerce}{\rightsquigarrow}
+
+Status: open
+Report: sec:type-theory, def:sem-compat, def:sem-assum, thm:fundamental, cor:compat-sound, sec:proto-transform, thm:faith, thm:trans-valid, sec:val-rel @ 77a0189
+Lean:   Pollux/Proto/Transform.lean (Value.reinterpretAt, Slot.reinterpret, Payload.reinterpret) @ 77a0189
+
+* Summary
+
+The author's advisor suggested that logical relations are the wrong framework
+for =sec:type-theory=. The proposal is to define a syntactic compatibility
+relation on descriptors, give an algorithm that computes the transformation from
+a derivation, and prove that the algorithm always produces a *well-behaved*
+transformation. "Well-behaved" should rule out transformations like "always
+insert the default".
+
+This note agrees, and argues four things:
+
+1. The existing development is already close to the proposal. The proposal has
+   a standard name: a *coercion semantics* for a subtyping-like judgment. Most
+   of the current machinery carries over, including $A$, $\vDash_n A$, and the
+   nested induction (outer on depth, inner on the derivation).
+2. The current semantic judgment (=def:sem-compat=) is too weak, and a concrete
+   counterexample shows it. "Well-behaved" has to be the wire condition *plus* a
+   faithfulness condition, not either one alone.
+3. Designing the relation around its coercions constrains the rule set. In
+   particular, it rules out a transitivity rule.
+4. On the Lean side, a function can't be computed from a =Prop= derivation. The
+   recommended route keeps =Value.reinterpret= and proves that it agrees with
+   the reading given by the derivation.
+
+The relations in =sec:proto-relations= are out of date (per the author), so the
+rules below use the newer $\Sigma; A \vdash$ style from =sec:type-theory=.
+They're a sketch of the rewrite, not a review of the old rules.
+
+* Why "logical relation" is the wrong name
+
+A logical relation is a family of relations defined *by induction on types*. Its
+defining clause is the one at function type: related arguments go to related
+results. Typically it's binary and relates two terms at the same type.
+=def:sem-compat= has neither feature. It is one flat statement about =Encodes=
+and $\parse$, stated the same way at every descriptor. The step index in
+=def:sem-assum= is strong induction on message depth. What =thm:fundamental=
+proves is *soundness* of a syntactic judgment against an independent semantics,
+the "$\vdash$ implies $\vDash$" shape of semantic type soundness. That's a
+legitimate result, but it isn't a logical relation.
+
+The advisor's version, a derivation read as a function
+$\denote{d_1} \to \denote{d_2}$, is the *coercion interpretation of subtyping*.
+The closest prior work is coercions for recursive subtypes. There, the
+assumption rule is read as a bound variable and the unfold rule as a =fix=,
+which is exactly the typing rule sketched in =sec:type-theory= (the =fix x. body=
+rule).
+
+References (check them before citing):
+- Breazu-Tannen, Coquand, Gunter, Scedrov. /Inheritance as implicit coercion/.
+  Information and Computation, 1991.
+- Amadio, Cardelli. /Subtyping recursive types/. TOPLAS, 1993.
+- Brandt, Henglein. /Coinductive axiomatization of recursive type equality and
+  subtyping/. TLCA '97; Fundamenta Informaticae, 1998. Its coercion reading
+  covers the assumption-set rules with =fix=.
+
+* Evidence: the current semantic judgment accepts int32 → string
+
+Take
+\[ d_1 = \{1 \mapsto \langle \imp, \mathtt{int32} \rangle\}, \qquad
+   d_2 = \{1 \mapsto \langle \imp, \mathtt{string} \rangle\}. \]
+Any encoding of a valid $m$ under $d_1$ is empty or a =VARINT= record for field
+1. A reader expecting =LEN= at field 1 treats a mismatched wire type as an
+unknown field, and the slot keeps its default. =sec:proto-transform= says so in
+the note on =Slot.reinterpret='s =Option=, and Go's and C++'s runtimes behave
+the same way. So
+\[ f = \lambda m.\ \{1 \mapsto \imp\ \texttt{""}\} \]
+satisfies $\vDash f : d_1 \ll d_2$ at every depth, and hence
+$\vDash d_1 \ll d_2$. The current =Value.reinterpret= is exactly this $f$: at
+=Transform.lean:102=, =(Slot.reinterpret f₁ f₂ x).getD f₂.init= falls back to
+the default whenever =Payload.reinterpret= returns =none=, and it does so for
+any two distinct scalars (=Transform.lean:133=).
+
+Wire-soundness therefore can't be the whole of "well-behaved": the parser
+itself inserts defaults. This is the advisor's worry, made concrete.
+
+The converse fails too. A faithfulness condition alone (defaults only at keys
+that exist only in the reader) says nothing about bytes. It holds for functions
+that no parser computes.
+
+* Proposed shape
+
+** Judgments
+
+Coercion variables $x$ stand for assumed pairs, so $\Gamma$ refines the
+assumption set $A$. The three judgment levels are:
+\begin{align*}
+  &\Sigma; \Gamma \vdash d_1 \ll d_2 \coerce c
+    && c : \denote{d_1} \to \denote{d_2} \text{ (message bodies)} \\
+  &\Sigma; \Gamma \vdash f_1 \propto f_2 \coerce c
+    && c : \mathrm{Slot}(f_1) \to \mathrm{Slot}(f_2) \text{ (fields: cardinality and type)} \\
+  &\Sigma; \Gamma \vdash \tau_1 \propto \tau_2 \coerce c
+    && c : \denote{\tau_1} \to \denote{\tau_2} \text{ (payloads)}
+\end{align*}
+Dropping the $\coerce c$ part gives the plain relation, which is what a checker
+decides. Reading the rules with it gives the algorithm.
+
+** Names and recursion
+
+\begin{mathpar}
+  \inferrule*[right=N-Assum]
+    { (a_1, a_2) \mapsto x \in \Gamma }
+    { \Sigma; \Gamma \vdash a_1 \ll a_2 \coerce x }
+
+  \inferrule*[right=N-Unfold]
+    { (a_1, a_2) \notin \dom{\Gamma} \\
+      \Sigma; \Gamma, (a_1, a_2) \mapsto x \vdash \Sigma(a_1) \ll \Sigma(a_2) \coerce c }
+    { \Sigma; \Gamma \vdash a_1 \ll a_2 \coerce \mathsf{fix}\ x.\ c }
+\end{mathpar}
+
+The =fix= is well founded on the writer's value. $x$ is only ever applied under
+=F-Msg=, which means it's applied to a nested message of strictly smaller depth
+(=def:msg-depth=). That's the argument =sec:recursive-types= already gives.
+
+** Descriptors
+
+\begin{mathpar}
+  \inferrule*[right=D-Update]
+    { \forall k \in \dom{d_1} \cap \dom{d_2}.\ \Sigma; \Gamma \vdash d_1[k] \propto d_2[k] \coerce c_k \\
+      \mathrm{OneofPreserved}(d_1, d_2) }
+    { \Sigma; \Gamma \vdash d_1 \ll d_2 \coerce \lambda m.\
+        \{ k \mapsto c_k(m[k]) \mid k \in \dom{d_1} \cap \dom{d_2} \}
+        \cup \{ k \mapsto \init(d_2[k]) \mid k \in \dom{d_2} \setminus \dom{d_1} \} }
+\end{mathpar}
+
+Defaults appear in exactly one place, keys that only the reader has. Keys that
+only the writer has are ignored, because the reader skips them using the wire
+type in the tag. Putting the *one-layer* =OneofPreserved= into =D-Update= means
+a derivation already contains =OneofPreservedAll= over every pair it reaches,
+because the derivation visits every reachable pair. That resolves the =% TODO=
+at the end of =sec:log-rel-lean= and fits =thm:trans-valid=. Reserved numbers,
+and the drop-then-re-add example in =sec:recursive-types=, would become a third
+premise on =D-Update= once the reserved set $r$ is in the descriptor.
+
+** Fields: cardinality
+
+For $\Sigma; \Gamma \vdash \langle c_1, \tau_1 \rangle \propto \langle c_2, \tau_2 \rangle$,
+the premise is $\Sigma; \Gamma \vdash \tau_1 \propto \tau_2 \coerce c$, and the
+cardinality pair lifts $c$ to slots. Oneof members count as $\opt$ here; the
+group constraint lives in =D-Update=.
+
+| writer  | reader  | slot coercion                                              | status                                    |
+|---------+---------+------------------------------------------------------------+-------------------------------------------|
+| IMP     | IMP     | $\imp\ p \mapsto \imp\ (c\ p)$                                      | fine                                      |
+| OPT     | OPT     | $\opt$ map $c$                                             | fine                                      |
+| REP     | REP     | $\rep$ map $c$                                             | fine (reader accepts packed and unpacked) |
+| OPT     | IMP     | $\none \mapsto \init$, $\some{p} \mapsto \imp\ (c\ p)$                   | fine                                      |
+| IMP     | OPT     | $\imp\ p \mapsto$ if $p = \init$ then $\none$ else $\some{(c\ p)}$ | *open*, see below                           |
+| IMP/OPT | REP     | empty $\mapsto [\,]$, $p \mapsto [c\ p]$                                | same caveat as IMP → OPT                  |
+| REP     | IMP/OPT | last element (last writer wins)                            | *open* for packed writers                   |
+
+The IMP → OPT coercion is *not* =Some p=, even though the old =Opt-Intro= rule
+says it is. Proto3 doesn't serialize an implicit field that holds its default,
+so the reader sees =None=. If =Encodes= also allows an encoding that writes the
+default explicitly (parsers must accept one), then two encodings of the same
+$m$ parse to =None= and =Some init=. The rule is then not wire-sound under
+$\forall bs$. The answer depends on how =Encodes= is defined.
+
+** Payloads
+
+\begin{mathpar}
+  \inferrule*[right=T-Refl]{ }{ \Sigma; \Gamma \vdash \tau \propto \tau \coerce \mathrm{id} }
+
+  \inferrule*[right=T-Varint]
+    { \tau_1, \tau_2 \in \vints }
+    { \Sigma; \Gamma \vdash \tau_1 \propto \tau_2 \coerce \decop{\tau_2} \circ \encop{\tau_1} }
+
+  \inferrule*[right=T-StrByt]{ }{ \Sigma; \Gamma \vdash \mathtt{string} \propto \mathtt{bytes} \coerce \mathrm{id} }
+
+  \inferrule*[right=T-BytStr]{ \text{(UTF-8 caveat, as in the report)} }{ \Sigma; \Gamma \vdash \mathtt{bytes} \propto \mathtt{string} \coerce \mathrm{id} }
+
+  \inferrule*[right=F-Msg]
+    { \Sigma; \Gamma \vdash a_1 \ll a_2 \coerce c }
+    { \Sigma; \Gamma \vdash \mathtt{msg}\ a_1 \propto \mathtt{msg}\ a_2 \coerce c }
+\end{mathpar}
+
+Pairs that are wire-compatible but undesirable, such as =double= → =fixed64=, get
+no rule. The relation stays deliberately conservative, as =sec:type-theory=
+already argues.
+
+** No transitivity rule
+
+A =Trans= rule would read as composing its two coercions. The report's own
+example in =sec:val-rel= shows this is unsound for the wire. Going through
+=uint32= composes to $2^{40} \mapsto 0$, while a =uint64= reader of =uint64=
+bytes gets $2^{40}$ back. Transitivity can be a lemma about the *plain*
+relation, if it's wanted at all. It can't be a rule with a coercion.
+
+* What "well-behaved" should mean
+
+For a function $f : \denote{d_1} \to \denote{d_2}$, it should mean both of the
+following.
+
+*(W) Wire-sound.* This is =def:sem-compat= unchanged:
+\[ \forall m \checkmark^{d_1}, bs.\ \mathrm{Encodes}_{d_1}(m, bs) \to \parse_{d_2}(bs) = \some{(f\ m)}. \]
+
+*(F) Faithful.* Every record of a shared field is carried, not skipped. There
+are three candidates:
+
+- *F1, presence-preserving.* For shared $k$, if the writer's slot is present
+  (=Some=, non-empty =REP=), so is the reader's. This is cheap to state, but it
+  says nothing for IMP → IMP, which is exactly the int32 → string case. It
+  isn't enough on its own.
+- *F2, no skipped records (recommended).* Let the parser also return the field
+  numbers it skipped as unknown, $\parse_{d_2}(bs) = \some{(m', U)}$, and
+  require $U \subseteq \dom{d_1} \setminus \dom{d_2}$. So the reader discards
+  only fields that really were dropped. This rules out int32 → string, because
+  field 1 lands in $U$. It still allows truncation (=uint64= → =uint32=),
+  which is a real conversion, not a fallback. It's also realistic: official
+  runtimes keep unknown fields, and a later round-trip-through-an-old-reader
+  story will need them.
+- *F3, by construction.* Define well-behaved as "equals the coercion of some
+  derivation." That's circular for the advisor's purpose, because the theorem
+  would then be vacuous. It fits only as the Lean agreement lemma below.
+
+Two consequences:
+
+- *Coherence is free.* (W) pins $f$ down on every valid message that has at
+  least one encoding. So if =Encodes= is total on valid messages (i.e., a
+  serializer exists), any two derivations of the same judgment yield coercions
+  that agree on valid messages. Overlapping rules, such as =T-Refl= and
+  =T-Varint= on the same $\tau$, need no separate coherence proof, although
+  $\decop{\tau} \circ \encop{\tau} = \mathrm{id}$ on valid values is an easy
+  sanity lemma.
+- *=thm:faith= becomes part of the definition.* It currently lives in
+  =sec:proto-transform=, next to a theorem about a transform that has a
+  fallback.
+
+* Theorem shape
+
+*Soundness of the coercion reading.* If
+$\Sigma; \varnothing \vdash d_1 \ll d_2 \coerce c$, with $d_1 \checkmark_w$ and
+$d_2 \checkmark_w$, then $c$ satisfies (W) and (F).
+
+The proof is the existing one. Generalize to an open $\Gamma$, with
+$\vDash_n \Gamma$ meaning that every $x$ in $\Gamma$ is interpreted by a
+function satisfying (W) and (F) below depth $n$ (=def:sem-assum=, now over
+coercion variables). Then use strong induction on $n$ outside and induction on
+the derivation inside, as =thm:fundamental= describes. The =fix= in =N-Unfold=
+discharges $\vDash_n$ for the new variable using the outer hypothesis.
+=cor:compat-sound= becomes the closed case.
+
+* Lean
+
+The InterParse relations (e.g. =DescCompat=, =Compatible.lean:116=) are
+inductive =Prop=​s, and the Proto-layer relation will presumably be one too. A
+=Prop= can't be eliminated into =Value → Value=, so the coercion can't be
+computed by recursion on the derivation. There are two options.
+
+- *(a) Put the derivation in =Type=.* Define =coerce : Deriv Σ Γ d₁ d₂ → Env Γ →
+  Value → Value= by well-founded recursion on (value depth, derivation). This
+  is a faithful rendering of the report, but it duplicates =Value.reinterpret=,
+  and every lemma about =reinterpret= would have to be re-proved for =coerce=.
+- *(b) Keep =Value.reinterpret= (recommended).* Keep the relation as a =Prop=
+  and prove agreement: a derivation implies that on valid messages,
+  =Value.reinterpret d₁ d₂= equals the coercion the rules describe. In
+  practice, the =getD= fallback at =Transform.lean:102= never fires on shared
+  keys. That's the =Slot.reinterpret_isSome= lemma already sketched in
+  =sec:proto-transform=. The report presents the coercion rules as the
+  specification, and Lean implements them with a function defined on the
+  descriptors. Coherence is automatic because =reinterpret= doesn't depend on
+  the derivation.
+
+Either way, =Payload.reinterpret= has to grow beyond "same scalar or =none="
+(=Transform.lean:133=) before =T-Varint= and =T-StrByt= can be sound. (W) also
+waits on =Encodes= and a Proto-layer $\parse$, both still planned.
+
+* Open questions for the author
+
+1. *F2 needs unknown fields in the model.* Should $\parse$ return the skipped
+   field numbers, or should =Value= keep unknown fields as Protobuf runtimes
+   do? F1 is the fallback, but it leaves IMP → IMP type changes unchecked.
+2. *IMP → OPT and IMP → REP depend on =Encodes=.* May an encoding write an
+   implicit field that holds its default? If so, those rules aren't wire-sound
+   under $\forall bs$ and have to go.
+3. *REP → singular with a packed writer.* The red note in =sec:proto-relations=
+   still applies. Either leave the rule out, or require an unpacked writer.
+4. *Naming.* "Coercion", "reinterpretation" and "transformation" all appear in
+   the report. The new section should pick one.
+
+* Suggested report text
+
+A starting point to replace the opening of =sec:type-theory=:
+
+#+begin_src latex
+\subsection{Compatibility as Coercion}
+
+A derivation of $\Sigma; \varnothing \vdash d_1 \ll d_2$ does more than certify
+compatibility: read rule by rule, it is a program
+$c : \denote{d_1} \to \denote{d_2}$, the coercion the reader applies to the
+writer's message. This is the coercion interpretation of subtyping
+\cite{...}, and the assumption rules \textsc{N-Assum} and \textsc{N-Unfold}
+read as a bound variable and a $\mathsf{fix}$ respectively.
+
+\begin{definition}[Well-behaved transformation]\label{def:well-behaved}
+  A function $f : \denote{d_1} \to \denote{d_2}$ is \emph{well-behaved} when,
+  for all $m \checkmark^{d_1}$ and all $bs$ with $\mathrm{Encodes}_{d_1}(m, bs)$,
+  \[ \mathrm{parse}_{d_2}(bs) = \some{(f(m), U)} \quad\text{with}\quad
+     U \subseteq \dom{d_1} \setminus \dom{d_2}. \]
+\end{definition}
+
+The second condition is essential. Wire-soundness alone admits
+$\mathtt{int32} \ll \mathtt{string}$: the reader skips the mistyped record and
+reports the default, so the constant-default function satisfies it.
+#+end_src

@@ -1,0 +1,306 @@
+ ▐▛███▛█   Claude Code v2.1.283
+▝▜██████▀  Opus 5.5 · Claude Pro
+ ▝▝   ▝▝   ~/workspace/pollux/latex/sections
+
+  Get to finished work sooner with Opus 5.5. Switch anytime with /model.
+
+❯ Read @notes/2026-09-30-review-coercion-framing.org and explain the coercion   
+  variables and expanded assumption context \Gamma                              
+  ⎿  Read notes/2026-09-30-review-coercion-framing.org (328 lines)
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● The note changes the report's anonymous assumption set $A$ into a context
+  $\Gamma$ that gives each assumption a name. The reason is that a derivation is
+  now supposed to compute a function, and a function can only call itself
+  through a name.
+
+  Where $A$ stands in the report
+
+  In sec:type-theory, $A$ is a set of name pairs that are assumed compatible.
+  The judgment $\Sigma; A \vdash d_1 \ll d_2$ is just a proposition. The
+  transformation is a separate, fixed function $\transform{d_1}{\cdot}{d_2}$
+  defined on the descriptors, and it doesn't depend on the derivation.
+  def:sem-assum gives the meaning of $A$: for each pair in $A$, that fixed
+  function works at every depth below $n$.
+
+  So when N-Assum fires, the derivation only needs to record "this pair is in
+  $A$". It doesn't need to produce anything.
+
+  Why the coercion reading needs variables
+
+  In the note's proposal, every judgment produces a term: $\Sigma; \Gamma \vdash
+  d_1 \ll d_2 \coerce c$. Each rule says how to build $c$ from the coercions of
+  its premises. That raises the question of what N-Assum produces.
+
+  When N-Assum fires for $(a_1, a_2)$, we are inside the derivation for that
+  same pair. N-Unfold added the pair earlier, and its coercion is the thing
+  still being built. There is no finished function to put there yet. Unfolding
+  again would make the term infinite. So we use a placeholder:
+
+  - A coercion variable $x$ stands for "the coercion for $(a_1, a_2)$, whatever
+    it ends up being".
+  - N-Unfold binds it. It adds $(a_1, a_2) \mapsto x$ to $\Gamma$, derives $c$
+    for the unfolded descriptors (and $c$ may mention $x$), and returns
+    $\mathsf{fix}\ x.\ c$. The result is a recursive function that calls itself
+    through $x$.
+  - N-Assum uses it. It looks up $(a_1, a_2) \mapsto x$ and returns $x$, which
+    is the recursive call.
+
+  This is how proofs become programs under Curry–Howard. Unlabeled hypotheses
+  are enough for a proof, but a proof term needs names for its hypotheses so it
+  can refer to them. $A$ is the unlabeled version, and $\Gamma$ is the labeled
+  one.
+
+  How $\Gamma$ relates to $A$
+
+  $\Gamma$ is a finite map from name pairs to coercion variables, and
+  $\dom{\Gamma} = A$. That's what the note means by "$\Gamma$ refines $A$". If
+  you erase the variables (and the $\coerce c$ parts), you get back exactly the
+  report's judgment. The side condition $(a_1, a_2) \notin \dom{\Gamma}$ is the
+  report's $(a_1, a_2) \notin A$. It gives each pair at most one variable, and
+  it is still what makes the checker terminate.
+
+  You can also read $\Gamma$ as an ordinary typing context, $x :
+  \denote{\Sigma(a_1)} \to \denote{\Sigma(a_2)}$.
+
+  A worked example
+
+  Writer: Tree { int32 val = 1; Tree child = 2; }. Reader: Tree' { int64 val = 
+  1; Tree' child = 2; }.
+
+  1. N-Unfold on $(\mathtt{Tree}, \mathtt{Tree'})$ gives $\Gamma =
+     (\mathtt{Tree}, \mathtt{Tree'}) \mapsto x$.
+  2. D-Update handles the shared keys 1 and 2.
+     - Key 1: T-Varint gives $\decop{\mathtt{int64}} \circ
+       \encop{\mathtt{int32}}$, lifted by the IMP/IMP row of the cardinality
+       table.
+     - Key 2: F-Msg, then N-Assum, gives $x$, lifted to the OPT slot as "map
+       $x$".
+  3. Result:
+     $$\mathsf{fix}\ x.\ \lambda m.\ {1 \mapsto \decop{}!\circ\encop{}(m[1]),\ 2
+     \mapsto \mathrm{map}\ x\ (m[2])}$$
+
+  This is the recursive function you would write by hand. $x$ is only ever
+  applied to m[2], which is a nested message of strictly smaller depth. That's
+  why the note says the $\mathsf{fix}$ is well founded on the writer's value.
+
+  The semantic side: $\vDash_n \Gamma$
+
+  Once coercions contain free variables, a term like $\mathrm{map}\ x\ (m[2])$
+  has no meaning until you say what $x$ is. So the semantics has to be relative
+  to an environment $\rho$ that assigns each variable a real function. The note
+  says this only implicitly ("every $x$ in $\Gamma$ is interpreted by a function
+  satisfying (W) and (F)"). Spelled out:
+
+  - $\rho \vDash_n \Gamma$ means that for every $(a_1, a_2) \mapsto x$ in
+    $\Gamma$ and every $j < n$, $\rho(x)$ is (W)- and (F)-good from
+    $\Sigma(a_1)$ to $\Sigma(a_2)$ at depth $j$. This is def:sem-assum, except
+    that the fixed $\transform{\Sigma(a_1)}{\cdot}{\Sigma(a_2)}$ is replaced by
+    whatever $\rho$ assigns to $x$.
+  - The generalized theorem: if $\Sigma; \Gamma \vdash d_1 \ll d_2 \coerce c$
+    and $\rho \vDash_n \Gamma$, then $c[\rho]$ is good at depth $n$.
+  - The N-Assum case holds directly by the hypothesis on $\rho(x)$. The strict
+    $j < n$ is safe because the only route to N-Assum passes through F-Msg,
+    which lowers the depth.
+  - The N-Unfold case is where the outer induction comes in. Write $g =
+    (\mathsf{fix}\ x.\ c)[\rho]$. By the outer IH, $g$ is good at every $j < n$,
+    so $\rho[x \mapsto g] \vDash_n \Gamma, (a_1, a_2) \mapsto x$. The inner IH
+    on $c$ then shows that $c[\rho[x \mapsto g]]$ is good at depth $n$, and that
+    term is just $g$ unfolded once. This is the step the note calls "the
+    $\mathsf{fix}$ in N-Unfold discharges $\vDash_n$ for the new variable using
+    the outer hypothesis".
+  - The closed case ($\Gamma = \varnothing$, empty $\rho$) is trivial to
+    satisfy, which gives cor:compat-sound.
+
+  The proof has the same structure as thm:fundamental: strong induction on depth
+  outside, induction on the derivation inside. What changes is that assumptions
+  now carry the functions themselves instead of pointing at the one fixed
+  transform.
+
+  Lean
+
+  Under option (b), the variables never appear in Lean. Value.reinterpret is
+  defined by recursion on the value, so the $\mathsf{fix}$ is built into the
+  definition. $\Gamma$ and its variables exist only in the report, as a
+  specification, and Lean proves that reinterpret agrees with it.
+
+  The note leaves the environment $\rho$ implicit. If the author adopts this
+  framing, the report text should state $\rho \vDash_n \Gamma$ explicitly;
+  otherwise $\vDash_n \Gamma$ is ambiguous. I can add that point to the note's
+  open questions if you'd like.
+
+✻ Cooked for 43s · done 2:15 PM
+
+※ recap: You asked what the coercion variables and the context Γ mean in the coercion-framing review note, and I explained both. Next, if you want, I can add a point to that note saying the report should state the environment ρ explicitly. (disable recaps in /config)
+
+❯ Talk about how to formulate the cardinality table into a rule.                
+
+● The table is really two independent things stacked together:
+
+  1. a payload coercion $c : \denote{\tau_1} \to \denote{\tau_2}$, which comes
+     from the payload rules;
+  2. a way to lift that coercion from one value to a whole slot, which depends
+     only on the pair of cardinalities and on a few facts about $\tau_1$ and
+     $\tau_2$.
+
+  I'd write the rule so it keeps those two parts apart.
+
+  Option A: one rule per row
+
+  The direct approach is seven rules, each with the payload premise repeated:
+
+  $$
+  \frac{\Sigma;\Gamma \vdash \tau_1 \propto \tau_2 \coerce c}
+       {\Sigma;\Gamma \vdash \langle \opt, \tau_1\rangle \propto \langle \imp,
+  \tau_2\rangle
+         \coerce \lambda s.\ \mathbf{case}\ s\ \mathbf{of}\ \none \Rightarrow
+  \imp\ \init_{\tau_2} \mid \some{p} \Rightarrow \imp\ (c\ p)}
+  ;\textsc{F-OptImp}
+  $$
+
+  …and so on for the other six. This works, but it's repetitive and hides that
+  every rule has the same premise.
+
+  Option B (recommended): one field rule plus a cardinality judgment
+
+  Add a small judgment that doesn't involve $\Sigma$ or $\Gamma$:
+
+  $$\kappa_1 \trianglelefteq_{\tau_1,\tau_2} \kappa_2 \coerce L
+  \qquad L : (\denote{\tau_1} \to \denote{\tau_2}) \to
+  \mathrm{Slot}{\kappa_1}(\tau_1) \to \mathrm{Slot}{\kappa_2}(\tau_2)$$
+
+  Then a single field rule combines the two:
+
+  $$
+  \frac{\Sigma;\Gamma \vdash \tau_1 \propto \tau_2 \coerce c \qquad \kappa_1
+  \trianglelefteq_{\tau_1,\tau_2} \kappa_2 \coerce L}
+       {\Sigma;\Gamma \vdash \langle \kappa_1, \tau_1\rangle \propto \langle
+  \kappa_2, \tau_2\rangle \coerce L(c)}
+  ;\textsc{F-Field}
+  $$
+
+  The cardinality rules are axioms. Each one is a row of the table:
+
+  ┌──────────┬──────────────────┬───────────────────────────────────────────┐
+  │   Rule   │     Judgment     │                  $L(c)$                   │
+  ├──────────┼──────────────────┼───────────────────────────────────────────┤
+  │          │ $\imp            │                                           │
+  │ K-Imp    │ \trianglelefteq  │ $\imp\ p \mapsto \imp\ (c\ p)$            │
+  │          │ \imp$            │                                           │
+  ├──────────┼──────────────────┼───────────────────────────────────────────┤
+  │          │ $\opt            │ $\mathrm{map}_{\mathrm{Option}}\ c$ (but  │
+  │ K-Opt    │ \trianglelefteq  │ see merging below)                        │
+  │          │ \opt$            │                                           │
+  ├──────────┼──────────────────┼───────────────────────────────────────────┤
+  │          │ $\rep            │                                           │
+  │ K-Rep    │ \trianglelefteq  │ $\mathrm{map}_{\mathrm{List}}\ c$         │
+  │          │ \rep$            │                                           │
+  ├──────────┼──────────────────┼───────────────────────────────────────────┤
+  │          │ $\opt            │ $\none \mapsto \imp\ \init_{\tau_2}$,     │
+  │ K-OptImp │ \trianglelefteq  │ $\some{p} \mapsto \imp\ (c\ p)$           │
+  │          │ \imp$            │                                           │
+  ├──────────┼──────────────────┼───────────────────────────────────────────┤
+  │          │ $\imp            │ $\imp\ p \mapsto \text{if } p =           │
+  │ K-ImpOpt │ \trianglelefteq  │ \init_{\tau_1} \text{ then } \none \text{ │
+  │          │ \opt$            │  else } \some{(c\ p)}$                    │
+  ├──────────┼──────────────────┼───────────────────────────────────────────┤
+  │          │ $\opt            │ $\none \mapsto [,]$, $\some{p} \mapsto    │
+  │ K-OptRep │ \trianglelefteq  │ [c\ p]$                                   │
+  │          │ \rep$            │                                           │
+  ├──────────┼──────────────────┼───────────────────────────────────────────┤
+  │          │ $\rep            │ $\mathrm{last} \circ \mathrm{map}\ c$     │
+  │ K-RepOpt │ \trianglelefteq  │ (for scalars; see merging)                │
+  │          │ \opt$            │                                           │
+  └──────────┴──────────────────┴───────────────────────────────────────────┘
+
+  The $\imp \leftrightarrow \rep$ rows don't need their own rules. They're
+  compositions: IMP→REP is K-ImpOpt followed by K-OptRep, and REP→IMP is
+  K-RepOpt followed by K-OptImp. You can either derive them or state them for
+  readability. Composing is safe at the cardinality level, unlike the
+  transitivity rule the note rejects, because these liftings never change a
+  payload. They only move values between containers. The real conversion is
+  still the single $c$.
+
+  I recommend B for three reasons:
+
+  - The proof splits along the same lines. The inner induction case for F-Field
+    becomes one generic lemma per K-rule: if $c$ is field-level good, then 
+    $L(c)$ is slot-level good. Those lemmas never mention $\Sigma$, $\Gamma$, or
+    depth.
+  - Excluding a case is simple. If an open question resolves against IMP→OPT or
+    REP→singular, you delete one axiom or add one side condition to it, and
+    F-Field is unchanged.
+  - The checker side is decidable at a glance. The cardinality relation is a
+    finite table.
+
+  Why the judgment is indexed by $\tau_1, \tau_2$
+
+  You might expect cardinalities to relate on their own, but three rows depend
+  on the types:
+
+  - Defaults. K-OptImp needs $\init_{\tau_2}$, the reader's default. K-ImpOpt
+    needs $\init_{\tau_1}$, the writer's default. The comparison has to happen
+    before $c$, on the writer's side, because what decides whether bytes exist
+    is the writer's serializer omitting its own default. With $\mathtt{uint64}
+    \to \mathtt{uint32}$, the writer value $2^{32}$ isn't the default, so it
+    gets written. The reader then sees $\some{0}$, not $\none$. If you checked
+    after $c$, you'd get $\none$, which is wrong for the wire.
+  - Packing. Only scalar numeric types can be packed. The REP→singular caveat
+    applies only when $\tau_1$ is packable. So the third open question becomes a
+    side condition on K-RepOpt, such as "$\tau_1$ not packable, or the writer
+    is unpacked". That condition needs to see $\tau_1$.
+  - Message types merge, they don't overwrite. See the next section.
+
+  A structural point follows. All the rows marked fine in the note are natural
+  transformations composed with map: $L(c) = \eta \circ \mathrm{map}\ c$, where
+  $\eta$ ignores the payload values. K-ImpOpt is the only row that inspects a
+  value, through its comparison against $\init_{\tau_1}$. That's exactly why
+  it's the row whose soundness depends on how Encodes is defined.
+
+  A correction to the table: message-typed slots
+
+  The note's REP→singular row says "last element (last writer wins)". For
+  scalars that's right. For a singular message field, Protobuf parsers merge
+  repeated occurrences instead of keeping the last one. So for $\tau =
+  \mathtt{msg}\ a$:
+
+  - K-RepOpt should be $\mathrm{foldl}\ \mathrm{merge} \circ \mathrm{map}\ c$,
+    not $\mathrm{last} \circ \mathrm{map}\ c$. The reader parses each record
+    under $d_2$ and merges the results.
+  - Even K-Opt and K-Imp are affected if Encodes is allowed to split one
+    singular message across several records, since parsers must accept that.
+    Soundness would then need a lemma that $c$ is a merge homomorphism:
+    $c(\mathrm{merge}\ m\ m') = \mathrm{merge}\ (c\ m)\ (c\ m')$. That lemma has
+    to be proved by the same nested induction, because $c$ may be a
+    $\mathsf{fix}$.
+
+  Separately, proto3 has no implicit-presence message fields, so $\langle \imp,
+  \mathtt{msg}\ a \rangle$ should be ruled out by descriptor well-formedness,
+  not handled by the cardinality rules.
+
+  This is another way the judgment depends on $\tau$: the K-rules either split
+  by "scalar vs. message", or use a type-indexed combine operation
+  ($\mathrm{last}$ for scalars, $\mathrm{merge}$ for messages).
+
+  A gap in the semantics
+
+  The report has semantic judgments at two levels: the field level ($\vDash_n g
+  : \tau_1 \propto \tau_2$, one record) and the message level ($\vDash_n f : d_1
+  \ll d_2$). The middle judgment in the note, $f_1 \propto f_2 \coerce c$ over
+  slots, has no semantic counterpart.
+
+  A slot-level definition would say: for every sequence of records for key $k$
+  that Encodes may produce from a $\kappa_1$-slot, the reader's slot assembly
+  gives $L(c)$ applied to that slot. Slot assembly means absent becomes
+  default/$\none$/$[,]$, scalars use last-wins, messages merge, and lists
+  concatenate (packed or not). The per-K-rule lemmas above would be stated
+  against that definition.
+
+  To sum up, the shape I'd propose is one F-Field rule, plus a type-indexed 
+  cardinality judgment with one axiom per row, plus a slot-level semantic 
+  definition. I can add this to the note as a new subsection, along with the
+  merge correction and the missing slot-level definition as an open question, if
+  you'd like.
+
+✻ Churned for 1m 1s · done 4:41 PM
