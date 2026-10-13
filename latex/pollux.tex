@@ -1,8 +1,10 @@
 \documentclass[11pt]{article}
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{fontspec}
-\setmonofont{JetBrainsMono Nerd Font}[SizeFeatures={Size=10}]
+\usepackage[mono=false]{libertinus}
+\directlua{luaotfload.add_fallback("monofallback", {"DejaVu Sans Mono:mode=node;"})}
+\setmonofont{JetBrainsMono Nerd Font}[
+  SizeFeatures={Size=9},
+  RawFeature={fallback=monofallback},
+]
 \usepackage{graphicx}
 \usepackage{longtable}
 \usepackage{booktabs}
@@ -10,8 +12,6 @@
 \usepackage{rotating}
 \usepackage[normalem]{ulem}
 \usepackage{amsmath}
-\usepackage{bbold}
-\usepackage{amssymb}
 \usepackage{amsthm}
 \usepackage{capt-of}
 \usepackage{hyperref}
@@ -23,7 +23,7 @@
 \usepackage{float}
 \usepackage[margin=1in]{geometry}
 \usepackage{tikz}
-\usetikzlibrary{positioning,calc,snakes,automata,arrows.meta}
+\usetikzlibrary{positioning,calc,decorations,automata,arrows.meta}
 \usepackage{array}
 \usepackage{multirow}
 \usepackage{listings}
@@ -34,10 +34,13 @@
 \usepackage{subcaption}
 \usepackage{stmaryrd}
 \usepackage[backend=biber,sorting=ynt]{biblatex}
-\usepackage{subfiles}
 \usepackage{xpatch}
 \usepackage{pl-syntax}
-% \usepackage{MnSymbol}
+\AtBeginDocument{%
+  \renewcommand{\Coloneqq}{\mathrel{\Colon\mkern-1.2mu=}}%
+} % Needed since libertinus math doesn't have ::= as one glyph.
+\usepackage{unicode-math}           % load after amsmath/mathtools
+\setmathfont{Libertinus Math}
 
 \addbibresource{pollux.bib}
 \author{Matt Schwennesen}
@@ -78,41 +81,40 @@
 
 \lstset{style=pollux}
 
+% Setup theorem definition styles
 \theoremstyle{definition}
 \newtheorem{definition}{Definition}[section]
-\theoremstyle{lemma}
+\theoremstyle{plain}
 \newtheorem{lemma}{Lemma}[section]
 \theoremstyle{plain}
 \newtheorem{theorem}{Theorem}
 \theoremstyle{plain}
 \newtheorem{corollary}{Corollary}
 
-\makeatletter
-\newsavebox{\@brx}
-\newcommand{\llangle}[1][]{\savebox{\@brx}{\(\m@th{#1\langle}\)}%
-  \mathopen{\copy\@brx\mkern2mu\kern-0.9\wd\@brx\usebox{\@brx}}}
-\newcommand{\rrangle}[1][]{\savebox{\@brx}{\(\m@th{#1\rangle}\)}%
-  \mathclose{\copy\@brx\mkern2mu\kern-0.9\wd\@brx\usebox{\@brx}}}
-\makeatother
-
 \newcommand{\fstar}{F$^\star$}
 \renewcommand{\emptyset}{\varnothing}
 \renewcommand{\mod}{\;\%\;}
 
-\newcommand{\impt}[1]{\mathtt{IMP}\ #1}
-\newcommand{\sigt}[1]{\mathtt{SIG}\ #1}
-\newcommand{\optt}[1]{\mathtt{OPT}\ #1}
-\newcommand{\rept}[1]{\mathtt{REP}\ #1}
-\newcommand{\imp}{\mathtt{IMP}}
-\newcommand{\sig}{\mathtt{SIG}}
-\newcommand{\opt}{\mathtt{OPT}}
-\newcommand{\rep}{\mathtt{REP}}
-\newcommand{\oneof}[1]{\texttt{ONE}\ #1}
+% Protobuf decorators
+\newcommand{\impN}{\mathtt{IMP}}
+\newcommand{\sigN}{\mathtt{SIG}}
+\newcommand{\optN}{\mathtt{OPT}}
+\newcommand{\repN}{\mathtt{REP}}
+\newcommand{\oneofN}{\mathtt{ONE}}
+\newcommand{\imp}[1]{\impN\ #1}
+\newcommand{\sig}[1]{\sigN\ #1}
+\newcommand{\opt}[1]{\optN\ #1}
+\newcommand{\rep}[1]{\repN\ #1}
+\newcommand{\oneof}[1]{\oneofN\ #1}
 \newcommand{\kle}[2]{\preceq_{#1,#2}}
 \newcommand{\comb}[1]{\oplus_{#1}}
 \newcommand{\packable}{\mathrm{Packable}}
 \newcommand{\assemble}{\mathrm{assemble}}
 \newcommand{\encodes}{\mathrm{Encodes}}
+\newcommand{\records}{\mathrm{records}}
+\newcommand{\groups}{\mathrm{groups}}
+\newcommand{\restr}[2]{#1|_{#2}}
+\newcommand{\accepts}{\mathrm{accepts}}
 
 % Using "s" and "l" as "short" and "long" since LaTeX commands can't contain
 % numbers in their names...
@@ -180,8 +182,13 @@
 \newcommand\doubleplus{+\kern-1.3ex+\kern0.8ex}
 \newcommand\mdoubleplus{\ensuremath{\mathbin{+\mkern-10mu+}}}
 
-\newcommand{\wfd}[1]{\mathrm{wf}(#1)}
-\newcommand{\legald}[1]{d \checkmark}
+\newcommand{\wfd}[1]{\mathrm{wfd}(#1)}
+\newcommand{\legald}[1]{\mathrm{legal}(#1)}
+\newcommand{\wfv}[1]{\mathrm{wfm}(#1)}
+\newcommand{\legalv}[2]{\mathrm{legal}_{#1}(#2)}
+\DeclareSymbolFont{bbsymbol}{U}{bbold}{m}{n}
+\DeclareMathSymbol{\bbcolon}{\mathbin}{bbsymbol}{'072}
+\newcommand{\validv}[2]{#1 \bbcolon #2}
 
 \begin{document}
 \maketitle
@@ -201,6 +208,8 @@ descriptors.
 
 \input{sections/06-proto-msg.tex}
 
+\input{sections/YY-proto-parse.tex}
+
 \input{sections/07-proto-trans.tex}
 
 \input{sections/08-proto-relations.tex}
@@ -209,9 +218,9 @@ descriptors.
 
 \input{sections/10-eval.tex}
 
-% \input{sections/11-simpl-parse.tex}
+\input{sections/11-simpl-parse.tex}
 
-% \input{sections/12-inter-parse.tex}
+\input{sections/12-inter-parse.tex}
 
 \input{sections/XX-todo.tex}
 

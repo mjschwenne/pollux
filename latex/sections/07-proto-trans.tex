@@ -108,7 +108,7 @@ decrease with each application.
 
 \vspace{1em}
 \begin{theorem}[Transform WF]\label{thm:trans-wf}
-  \[ \forall\ m, d_1, d_2.\ d_2 \checkmark_w \rightarrow \coercion{d_1}{m}{d_2} \checkmark_w \]
+  \[ \forall\ m, d_1, d_2.\ \wfd{d_2} \rightarrow \wfv{\coercion{d_1}{m}{d_2}} \]
 \end{theorem}
 
 \vspace{1em}
@@ -118,12 +118,12 @@ decrease with each application.
 
 \vspace{1em}
 \begin{theorem}[Transform Self]\label{thm:trans-self}
-  \[ \forall\ m, d.\ d \checkmark \rightarrow m \checkmark^d \rightarrow \coercion{d}{m}{d} = m \]
+  \[ \forall\ m, d.\ \wfd{d} \rightarrow \validv{m}{d} \rightarrow \coercion{d}{m}{d} = m \]
 \end{theorem}
 
 \vspace{1em}
 \begin{theorem}[Transform Valid]\label{thm:trans-valid}
-  \[ \forall\ m, d_1, d_2.\ m \checkmark^{d_1} \rightarrow d_2 \checkmark \rightarrow \mathrm{OneofPreservedAll}(d_1, d_2) \rightarrow \coercion{d_1}{m}{d_2} \checkmark^{d_2} \] 
+  \[ \forall\ m, d_1, d_2.\ \validv{m}{d_1} \rightarrow \wfd{d_2} \rightarrow \mathrm{OneofPreservedAll}(d_1, d_2) \rightarrow \validv{\coercion{d_1}{m}{d_2}}{d_2} \] 
   Where
   \begin{itemize}
   \item $\mathrm{OneofPreservedAll}(d_1, d_2) = \mathrm{OneofPreserved}(d_1, d_2) \wedge
@@ -180,7 +180,7 @@ The Protobuf compatibility framework might drop the message compatibility
 relation in favor of only having the transformation. In that case, we'd end up
 needing to argue that the transformation is total over all possible messages
 being converted between two descriptors, i.e. $\coercion{d_1}{m}{d_2}$ produces
-some $m'$ for all $m \checkmark^{d_1}$.
+some $m'$ for all $\validv{m}{d_2}$.
 
 The current transformation function is \emph{always total} by falling back to
 injecting field type defaults, so in the context of Protobuf, we want to show
@@ -205,7 +205,7 @@ value fallback anyways. This could be built into a faithfulness theorem.
 \vspace{1em}
 \begin{theorem}[Faithfulness]\label{thm:faith}
   For two compatible descriptors, $d_1 \ll d_2$ and a valid value $m$ under
-  $d_1$, $m \checkmark^{d_1}$ such that for all keys $k$, $d_1[k] = f_1$ and $d_2[k] =
+  $d_1$, $\validv{m}{d_1}$ such that for all keys $k$, $d_1[k] = f_1$ and $d_2[k] =
   f_2$ there must exist a value $x$ and $y$ such that
   \begin{itemize}
   \item $m[k] = x$
@@ -235,7 +235,7 @@ particular integer width changes which might truncate values.
 
 \vspace{1em}
 \begin{theorem}[Point-wise Field Compatibility]\label{thm:pointwise-compat}
-  \[ d_1 \checkmark \rightarrow \forall\ k \in \dom{d_1} \cap \dom{d_2}. d_1[k] \propto d_2[k] \] 
+  \[ \wfd{d_1} \rightarrow \forall\ k \in \dom{d_1} \cap \dom{d_2}. d_1[k] \propto d_2[k] \] 
 \end{theorem}
 
 Combined with Theorem~\ref{thm:faith}, Theorem~\ref{thm:pointwise-compat} states

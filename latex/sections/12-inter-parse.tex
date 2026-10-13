@@ -105,7 +105,7 @@ self-contained manner.
 
 \vspace{1em}
 \begin{definition}[Intermediate Descriptor Well-Formedness]\label{def:inter-dwf}
-  A descriptor $d$ is considered well-formed, denoted $d \checkmark$, if
+  A descriptor $d$ is considered well-formed, denoted $\wfd{d}$, if
   \begin{itemize}
   \item The keys are stored in sorted order.
   \item There are no duplicate keys.
@@ -114,7 +114,7 @@ self-contained manner.
 
 \vspace{1em}
 \begin{definition}[Intermediate Value Well-Formedness]\label{def:inter-vwf}
-  A message $m$ is well-formed, denoted $m \checkmark$, if
+  A message $m$ is well-formed, denoted $\wfv{m}$, if
   \begin{itemize}
   \item All keys are in the range 0 to 256.
   \item All values in the message are type-aligned with the descriptor
@@ -241,7 +241,7 @@ relation (Section~\ref{sec:val-rel}) and type relation (Section~\ref{sec:typ-rel
 \vspace{1em}
 \begin{theorem}[Intermediate Schema Correct Round-trip]\label{thm:inter-schema-correct}
   \[
-    \langle m_1 : d \rangle \rightarrow m_1 \checkmark \rightarrow \forall\ bs, \mathrm{ser}_d(m_1) =
+    \langle m_1 : d \rangle \rightarrow \wfv{m_1} \rightarrow \forall\ bs, \mathrm{ser}_d(m_1) =
     bs \rightarrow \exists\ m_2, \mathrm{par}_d(bs) = m_2 \wedge \langle m_1
     : d \preceq m_2 : d \rangle
   \]
@@ -290,7 +290,7 @@ matching types.
 
 \begin{theorem}[Intermediate Identity Compatibility]\label{thm:inter-id-compat}
   \[
-    d \checkmark \rightarrow m_1 \checkmark \rightarrow \forall\ bs, \mathrm{ser}_d(m_1) =
+    \wfd{d} \rightarrow \wfv{m_1} \rightarrow \forall\ bs, \mathrm{ser}_d(m_1) =
     bs \rightarrow \exists\ m_2, \mathrm{par}_d(bs) = m_2 \wedge \langle m_1
     : d \preceq m_2 : d \rangle
   \] 
@@ -449,7 +449,7 @@ parser and serializer would actually behave.
 \vspace{1em}
 \begin{theorem}[Intermediate Compatibility]\label{thm:inter-compat}
   \[
-    d_1 \checkmark \rightarrow m_1 \checkmark \rightarrow d_2 \checkmark
+    \wfd{d_1} \rightarrow \wfv{m_1} \rightarrow \wfd{d_2}
     \rightarrow d_1 \ll d_2 \rightarrow \forall\ bs, \mathrm{ser}_{d_1}(m_1) =
     bs \rightarrow \exists\ m_2, \mathrm{par}_{d_2}(bs) = m_2 \wedge \langle m_1
     : d_1 \preceq m_2 : d_2 \rangle

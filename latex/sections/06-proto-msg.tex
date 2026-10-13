@@ -82,7 +82,7 @@ needed.}
     \alternative{(n, s) :: l}
 
     \category[Value]{v}
-    \alternative{\llangle l \rrangle_v}
+    \alternative{\lAngle l \rAngle_v}
   \end{syntax}
   \caption{Pollux syntax for Protobuf values.}\label{fig:proto-val-syn}
 \end{figure}
@@ -235,21 +235,20 @@ combinator library.
 
 \vspace{1em}
 \begin{definition}[Valid Message]\label{def:vvalid}
-  A message $m$ is valid against a descriptor $d$, denoted $v \checkmark^d$ if
-  both $v \checkmark_w$ and $v \checkmark_l^d$. 
+  A message $m$ is valid against a descriptor $d$, denoted $\validv{m}{d}$ if
+  both $\wfv{m}$ and $\legalv{m}{d}$. 
 \end{definition}
 
 \vspace{1em}
 \begin{definition}[Message Well-Formedness]\label{def:vwf}
-  A message $m$ is well-formed, denoted $m \checkmark_w$, if all fields in
+  A message $m$ is well-formed, denoted $\wfv{m}$, if all fields in
   the message have a unique field number, the fields are stored in sorted
   order, and all nested messages are also well-formed.
 \end{definition}
 
 \vspace{1em}
 \begin{definition}[Legal Message]\label{def:vlegal}
-  A message $m$ is legal with regards to descriptor $d$, denoted $m
-  \checkmark_l^d$, if
+  A message $m$ is legal with regards to descriptor $d$, denoted $\legalv{m}{d}$, if
   \begin{itemize}
   \item Totality, $\dom{m} = \dom{d}$.
   \item For all values in the message
@@ -259,7 +258,7 @@ combinator library.
     \item The type of the value agrees with the type of the field in the
       descriptor. For integer scalars, this condition also enforces the range
       bounds associated with the various Protobuf integer types (i.e.\ \ints{},
-      \uintl{}, etc.) while for nested messages, that means $v' \checkmark^{d'}$.
+      \uintl{}, etc.) while for nested messages, that means $\validv{m'}{d'}$.
     \end{itemize}
   \item At most one key in a \texttt{oneof} group defined in the descriptor is
     set. This is the only non-pairwise requirement that a well-formed message has
@@ -276,14 +275,14 @@ have a decidable equality instance defined.
 
 \vspace{1em}
 \begin{lemma}
-  For all descriptors $d$, $\mathrm{init}(d) \checkmark^d$.
+  For all descriptors $d$, $\validv{\mathrm{init}(d)}{d}$.
 \end{lemma}
 
 \vspace{1em}
 \begin{definition}[Message Size]\label{def:vsize}
   The size of a message, $\mathrm{size}_v$, is defined below. 
   \begin{mathpar}
-    \mathrm{size}_v(\llangle l \rrangle) = 1 + \mathrm{size}_v(l)
+    \mathrm{size}_v(\lAngle l \rAngle) = 1 + \mathrm{size}_v(l)
 
     \mathrm{size}_v(l) =
     \begin{cases}
@@ -301,8 +300,8 @@ have a decidable equality instance defined.
 
     \mathrm{size}_v(p) =
     \begin{cases}
-      \mathrm{size}_v(\llangle l' \rrangle) & \text{if } p = \llangle l'
-                                              \rrangle \\
+      \mathrm{size}_v(\lAngle l' \rAngle) & \text{if } p = \lAngle l'
+                                              \rAngle \\
       1 & \text{otherwise}
     \end{cases}
   \end{mathpar}

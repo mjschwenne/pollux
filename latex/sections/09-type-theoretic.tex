@@ -18,13 +18,19 @@ reader applies to the writer's message.
 \vspace{1em}
 \begin{definition}[Well-behaved Transformation]\label{def:well-behaved}
   A function $f : \denote{d_1} \to \denote{d_2}$ is \emph{well-behaved} when,
-  for all $m \checkmark^{d_1}$ and all $bs$ with $\mathrm{Encodes}_{d_1}(m, bs)$,
+  for all $\validv{m}{d}$ and all $bs$ with $\encodes_{d_1}(m, bs)$,
   \[ \mathrm{parse}_{d_2}(bs) = \some{(f(m), U)} \quad\text{with}\quad
     U \subseteq \dom{d_1} \setminus \dom{d_2}. \]
 \end{definition}
 
-Here $U$ is the set of fields skipped during parsing (i.e.\ where defaults are
-injected during parsing). The second condition that
+\vspace{1em}
+\begin{definition}[Compatibility]\label{def:compat}
+  Two descriptors $d_1$ and $d_2$ are compatible if there exists a well-behaved
+  transformation between them. 
+\end{definition}
+
+Here $U$ is the set of fields skipped during parsing (i.e.\ writer-only fields or
+fields with mismatched wire types). The second condition that
 $U \subseteq \dom{d_1} \setminus \dom{d_2}$ is essential to this definition. Wire-soundness,
 that the message parses, would admit something like $\ints \ll \str$ when the
 reader skips the mistyped record and injects the default \str{} value. This
@@ -319,7 +325,7 @@ to the new type.
   A coercion $g : \denote{\tau_1} \rightarrow \denote{\tau_2}$ \emph{carries
   $\tau_1$ into $\tau_2$ up to depth $n$}, written $\vDash_n g : \tau_1 \propto
   \tau_2$, when
-  \[ \forall\ v \checkmark^{\tau_1} \text{ with } \mathrm{depth}_f(v) \le n,\
+  \[ \forall\ \validv{v}{\tau_1} \text{ with } \mathrm{depth}_f(v) \le n,\
     \forall\ bs.\ \mathrm{Encodes}_{\tau_1}(v, bs) \rightarrow
     \mathrm{parse}_{\tau_2}(bs) = \some{g(v)}. \]
 \end{definition}
@@ -328,26 +334,42 @@ to the new type.
 \begin{definition}[Semantic compatibility, field level]\label{def:sem-compat-fld}
   A coercion $g : \denote{s_1} \rightarrow \denote{s_2}$ \emph{carries $s_1$ into $s_2$ up
   to depth $n$}, written $\vDash_n g : s_1 \ll s_2$, when 
-\[ \forall\ s \checkmark^{f_1}, rs.\ \mathrm{depth}(s) \le n \rightarrow \mathrm{Encodes}_{f_1}^k(s, rs) \rightarrow
+\[ \forall\ \validv{s}{f_1}, rs.\ \mathrm{depth}(s) \le n \rightarrow \mathrm{Encodes}_{f_1}^k(s, rs) \rightarrow
   \assemble_{f2}^k(rs) = \some{(g\ s)} \]
 and no record of $rs$ is skipped.
 \end{definition}
 
-% TODO: Should this really introduce a new assemble notation or do something
-% like what Ethan referenced once were we restrict the byte sting to only be the
-% fragments that matter to this slot?
-
-Here $\mathrm{Encodes}_f^k(s, rs)$ means that $rs$ is a sequence of records for
-key $k$ that an encoding of a message may contain when slot $k$ holds
-$s$. Basically, the slot-level version of the primary Encodes
-relation. Additionally, $\assemble_f^k(rs)$ represents how the reader builds its
-slot from these records:
+Here $\mathrm{Encodes}_f^k(s, rs)$ says that $rs$, a list of records with field
+number $k$, is a valid encoding of slot $s$. The message-level relation is
+defined from it:
+\[
+  \mathrm{Encodes}_d(m, bs) \iff
+  \records(bs) = \some{rs}
+  \wedge \forall (k, w, p) \in rs.\ k \in \dom{d}
+  \wedge \forall k \in \dom{d}.\ \mathrm{Encodes}_{d[k]}^k(m[k], \restr{rs}{k}).
+\]
+Records of different fields may appear in any order. $\assemble_f(rs)$ is the
+part of $\mathrm{parse}$ that builds one slot from that field's records
+(Section~\ref{sec:philosophy}):
 \begin{itemize}
-\item An empty sequence gives $\init_{\tau}$, $\none$ or $[\,]$.
-\item Singular slots combine the parsed records with $\comb{\tau}$
-\item Repeated slots concatenate the parse records, regardless of it they're
-  packed or unpacked.
+\item An empty list gives $\init_\tau$, $\none$, or $[\,]$.
+\item Singular slots combine the records' values with $\comb{\tau}$.
+\item Repeated slots concatenate the records' values, packed or unpacked.
 \end{itemize}
+"No record of $rs$ is skipped" means
+$\forall (k, w, p) \in rs.\ \accepts(f_2, w)$.
+
+\vspace{1em}
+\begin{lemma}[Message from fields]\label{lem:msg-from-fields}
+  Suppose $\mathrm{OneofPreserved}(d_1, d_2)$, and
+  $\vDash_n g_k : d_1[k] \propto d_2[k]$ for every
+  $k \in \dom{d_1} \cap \dom{d_2}$. Let $f$ be the coercion
+  \textsc{D-Update} builds from the $g_k$. Then for all
+  $\validv{m}{d_1}$ with $\mathrm{depth}_v(m) \le n$ and all $bs$ with
+  $\mathrm{Encodes}_{d_1}(m, bs)$,
+  \[ \mathrm{parse}_{d_2}(bs) = \some{(f(m), U)} \quad\text{with}\quad
+     U \subseteq \dom{d_1} \setminus \dom{d_2}. \]
+\end{lemma}
 
 The \textsc{F-Field} case of the inner induction reduces to one lemma per axiom,
 none of which require the $\Sigma$ or $\Gamma$ context. If $\forall\ j \le n. \vDash_j c : \tau_1 \propto \tau_2$
@@ -373,7 +395,7 @@ wins.
 \begin{definition}[Semantic compatibility]\label{def:sem-compat}
   A function $f : \denote{d_1} \rightarrow \denote{d_2}$ \emph{carries $d_1$ into
   $d_2$ up to depth $n$}, written $\vDash_n f : d_1 \ll d_2$, when
-  \[ \forall\ m \checkmark^{d_1} \text{ with } \mathrm{depth}_v(m) \le n,\
+  \[ \forall\ \validv{m}{d_1} \text{ with } \mathrm{depth}_v(m) \le n,\
     \forall\ bs.\ \mathrm{Encodes}_{d_1}(m, bs) \rightarrow
     \mathrm{parse}_{d_2}(bs) = \some{f(m)}. \]
   It \emph{carries $d_1$ into $d_2$}, written $\vDash f : d_1 \ll d_2$, when
@@ -450,7 +472,7 @@ we want to show that two descriptors are compatible using the judgment $\Sigma;
 
   d_2 := \mu\ X.\ G\ X 
 
-  \vDash d_1 \ll d_2 := \exists\ f: \denote{d_1} \rightarrow \denote{d_2}.\ \forall\ m \checkmark^{d_1}, bs.\
+  \vDash d_1 \ll d_2 := \exists\ f: \denote{d_1} \rightarrow \denote{d_2}.\ \forall\ \validv{m}{d_1}, bs.\
   \mathrm{E}_{d_1}(m, bs) \rightarrow \mathrm{parse}_{d_2}(bs) = f(m)
 \end{mathpar}
 
@@ -495,8 +517,8 @@ Using that framing, we can define a logical relation as such:
   $A \subseteq \dom{\Sigma} \times \dom{\Sigma}$. Fix $n$ and assume
   $\vDash_n A$. Then
   \begin{enumerate}
-    \item if $\Sigma; A \vdash d_1 \ll d_2$ with $d_1 \checkmark_w$ and
-      $d_2 \checkmark_w$, then
+    \item if $\Sigma; A \vdash d_1 \ll d_2$ with $\wfd{d_1}$ and
+      $\wfd{d_2}$, then
       $\vDash_n \coercion{d_1}{\cdot}{d_2} : d_1 \ll d_2$;
     \item if $\Sigma; A \vdash \tau_1 \propto \tau_2$, then
       $\vDash_n \coercion{\tau_1}{\cdot}{\tau_2} : \tau_1 \propto \tau_2$;

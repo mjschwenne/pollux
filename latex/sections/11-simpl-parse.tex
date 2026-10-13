@@ -70,7 +70,7 @@ $\mathtt{parse}\ (d : Desc)\ :\ \mathtt{Parser}\;\llbracket d \rrbracket$ while
 an explicitly well-typed parser setup would have the top-level type of
 $\mathtt{parse}\ (d : Desc)\ :\ \mathtt{Parser}\ \mathtt{Val}$ for some generic,
 universal document model \texttt{Val}. We'd also need to provide a theorem
-standing that ``if \texttt{parse d enc} $\leadsto$ $x$ then
+standing that ``if \texttt{parse d enc} leads to $x$ then
 $\vdash_{\mathrm{doc}} x\ :\ d$'', basically that if calling \texttt{parse} on an
 encoding returns a result, the structure of that result will be well-typed under
 some document type system.

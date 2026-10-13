@@ -75,14 +75,14 @@ Outside of Lean, we'll use this syntax for the Protobuf descriptors.
 
     \category[Field List]{l}
     \alternative{\texttt{[]}}
-    \alternative{(n, f) :: l}
+    \alternative{(n, f) \Colon l}
 
     \category[Reserved Set]{r}
     \alternative{\varnothing_r}
     \alternative{n, r}
 
     \category[Descriptor]{d}
-    \alternative{\llangle r, l \rrangle}
+    \alternative{\lAngle r, l \rAngle}
   \end{syntax}
   \caption{Pollux syntax for Protobuf descriptors.}\label{fig:proto-desc-syn}
 \end{figure}
@@ -156,7 +156,7 @@ interface. We define a function to compute the size of the descriptor below.
   The size of a descriptor $d$ is defined as $\mathrm{size}_d$ below.
   \begin{mathpar}
 
-    \mathrm{size}_d\left(\llangle r, l \rrangle\right) = 1 + \mathrm{size}_d(l)
+    \mathrm{size}_d\left(\lAngle r, l \rAngle\right) = 1 + \mathrm{size}_d(l)
 
     \mathrm{size}_d(\langle \_, \tau_s \rangle) = 1
     

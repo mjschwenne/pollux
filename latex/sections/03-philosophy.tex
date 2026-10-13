@@ -2,7 +2,7 @@
 
 Any data language with way to specify a schema for a particular type of message
 can have compatibility questions, simply put, does this encoded binary blob
-conform to the known specification of the message?
+conform to the known specification of this message type?
 
 This project maintains a separation between the data description language and
 the encoding format, enabling all parsing to be seen as two steps, one to parse
@@ -34,17 +34,13 @@ in the protoscope language are given below.
   \texttt{I32} and \texttt{I64} could only be interpreted as a list of bytes of
   the correct length. Casting to either a \texttt{fixed}, \texttt{sfixed} or
   floating point number would be part of the validation process.
-\item The tricky case here is clearly \texttt{LEN}, and more specifically nested
-  messages. Realistically, a tool like \texttt{protoscope} doesn't need to know
-  the schema of a nested message to produce a low level representation but it
-  does need to know that a \texttt{LEN} field is a nested message and not a
-  \texttt{string}, \texttt{bytes} or a packed \texttt{repeated} field. This
-  issue, particularly with nested messages, led the \texttt{protoscope}
-  developers to implement the \texttt{-all-fields-are-messages} command line
-  option, which attempts to recursively parse \texttt{LEN} fields. Note that all
-  valid nested messages can be parsed this way, but it is possible for one of
-  the other \texttt{LEN} fields to happen to be a valid protobuf message and
-  \texttt{protoscope} can't differentiate between these cases.
+\item \texttt{LEN} is the tricky case: its bytes could be a string, raw bytes,
+  a packed list of numbers, or a nested message. \texttt{protoscope} guesses
+  (\texttt{-all-fields-are-messages}) and can guess wrong. Pollux does not
+  guess. The first step keeps every \texttt{LEN} payload as raw bytes, and the
+  second step, which has the descriptor, decides what they are. For a nested
+  message this means running both steps again on the payload, which is the loop
+  in Figure~\ref{fig:parse-validate}.
 \end{itemize}
 
 Represented visually, the process for both CBOR+CDDL and Protobuf would look
@@ -80,10 +76,10 @@ like this:
     \begin{tikzpicture}
       \node[draw] (cp) at (0, 0) {P}; \node[draw] (cv) at (3, 0) {V};
 
-      \draw[-{LaTeX}] (cp) -- (pv);
+      \draw[-{LaTeX}] (cp) -- (cv);
     \end{tikzpicture}
     \caption{CBOR parse validation flow. Tag 24 might require parsing again, but
-    that is expected to be trigger by the host application at a later time.}
+    that is expected to be triggered by the host application at a later time.}
   \end{subfigure}
 
   \caption{Splitting the Protobuf and CDDL parse process into two steps, parsing
@@ -91,11 +87,30 @@ like this:
   \label{fig:parse-validate}
 \end{figure}
 
-While I claimed earlier that Protobuf forces Pollux to consider the binary
-encoding blob. Where is that expressed in any of the compatibility relations?
-\emph{It's not.} Basically all of the existing work for Pollux on Protobuf can
-be trivially lifted to operating on the protoscope level just by changing our
-mental framing around it.
+For Protobuf, the first step cuts the bytes into \emph{records}: a field number,
+a wire type, and a raw payload. The wire type says where each payload ends, so
+this needs no descriptor:
+\[ \records : \mathrm{Bytes} \to \mathrm{Option}\ (\mathrm{List}\ (k, w, p)). \]
+The second step builds the reader's message one field at a time. The slot for
+field $k$ is $\assemble_{d[k]}$ applied to $\restr{\records(bs)}{k}$, the
+records with field number $k$. A oneof group is handled as one unit, since a
+record for one member clears the others. Records whose field number is unknown
+to the reader, or whose wire type doesn't fit, are skipped. For Protobuf this
+second step does more than validate: it converts numbers between types,
+combines repeated records, and parses nested messages, and that is where all of
+Protobuf's compatibility behaviour lives.
+
+The compatibility relations never mention bytes. The semantic definitions of
+Section~\ref{sec:type-theory} mention records, and only $\records$ and
+$\mathrm{Encodes}$ mention bytes. Because each field's slot depends only on that
+field's records, compatibility of whole messages follows from compatibility of
+their fields.
+
+Not every format has a first step. Avro needs the writer's schema to read
+anything, and the format of Section~\ref{sec:inter-parse} cannot skip an unknown
+field because its tags carry no wire type. Pollux's definition of compatibility
+(Definition~\ref{def:compat}) does not depend on the split. The split is an
+extra that makes field-by-field proofs possible when a format offers it.
 
 % Local Variables:
 % citar-bibliography: ("../pollux.bib")
