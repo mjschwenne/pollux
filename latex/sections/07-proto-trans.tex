@@ -87,7 +87,7 @@ the size that descriptor alone, not dependent on the message being
 reinterpreted.
 
 Note that the intermediate compatibility relation didn't have a drop rule in
-$\ll$. That was because if we encountered a dropped value, we had no way to know
+$\dcompat$. That was because if we encountered a dropped value, we had no way to know
 if the next thing in the encoding was a scalar or a nested message and the
 parsing failed. Since Protobuf encoding the wire type into the value encoding,
 it's always possible to skip the unknown field without de-synchronizing the byte
@@ -204,7 +204,7 @@ value fallback anyways. This could be built into a faithfulness theorem.
 
 \vspace{1em}
 \begin{theorem}[Faithfulness]\label{thm:faith}
-  For two compatible descriptors, $d_1 \ll d_2$ and a valid value $m$ under
+  For two compatible descriptors, $d_1 \dcompat d_2$ and a valid value $m$ under
   $d_1$, $\validv{m}{d_1}$ such that for all keys $k$, $d_1[k] = f_1$ and $d_2[k] =
   f_2$ there must exist a value $x$ and $y$ such that
   \begin{itemize}
@@ -235,16 +235,15 @@ particular integer width changes which might truncate values.
 
 \vspace{1em}
 \begin{theorem}[Point-wise Field Compatibility]\label{thm:pointwise-compat}
-  \[ \wfd{d_1} \rightarrow \forall\ k \in \dom{d_1} \cap \dom{d_2}. d_1[k] \propto d_2[k] \] 
+  \[ \wfd{d_1} \rightarrow \forall\ k \in \dom{d_1} \cap \dom{d_2}. d_1[k] \slotrel d_2[k] \] 
 \end{theorem}
 
 Combined with Theorem~\ref{thm:faith}, Theorem~\ref{thm:pointwise-compat} states
-that the descriptor relation $\ll$ is a maximal relation or equivalently the
-weakest precondition for lossless data transmission. Again, this will be
+that the descriptor relation $\dcompat$ is a maximal relation or equivalently
+the weakest precondition for lossless data transmission. Again, this will be
 complicated by adding integer truncation. Once that feature is added, this
-concept is split into \emph{carriage}, which thinks about data being
-present, and \emph{lossless-ness} that the transformed view of the data is
-unique. 
+concept is split into \emph{carriage}, which thinks about data being present,
+and \emph{lossless-ness} that the transformed view of the data is unique.
 
 % Local Variables:
 % citar-bibliography: ("../pollux.bib")

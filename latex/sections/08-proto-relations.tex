@@ -28,11 +28,11 @@ Below is a list of the relations about to be defined, along with an English
 explanation of how to read them.
 
 \begin{align*}
-  \prec &: \text{Value relation} & v_1 : \tau_1 \prec v_2 : \tau_2 &\rightarrow ``v_1 : \tau_1 \text{ becomes } v_2 :
-                                           \tau_2 '' \\
-  \propto &: \text{Type relation} & \tau_1 \propto \tau_2 &\rightarrow ``\tau_1\text{ is type-compatible with }
-                                          \tau_2'' \\
-  \ll &: \text{Descriptor relation} & d_1 \ll d_2 &\rightarrow ``d_1 \text{ is compatible with } d_2''
+  \valrel &: \text{Value relation} & v_1 : \tau_1 \valrel v_2 : \tau_2 &\rightarrow \text{``}v_1 : \tau_1 \text{ becomes } v_2 :
+                                           \tau_2 \text{''} \\
+  \typrel &: \text{Type relation} & \tau_1 \typrel \tau_2 &\rightarrow \text{``}\tau_1\text{ is type-compatible with }
+                                          \tau_2\text{''} \\
+  \dcompat &: \text{Descriptor relation} & d_1 \dcompat d_2 &\rightarrow \text{``}d_1 \text{ is compatible with } d_2\text{''}
 \end{align*}
 
 
@@ -76,7 +76,7 @@ as bytes $bs$ under type $\tau$. \\
 
 \begin{definition}[Value Relation]
   A protobuf value at the specification level $v_1$ with protobuf type $\tau_1$ is
-  related to another value $v_2$ at type $\tau_2$, denoted $v_1 : \tau_1 \prec v_2 : \tau_2$
+  related to another value $v_2$ at type $\tau_2$, denoted $v_1 : \tau_1 \valrel v_2 : \tau_2$
   if $\forall\ bs, E_{\tau_1}(v_1, bs) \rightarrow parse_{\tau_2}(bs) = v_2$.
 \end{definition}
 
@@ -87,19 +87,17 @@ rules isn't included in the relation. To understand why, first consult the
 integer rules in Section~\ref{sec:proto-compat-ints} and consider what happens
 when an integer is cast to a smaller byte width. Specifically, consider $2^{40}$
 as a \texttt{uint64}. Casting this value to a \texttt{uint32} can be done with
-the \textsc{Uint-Chg-W} rule, resulting in $2^{40} : \mathtt{uint64} \prec 0 :
-\mathtt{uint32}$, which describes changing the field perfectly. However, we can
-then promote this field back to \texttt{uint64} with another application of
-\textsc{Uint-Chg-W}, getting $0 : \mathtt{uint32} \prec 0 :
-\mathtt{uint64}$. Having a transitive rule would result in $2^{40} :
-\mathtt{uint64} \prec 0 : \mathtt{uint64}$ but clearly parsing a serialization
-of $2^{40}$ as a \texttt{uint64} when it was serialized as a \texttt{uint64}
-should recover the original value!
+the \textsc{Uint-Chg-W} rule, resulting in
+$2^{40} : \mathtt{uint64} \valrel 0 : \mathtt{uint32}$, which describes changing
+the field perfectly. However, we can then promote this field back to
+\texttt{uint64} with another application of \textsc{Uint-Chg-W}, getting
+$0 : \mathtt{uint32} \valrel 0 : \mathtt{uint64}$. Having a transitive rule
+would result in $2^{40} : \mathtt{uint64} \valrel 0 : \mathtt{uint64}$ but
+clearly parsing a serialization of $2^{40}$ as a \texttt{uint64} when it was
+serialized as a \texttt{uint64} should recover the original value!
 
 \begin{mathpar}
-  \infer[Refl]{ }{v:\tau \prec v:\tau}
-
-  % \infer[Trans]{v_1:\tau_1 \prec v_2:\tau_2 \\ v_2:\tau_2 \prec v_3:\tau_3}{v_1:\tau_1 \prec v_3:\tau_3}
+  \infer[Refl]{ }{v:\tau \valrel v:\tau}
 \end{mathpar}
 
 \subsubsection{String \& Byte Rules}
@@ -111,9 +109,9 @@ that all strings are encoded in UTF-8, so we can optionally add that requirement
 to converting from \texttt{bytes} to \texttt{string}.
 
 \begin{mathpar}
-  \infer[Str-Byte]{ }{v: \str{} \prec{} v: \byt{}}
+  \infer[Str-Byte]{ }{v: \str \valrel v: \byt}
 
-  \infer[Byte-Str]{ {\color{red} v \text{ is valid UTF-8}} }{v: \byt{} \prec{} v: \str{}}
+  \infer[Byte-Str]{ {\color{red} v \text{ is valid UTF-8}} }{v: \byt \valrel v: \str}
 \end{mathpar}
 
 \subsubsection{Varint Scalar Rules}\label{sec:proto-compat-ints}
@@ -147,7 +145,7 @@ be functions that convert from a $\tau$-typed writer to the payload number and
 the value recovered by a $\tau$-typed reader respectively.
 \[
   \infer[Varint]{ \tau_1, \tau_2 \in \vints \\ v_2 =
-    \dec{\tau_2}{\enc{\tau_1}{v_1}}}{v_1 : \tau_1 \prec v_2 : \tau_2}
+    \dec{\tau_2}{\enc{\tau_1}{v_1}}}{v_1 : \tau_1 \valrel v_2 : \tau_2}
 \]
 
 The table below gives the decoding and encoding functions for each type, and
@@ -220,9 +218,9 @@ Section~\ref{sec:msg-rel}. The values are represented as a mapping from the id
 number of each field to the value and type of that field. 
 
 \begin{mathpar}
-  \infer[Msg]{\msg{r_1}{f_1} \preceq \msg{r_2}{f_2} \\ \forall\;i \in \dom{v_2}.\;\left( f_1(i) =
-      (s, \tau_1) \wedge v_1(i) \prec v_2(i) \right) \vee v_2(i) = default\left(\mathtt{snd}\ f_2(i)\right)}
-  {v_1 : \mathtt{MSG}\ \msg{r_1}{f_1} \prec v_2 : \mathtt{MSG}\ \msg{r_2}{f_2} }
+  \infer[Msg]{\msg{r_1}{f_1} \msgrel \msg{r_2}{f_2} \\ \forall\;i \in \dom{v_2}.\;\left( f_1(i) =
+      (s, \tau_1) \wedge v_1(i) \valrel v_2(i) \right) \vee v_2(i) = default\left(\mathtt{snd}\ f_2(i)\right)}
+  {v_1 : \mathtt{MSG}\ \msg{r_1}{f_1} \valrel v_2 : \mathtt{MSG}\ \msg{r_2}{f_2} }
 \end{mathpar}
 
 The first rule is complex. It stands that a message with some reserved fields
@@ -249,19 +247,19 @@ underlying type of each decorator. Implicit fields require no special
 consideration.
 
 \begin{mathpar}
-  \infer[Rep-Pass]{v_1:\tau_1 \prec v_1':\tau_2 \\ \cdots \\ v_n:\tau_1 \prec v_n':\tau_2}{[v_1; \dots;
-    v_n]: \rept{\tau_1} \prec [v_1'; \dots; v_n']: \rept{\tau_2}}
+  \infer[Rep-Pass]{v_1:\tau_1 \valrel v_1':\tau_2 \\ \cdots \\ v_n:\tau_1 \valrel v_n':\tau_2}{[v_1; \dots;
+    v_n]: \rep{\tau_1} \valrel [v_1'; \dots; v_n']: \rep{\tau_2}}
 
-  \infer[Opt-Some-Pass]{v_1:\tau_1 \prec v_2:\tau_2}{(\some{v_1}): \optt{\tau_1} \prec
-    (\some{v_2}): \optt{\tau_2}}
+  \infer[Opt-Some-Pass]{v_1:\tau_1 \valrel v_2:\tau_2}{(\some{v_1}): \opt{\tau_1} \prec
+    (\some{v_2}): \opt{\tau_2}}
 
-  \infer[Opt-None-Pass]{ }{\none: \optt{\tau_1} \prec \none: \optt{\tau_2}}
+  \infer[Opt-None-Pass]{ }{\none: \opt{\tau_1} \valrel \none: \opt{\tau_2}}
   
-  \infer[Opt-Intro]{ }{v:\tau \prec (\some{v}): \optt{\tau}}
+  \infer[Opt-Intro]{ }{v:\tau \valrel (\some{v}): \opt{\tau}}
 
-  \infer[Rep-Intro]{ }{v:\tau \prec [v]: \rept{\tau}}
+  \infer[Rep-Intro]{ }{v:\tau \valrel [v]: \rep{\tau}}
 
-  \infer[Missing-Imp]{\tau_1 \propto \tau_2}{\none: \tau_1 \prec default(\tau_2):\tau_2}
+  \infer[Missing-Imp]{\tau_1 \typrel \tau_2}{\none: \tau_1 \valrel default(\tau_2):\tau_2}
 \end{mathpar}
 
 \subsection{Type Relation}~\label{sec:typ-rel}
@@ -271,8 +269,8 @@ relation. Recall that this relation is needed to reason about descriptor-only
 compatibility, which doesn't have any concrete values associated with it.
 
 \begin{definition}[Type Relation]
-  The type relation relates two protobuf type $\tau_1$ and $\tau_2$, denoted $\tau_1 \propto
-  \tau_2$ if for all $v_1:\tau_1$ there exists a $v_2:\tau_2$ such that $v_1:\tau_1 \prec v_2:\tau_2$.
+  The type relation relates two protobuf type $\tau_1$ and $\tau_2$, denoted $\tau_1 \typrel
+  \tau_2$ if for all $v_1:\tau_1$ there exists a $v_2:\tau_2$ such that $v_1:\tau_1 \valrel v_2:\tau_2$.
 \end{definition}
 
 These rules compress many of the rules in the previous section into one rule,
@@ -281,16 +279,16 @@ stating that types are compatible with each other.
 \subsubsection{Base Type Rules}
 
 \begin{mathpar}
-  \infer[Str-Byt-T]{ }{\str \propto \byt}
+  \infer[Str-Byt-T]{ }{\str \typrel \byt}
 
-  \infer[Byt-Str-T]{ }{\byt \propto \str}
+  \infer[Byt-Str-T]{ }{\byt \typrel \str}
 
   \infer[Int-Int-T]{\tau_1, \tau_2 \in \left\{{
         \begin{array}{c}
           \ints, \intl, \uints, \uintl \\
           \sints, \sintl, \bool
         \end{array}
-      }\right\}}{\tau_1 \propto \tau_2}
+      }\right\}}{\tau_1 \typrel \tau_2}
 \end{mathpar}
 
 It's worth pointing out that converting to and from \sintn{n} is tricky, since
@@ -303,7 +301,7 @@ from Protobuf's official compatibility guide \cite{LanguageGuideProto}.
 \subsubsection{Message Rules}
 
 \begin{mathpar}
-  \infer[Msg-T]{m_1 \preceq m_2}{\mathtt{MSG}\ m_1 \propto \mathtt{MSG}\ m_2}
+  \infer[Msg-T]{m_1 \msgrel m_2}{\mathtt{MSG}\ m_1 \typrel \mathtt{MSG}\ m_2}
 \end{mathpar}
 
 \subsubsection{Decorator Rules}
@@ -313,21 +311,21 @@ need to ensure that decorator restrictions like moving from a repeated field to
 a singleton one aren't violated.
 
 \begin{mathpar}
-  \infer[Opt-Add-T]{ }{\tau \propto \optt{\tau}}
+  \infer[Opt-Add-T]{ }{\tau \slotrel \opt{\tau}}
 
-  \infer[Opt-Rm-T]{ }{\optt{\tau} \propto \tau}
+  \infer[Opt-Rm-T]{ }{\opt{\tau} \slotrel \tau}
 
-  \infer[Opt-T]{\tau_1 \propto \tau_2}{\optt{\tau_1} \propto \optt{\tau_2}}
+  \infer[Opt-T]{\tau_1 \typrel \tau_2}{\opt{\tau_1} \slotrel \opt{\tau_2}}
 
-  \infer[Rep-Add-T]{ }{\tau \propto \rept{\tau}}
+  \infer[Rep-Add-T]{ }{\tau \slotrel \rep{\tau}}
 
-  \infer[Rep-T]{\tau_1 \propto \tau_2}{\rept{\tau_1} \propto \rept{\tau_2}}
+  \infer[Rep-T]{\tau_1 \typrel \tau_2}{\rep{\tau_1} \slotrel \rep{\tau_2}}
 \end{mathpar}
 
 \subsection{Message Relation}~\label{sec:msg-rel}
 
-The descriptor compatibility relation $\preceq$ is defined as below, but first it is
-important to discuss the structure of fields and messages.
+The descriptor compatibility relation $\dcompat$ is defined as below, but first
+it is important to discuss the structure of fields and messages.
 
 A message value is a tuple containing a set of reserved field numbers and names,
 then a map from an identifier to a tuple with the name of the field and the type
@@ -337,7 +335,7 @@ mutually exclusively set.
 
 Enums will be modeled as a set of integers, likewise ignoring the name given to
 each element to favor the integer which is used in the encoding. The enum
-relation is defined using $\preceq_e$ to differentiate it from the message
+relation is defined using $\enumrel$ to differentiate it from the message
 relation.
 
 \subsubsection{Basic Rules}
@@ -346,13 +344,13 @@ A compatibility relation is both reflexive and transitive, although it is
 neither symmetric nor anti-symmetric.  
 
 \begin{mathpar}
-   \infer[Refl-M]{ }{m \preceq m}
+   \infer[Refl-M]{ }{m \msgrel m}
 
-   \infer[Refl-E]{ }{e \preceq_e e}
+   \infer[Refl-E]{ }{e \enumrel e}
 
-   \infer[Trans-M]{m_1 \preceq m_2 \\ m_2 \preceq m_3}{m_1 \preceq m_3}
+   \infer[Trans-M]{m_1 \msgrel m_2 \\ m_2 \msgrel m_3}{m_1 \msgrel m_3}
 
-   \infer[Trans-E]{e_1 \preceq_e e_2 \\ e_2 \preceq_e e_3}{e_1 \preceq_e e_3}
+   \infer[Trans-E]{e_1 \enumrel e_2 \\ e_2 \enumrel e_3}{e_1 \enumrel e_3}
 \end{mathpar}
 
 \subsubsection{Field Update Rules}
@@ -369,13 +367,13 @@ Generally speaking, we can change the type of a field, add a new field or update
 a field in a map.
 
 \begin{mathpar}
-  \infer[Field-Type]{f(id) = \tau_1 \\ \tau_1 \propto \tau_2}{\msg{r}{f} \preceq \msg{r}{f[id \mapsto \tau_2]}}
+  \infer[Field-Type]{f(id) = \tau_1 \\ \tau_1 \typrel \tau_2}{\msg{r}{f} \msgrel \msg{r}{f[id \mapsto \tau_2]}}
 
-  \infer[Field-Add]{id \not \in \textrm{dom}(f) }{\msg{r}{f} \preceq \msg{r}{f[id \mapsto \tau]}}
+  \infer[Field-Add]{id \not \in \textrm{dom}(f) }{\msg{r}{f} \msgrel \msg{r}{f[id \mapsto \tau]}}
 
   % TODO: May need restrictions about maps in maps...
-  \infer[Map-Type-F]{f(id) = (\map{\tau_1}{\impt{\tau_2})} \\ \tau_1 \propto \tau_1' \\ \tau_2 \propto \impt{\tau_2'} \\ \tau_1 \ne \byt}
-  {\msg{r}{f} \preceq \msg{r}{f[id \mapsto (\map{\tau_1'}{\imp{\tau_2'}})]}}
+  \infer[Map-Type-F]{f(id) = (\map{\tau_1}{\imp{\tau_2})} \\ \tau_1 \typrel \tau_1' \\ \tau_2 \slotrel \imp{\tau_2'} \\ \tau_1 \ne \byt}
+  {\msg{r}{f} \msgrel \msg{r}{f[id \mapsto (\map{\tau_1'}{\imp{\tau_2'}})]}}
 \end{mathpar}
 
 Messages are similar to records in Lean or other functional languages and
@@ -396,28 +394,28 @@ one field by encapsulating several fields into a singular field.
 
 \begin{mathpar}
   \infer[Oneof-Intro-Field]{d \in \{\imp, \opt\} \\ f(id) = d\ \tau}
-  {\msg{r}{f} \preceq \msg{r}{f[\{id\} \mapsto \oneof{id \mapsto (d\ \tau)}]}}
+  {\msg{r}{f} \msgrel \msg{r}{f[\{id\} \mapsto \oneof{id \mapsto (d\ \tau)}]}}
 
   % May need some statement about f_{n+1} not already being in the message?
   % You can introduce a new field, but not move an existing one.
   \infer[Oneof-Add-F]{d \in \{\mathtt{IMP}, \mathtt{OPT}\} \\ id_n \not \in
     id_s \\ f(id_s) = m \\ id_n \not \in  \mathrm{dom}(m) \\ \tau \not= \mathtt{MAP}}
-  {\msg{r}{f} \preceq \msg{r}{f[id_s \cup \{id_n\} \mapsto (m[id_n \mapsto (d \tau)])]}}
+  {\msg{r}{f} \msgrel \msg{r}{f[id_s \cup \{id_n\} \mapsto (m[id_n \mapsto (d \tau)])]}}
 
   % This rule should just be a combination of the above two rules...
   \infer[Oneof-Intro-New]{\dom{ f } \cap \dom{ f_o } = \emptyset
     \\ \mathtt{REP} \not \in dec(f_o) \\ \forall\;id_n \in \dom{f_o}.\
-    \texttt{snd}\ f_o(id_n) \ne \mathtt{MAP}}{\msg{r}{f} \preceq \msg{r}{f[\dom{f_o}
+    \texttt{snd}\ f_o(id_n) \ne \mathtt{MAP}}{\msg{r}{f} \msgrel \msg{r}{f[\dom{f_o}
       \mapsto f_o]}}
 
   \infer[Oneof-Elim]{f(id_n) = m \\ id \in id_n }
-  {\msg{r}{f} \preceq \msg{r}{f[id_n \setminus id \mapsto m \setminus id]}}
+  {\msg{r}{f} \msgrel \msg{r}{f[id_n \setminus id \mapsto m \setminus id]}}
 
   % I'm not sure about the premise of this rule, but it seems better than having
   % to making another version of all the other rules. This is the first instance
   % where having a field relation would be very helpful.
-  \infer[Oneof-Field-Update]{f_o(id') = \tau \\ \tau \propto \tau'}
-  {\msg{r}{f[id \mapsto f_o]} \preceq \msg{r}{f[id \mapsto ( f_o[id' \mapsto \tau'] )]}}
+  \infer[Oneof-Field-Update]{f_o(id') = \tau \\ \tau \typrel \tau'}
+  {\msg{r}{f[id \mapsto f_o]} \msgrel \msg{r}{f[id \mapsto ( f_o[id' \mapsto \tau'] )]}}
 \end{mathpar}
 
 \subsubsection{Enum Rules}
@@ -432,16 +430,16 @@ handles enums, since it doesn't support closed enums. Since protobuf enums don't
 contain extra information, no depth rules is allowed.
 
 \begin{mathpar}
-  \infer[Enum-Width]{vals(e_1) \subset vals(e_2)}{e_1 \preceq_e e_2}
+  \infer[Enum-Width]{vals(e_1) \subset vals(e_2)}{e_1 \enumrel e_2}
 \end{mathpar}
 
 \subsubsection{Reserved Field Rules}
 
 \begin{mathpar}
-  \infer[Reserved-Add]{r \subset r'}{\msg{r}{f} \preceq \msg{r'}{f}}
+  \infer[Reserved-Add]{r \subset r'}{\msg{r}{f} \msgrel \msg{r'}{f}}
 
   {\color{red}
-    \infer[Reserved-Rm]{r \supset r'}{\msg{r}{f} \preceq \msg{r'}{f}}
+    \infer[Reserved-Rm]{r \supset r'}{\msg{r}{f} \msgrel \msg{r'}{f}}
   }
 \end{mathpar}
 
@@ -449,17 +447,18 @@ contain extra information, no depth rules is allowed.
 
 \begin{definition}[Valid Protobuf Descriptors]
   A protobuf message descriptor is \emph{valid}, denoted $v(d)$ if
-  $\msg{\emptyset}{\emptyset} \preceq \msg{r}{f}$.
+  $\msg{\emptyset}{\emptyset} \msgrel \msg{r}{f}$.
 \end{definition}
 
 \subsubsection{Compatibility Theorem}
 
 The main field-level compatibility theorem is stated below.
-\\
+
+\vspace{1em}
 \begin{theorem}[Protobuf Compatibility]
-  If $d_1 \ll d_2$ and $d_2$ is well-formed, then for all binary strings
+  If $d_1 \dcompat d_2$ and $d_2$ is well-formed, then for all binary strings
   $bs$ such that $\mathtt{parse}_{d_1}\ bs = \mathtt{Some}\ m_1$,
-  $\mathtt{parse}_{d_2}\ bs = \mathtt{Some}\ m_2$ and $m_1 \preceq m_2$
+  $\mathtt{parse}_{d_2}\ bs = \mathtt{Some}\ m_2$ and $m_1 \msgrel m_2$
 \end{theorem}
 
 % Local Variables:

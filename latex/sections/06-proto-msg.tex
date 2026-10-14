@@ -72,10 +72,10 @@ needed.}
     \alternative{v}
 
     \category[Slot]{s}
-    \alternative{\impt{p}}
-    \alternative{\optt{\text{none}}}
-    \alternative{\optt{p}}
-    \alternative{\rept{[p_1; \dots; p_m]}}
+    \alternative{\imp{p}}
+    \alternative{\opt{\text{none}}}
+    \alternative{\opt{p}}
+    \alternative{\rep{[p_1; \dots; p_m]}}
 
     \category[Value List]{l}
     \alternative{\texttt{[]}}
@@ -122,9 +122,9 @@ isn't present in the value, and the reader gets a missing value (a
 intermediate format feature not present in Protobuf, this would become the
 default for the type of the field).
 \[
-  \infer[M-Declare]{m_1 : d_1 \preceq m_2 : d_2 \\\\ k \not \in \dom{d_1} \\ k \not \in
-    \dom{m_1} \\ f_1 \propto f_2}{ m_1 : d_1[k \mapsto f_1] \preceq m_2[k \mapsto \mathtt{M\_MISSING}] :
-    d_2[k \mapsto f_2]}
+  \infer[M-Declare]{m_1 : d_1 \msgrel m_2 : d_2 \\\\ k \not \in \dom{d_1} \\ k \not \in
+    \dom{m_1} \\ f_1 \slotrel f_2}{ m_1 : d_1[k \mapsto f_1] \msgrel m_2[k \mapsto
+    \mathtt{M\_MISSING}] : d_2[k \mapsto f_2]}
 \]
 For that format, this rule was required since without it, the message
 compatibility relation could not follow the ID compatibility relation which
@@ -292,10 +292,10 @@ have a decidable equality instance defined.
 
     \mathrm{size}_v(v) =
     \begin{cases}
-      1 + \mathrm{size}_v(p) & \text{if } v = \impt{p} \\
-      1 & \text{if } v = \optt{\text{none}} \\
-      1 + \mathrm{size}_v(p) & \text{if } v = \optt{p} \\
-      1 + \mathrm{size}_v(p_1) + \dots + \mathrm{size}_v(p_n) & \text{if } v = \rept{[p_1;\dots;p_n]}
+      1 + \mathrm{size}_v(p) & \text{if } v = \imp{p} \\
+      1 & \text{if } v = \opt{\text{none}} \\
+      1 + \mathrm{size}_v(p) & \text{if } v = \opt{p} \\
+      1 + \mathrm{size}_v(p_1) + \dots + \mathrm{size}_v(p_n) & \text{if } v = \rep{[p_1;\dots;p_n]}
     \end{cases}
 
     \mathrm{size}_v(p) =

@@ -13,8 +13,8 @@ encoding type of a message is an ordered list of encoding fields.
 	For fields $f_1 = (id_1, tag_1, v_1)$ and $f_2 = (id_2, tag_2, v_2)$, $f_2$
 	with descriptor $d_2$ is a compatible update to $f_1$ with descriptor $d_1$ if
 	$id_1 = id_2$ and for all values $v_1$, $serialize_{d_1}\ f_1 = bs$ and there
-	exists a $v_2$ such that $parse_{d_2}\ bs = v_2$ and $v_1 \prec v_2$ according to
-	some relation $\prec$.
+	exists a $v_2$ such that $parse_{d_2}\ bs = v_2$ and $v_1 \valrel v_2$ according to
+	some relation $\valrel$.
 \end{definition}
 
 An example value relation is given in Section~\ref{sec:val-rel}.
@@ -25,7 +25,7 @@ An example value relation is given in Section~\ref{sec:val-rel}.
 	field in $d_1$ has a compatible field in $d_2$.
 \end{definition}
 
-Formally speaking, the message compatibility relation ($\preceq$) is given in
+Formally speaking, the message compatibility relation ($\msgrel$) is given in
 Section~\ref{sec:comp-rel}.
 
 \vspace{1em}

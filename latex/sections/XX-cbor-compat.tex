@@ -23,8 +23,8 @@ Now, the above two points are \emph{possibly} lies. The presence of controls in
 CDDL present an opportunity to add refinement types to the abstract value types,
 in which case the value and type relations would grow in size (and complexity)
 quite a bit. They would need to contain terms like
-$5\ :\ \mathtt{int}\ .\mathtt{lt}\ 10 \prec 5\ :\ \mathtt{int}\ .\mathtt{lt}\ 15$
-and $\mathtt{int}\ \mathtt{.lt}\ 10 \propto \mathtt{int}\ \mathtt{.lt}\ 15$. Note that
+$5\ :\ \mathtt{int}\ .\mathtt{lt}\ 10 \valrel 5\ :\ \mathtt{int}\ .\mathtt{lt}\ 15$ and
+$\mathtt{int}\ \mathtt{.lt}\ 10 \typrel \mathtt{int}\ \mathtt{.lt}\ 15$. Note that
 the value itself could never change, but the type can. The notation is a bit
 clumsy, in my opinion, but comes directly from CDDL.
 
@@ -38,3 +38,10 @@ maybe pulling a field out of a wildcard repeated field?) while there is much
 more to think about with the refinement types that can be expressed in CDDL that
 protobuf lacks.
 \end{document}
+
+% Local Variables:
+% citar-bibliography: ("../pollux.bib")
+% TeX-master: "../pollux.tex"
+% TeX-command-default: "Make"
+% jinx-local-words: "cardinality protobuf"
+% End:

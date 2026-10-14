@@ -217,12 +217,12 @@ both sides of the compatibility relation, it's been written for maximum
 flexibility and to generalize to a more complex relation.
 
 \begin{mathpar}
-  \infer[Compat-Refl]{\langle m : d_1 \rangle \\ \langle m : d_2 \rangle}{\langle m : d_1 \preceq m : d_2 \rangle}
+  \infer[Compat-Refl]{\langle m : d_1 \rangle \\ \langle m : d_2 \rangle}{\langle m : d_1 \msgrel m : d_2 \rangle}
 
-  \infer[Compat-Add]{\langle m_1 : d_1 \preceq m_2 : d_2 \rangle \\\\ k \not \in \dom{m_1} \\ k \not \in
+  \infer[Compat-Add]{\langle m_1 : d_1 \msgrel m_2 : d_2 \rangle \\\\ k \not \in \dom{m_1} \\ k \not \in
     \dom{d_2} \\ k \not \in \dom{m_2} \\ k \not \in \dom{d_2} \\\\ v_1 = v_2 \\ f_1
     = f_2}
-  { \langle m_1[k \mapsto v_1] : d[k \mapsto f_1] \preceq
+  { \langle m_1[k \mapsto v_1] : d[k \mapsto f_1] \msgrel
     m_2[k \mapsto v_2] : d_2[k \mapsto f_2] \rangle}
 \end{mathpar}
 
@@ -233,7 +233,7 @@ relation (Section~\ref{sec:val-rel}) and type relation (Section~\ref{sec:typ-rel
 \vspace{1em}
 \begin{lemma}[Intermediate Schema Correct Equal]\label{lem:inter-sc-eq}
   \[
-    \forall\ m_1, m_2, d_1, d_2.\ \langle m_1 : d_1 \preceq m_2 : d_2 \rangle
+    \forall\ m_1, m_2, d_1, d_2.\ \langle m_1 : d_1 \msgrel m_2 : d_2 \rangle
     \rightarrow d_1 = d_2 \rightarrow v_1 = v_2
   \] 
 \end{lemma}
@@ -243,7 +243,7 @@ relation (Section~\ref{sec:val-rel}) and type relation (Section~\ref{sec:typ-rel
   \[
     \langle m_1 : d \rangle \rightarrow \wfv{m_1} \rightarrow \forall\ bs, \mathrm{ser}_d(m_1) =
     bs \rightarrow \exists\ m_2, \mathrm{par}_d(bs) = m_2 \wedge \langle m_1
-    : d \preceq m_2 : d \rangle
+    : d \msgrel m_2 : d \rangle
   \]
 \end{theorem}
 
@@ -255,7 +255,7 @@ theorem statement are equal.
 Naturally then, we can pose the descriptor mismatch problem in terms of a
 compatibility relation where the descriptor doesn't change. Since the descriptor
 is always related to itself, this is known as the \emph{identity compatibility
-  relation}. Let $\langle v_1 : d_1 \preceq v_2 : d_2 \rangle$ denote that $v_1$
+  relation}. Let $\langle v_1 : d_1 \msgrel v_2 : d_2 \rangle$ denote that $v_1$
 when interpreted under $d_1$ is compatible with $v_2$ under $d_2$.
 
 
@@ -267,32 +267,32 @@ serialization and missing values inserted during parsing. In this setting, it
 matching types.
 
 \begin{mathpar}
-  \infer[Empty]{ }{\langle \emptyset : \emptyset \preceq \emptyset : \emptyset \rangle}
+  \infer[Empty]{ }{\langle \emptyset : \emptyset \msgrel \emptyset : \emptyset \rangle}
 
-  \infer[Insert-Int]{d' = d[k \mapsto \mathtt{F\_INT}] \\ \langle m' : d \preceq m : d \rangle}{\langle m'[k \mapsto z]
-    : d' \preceq m[k \mapsto z] : d' \rangle}
+  \infer[Insert-Int]{d' = d[k \mapsto \mathtt{F\_INT}] \\ \langle m' : d \msgrel m : d \rangle}{\langle m'[k \mapsto z]
+    : d' \msgrel m[k \mapsto z] : d' \rangle}
 
-  \infer[Insert-Bool]{d' = d[k \mapsto \mathtt{F\_BOOL}] \\ \langle m' : d \preceq m : d \rangle}{\langle m'[k \mapsto b]
-    : d' \preceq m[k \mapsto b] : d' \rangle}
+  \infer[Insert-Bool]{d' = d[k \mapsto \mathtt{F\_BOOL}] \\ \langle m' : d \msgrel m : d \rangle}{\langle m'[k \mapsto b]
+    : d' \msgrel m[k \mapsto b] : d' \rangle}
 
-  \infer[Insert-Msg]{d' = d[k \mapsto \mathtt{F\_MSG}\ d_n] \\\\ \langle m' : d \preceq m : d \rangle \\ \langle
-    m_n' : d_n \preceq m_n : d_n \rangle}{\langle m'[k \mapsto \mathtt{M\_MSG}\ m_n'] : d' \preceq m[k \mapsto
+  \infer[Insert-Msg]{d' = d[k \mapsto \mathtt{F\_MSG}\ d_n] \\\\ \langle m' : d \msgrel m : d \rangle \\ \langle
+    m_n' : d_n \msgrel m_n : d_n \rangle}{\langle m'[k \mapsto \mathtt{M\_MSG}\ m_n'] : d' \msgrel m[k \mapsto
     \mathtt{M\_MSG}\ m_n] : d' \rangle}
 
-  \infer[Drop]{k \not \in \dom{d} \\ k \not \in \dom{m} \\ \langle m' : d \preceq m : d \rangle}{\langle m'[k \mapsto z] : d \preceq m : d \rangle}
+  \infer[Drop]{k \not \in \dom{d} \\ k \not \in \dom{m} \\ \langle m' : d \msgrel m : d \rangle}{\langle m'[k \mapsto z] : d \msgrel m : d \rangle}
 
-  \infer[Add-Missing]{ k \not \in \dom{m} \\ d' = d[k \mapsto f] \\ \langle m' : d \preceq m :
-    d \rangle}{ \langle m' : d' \preceq m[k \mapsto \mathtt{M\_MISSING}] : d' \rangle}
+  \infer[Add-Missing]{ k \not \in \dom{m} \\ d' = d[k \mapsto f] \\ \langle m' : d \msgrel m :
+    d \rangle}{ \langle m' : d' \msgrel m[k \mapsto \mathtt{M\_MISSING}] : d' \rangle}
 
   \infer[Input-Missing]{k \not \in \dom{d} \\ k \not \in \dom{m} \\ k \not \in
-    \dom{m'} \\\\ d' = d[k \mapsto f]}{\langle m'[k \mapsto \mathtt{M\_MISSING}] : d' \preceq m[k \mapsto \mathtt{M\_MISSING}] : d' \rangle}
+    \dom{m'} \\\\ d' = d[k \mapsto f]}{\langle m'[k \mapsto \mathtt{M\_MISSING}] : d' \msgrel m[k \mapsto \mathtt{M\_MISSING}] : d' \rangle}
 \end{mathpar}
 
 \begin{theorem}[Intermediate Identity Compatibility]\label{thm:inter-id-compat}
   \[
     \wfd{d} \rightarrow \wfv{m_1} \rightarrow \forall\ bs, \mathrm{ser}_d(m_1) =
     bs \rightarrow \exists\ m_2, \mathrm{par}_d(bs) = m_2 \wedge \langle m_1
-    : d \preceq m_2 : d \rangle
+    : d \msgrel m_2 : d \rangle
   \] 
 \end{theorem}
 
@@ -315,13 +315,13 @@ relation, type relation and message relation.
 Below is a list of the relations about to be defined, along with an English
 explanation of how to read them.
 \begin{align*}
-  \prec &: \text{Value relation} & v_1 : \tau_1 \prec v_2 : \tau_2 &\rightarrow ``\text{value } v_1 : \tau_1 \text{ becomes } v_2 :
+  \valrel &: \text{Value relation} & v_1 : \tau_1 \valrel v_2 : \tau_2 &\rightarrow ``\text{value } v_1 : \tau_1 \text{ becomes } v_2 :
                                            \tau_2 " \\
-  \propto &: \text{Field type relation} & f_1 \propto f_2 &\rightarrow ``f_1 \text{ is type-compatible with }
+  \slotrel &: \text{Field type relation} & f_1 \slotrel f_2 &\rightarrow ``f_1 \text{ is type-compatible with }
                                           f_2" \\
-  \ll &: \text{Descriptor type relation} & d_1 \ll d_2 &\rightarrow ``d_1 \text{ is
+  \dcompat &: \text{Descriptor type relation} & d_1 \dcompat d_2 &\rightarrow ``d_1 \text{ is
                                                      descriptor-compatible with } d_2" \\
-  \preceq &: \text{Message relation} & m_1 \preceq m_2 &\rightarrow ``\text{message } m_1 \text{ becomes } m_2"
+  \msgrel &: \text{Message relation} & m_1 \msgrel m_2 &\rightarrow ``\text{message } m_1 \text{ becomes } m_2"
 \end{align*}
 
 \subsubsection{Value Relation}\label{sec:ip-val-rel}
@@ -330,20 +330,20 @@ can convert between them. Message relation compatible messages can also be used
 to make updates to nested messages.
 
 \begin{mathpar}
-  \infer[V-Bool-Int]{v_2 = \mathbb{1}[v_1]}{v_1 : \mathtt{bool} \prec v_2 : \mathtt{int}}
+  \infer[V-Bool-Int]{v_2 = \mathbb{1}[v_1]}{v_1 : \mathtt{bool} \valrel v_2 : \mathtt{int}}
 
   \infer[V-Int-Bool]{v_2 = \left\{
     {\begin{array}{l@{\quad:\quad}l}
       \mathtt{false} & \mathrm{if}\ v_1 = 0 \\
       \mathtt{true} & \mathrm{otherwise}
-    \end{array}}\right.}{v_1 : \mathtt{int} \prec v_2 : \mathtt{bool}}
+    \end{array}}\right.}{v_1 : \mathtt{int} \valrel v_2 : \mathtt{bool}}
 
-  \infer[V-Msg]{m_1 : d_1 \preceq m_2 : d_2}{\mathtt{M\_MSG}\ m_1 : \mathtt{F\_MSG}\
-    d_1 \prec \mathtt{M\_MSG}\ m_2 : \mathtt{F\_MSG}\ d_2}
+  \infer[V-Msg]{m_1 : d_1 \msgrel m_2 : d_2}{\mathtt{M\_MSG}\ m_1 : \mathtt{F\_MSG}\
+    d_1 \valrel \mathtt{M\_MSG}\ m_2 : \mathtt{F\_MSG}\ d_2}
 
-  \infer[V-Refl]{ }{v : f \prec v : f}
+  \infer[V-Refl]{ }{v : f \valrel v : f}
 
-  \infer[V-Trans]{v_1 : f_1 \prec v_2 : f_2 \\ v_2 : f_2 \prec v_3 : f_3}{v_1 : f_1 \prec v_3 : f_3}
+  \infer[V-Trans]{v_1 : f_1 \valrel v_2 : f_2 \\ v_2 : f_2 \valrel v_3 : f_3}{v_1 : f_1 \valrel v_3 : f_3}
 \end{mathpar}
 
 \subsubsection{Field Type Relation}\label{sec:ip-f-typ-rel}
@@ -351,15 +351,15 @@ Just like with the value relation, we can freely convert between integer and
 boolean fields.
 
 \begin{mathpar}
- \infer[F-Bool-Int]{ }{\mathtt{bool} \propto \mathtt{int}}
+ \infer[F-Bool-Int]{ }{\mathtt{bool} \typrel \mathtt{int}}
 
- \infer[F-Int-Bool]{ }{\mathtt{int} \propto \mathtt{bool}}
+ \infer[F-Int-Bool]{ }{\mathtt{int} \typrel \mathtt{bool}}
 
- \infer[F-Msg]{d_1 \ll d_2}{\mathtt{F\_MSG}\ d_1 \propto \mathtt{F\_MSG}\ d_2}
+ \infer[F-Msg]{d_1 \dcompat d_2}{\mathtt{F\_MSG}\ d_1 \typrel \mathtt{F\_MSG}\ d_2}
 
- \infer[F-Refl]{ }{f \propto f}
+ \infer[F-Refl]{ }{f \slotrel f}
 
- \infer[F-Trans]{f_1 \propto f_2 \\ f_2 \propto f_3}{f_1 \propto f_3}
+ \infer[F-Trans]{f_1 \slotrel f_2 \\ f_2 \slotrel f_3}{f_1 \slotrel f_3}
 \end{mathpar}
 
 The more complex thing here is handling the descriptors. We need to be able to
@@ -372,18 +372,18 @@ moment I've decided to split them out.
 \begin{mathpar}
   {\color{red}
   \infer[D-Update]{ \dom{d_{mand}} \supseteq \dom{d_{mand}'} \\ \forall\ k \in
-    \dom{d} \cap \dom{d'}.\ d[k] \propto d'[k] }{ d \ll d' }
+    \dom{d} \cap \dom{d'}.\ d[k] \slotrel d'[k] }{ d \dcompat d' }
   }
 
-  \infer[D-Emp]{ }{\emptyset \ll \emptyset}
+  \infer[D-Emp]{ }{\emptyset \dcompat \emptyset}
 
-  \infer[D-Add]{k \not \in \dom{d}}{d \ll d[k \mapsto f]}
+  \infer[D-Add]{k \not \in \dom{d}}{d \dcompat d[k \mapsto f]}
 
-  \infer[D-Chg]{d[k] \propto f}{d \ll d[k \mapsto f]}
+  \infer[D-Chg]{d[k] \slotrel f}{d \dcompat d[k \mapsto f]}
 
-  \infer[D-Refl]{ }{d \ll d}
+  \infer[D-Refl]{ }{d \dcompat d}
 
-  \infer[D-Trans]{d_1 \ll d_2 \\ d_2 \ll d_3}{d_1 \ll d_3}
+  \infer[D-Trans]{d_1 \dcompat d_2 \\ d_2 \dcompat d_3}{d_1 \dcompat d_3}
 \end{mathpar}
 
 Just like with the Protobuf relation, we can add fields or change existing
@@ -403,30 +403,30 @@ implementation.
 \subsubsection{Message Relation}\label{sec:ip-msg-rel}
 
 \begin{mathpar}
-  \infer[M-Emp]{ }{\emptyset : \emptyset \preceq \emptyset : \emptyset}
+  \infer[M-Emp]{ }{\emptyset : \emptyset \msgrel \emptyset : \emptyset}
 
-  {\color{red}\infer[M-Add]{m_1 : d_1 \preceq m_2 : d_2 \\ v : f \\\\ k \not \in \dom{m_1} \\ k \not \in
-    \dom{d_1}}{ m_1 : d_1 \preceq m_2[k \mapsto v] : d_2[k \mapsto f]}}
+  {\color{red}\infer[M-Add]{m_1 : d_1 \msgrel m_2 : d_2 \\ v : f \\\\ k \not \in \dom{m_1} \\ k \not \in
+    \dom{d_1}}{ m_1 : d_1 \msgrel m_2[k \mapsto v] : d_2[k \mapsto f]}}
 
-  \infer[M-Missing]{m_1 : d_1 \preceq m_2 : d_2 \\\\ k \not \in \dom{m_1} \\ k \not \in
-    \dom{d_1}}{ m_1 : d_1 \preceq m_2[k \mapsto \mathtt{M\_MISSING}] : d_2[k \mapsto f]}
+  \infer[M-Missing]{m_1 : d_1 \msgrel m_2 : d_2 \\\\ k \not \in \dom{m_1} \\ k \not \in
+    \dom{d_1}}{ m_1 : d_1 \msgrel m_2[k \mapsto \mathtt{M\_MISSING}] : d_2[k \mapsto f]}
 
-  \infer[M-Declare]{m_1 : d_1 \preceq m_2 : d_2 \\\\ k \not \in \dom{d_1} \\ k \not \in
-    \dom{m_1} \\ f_1 \propto f_2}{ m_1 : d_1[k \mapsto f_1] \preceq m_2[k \mapsto \mathtt{M\_MISSING}] :
+  \infer[M-Declare]{m_1 : d_1 \msgrel m_2 : d_2 \\\\ k \not \in \dom{d_1} \\ k \not \in
+    \dom{m_1} \\ f_1 \slotrel f_2}{ m_1 : d_1[k \mapsto f_1] \msgrel m_2[k \mapsto \mathtt{M\_MISSING}] :
     d_2[k \mapsto f_2]}
 
-  \infer[M-Update]{m_1 : d_1 \preceq m_2 : d_2 \\\\ m_1[k] : d_1[k] \prec v : f \\ d_1[k] \propto f}{ m_1 : d_1 \preceq m_2[k
-    \mapsto v] : d_2[k \mapsto f]}
+  \infer[M-Update]{m_1 : d_1 \msgrel m_2 : d_2 \\\\ m_1[k] : d_1[k] \valrel v : f \\
+    d_1[k] \slotrel f}{ m_1 : d_1 \msgrel m_2[k \mapsto v] : d_2[k \mapsto f]}
 
-  \infer[M-Drop]{m_1 : d_1 \preceq m_2 : d_2 \\\\ k \not \in \dom{m_2} \\ k \not
-    \in \dom{d_2}}{ m_1[k \mapsto v] : d_1[k \mapsto f] \preceq m_2 : d_2 }
+  \infer[M-Drop]{m_1 : d_1 \msgrel m_2 : d_2 \\\\ k \not \in \dom{m_2} \\ k \not
+    \in \dom{d_2}}{ m_1[k \mapsto v] : d_1[k \mapsto f] \msgrel m_2 : d_2 }
 
-  \infer[M-Drop-Unknown]{m_1 : d_1 \preceq m_2 : d_2 \\\\ k \not \in \dom{m_2} \\ k \not
-    \in \dom{d_2} \\ k \not \in \dom{d_1}}{ m_1[k \mapsto v] : d_1 \preceq m_2 : d_2 }
+  \infer[M-Drop-Unknown]{m_1 : d_1 \msgrel m_2 : d_2 \\\\ k \not \in \dom{m_2} \\ k \not
+    \in \dom{d_2} \\ k \not \in \dom{d_1}}{ m_1[k \mapsto v] : d_1 \msgrel m_2 : d_2 }
 
-  \infer[M-Refl]{ }{ m : d \preceq m : d}
+  \infer[M-Refl]{ }{ m : d \msgrel m : d}
 
-  \infer[M-Trans]{m_1 : d_1 \preceq m_2 : d_2 \\ m_2 : d_2 \preceq m_3 : d_3}{m_1 : d_1 \preceq
+  \infer[M-Trans]{m_1 : d_1 \msgrel m_2 : d_2 \\ m_2 : d_2 \msgrel m_3 : d_3}{m_1 : d_1 \msgrel
     m_3 : d_3}
 \end{mathpar}
 
@@ -437,11 +437,11 @@ with the field $f$, i.e. $v$ is an integer and $f$ is \verb|F_INT|. It would not
 hold if $v = \mathtt{true}$ and $f$ was \verb|F_INT|.
 
 The highlighted rule would let the parser pull any correctly typed value out of
-thin air. Do we want this? No, the $\preceq$ relation defines how a message is
+thin air. Do we want this? No, the $\msgrel$ relation defines how a message is
 transmuted during the serializer / parser round trip, and that's not how the
 parser would behave.
 
-In \textsc{M-Declare}, we require $f_1 \propto f_2$ so that we can handle examples
+In \textsc{M-Declare}, we require $f_1 \slotrel f_2$ so that we can handle examples
 were an empty message under a descriptor with one boolean parses to an empty
 field under a different, compatible type. This continues to mirror how the
 parser and serializer would actually behave.
@@ -450,9 +450,9 @@ parser and serializer would actually behave.
 \begin{theorem}[Intermediate Compatibility]\label{thm:inter-compat}
   \[
     \wfd{d_1} \rightarrow \wfv{m_1} \rightarrow \wfd{d_2}
-    \rightarrow d_1 \ll d_2 \rightarrow \forall\ bs, \mathrm{ser}_{d_1}(m_1) =
+    \rightarrow d_1 \dcompat d_2 \rightarrow \forall\ bs, \mathrm{ser}_{d_1}(m_1) =
     bs \rightarrow \exists\ m_2, \mathrm{par}_{d_2}(bs) = m_2 \wedge \langle m_1
-    : d_1 \preceq m_2 : d_2 \rangle
+    : d_1 \msgrel m_2 : d_2 \rangle
   \] 
 \end{theorem}
 

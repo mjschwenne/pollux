@@ -91,9 +91,24 @@
 \theoremstyle{plain}
 \newtheorem{corollary}{Corollary}
 
-\newcommand{\fstar}{F$^\star$}
 \renewcommand{\emptyset}{\varnothing}
 \renewcommand{\mod}{\;\%\;}
+
+% Tools
+\newcommand{\fstar}{F$^\star$}
+
+% Compatibility relations
+\newcommand{\dcompat}{\ll}
+\newcommand{\valrel}{\prec}
+\newcommand{\typrel}{\propto}
+\newcommand{\slotrel}{\propto}
+\newcommand{\msgrel}{\preceq}
+\newcommand{\enumrel}{\msgrel_e}
+\newcommand{\cardrel}[2]{\msgrel_{#1,#2}}
+
+% Judgements
+\newcommand{\judg}[2]{\Sigma; #1 \vdash #2}
+\newcommand{\semjudg}[2][]{\vDash_{#1} #2}
 
 % Protobuf decorators
 \newcommand{\impN}{\mathtt{IMP}}
@@ -106,7 +121,6 @@
 \newcommand{\opt}[1]{\optN\ #1}
 \newcommand{\rep}[1]{\repN\ #1}
 \newcommand{\oneof}[1]{\oneofN\ #1}
-\newcommand{\kle}[2]{\preceq_{#1,#2}}
 \newcommand{\comb}[1]{\oplus_{#1}}
 \newcommand{\packable}{\mathrm{Packable}}
 \newcommand{\assemble}{\mathrm{assemble}}
@@ -116,6 +130,7 @@
 \newcommand{\restr}[2]{#1|_{#2}}
 \newcommand{\accepts}{\mathrm{accepts}}
 
+% Protobuf types
 % Using "s" and "l" as "short" and "long" since LaTeX commands can't contain
 % numbers in their names...
 \newcommand{\ints}{\texttt{int32}}
