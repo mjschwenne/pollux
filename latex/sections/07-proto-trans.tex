@@ -108,7 +108,7 @@ decrease with each application.
 
 \vspace{1em}
 \begin{theorem}[Transform WF]\label{thm:trans-wf}
-  \[ \forall\ m, d_1, d_2.\ \wfd{d_2} \rightarrow \wfv{\coercion{d_1}{m}{d_2}} \]
+  \[ \forall\ m, d_1, d_2.\ \wfd{d_2} \rightarrow \wfm{\coercion{d_1}{m}{d_2}} \]
 \end{theorem}
 
 \vspace{1em}
@@ -127,12 +127,12 @@ decrease with each application.
   Where
   \begin{itemize}
   \item $\mathrm{OneofPreservedAll}(d_1, d_2) = \mathrm{OneofPreserved}(d_1, d_2) \wedge
-    \forall\ k, c_1, d_1', c_2, d_2'.\ d_1[k] = \langle c_1, d_1' \rangle \rightarrow d_2[k] = \langle c_2, d_2' \rangle \rightarrow
+    \forall\ k, \kappa_1, d_1', \kappa_2, d_2'.\ d_1[k] = \field{\kappa_1}{d_1'} \rightarrow d_2[k] = \field{\kappa_2}{d_2'} \rightarrow
     \mathrm{OneofPreservedAll}(d_1', d_2')$
   \item $\mathrm{OneofPreserved}(d_1, d_2) = \forall\ k_1, k_2, f_1, f_1', f_2, f_2',
     g. d_1[k_1] = f_1 \rightarrow d_1[k_2] = f_2 \rightarrow d_2[k_1] = f_1' \rightarrow d_2[k_2] = f_2' \rightarrow
-    f_1' = \langle \oneof{g}, \_ \rangle \rightarrow f_2' = \langle \oneof{g}, \_ \rangle \rightarrow \exists\ g_0. f_1 = \langle
-    \oneof{g_0}, \_ \rangle \wedge f_2 = \langle \oneof{g_0}, \_ \rangle$
+    f_1' = \field{\oneof{g}}{\_} \rightarrow f_2' = \field{\oneof{g}}{\_} \rightarrow \exists\ g_0. f_1 = \langle
+    \oneof{g_0}, \_ \rangle \wedge f_2 = \field{\oneof{g_0}}{\_}$
   \end{itemize}
 \end{theorem}
 
@@ -162,7 +162,7 @@ set multiple fields in a \texttt{oneof} of the reader (we'll know in advance
 that it can't have multiple fields set in a writer's \texttt{oneof}). Then you
 might be able to weaken the $\mathrm{OneofPreservedAll}(d_1, d_2)$ to 
 \[ \forall\ k_1, k_2, g.\ d_2[k_1] = \langle \oneof{g}, \_ \rangle \rightarrow d_2[k_2] = \langle \oneof{g}, \_ \rangle \to
-  m[k_1] = \mathtt{NONE} \vee m[k_2] = \mathtt{NONE} \]
+  m[k_1] = \none \vee m[k_2] = \none \]
 Which is wouldn't be true for all messages under $d_1$, but might be provable
 as a weakened version of Theorem~\ref{thm:trans-valid} for some systems.
 
@@ -235,7 +235,7 @@ particular integer width changes which might truncate values.
 
 \vspace{1em}
 \begin{theorem}[Point-wise Field Compatibility]\label{thm:pointwise-compat}
-  \[ \wfd{d_1} \rightarrow \forall\ k \in \dom{d_1} \cap \dom{d_2}. d_1[k] \slotrel d_2[k] \] 
+  \[ \wfd{d_1} \rightarrow \forall\ k \in \dom{d_1} \cap \dom{d_2}. d_1[k] \fieldrel d_2[k] \] 
 \end{theorem}
 
 Combined with Theorem~\ref{thm:faith}, Theorem~\ref{thm:pointwise-compat} states

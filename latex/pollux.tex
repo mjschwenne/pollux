@@ -35,9 +35,11 @@
 \usepackage{stmaryrd}
 \usepackage[backend=biber,sorting=ynt]{biblatex}
 \usepackage{xpatch}
+\usepackage{metavarsx}
 \usepackage{pl-syntax}
 \AtBeginDocument{%
   \renewcommand{\Coloneqq}{\mathrel{\Colon\mkern-1.2mu=}}%
+  \renewcommand\doubleplus{\ensuremath{\mathbin{+\mkern-6mu+}}}
 } % Needed since libertinus math doesn't have ::= as one glyph.
 \usepackage{unicode-math}           % load after amsmath/mathtools
 \setmathfont{Libertinus Math}
@@ -92,7 +94,7 @@
 \newtheorem{corollary}{Corollary}
 
 \renewcommand{\emptyset}{\varnothing}
-\renewcommand{\mod}{\;\%\;}
+\newcommand{\fmod}{\;\%\;}
 
 % Tools
 \newcommand{\fstar}{F$^\star$}
@@ -101,30 +103,48 @@
 \newcommand{\dcompat}{\ll}
 \newcommand{\valrel}{\prec}
 \newcommand{\typrel}{\propto}
-\newcommand{\slotrel}{\propto}
+\newcommand{\fieldrel}{\propto}
 \newcommand{\msgrel}{\preceq}
 \newcommand{\enumrel}{\msgrel_e}
 \newcommand{\cardrel}[2]{\msgrel_{#1,#2}}
+
+% Metavariables
+\NewMetaVariable{k}[\card]{\kappa} % Cardinality
+\NewMetaVariable{c}[\co]{c} % Coercion
+\NewMetaVariable{m}{m} % Message
+\NewMetaVariable{i}[\id]{k} % Field Number
+\NewMetaVariable{s}[\slot]{s} % Slot
+\NewMetaVariable{p}[\pay]{p} % Payload
+\NewMetaVariable{n}[\width]{n} % bit width, or misc. natural number
+\NewMetaVariable{b}[\bs]{bs} % byte string
+\NewMetaVariable{t}[\str]{t} % string
+\NewMetaVariable{r}[\res]{r} % Reserved set
+\NewMetaVariable{y}[\ty]{\tau} % Primitive type
 
 % Judgements
 \newcommand{\judg}[2]{\Sigma; #1 \vdash #2}
 \newcommand{\semjudg}[2][]{\vDash_{#1} #2}
 
 % Protobuf decorators
-\newcommand{\impN}{\mathtt{IMP}}
-\newcommand{\sigN}{\mathtt{SIG}}
-\newcommand{\optN}{\mathtt{OPT}}
-\newcommand{\repN}{\mathtt{REP}}
-\newcommand{\oneofN}{\mathtt{ONE}}
-\newcommand{\imp}[1]{\impN\ #1}
-\newcommand{\sig}[1]{\sigN\ #1}
-\newcommand{\opt}[1]{\optN\ #1}
-\newcommand{\rep}[1]{\repN\ #1}
-\newcommand{\oneof}[1]{\oneofN\ #1}
-\newcommand{\comb}[1]{\oplus_{#1}}
+\newcommand{\imp}{\mathtt{IMP}}
+\newcommand{\sig}{\mathtt{SIG}}
+\newcommand{\opt}{\mathtt{OPT}}
+\newcommand{\rep}{\mathtt{REP}}
+\newcommand{\oneof}{\mathtt{ONE}}
+\newcommand{\impt}[1]{\imp\ #1}
+\newcommand{\sigt}[1]{\sig\ #1}
+\newcommand{\optt}[1]{\opt\ #1}
+\newcommand{\rept}[1]{\rep\ #1}
+\newcommand{\oneoft}[1]{\oneof\ #1}
+\newcommand{\impslot}[1]{\imp\ #1}
+\newcommand{\sigslot}[1]{\sig\ #1}
+\newcommand{\optslot}[1]{\opt\ #1}
+\newcommand{\repslot}[1]{\rep\ #1}
+\newcommand{\oneofslot}[1]{\oneofN\ #1}
+\newcommand{\combine}[1]{\oplus_{#1}}
 \newcommand{\packable}{\mathrm{Packable}}
 \newcommand{\assemble}{\mathrm{assemble}}
-\newcommand{\encodes}{\mathrm{Encodes}}
+\newcommand{\encodes}[2][]{\mathrm{Encodes}_{#2}^{#1}}
 \newcommand{\records}{\mathrm{records}}
 \newcommand{\groups}{\mathrm{groups}}
 \newcommand{\restr}[2]{#1|_{#2}}
@@ -152,27 +172,25 @@
 \newcommand{\true}{\texttt{true}}
 \newcommand{\false}{\texttt{false}}
 \newcommand{\enum}[1]{\texttt{enum}\ #1}
-\newcommand{\str}{\texttt{string}}
+\newcommand{\String}{\texttt{string}}
 \newcommand{\byt}{\texttt{bytes}}
 \newcommand{\double}{\texttt{double}}
 \newcommand{\float}{\texttt{float}}
 
-\newcommand{\some}[1]{\texttt{Some}\ #1}
-\newcommand{\none}{\texttt{None}}
-\newcommand{\slot}[2]{\langle #1, #2 \rangle}
+\newcommand{\some}[1]{\mathtt{Some}(#1)}
+\newcommand{\none}{\mathtt{None}}
 
-\newcommand{\lb}[1]{``\mathrm{#1}"}
 \newcommand{\field}[2]{\langle#1, #2\rangle}
 \newcommand{\map}[2]{#1 \rightharpoonup{} #2}
 
-\newcommand{\ptag}[1]{\texttt{#1}}
-\newcommand{\msg}[2]{(#1,#2)}
+\newcommand{\init}{\mathrm{init}}
+\newcommand{\msg}[1]{\lAngle #1 \rAngle_v}
+\newcommand{\desc}[2]{\lAngle #1, #2 \rAngle}
 
 \newcommand{\dom}[1]{\mathrm{dom}(#1)}
 \newcommand{\denote}[1]{\llbracket{} #1 \rrbracket{}}
 \newcommand{\coerce}{\rightsquigarrow}
-\newcommand{\init}{\mathrm{init}}
-\newcommand{\coercion}[3]{\prescript{}{#1}{\llbracket{} #2 \rrbracket{}}_{#3}}
+\newcommand{\coercion}[3]{{}_{#1}\llbracket{} #2 \rrbracket{}_{#3}}
 
 % Varint encode/decode pipeline (Section 5 integer rules).
 % Bare forms for signatures and composition; applied forms for everything else.
@@ -192,14 +210,10 @@
 \newcommand{\vints}{\mathcal{V}}
 \newcommand{\payload}{\left[0, 2^{64}\right)}
 \newcommand{\ind}[1]{\mathbb{1}\left[#1\right]}
-\newcommand{\fdiv}[2]{\left\lfloor #1 / #2 \right\rfloor}
-
-\newcommand\doubleplus{+\kern-1.3ex+\kern0.8ex}
-\newcommand\mdoubleplus{\ensuremath{\mathbin{+\mkern-10mu+}}}
 
 \newcommand{\wfd}[1]{\mathrm{wfd}(#1)}
 \newcommand{\legald}[1]{\mathrm{legal}(#1)}
-\newcommand{\wfv}[1]{\mathrm{wfm}(#1)}
+\newcommand{\wfm}[1]{\mathrm{wfm}(#1)}
 \newcommand{\legalv}[2]{\mathrm{legal}_{#1}(#2)}
 \DeclareSymbolFont{bbsymbol}{U}{bbold}{m}{n}
 \DeclareMathSymbol{\bbcolon}{\mathbin}{bbsymbol}{'072}

@@ -72,17 +72,17 @@ needed.}
     \alternative{v}
 
     \category[Slot]{s}
-    \alternative{\imp{p}}
-    \alternative{\opt{\text{none}}}
-    \alternative{\opt{p}}
-    \alternative{\rep{[p_1; \dots; p_m]}}
+    \alternative{\impslot{p}}
+    \alternative{\optslot{\none}}
+    \alternative{\optslot{p}}
+    \alternative{\repslot{[p_1; \dots; p_m]}}
 
     \category[Value List]{l}
     \alternative{\texttt{[]}}
     \alternative{(n, s) :: l}
 
     \category[Value]{v}
-    \alternative{\lAngle l \rAngle_v}
+    \alternative{\msg{l}}
   \end{syntax}
   \caption{Pollux syntax for Protobuf values.}\label{fig:proto-val-syn}
 \end{figure}
@@ -96,7 +96,7 @@ value is automatically populated into the field. Pollux matches this model by
 requiring that when a value is linked to a specific descriptor, the domains of
 the two match exactly. This will be part of the value well-formedness
 conditions. Pollux will model a missing field using either the default value for
-that type, \texttt{none} for optional values and an empty list for
+that type, $\none$ for optional values and an empty list for
 \texttt{repeated} ones, just like Protobuf.
 
 This choice strengthens the connection between a descriptor and values under it,
@@ -123,7 +123,7 @@ intermediate format feature not present in Protobuf, this would become the
 default for the type of the field).
 \[
   \infer[M-Declare]{m_1 : d_1 \msgrel m_2 : d_2 \\\\ k \not \in \dom{d_1} \\ k \not \in
-    \dom{m_1} \\ f_1 \slotrel f_2}{ m_1 : d_1[k \mapsto f_1] \msgrel m_2[k \mapsto
+    \dom{m_1} \\ f_1 \fieldrel f_2}{ m_1 : d_1[k \mapsto f_1] \msgrel m_2[k \mapsto
     \mathtt{M\_MISSING}] : d_2[k \mapsto f_2]}
 \]
 For that format, this rule was required since without it, the message
@@ -150,7 +150,7 @@ things:
 
 \begin{enumerate}
 \item The transformations output (Section~\ref{sec:proto-transform}) will always
-  have a domain of $\dom(d_2)$ since we want to provide a value when viewed
+  have a domain of $\dom{d_2}$ since we want to provide a value when viewed
   against $d_2$. So the keys that we lose when transforming a value $v$ are
   exactly $\dom{v} \setminus \dom{d_2}$. Having exact domain equality between
   $v$ and $d_1$ means that this is the same as $\dom{d_1} \setminus \dom{d_2}$
@@ -195,7 +195,7 @@ generate initial, empty messages to establish this invariant. Notice that the
 \texttt{Field.init} function takes the cardinality information in addition to the
 type information. This is what lets the initialization process differentiate
 between the default value of a repeated field (an empty list), optional field
-(\texttt{none}) and scalar field.
+($\none$) and scalar field.
 
 \begin{minted}{lean}
 def Field.init : Field → Val
@@ -236,12 +236,12 @@ combinator library.
 \vspace{1em}
 \begin{definition}[Valid Message]\label{def:vvalid}
   A message $m$ is valid against a descriptor $d$, denoted $\validv{m}{d}$ if
-  both $\wfv{m}$ and $\legalv{m}{d}$. 
+  both $\wfm{m}$ and $\legalv{m}{d}$. 
 \end{definition}
 
 \vspace{1em}
 \begin{definition}[Message Well-Formedness]\label{def:vwf}
-  A message $m$ is well-formed, denoted $\wfv{m}$, if all fields in
+  A message $m$ is well-formed, denoted $\wfm{m}$, if all fields in
   the message have a unique field number, the fields are stored in sorted
   order, and all nested messages are also well-formed.
 \end{definition}
@@ -275,7 +275,7 @@ have a decidable equality instance defined.
 
 \vspace{1em}
 \begin{lemma}
-  For all descriptors $d$, $\validv{\mathrm{init}(d)}{d}$.
+  For all descriptors $d$, $\validv{\init(d)}{d}$.
 \end{lemma}
 
 \vspace{1em}
@@ -292,10 +292,10 @@ have a decidable equality instance defined.
 
     \mathrm{size}_v(v) =
     \begin{cases}
-      1 + \mathrm{size}_v(p) & \text{if } v = \imp{p} \\
-      1 & \text{if } v = \opt{\text{none}} \\
-      1 + \mathrm{size}_v(p) & \text{if } v = \opt{p} \\
-      1 + \mathrm{size}_v(p_1) + \dots + \mathrm{size}_v(p_n) & \text{if } v = \rep{[p_1;\dots;p_n]}
+      1 + \mathrm{size}_v(p) & \text{if } v = \impslot{p} \\
+      1 & \text{if } v = \optslot{\none} \\
+      1 + \mathrm{size}_v(p) & \text{if } v = \optslot{p} \\
+      1 + \mathrm{size}_v(p_1) + \dots + \mathrm{size}_v(p_n) & \text{if } v = \repslot{[p_1;\dots;p_n]}
     \end{cases}
 
     \mathrm{size}_v(p) =

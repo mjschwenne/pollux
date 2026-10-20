@@ -1,10 +1,51 @@
 \documentclass{article}
 
 \usepackage{amsfonts}
+\usepackage{booktabs}
 \usepackage{pl-syntax}
+\usepackage{metavarsx}
+
+% ---------------------------------------------------------------------------
+% Meta-variable declarations (metavarsx).
+%
+% \NewMetaVariable{<key>}[<\command>]{<display>}
+%
+% declares a meta-variable and a command that typesets it. Without the
+% optional argument the command is \<key>. From <display> the package derives
+%   set          \makefirstuc{<display>}
+%   set of sets  \widehat{<set>}
+%   universe     \mathbb{<set>}
+% Any derived form can be replaced with \RenewMetaSet, \RenewMetaSetSet, or
+% \RenewMetaUniverse.
+% ---------------------------------------------------------------------------
+
+% The simplest case: key e, command \e, displayed as e.
+\NewMetaVariable{e}{e}
+
+% \x and \n are free, so the key can double as the command name.
+\NewMetaVariable{x}{x}
+\NewMetaVariable{n}{n}
+
+% \v is already the caron accent, so pick a different command name.
+\NewMetaVariable{val}[\val]{v}
+
+% Greek letters have no capital to derive, so set the forms by hand. The
+% universe and set of sets are rebuilt from the new set automatically.
+\NewMetaVariable{ty}[\ty]{\tau}
+\RenewMetaSet{ty}{T}
+
+\NewMetaVariable{ctx}[\ctx]{\Gamma}
+\RenewMetaSet{ctx}{\mathcal{G}}
+\RenewMetaUniverse{ctx}{\mathbf{Ctx}}
+
+% Multi-letter names: \makefirstuc capitalizes inside \mathit, giving Msg,
+% but \mathbb{\mathit{Msg}} would print as plain italic, so replace the
+% universe.
+\NewMetaVariable{msg}[\msg]{\mathit{msg}}
+\RenewMetaUniverse{msg}{\mathbf{Msg}}
 
 
-\title{Example Usage of \texttt{pl-syntax} Package}
+\title{Example Usage of the \texttt{pl-syntax} and \texttt{metavarsx} Packages}
 \author{Andrew Hirsch \and Josh Acay}
 
 
@@ -89,4 +130,133 @@ It is possible to group multiple definition on one line:
   }
 
 \end{syntax}
+
+\section{Meta-Variables with \texttt{metavarsx}}
+
+A meta-variable such as $e$ comes with related notation: a set of
+expressions $E$, the universe of all expressions $\mathbb{E}$, and
+sometimes a set of such sets. The \texttt{metavarsx} package declares
+all of these from one definition, so they stay consistent across a
+document and can be restyled in one place.
+
+\subsection{Declaring a Meta-Variable}
+
+Declarations go in the preamble:
+\begin{verbatim}
+\NewMetaVariable{e}{e}            % key e, command \e
+\NewMetaVariable{val}[\val]{v}    % key val, command \val
+\end{verbatim}
+The first argument is a key that names the variable inside the package.
+The optional second argument is the command to define; without it the
+command is \verb|\|\textit{key}. The last argument is how the variable
+itself is displayed.
+
+\subsection{The Four Forms}
+
+Suffixes on the command select the form:
+
+\begin{center}
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    Input           & Output         & Meaning \\
+    \midrule
+    \verb|\e|       & \e             & one expression \\
+    \verb|\e*|      & \e*            & a set of expressions \\
+    \verb|\e**|     & \e**           & a set of sets of expressions \\
+    \verb|\e!|      & \e!            & all expressions \\
+    \verb|\showcasex{\e}| & \showcasex{\e} & all three at once \\
+    \bottomrule
+  \end{tabular}
+\end{center}
+
+Every form works in both text and math mode, and a space after it in
+running text is kept: ``each \e* is finite'' is written
+\verb|each \e* is finite|.
+
+The suffixes must follow the command directly. \verb|\e *| is the
+variable $e$ followed by a literal asterisk. A \verb|!| takes precedence
+over stars, so \verb|\e!*| gives the universe and discards the star.
+
+\subsection{Overriding the Derived Forms}
+
+By default the set is the display with its first letter capitalized, the
+universe is the set in blackboard bold, and the set of sets is the set
+with a wide hat. These defaults do not suit every variable, and three
+commands replace them:
+\begin{verbatim}
+\RenewMetaSet{key}{...}
+\RenewMetaSetSet{key}{...}
+\RenewMetaUniverse{key}{...}
+\end{verbatim}
+They take the key, not the command. The default universe and set of
+sets are computed from the set each time they are used, so replacing
+the set alone updates both.
+
+\paragraph{Greek letters.} \verb|\makefirstuc| has nothing to capitalize
+in \verb|\tau|, so every form would print as $\tau$. After
+\verb|\RenewMetaSet{ty}{T}| the forms are \showcasex{\ty}, and the set
+of sets is \ty**.
+
+\paragraph{Multi-letter names.} For \verb|\NewMetaVariable{msg}[\msg]{\mathit{msg}}|
+the set capitalizes inside \verb|\mathit| as expected, but
+\verb|\mathbb{\mathit{Msg}}| prints as plain italic, and
+\texttt{amsfonts} provides blackboard bold for capital letters only.
+Replacing the universe gives \showcasex{\msg}.
+
+\paragraph{Fully custom forms.} The context variable replaces both the
+set and the universe: \showcasex{\ctx}.
+
+\subsection{Choosing Command Names}
+
+Without the optional argument, the declaration defines the command
+\verb|\|\textit{key}, and it fails if that command already exists. Text accents and symbols already use many one-letter
+commands, among them
+\begin{center}
+  \verb|\b  \c  \d  \H  \i  \j  \k  \l  \o  \P  \r  \S  \t  \u  \v|
+\end{center}
+Give these variables an explicit command, as with \verb|\val| for $v$
+above.
+
+\subsection{Meta-Variables in a Syntax Definition}
+
+The two packages combine directly. Figure~\ref{fig:metavars-syntax}
+repeats the grammar of Figure~\ref{fig:abstract-syntax} with the
+meta-variable commands, so changing a declaration in the preamble
+changes the figure and the prose together.
+
+\begin{figure}[h]
+  \begin{syntax}
+    \abstractCategory[Variables]{\x, y, z}
+    \categoryFromSet[Naturals]{\n}{\mathbb{N}}
+
+    \category[Expressions]{\e \in \e!}
+    \alternative{\x}
+    \alternative{\n}
+    \alternative{\lambda \x . \e}
+    \alternative{\e_1\, \e_2}
+
+    \category[Values]{\val \in \val!}
+    \alternative{\lambda \x . \e}
+
+    \separate
+
+    \category[Types]{\ty \in \ty!}
+    \alternative{\mathbf{Nat}}
+    \alternative{\ty_1 \rightarrow \ty_2}
+
+    \category[Contexts]{\ctx \in \ctx!}
+    \alternative{\x_1 : \ty_1, \ldots, \x_k : \ty_k}
+    \note{no repeats}
+    \note{unordered}
+  \end{syntax}
+
+  \caption{Figure~\ref{fig:abstract-syntax} written with \texttt{metavarsx}}
+  \label{fig:metavars-syntax}
+\end{figure}
+
+Prose uses the same commands. For example: a context \ctx assigns types
+to variables; a set of values $\val* \subseteq \val!$ is closed if every
+\val in it has no free variables; and a typing environment for a module
+is a set of contexts \ctx* drawn from \ctx!.
+
 \end{document}

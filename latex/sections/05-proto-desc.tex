@@ -59,19 +59,19 @@ Outside of Lean, we'll use this syntax for the Protobuf descriptors.
     }
     \groupleft{
       \alternative{\bool}
-      \alternative{\str}
+      \alternative{\String}
       \alternative{\byt}
     }
 
-    \category[Cardinality]{c}
+    \category[Cardinality]{\kappa}
     \alternative{\sig}
     \alternative{\opt}
     \alternative{\rep}
-    \alternative{\oneof{n}}
+    \alternative{\oneoft{n}}
 
     \category[Field]{f}
-    \alternative{\langle c, \tau_s \rangle}
-    \alternative{\langle c, a \rangle}
+    \alternative{\field{\kappa}{\tau_s}}
+    \alternative{\field{\kappa}{a}}
 
     \category[Field List]{l}
     \alternative{\texttt{[]}}
@@ -82,7 +82,7 @@ Outside of Lean, we'll use this syntax for the Protobuf descriptors.
     \alternative{n, r}
 
     \category[Descriptor]{d}
-    \alternative{\lAngle r, l \rAngle}
+    \alternative{\desc{r}{l}}
   \end{syntax}
   \caption{Pollux syntax for Protobuf descriptors.}\label{fig:proto-desc-syn}
 \end{figure}
@@ -158,9 +158,9 @@ interface. We define a function to compute the size of the descriptor below.
 
     \mathrm{size}_d\left(\lAngle r, l \rAngle\right) = 1 + \mathrm{size}_d(l)
 
-    \mathrm{size}_d(\langle \_, \tau_s \rangle) = 1
+    \mathrm{size}_d(\field{\_}{\tau_s}) = 1
     
-    \mathrm{size}_d(\langle \_, d \rangle) = 1 + \mathrm{size}_d(d) 
+    \mathrm{size}_d(\field{\_}{d}) = 1 + \mathrm{size}_d(d) 
 
     \mathrm{size}_d(l) =
     \begin{cases}

@@ -17,9 +17,9 @@ reader applies to the writer's message.
 
 \vspace{1em}
 \begin{definition}[Well-behaved Transformation]\label{def:well-behaved}
-  A function $f : \denote{d_1} \to \denote{d_2}$ is \emph{well-behaved} when,
-  for all $\validv{m}{d}$ and all $bs$ with $\encodes_{d_1}(m, bs)$,
-  \[ \mathrm{parse}_{d_2}(bs) = \some{(f(m), U)} \quad\text{with}\quad
+  A coercion $c : \denote{d_1} \to \denote{d_2}$ is \emph{well-behaved} when,
+  for all $\validv{m}{d_1}$ and all $bs$ with $\encodes{d_1}(m, bs)$,
+  \[ \mathrm{parse}_{d_2}(bs) = \some{(c(m), U)} \quad\text{with}\quad
     U \subseteq \dom{d_1} \setminus \dom{d_2}. \]
 \end{definition}
 
@@ -32,8 +32,8 @@ reader applies to the writer's message.
 Here $U$ is the set of fields skipped during parsing (i.e.\ writer-only fields or
 fields with mismatched wire types). The second condition that
 $U \subseteq \dom{d_1} \setminus \dom{d_2}$ is essential to this definition. Wire-soundness,
-that the message parses, would admit something like $\ints \dcompat \str$ when the
-reader skips the mistyped record and injects the default \str{} value. This
+that the message parses, would admit something like $\ints \dcompat \String$ when the
+reader skips the mistyped record and injects the default $\String$ value. This
 condition rules out the trivial transformation which always injects the default
 values for all fields.
 
@@ -43,7 +43,7 @@ message under $d_1$ will parse to the coerced version under $d_2$. Faithfulness
 states that there are no skipped fields during parsing.  An immediate
 consequence of this definition is that coherence is free. Wire soundness pins
 $f$ down on every valid message that has at least one encoding. So if
-$\encodes_{d_1}$ is total on valid messages (i.e. a serializer exists), any two
+$\encodes{d_1}$ is total on valid messages (i.e. a serializer exists), any two
 derivations of the same judgment yield coercions that agree on valid messages.
 
 \subsubsection{Pollux Judgements}
@@ -69,7 +69,7 @@ for each type of object:
 \begin{align*}
   &\judg{\Gamma}{d_1 \dcompat d_2 \coerce c}
   && c : \denote{d_1} \to \denote{d_2} \text{ (message bodies)} \\
-  &\judg{\Gamma}{f_1 \slotrel f_2 \coerce c}
+  &\judg{\Gamma}{f_1 \fieldrel f_2 \coerce c}
   && c : \mathrm{Slot}(f_1) \to \mathrm{Slot}(f_2) \text{ (fields: cardinality and type)} \\
   &\judg{\Gamma}{\tau_1 \typrel \tau_2 \coerce c}
   && c : \denote{\tau_1} \to \denote{\tau_2} \text{ (payloads)}
@@ -96,7 +96,7 @@ it's applied to a nested message of strictly smaller depth.
 
 \begin{mathpar}
   \infer[D-Update]
-  { \forall k \in \dom{d_1} \cap \dom{d_2}.\ \judg{\Gamma}{d_1[k] \slotrel d_2[k] \coerce c_k} \\
+  { \forall k \in \dom{d_1} \cap \dom{d_2}.\ \judg{\Gamma}{d_1[k] \fieldrel d_2[k] \coerce c_k} \\
     \mathrm{OneofPreserved}(d_1, d_2) }
   {
     \judg{\Gamma}{d_1 \dcompat d_2 \coerce \lambda m.\
@@ -155,7 +155,7 @@ note says the $\mathsf{fix}$ is well founded on the writer's value.
 \subsubsection{Fields \& Cardinality}
 
 To prove
-$\judg{\Gamma}{\field{\kappa_1}{\tau_1} \dcompat \field{\kappa_2}{d_2}}$, we'll need
+$\judg{\Gamma}{\field{\kappa_1}{\tau_1} \fieldrel \field{\kappa_2}{\tau_2}}$, we'll need
 $\judg{\Gamma}{\tau_1 \typrel \tau_2 \coerce c}$ as a premise and some statement that the
 cardinality pair.
 
@@ -164,7 +164,7 @@ coerce a slot, we need to know that the payload types are compatible and lift
 that to the whole slot.
 
 \[ \kappa_1 \cardrel{\tau_1}{\tau_2} \kappa_2 \coerce \left( L : (\denote{\tau_1} \to \denote{\tau_2}) \rightarrow
-    \mathrm{Slot}{\kappa_1}(\tau_1) \rightarrow \mathrm{Slot}{k_2}(\tau_2) \right) \]
+    \mathrm{Slot}_{\kappa_1}(\tau_1) \rightarrow \mathrm{Slot}_{\kappa_2}(\tau_2) \right) \]
 
 The judgment here is indexed by both types since
 \begin{itemize}
@@ -175,7 +175,7 @@ The judgment here is indexed by both types since
   messages. More generally, there are several cases where a single payload can
   be split or combined with others. For some types, that's a last-write-wins
   operation, but messages merge. To accomplish this, we use a \emph{combine}
-  operator $\comb{\tau}$ which takes the right argument for last-write-wins types
+  operator $\combine{\tau}$ which takes the right argument for last-write-wins types
   and merges messages.
 \item If the payload is a packed scalar type, converting from repeated to
   implicit might cause a wire type mismatch.
@@ -185,12 +185,12 @@ descriptor well-formedness excludes it (Definition~\ref{def:dwf}), so the rule
 doesn't need to handle this.
 
 \[ \infer[F-Field]{ \judg{\Gamma}{\tau_1 \typrel \tau_2 \coerce c} \\ \kappa_1 \cardrel{\tau_1}{\tau_2} \kappa_2 \coerce L
-  }{ \judg{\Gamma}{\langle \kappa_1, \tau_1 \rangle \typrel \langle \kappa_2, \tau_2 \rangle \coerce L(c)} } \]
+  }{ \judg{\Gamma}{\field{\kappa_1}{\tau_1} \typrel \field{\kappa_2}{\tau_2} \coerce L(c)} } \]
 
 Then, we introduce Protobuf cardinality rules
 
 \begin{mathpar}
-  \infer[K-Imp]{ }{ \imp \cardrel{\tau_1}{\tau_2} \imp \coerce \lambda\ c.\ \lambda\ (\imp{p}). \imp{(c\ 
+  \infer[K-Imp]{ }{ \imp \cardrel{\tau_1}{\tau_2} \imp \coerce \lambda\ c.\ \lambda\ (\impslot{p}). \impslot{(c\ 
       p)} }
 
   \infer[K-Opt]{ }{ \opt \cardrel{\tau_1}{\tau_2} \opt \coerce \lambda\
@@ -201,13 +201,13 @@ Then, we introduce Protobuf cardinality rules
 
   {\color{red}
   \infer[K-OptImp]{ } { \opt \cardrel{\tau_1}{\tau_2} \imp \coerce \lambda c.\ \lambda s.\
-    \mathbf{case}\ s\ \mathbf{of}\ \none \Rightarrow \imp\ \init_{\tau_2} \mid \some{p} \Rightarrow \imp\ (c\
+    \mathbf{case}\ s\ \mathbf{of}\ \none \Rightarrow \impslot{\init_{\tau_2}} \mid \some{p} \Rightarrow \imp\ (c\
     p) }
   }
 
   {\color{red}
   \infer[K-ImpOpt\ (open)]{ } { \imp \cardrel{\tau_1}{\tau_2} \opt \coerce \lambda c.\ \lambda
-    (\imp\ p).\ \mathbf{if}\ p = \init_{\tau_1}\ \mathbf{then}\ \none\
+    (\impslot{p}).\ \mathbf{if}\ p = \init_{\tau_1}\ \mathbf{then}\ \none\
     \mathbf{else}\ \some{(c\ p)} }
   }
 
@@ -224,13 +224,13 @@ Then, we introduce Protobuf cardinality rules
     { \rep \cardrel{\tau_1}{\tau_2} \opt \coerce
       \lambda c.\ \lambda l.\ \mathbf{case}\ l\ \mathbf{of}\
         [\,] \Rightarrow \none \mid
-        p :: ps \Rightarrow \some{(\mathrm{foldl}\ \comb{\tau_2}\ (c\ p)\ (\mathrm{map}\ c\ ps))} }
+        p :: ps \Rightarrow \some{(\mathrm{foldl}\ \combine{\tau_2}\ (c\ p)\ (\mathrm{map}\ c\ ps))} }
   }
 
   {\color{red}
   \infer[K-ImpRep\ (open)]{ }
     { \imp \cardrel{\tau_1}{\tau_2} \rep \coerce
-      \lambda c.\ \lambda (\imp\ p).\
+      \lambda c.\ \lambda (\impslot{p}).\
         \mathbf{if}\ p = \init_{\tau_1}\ \mathbf{then}\ [\,]\ \mathbf{else}\ [c\ p] }
    }
 
@@ -239,8 +239,8 @@ Then, we introduce Protobuf cardinality rules
     { \neg\packable(\tau_1) }
     { \rep \cardrel{\tau_1}{\tau_2} \imp \coerce
       \lambda c.\ \lambda l.\ \mathbf{case}\ l\ \mathbf{of}\
-        [\,] \Rightarrow \imp\ \init_{\tau_2} \mid
-        p :: ps \Rightarrow \imp\ (\mathrm{foldl}\ \comb{\tau_2}\ (c\ p)\ (\mathrm{map}\ c\ ps)) }
+        [\,] \Rightarrow \impslot{\init_{\tau_2}} \mid
+        p :: ps \Rightarrow \impslot{(\mathrm{foldl}\ \combine{\tau_2}\ (c\ p)\ (\mathrm{map}\ c\ ps))} }
    }
 \end{mathpar}
 
@@ -284,8 +284,8 @@ Some notes on the cardinality rules:
   flag to a field and add a side condition that only unpacked fields can go from
   repeated to implicit cardinalities. This would also lift the whole judgment to
   fields rather than just types, but that should be trivial.
-\item A oneof field is represented here as an $\opt{}$ and don't have explicit
-  rules. Remember that a oneof is an $\opt{}$ with an extra condition, handled in
+\item A oneof field is represented here as an $\opt$ and don't have explicit
+  rules. Remember that a $\oneof$ is an $\opt$ with an extra condition, handled in
   \textsc{D-Update}, that only one in a set can be non-\texttt{None}.
 \end{itemize}
 
@@ -298,10 +298,10 @@ Some notes on the cardinality rules:
     { \tau_1, \tau_2 \in \vints }
     { \judg{\Gamma}{\tau_1 \typrel \tau_2 \coerce \decop{\tau_2} \circ \encop{\tau_1}} } 
 
-  \infer[T-StrByt]{ }{ \judg{\Gamma}{\mathtt{string} \typrel \mathtt{bytes} \coerce \mathrm{id}} }
+  \infer[T-StrByt]{ }{ \judg{\Gamma}{\String \typrel \byt \coerce \mathrm{id}} }
 
-  \infer[T-BytStr]{ \text{bytes are UTF-8} }{ \judg{\Gamma}{\mathtt{bytes} \typrel
-      \mathtt{string} \coerce \mathrm{id}} }
+  \infer[T-BytStr]{ \text{bytes are UTF-8} }{ \judg{\Gamma}{\byt \typrel
+      \String \coerce \mathrm{id}} }
 
   \infer[F-Msg]
     { \judg{\Gamma}{a_1 \dcompat a_2 \coerce c} }
@@ -330,7 +330,7 @@ to the new type.
     $\tau_1$ into $\tau_2$ up to depth $n$}, written
   $\semjudg[n]{g : \tau_1 \typrel \tau_2}$, when
   \[ \forall\ \validv{v}{\tau_1} \text{ with } \mathrm{depth}_f(v) \le n,\
-    \forall\ bs.\ \mathrm{Encodes}_{\tau_1}(v, bs) \rightarrow
+    \forall\ bs.\ \encodes{\tau_1}(v, bs) \rightarrow
     \mathrm{parse}_{\tau_2}(bs) = \some{g(v)}. \]
 \end{definition}
 
@@ -338,26 +338,26 @@ to the new type.
 \begin{definition}[Semantic compatibility, field level]\label{def:sem-compat-fld}
   A coercion $g : \denote{s_1} \rightarrow \denote{s_2}$ \emph{carries $s_1$ into $s_2$ up
   to depth $n$}, written $\semjudg[n]{g : s_1 \dcompat s_2}$, when 
-\[ \forall\ \validv{s}{f_1}, rs.\ \mathrm{depth}(s) \le n \rightarrow \mathrm{Encodes}_{f_1}^k(s, rs) \rightarrow
-  \assemble_{f2}^k(rs) = \some{(g\ s)} \]
+\[ \forall\ \validv{s}{f_1}, rs.\ \mathrm{depth}(s) \le n \rightarrow \encodes[k]{f_1}(s, rs) \rightarrow
+  \assemble_{f_2}^k(rs) = \some{(g\ s)} \]
 and no record of $rs$ is skipped.
 \end{definition}
 
-Here $\mathrm{Encodes}_f^k(s, rs)$ says that $rs$, a list of records with field
+Here $\encodes[k]{f}(s, rs)$ says that $rs$, a list of records with field
 number $k$, is a valid encoding of slot $s$. The message-level relation is
 defined from it:
 \[
-  \mathrm{Encodes}_d(m, bs) \iff
+  \encodes{d}(m, bs) \iff
   \records(bs) = \some{rs}
   \wedge \forall (k, w, p) \in rs.\ k \in \dom{d}
-  \wedge \forall k \in \dom{d}.\ \mathrm{Encodes}_{d[k]}^k(m[k], \restr{rs}{k}).
+  \wedge \forall k \in \dom{d}.\ \encodes[k]{d[k]}(m[k], \restr{rs}{k}).
 \]
 Records of different fields may appear in any order. $\assemble_f(rs)$ is the
 part of $\mathrm{parse}$ that builds one slot from that field's records
 (Section~\ref{sec:philosophy}):
 \begin{itemize}
 \item An empty list gives $\init_\tau$, $\none$, or $[\,]$.
-\item Singular slots combine the records' values with $\comb{\tau}$.
+\item Singular slots combine the records' values with $\combine{\tau}$.
 \item Repeated slots concatenate the records' values, packed or unpacked.
 \end{itemize}
 "No record of $rs$ is skipped" means
@@ -366,11 +366,11 @@ $\forall (k, w, p) \in rs.\ \accepts(f_2, w)$.
 \vspace{1em}
 \begin{lemma}[Message from fields]\label{lem:msg-from-fields}
   Suppose $\mathrm{OneofPreserved}(d_1, d_2)$, and
-  $\semjudg[n]{g_k : d_1[k] \slotrel d_2[k]}$ for every
+  $\semjudg[n]{g_k : d_1[k] \fieldrel d_2[k]}$ for every
   $k \in \dom{d_1} \cap \dom{d_2}$. Let $f$ be the coercion
   \textsc{D-Update} builds from the $g_k$. Then for all
   $\validv{m}{d_1}$ with $\mathrm{depth}_v(m) \le n$ and all $bs$ with
-  $\mathrm{Encodes}_{d_1}(m, bs)$,
+  $\encodes{d_1}(m, bs)$,
   \[ \mathrm{parse}_{d_2}(bs) = \some{(f(m), U)} \quad\text{with}\quad
      U \subseteq \dom{d_1} \setminus \dom{d_2}. \]
 \end{lemma}
@@ -379,7 +379,7 @@ The \textsc{F-Field} case of the inner induction reduces to one lemma per axiom,
 none of which require the $\Sigma$ or $\Gamma$ context. If
 $\forall\ j \le n. \semjudg[j]{c : \tau_1 \typrel \tau_2}$ and
 $\kappa_1 \cardrel{\tau_1}{\tau_2} \coerce L$ then
-$\semjudg[n]{L(c) : \slot{\kappa_1}{\tau_1} \slotrel \slot{\kappa_2}{\tau_2}}$.
+$\semjudg[n]{L(c) : \field{\kappa_1}{\tau_1} \fieldrel \field{\kappa_2}{\tau_2}}$.
 
 For message payloads, those lemmas would need $c$ to be a merge homomorphism,
 $c(\mathrm{merge}\ m\ m') = \mathrm{merge}\ (c\ m)\ (c\ m')$. It's required when
@@ -391,7 +391,7 @@ coherence.
 
 There are also considerations here about if Encodes is closed under
 concatenation. If some byte string $bs$ encodes $m$ and $bs'$ encodes $m'$, then
-$bs ++ bs'$ encodes $\mathsf{merge}(m, m')$. Then wire-soundness
+$bs \doubleplus bs'$ encodes $\mathsf{merge}(m, m')$. Then wire-soundness
 applied to the concatenated byte string, together with $\mathsf{parse}$
 respecting concatenation forces this equation on all valid messages. Validity of
 $\mathsf{merge}(m, m')$ would need to check for oneofs, where the late member
@@ -399,11 +399,11 @@ wins.
 
 \vspace{1em}
 \begin{definition}[Semantic compatibility]\label{def:sem-compat}
-  A function $f : \denote{d_1} \rightarrow \denote{d_2}$ \emph{carries $d_1$ into
-  $d_2$ up to depth $n$}, written $\semjudg[n]{f : d_1 \dcompat d_2}$, when
+  A coercion $c : \denote{d_1} \rightarrow \denote{d_2}$ \emph{carries $d_1$ into
+  $d_2$ up to depth $n$}, written $\semjudg[n]{c : d_1 \dcompat d_2}$, when
   \[ \forall\ \validv{m}{d_1} \text{ with } \mathrm{depth}_v(m) \le n,\
-    \forall\ bs.\ \mathrm{Encodes}_{d_1}(m, bs) \rightarrow
-    \mathrm{parse}_{d_2}(bs) = \some{f(m)}. \]
+    \forall\ bs.\ \encodes{d_1}(m, bs) \rightarrow
+    \mathrm{parse}_{d_2}(bs) = \some{c(m)}. \]
   It \emph{carries $d_1$ into $d_2$}, written $\semjudg{f : d_1 \dcompat d_2}$, when
   it does so at every depth, and $\semjudg{d_1 \dcompat d_2}$ abbreviates
   $\exists\ f.\ \semjudg{f : d_1 \dcompat d_2}$.
@@ -479,7 +479,7 @@ it means for two descriptor to be compatible as
   d_2 := \mu\ X.\ G\ X 
 
   \semjudg{d_1 \dcompat d_2 := \exists\ f: \denote{d_1} \rightarrow \denote{d_2}.\ \forall\
-    \validv{m}{d_1}, bs.\ \mathrm{E}_{d_1}(m, bs) \rightarrow \mathrm{parse}_{d_2}(bs) =
+    \validv{m}{d_1}, bs.\ \encodes{d_1}(m, bs) \rightarrow \mathrm{parse}_{d_2}(bs) =
     f(m)}
 \end{mathpar}
 
@@ -546,15 +546,15 @@ right lens of folding and unfolding recursive types.
 Consider the addition of recursive descriptors to the Pollux formalization. With
 a descriptor rule like this one
 \[
-  \infer[D-Update]{ \forall\ k \in \dom{d} \cap \dom{d'}.\ d[k] \slotrel d'[k] }{ d \dcompat d' }
+  \infer[D-Update]{ \forall\ k \in \dom{d} \cap \dom{d'}.\ d[k] \fieldrel d'[k] }{ d \dcompat d' }
 \]
 (Note that for mandatory messages, which aren't supported in Protobuf, we'd need
 that $\dom{d_{mand}} \supseteq \dom{d_{mand}'}$, i.e.\ that mandatory fields can
 become optional.) the descriptor relation would become co-inductive since an
-update to this descriptor would require showing $d_1[k] \slotrel d_2[k]$ if
+update to this descriptor would require showing $d_1[k] \fieldrel d_2[k]$ if
 $k$ is the field where we see the recursive type and the field relation would
 include:
-\[ \infer[F-Msg]{ \judg{\Gamma}{a_1 \dcompat a_2 } }{ \langle c, a_1 \rangle \slotrel \langle c, a_2 \rangle } \]
+\[ \infer[F-Msg]{ \judg{\Gamma}{a_1 \dcompat a_2 } }{ \field{\kappa}{a_1} \fieldrel \field{\kappa}{a_2} } \]
 So a derivation that $d_1[k] \dcompat d_2[k]$ would need to include a derivation of
 itself! The natural solution here is to make $\dcompat$ co-inductive. 
 
@@ -571,12 +571,12 @@ be omitted and message fields always have an explicit presence indicator, we
 actually have a \texttt{List} definition rather than a true co-inductive stream.
 
 From the perspective of algebraic type theory, this type is
-$F\ X = \ints \times \opt{X}$. Note that Protobuf always generates nested messages as
+$F\ X = \ints \times \optt{X}$. Note that Protobuf always generates nested messages as
 if they were optional, with a host language default (i.e. \texttt{nil} in Go)
 and a some mechanism to explicitly check the presence of the nested message. If
 we were to add a \texttt{bool} field to this descriptor, the algebraic type
 would update to
-$G\ X = \ints \times \bool \times \opt{X}$.
+$G\ X = \ints \times \bool \times \optt{X}$.
 
 \begin{minted}{proto}
 message Stream' {

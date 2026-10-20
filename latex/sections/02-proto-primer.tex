@@ -41,31 +41,31 @@ table~\ref{tbl:proto-prim}.
 \begin{table}[H]
 	\centering
 	\begin{tabular}{cl}
-		\toprule
-		Type              & Notes                                                    \\
-		\midrule
-		\texttt{double}   & Standard 64 bit double-precision floating point
-		number.                                                                      \\
-		\texttt{float}    & Standard 32 bit floating point number.                   \\
-		\texttt{int32}    & Variable-length signed 32 bit integer.                   \\
-		\texttt{int64}    & Variable-length signed 64 bit integer.                   \\
-		\texttt{uint32}   & Variable-length unsigned 32 bit integer.                 \\
-		\texttt{uint64}   & Variable-length unsigned 64 bit integer.                 \\
-		\texttt{sint32}   & Variable-length 32 bit integer with more
-		efficient encoding for negative numbers.                                     \\
-		\texttt{sint64}   & Variable-length 64 bit integer with more efficient
-		encoding for negative numbers.                                               \\
-		\texttt{fixed32}  & Four byte integer, more efficient than \texttt{uint32}
-		for values greater than $2^{38}$.                                            \\
-		\texttt{fixed64}  & Eight byte integer, more efficient than \texttt{uint64}
-		for values greater than $2^{56}$.                                            \\
-		\texttt{sfixed32} & Four byte signed integer.                                \\
-		\texttt{sfixed64} & Eight byte signed integer.                               \\
-		\texttt{bool}     & Boolean, encoded in one byte.                            \\
-		\texttt{string}   & A string of UFT-8 or 7-bit ASCII characters shorter than
-		$2^{32}$ bytes.                                                              \\
-		\texttt{bytes}    & An arbitrary sequence of less than $2^{32}$ bytes.       \\
-		\bottomrule
+      \toprule
+      Type              & Notes                                                    \\
+      \midrule
+      \double   & Standard 64 bit double-precision floating point
+                  number.                                                                      \\
+      \float    & Standard 32 bit floating point number.                   \\
+      \ints    & Variable-length signed 32 bit integer.                   \\
+      \intl    & Variable-length signed 64 bit integer.                   \\
+      \uints   & Variable-length unsigned 32 bit integer.                 \\
+      \uintl   & Variable-length unsigned 64 bit integer.                 \\
+      \sints   & Variable-length 32 bit integer with more
+                 efficient encoding for negative numbers.                                     \\
+      \sintl   & Variable-length 64 bit integer with more efficient
+                 encoding for negative numbers.                                               \\
+      \fixeds  & Four byte integer, more efficient than \texttt{uint32}
+                 for values greater than $2^{38}$.                                            \\
+      \fixedl  & Eight byte integer, more efficient than \texttt{uint64}
+                 for values greater than $2^{56}$.                                            \\
+      \sfixeds & Four byte signed integer.                                \\
+      \sfixedl & Eight byte signed integer.                               \\
+      \bool     & Boolean, encoded in one byte.                            \\
+      \String   & A string of UFT-8 or 7-bit ASCII characters shorter than
+               $2^{32}$ bytes.                                                              \\
+      \byt    & An arbitrary sequence of less than $2^{32}$ bytes.       \\
+      \bottomrule
 	\end{tabular}
 	\caption{Summary of the protobuf scalar values.}
 	\label{tbl:proto-prim}

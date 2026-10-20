@@ -74,8 +74,8 @@ messages are the same, one application of the reflexivity rule shows these to be
 compatible. Focus on the \texttt{item} message then. 
 \begin{align*}
   &\msg{\emptyset}{f} \\
-  &\left\{f(3) = (\lb{description}, \str) \right\} \\
-  &\msg{\emptyset}{f[3 \mapsto \field{public\_description}{\str}]} = \msg{\emptyset}{f_1} \\
+  &\left\{f(3) = (\lb{description}, \String) \right\} \\
+  &\msg{\emptyset}{f[3 \mapsto \field{public\_description}{\String}]} = \msg{\emptyset}{f_1} \\
   &\left\{ \ints \typrel \intl \right\} \\
   &\msg{\emptyset}{f_1[4 \mapsto \field{value}{\intl}]} = \msg{\emptyset}{f_2} \\
   &\left\{ f_2(5) = \field{loc}{\mathtt{Location}} \right\} \\
@@ -83,7 +83,7 @@ compatible. Focus on the \texttt{item} message then.
   &\left\{ 6 \not \in \dom{f_3} \right\} \\
   &\msg{\emptyset}{f_3[6 \mapsto \field{level}{\ints}]} = \msg{\emptyset}{f_4} \\
   &\left\{ 7 \not \in \dom{f_4} \right\} \\
-  &\msg{\emptyset}{f_4[7 \mapsto \field{private\_description}{\str}]} = \msg{\emptyset}{f_5} \\
+  &\msg{\emptyset}{f_4[7 \mapsto \field{private\_description}{\String}]} = \msg{\emptyset}{f_5} \\
   &\left\{ 8 \not \in \dom{f_5} \right\} \\
   &\msg{\emptyset}{f_5[8 \mapsto \field{current\_loc}{\mathtt{Location}}]}
 \end{align*}
