@@ -17,7 +17,7 @@ the values in the record before validation occurs.
 However, this perspective isn't a natural fit for protobuf. Recall
 Table~\ref{tab:tags}, and notice that encoding any of the variable width integer
 fields in the proto language leads to the same tag value in the encoded
-struct. While parsing one a \texttt{VARINT} field, it is not possible to know
+struct. While parsing one a \wtvar{} field, it is not possible to know
 the final integer value being encoded without referencing some specification to
 disambiguate between all the integer fields. However, that doesn't mean that
 protobuf cannot be parsed without a descriptor to validate against. The
@@ -31,7 +31,7 @@ in the protoscope language are given below.
   Section~\ref{sec:val-rel}.
 \item Tags (which would be types in \texttt{protoscope}, using the term to refer
   to the language rather then the tool. Use context to differentiate.) for
-  \texttt{I32} and \texttt{I64} could only be interpreted as a list of bytes of
+  \wtis{} and \wtil{} could only be interpreted as a list of bytes of
   the correct length. Casting to either a \texttt{fixed}, \texttt{sfixed} or
   floating point number would be part of the validation process.
 \item \texttt{LEN} is the tricky case: its bytes could be a string, raw bytes,
@@ -90,10 +90,10 @@ like this:
 For Protobuf, the first step cuts the bytes into \emph{records}: a field number,
 a wire type, and a raw payload. The wire type says where each payload ends, so
 this needs no descriptor:
-\[ \records : \mathrm{Bytes} \to \mathrm{Option}\ (\mathrm{List}\ (k, w, p)). \]
+\[ \records : \mathrm{Bytes} \to \mathrm{Option}\ (\mathrm{List}\ (\id, w, \pay)). \]
 The second step builds the reader's message one field at a time. The slot for
-field $k$ is $\assemble_{d[k]}$ applied to $\restr{\records(bs)}{k}$, the
-records with field number $k$. A oneof group is handled as one unit, since a
+field $\id$ is $\assemble_{d[\id]}$ applied to $\restr{\records(\bs)}{\id}$, the
+records with field number $\id$. A oneof group is handled as one unit, since a
 record for one member clears the others. Records whose field number is unknown
 to the reader, or whose wire type doesn't fit, are skipped. For Protobuf this
 second step does more than validate: it converts numbers between types,
@@ -102,7 +102,7 @@ Protobuf's compatibility behaviour lives.
 
 The compatibility relations never mention bytes. The semantic definitions of
 Section~\ref{sec:type-theory} mention records, and only $\records$ and
-$\encodes{\tau}$ mention bytes. Because each field's slot depends only on that
+$\encodes{\ty}$ mention bytes. Because each field's slot depends only on that
 field's records, compatibility of whole messages follows from compatibility of
 their fields.
 

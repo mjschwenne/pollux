@@ -55,9 +55,9 @@ table~\ref{tbl:proto-prim}.
                  efficient encoding for negative numbers.                                     \\
       \sintl   & Variable-length 64 bit integer with more efficient
                  encoding for negative numbers.                                               \\
-      \fixeds  & Four byte integer, more efficient than \texttt{uint32}
+      \fixeds  & Four byte integer, more efficient than \uints{}
                  for values greater than $2^{38}$.                                            \\
-      \fixedl  & Eight byte integer, more efficient than \texttt{uint64}
+      \fixedl  & Eight byte integer, more efficient than \uintl{}
                  for values greater than $2^{56}$.                                            \\
       \sfixeds & Four byte signed integer.                                \\
       \sfixedl & Eight byte signed integer.                               \\
@@ -135,7 +135,7 @@ message SearchRequest {
 \end{figure}
 
 There are two other features which need to be modeled, \texttt{map} and
-\texttt{oneof}. Maps can be thought of like a standard map in \texttt{go} or a
+\Oneof. Maps can be thought of like a standard map in \texttt{go} or a
 \texttt{dict} in \texttt{python}. From a serialization perspective, this is an
 unordered map that could be modeled as a list of key-value pairs. A \texttt{map}
 field cannot be \texttt{repeated}, and repeated keys have the last occurrence
@@ -167,11 +167,11 @@ message Foo {
 	\label{fig:proto-map}
 \end{figure}
 
-The final important feature of the proto language is a \texttt{oneof} field,
+The final important feature of the proto language is a \Oneof{} field,
 which operates like a union in \texttt{C}. Setting any member of the
-\texttt{oneof} will clear any previously set field. A \texttt{oneof} field
+\Oneof{} will clear any previously set field. A \Oneof{} field
 cannot contain a \texttt{repeated} field or a \texttt{map} and the
-\texttt{oneof} field itself cannot be \texttt{repeated}.
+\Oneof{} field itself cannot be \texttt{repeated}.
 
 \begin{figure}[H]
 	\begin{lstlisting}[language=proto]
@@ -226,14 +226,14 @@ field number varint, effectively encoded as \texttt{(field\_number << 3) | tag}.
 		\toprule
 		ID & Name            & Uses                                                 \\
 		\midrule
-		0  & \texttt{VARINT} & \texttt{int32}, \texttt{int64}, \texttt{uint32},
-		\texttt{uint64}, \texttt{sint32}, \texttt{sint64},
-		\texttt{bool}, \texttt{enum}                                                \\
-		1  & \texttt{I64}    & \texttt{fixed64}, \texttt{sfixed64}, \texttt{double} \\
-		2  & \texttt{LEN}    & \texttt{string}, \texttt{bytes}, embedded messages,
+		0  & \wtvar & \ints, \intl, \uints,
+		\uintl, \sints, \sintl,
+		\bool, \texttt{enum}                                                \\
+		1  & \wtil    & \fixedl, \sfixedl, \double \\
+		2  & \texttt{LEN}    & \String, \byt, embedded messages,
 		packed repeated fields                                                      \\
-		5  & \texttt{I32}    & \texttt{fixed32}, \texttt{sfixed32},
-		\texttt{float}                                                              \\
+		5  & \wtis    & \fixeds, \sfixeds,
+		\float                                                              \\
 		\bottomrule
 	\end{tabular}
 
@@ -262,8 +262,8 @@ setting field in the parent message.
 \subsubsection{Signed Integers}~\label{sec:proto-sint}
 
 The standard varint encoding is only for unsigned integers. Signed integers can
-be encoded in both \texttt{int32} and \texttt{int64} or \texttt{sint32} and
-\texttt{sint64} field types. The \texttt{intN} types uses standard two's
+be encoded in both \ints{} and \intl{} or \sints{} and
+\sintl{} field types. The \texttt{intN} types uses standard two's
 complement to encode negative integers. However, since a negative two's
 compliment integer always has the sign bit set, any negative number will be
 encoded in a maximum length varint 10 bytes long.

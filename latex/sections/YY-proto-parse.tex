@@ -7,7 +7,7 @@ A protobuf message on the wire is a sequence of records.
 
 \vspace{1em}
 \begin{definition}[Protobuf Record]
-  A Protobuf wire record is a tuple with the field number $k$, the wire type $w$
+  A Protobuf wire record is a tuple with the field number $\id$, the wire type $w$
   and the payload. The wire type will control how long the payload is.
 \end{definition}
 
@@ -15,10 +15,10 @@ A protobuf message on the wire is a sequence of records.
 \begin{definition}[Protobuf Record Wire Type]
   There are four Protobuf wire types represented in a record:
   \begin{itemize}
-  \item \texttt{VARINT}, whose payload is an unsigned number up to $2^{64} - 1$.
-  \item \texttt{I64}, whose payload is exactly 8 bytes.
-  \item \texttt{I32}, whose payload is exactly 4 bytes.
-  \item $\mathtt{LEN}\ \ell$, whose payload is exactly $\ell$ bytes.
+  \item \wtvar, whose payload is an unsigned number up to $2^{64} - 1$.
+  \item \wtil, whose payload is exactly 8 bytes.
+  \item \wtis, whose payload is exactly 4 bytes.
+  \item $\wtlen{\ell}$, whose payload is exactly $\ell$ bytes.
   \end{itemize}
 \end{definition}
 

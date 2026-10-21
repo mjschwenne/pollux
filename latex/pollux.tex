@@ -125,12 +125,13 @@
 \newcommand{\judg}[2]{\Sigma; #1 \vdash #2}
 \newcommand{\semjudg}[2][]{\vDash_{#1} #2}
 
-% Protobuf decorators
+% Protobuf slots / fields
 \newcommand{\imp}{\mathtt{IMP}}
 \newcommand{\sig}{\mathtt{SIG}}
 \newcommand{\opt}{\mathtt{OPT}}
 \newcommand{\rep}{\mathtt{REP}}
 \newcommand{\oneof}{\mathtt{ONE}}
+\newcommand{\Oneof}{\texttt{oneof}}
 \newcommand{\impt}[1]{\imp\ #1}
 \newcommand{\sigt}[1]{\sig\ #1}
 \newcommand{\optt}[1]{\opt\ #1}
@@ -141,14 +142,12 @@
 \newcommand{\optslot}[1]{\opt\ #1}
 \newcommand{\repslot}[1]{\rep\ #1}
 \newcommand{\oneofslot}[1]{\oneofN\ #1}
-\newcommand{\combine}[1]{\oplus_{#1}}
-\newcommand{\packable}{\mathrm{Packable}}
-\newcommand{\assemble}{\mathrm{assemble}}
-\newcommand{\encodes}[2][]{\mathrm{Encodes}_{#2}^{#1}}
-\newcommand{\records}{\mathrm{records}}
-\newcommand{\groups}{\mathrm{groups}}
-\newcommand{\restr}[2]{#1|_{#2}}
-\newcommand{\accepts}{\mathrm{accepts}}
+
+% Protobuf Wire types
+\newcommand{\wtvar}{\texttt{VARINT}}
+\newcommand{\wtil}{\texttt{I64}}
+\newcommand{\wtis}{\texttt{I32}}
+\newcommand{\wtlen}[1]{\texttt{LEN}~{#1}}
 
 % Protobuf types
 % Using "s" and "l" as "short" and "long" since LaTeX commands can't contain
@@ -211,6 +210,32 @@
 \newcommand{\payload}{\left[0, 2^{64}\right)}
 \newcommand{\ind}[1]{\mathbb{1}\left[#1\right]}
 
+% Auxiliary Data Structures
+\newcommand{\nil}{\texttt{[]}}
+\newcommand{\cons}[2]{#1 \Colon #2}
+
+% Auxiliary Functions
+\newcommand{\dsize}{\mathrm{size}_d}
+\newcommand{\msize}{\mathrm{size}_m}
+\newcommand{\ddepth}{\mathrm{depth}_m}
+\newcommand{\mdepth}{\mathrm{depth}_m}
+\newcommand{\fdepth}{\mathrm{depth}_f}
+\newcommand{\parse}[1]{\mathrm{parse}_{#1}}
+\newcommand{\ser}[1]{\mathrm{serial}_{#1}}
+
+% Auxiliary Definitions
+\newcommand{\oneofpres}{\mathrm{OneofPreserved}}
+\newcommand{\oneofpresall}{\mathrm{OneofPreservedAll}}
+
+% Theory
+\newcommand{\combine}[1]{\oplus_{#1}}
+\newcommand{\packable}{\mathrm{Packable}}
+\newcommand{\assemble}{\mathrm{assemble}}
+\newcommand{\encodes}[2][]{\mathrm{Encodes}_{#2}^{#1}}
+\newcommand{\records}{\mathrm{records}}
+\newcommand{\groups}{\mathrm{groups}}
+\newcommand{\restr}[2]{#1|_{#2}}
+\newcommand{\accepts}{\mathrm{accepts}}
 \newcommand{\wfd}[1]{\mathrm{wfd}(#1)}
 \newcommand{\legald}[1]{\mathrm{legal}(#1)}
 \newcommand{\wfm}[1]{\mathrm{wfm}(#1)}

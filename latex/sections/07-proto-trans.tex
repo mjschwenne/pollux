@@ -26,7 +26,7 @@ Compatibility relation has the \textsc{M-Drop-Unknown} rule, with no constrain
 which value is dropped, and \textsc{M-Missing}, which can insert a new value
 into the resulting message. Because of these rules, the induction hypothesis of
 the theorem by itself is too weak to prove the whole theorem since the
-compatibility relation has multiple $m_2$ related to the same $m_1$, $d_1$ and
+compatibility relation has multiple $\m_2$ related to the same $\m_1$, $d_1$ and
 $d_2$ so the proof must find a witness. Instead we use the transformation to
 strengthen the inductive hypothesis into naming that witness and prove that
 anything from the transformation will land inside the compatibility relation.
@@ -63,8 +63,8 @@ carryable by the new type and the caller falls back to the default slot value,
 which is exactly what the reader sees when the writer's bytes do not populate
 the field at all or using the incorrect wire type.
 
-Mathematically, the transformation where a message $m$ at descriptor $d_1$ is
-transformed to $d_2$ is denoted $\coercion{d_1}{m}{d_2}$.
+Mathematically, the transformation where a message $\m$ at descriptor $d_1$ is
+transformed to $d_2$ is denoted $\coercion{d_1}{\m}{d_2}$.
 
 For each key in the reading descriptor, there are three cases.
 
@@ -101,38 +101,38 @@ decrease with each application.
 
 \vspace{1em}
 \begin{theorem}[Transformation Specification]
-  For all messages $m$ and descriptors $d_1$, $d_2$, each value of the
+  For all messages $\m$ and descriptors $d_1$, $d_2$, each value of the
   transformed message is equal to the result of transforming that value.
-  \[ \coercion{d_1}{m}{d_2}[k] = \coercion{d_1}{m[k]}{d_2} \]
+  \[ \coercion{d_1}{\m}{d_2}[\id] = \coercion{d_1}{\m[\id]}{d_2} \]
 \end{theorem}
 
 \vspace{1em}
 \begin{theorem}[Transform WF]\label{thm:trans-wf}
-  \[ \forall\ m, d_1, d_2.\ \wfd{d_2} \rightarrow \wfm{\coercion{d_1}{m}{d_2}} \]
+  \[ \forall\ \m, d_1, d_2.\ \wfd{d_2} \rightarrow \wfm{\coercion{d_1}{\m}{d_2}} \]
 \end{theorem}
 
 \vspace{1em}
 \begin{theorem}[Transform Total]\label{thm:trans-total}
-  \[ \forall\ m, d_1, d_2.\ \dom{d_2} = \dom{\coercion{d_1}{m}{d_2}} \]
+  \[ \forall\ \m, d_1, d_2.\ \dom{d_2} = \dom{\coercion{d_1}{\m}{d_2}} \]
 \end{theorem}
 
 \vspace{1em}
 \begin{theorem}[Transform Self]\label{thm:trans-self}
-  \[ \forall\ m, d.\ \wfd{d} \rightarrow \validv{m}{d} \rightarrow \coercion{d}{m}{d} = m \]
+  \[ \forall\ \m, d.\ \wfd{d} \rightarrow \validv{\m}{d} \rightarrow \coercion{d}{\m}{d} = \m \]
 \end{theorem}
 
 \vspace{1em}
 \begin{theorem}[Transform Valid]\label{thm:trans-valid}
-  \[ \forall\ m, d_1, d_2.\ \validv{m}{d_1} \rightarrow \wfd{d_2} \rightarrow \mathrm{OneofPreservedAll}(d_1, d_2) \rightarrow \validv{\coercion{d_1}{m}{d_2}}{d_2} \] 
+  \[ \forall\ \m, d_1, d_2.\ \validv{\m}{d_1} \rightarrow \wfd{d_2} \rightarrow \oneofpresall(d_1, d_2) \rightarrow \validv{\coercion{d_1}{\m}{d_2}}{d_2} \]
   Where
   \begin{itemize}
-  \item $\mathrm{OneofPreservedAll}(d_1, d_2) = \mathrm{OneofPreserved}(d_1, d_2) \wedge
-    \forall\ k, \kappa_1, d_1', \kappa_2, d_2'.\ d_1[k] = \field{\kappa_1}{d_1'} \rightarrow d_2[k] = \field{\kappa_2}{d_2'} \rightarrow
-    \mathrm{OneofPreservedAll}(d_1', d_2')$
-  \item $\mathrm{OneofPreserved}(d_1, d_2) = \forall\ k_1, k_2, f_1, f_1', f_2, f_2',
-    g. d_1[k_1] = f_1 \rightarrow d_1[k_2] = f_2 \rightarrow d_2[k_1] = f_1' \rightarrow d_2[k_2] = f_2' \rightarrow
-    f_1' = \field{\oneof{g}}{\_} \rightarrow f_2' = \field{\oneof{g}}{\_} \rightarrow \exists\ g_0. f_1 = \langle
-    \oneof{g_0}, \_ \rangle \wedge f_2 = \field{\oneof{g_0}}{\_}$
+  \item $\oneofpresall(d_1, d_2) = \oneofpres(d_1, d_2) \wedge
+    \forall\ \id, \card_1, d_1', \card_2, d_2'.\ d_1[\id] = \field{\card_1}{d_1'} \rightarrow d_2[\id] = \field{\card_2}{d_2'} \rightarrow
+    \oneofpresall(d_1', d_2')$
+  \item $\oneofpres(d_1, d_2) = \forall\ \id_1, \id_2, f_1, f_1', f_2, f_2',
+    g. d_1[\id_1] = f_1 \rightarrow d_1[\id_2] = f_2 \rightarrow d_2[\id_1] = f_1' \rightarrow d_2[\id_2] = f_2' \rightarrow
+    f_1' = \field{\oneof{g}}{\_} \rightarrow f_2' = \field{\oneof{g}}{\_} \rightarrow \exists\ g_0. f_1 =
+    \field{\oneof{g_0}}{\_} \wedge f_2 = \field{\oneof{g_0}}{\_}$
   \end{itemize}
 \end{theorem}
 
@@ -142,27 +142,27 @@ message, and Theorem~\ref{thm:trans-valid} which we can use to show that a
 transformed value is valid.
 
 Most of the premises for these theorems should be evident, except the
-\texttt{oneof} conditions for Theorem~\ref{thm:trans-valid}. This premise is
+\Oneof{} conditions for Theorem~\ref{thm:trans-valid}. This premise is
 required, and to see why consider that a writer should legitimately set two
-fields outside a \texttt{oneof} and then transform to a reader where those two
-fields are part of the same \texttt{oneof}. The OneofPreserved function states
-that any two reader keys sharing a \texttt{oneof} group were already in a group
+fields outside a \Oneof{} and then transform to a reader where those two
+fields are part of the same \Oneof. The OneofPreserved function states
+that any two reader keys sharing a \Oneof{} group were already in a group
 together in the writer. Note that this is vacuous if either key is reader-only,
-so adding a new field to an existing \texttt{oneof} is acceptable, while moving
-an existing field into an existing \texttt{oneof} isn't. This is part of the
+so adding a new field to an existing \Oneof{} is acceptable, while moving
+an existing field into an existing \Oneof{} isn't. This is part of the
 Protobuf best practices guide~\cite{LanguageGuideProto}, represented as proof
 obligation here. The direction is also important, since it does allow us to
-split a \texttt{oneof} into multiple \texttt{oneof} groups without
+split a \Oneof{} into multiple \Oneof{} groups without
 issue. Additionally, the recursive version is required to prevent the example
 case from appearing in a nested message.
 
-Now, it is possible to move an existing field into an existing \texttt{oneof} in
+Now, it is possible to move an existing field into an existing \Oneof{} in
 a Protobuf descriptor. In that case, you'd need to be sure that the value didn't
-set multiple fields in a \texttt{oneof} of the reader (we'll know in advance
-that it can't have multiple fields set in a writer's \texttt{oneof}). Then you
-might be able to weaken the $\mathrm{OneofPreservedAll}(d_1, d_2)$ to 
-\[ \forall\ k_1, k_2, g.\ d_2[k_1] = \langle \oneof{g}, \_ \rangle \rightarrow d_2[k_2] = \langle \oneof{g}, \_ \rangle \to
-  m[k_1] = \none \vee m[k_2] = \none \]
+set multiple fields in a \Oneof{} of the reader (we'll know in advance
+that it can't have multiple fields set in a writer's \Oneof). Then you
+might be able to weaken the $\oneofpresall(d_1, d_2)$ to
+\[ \forall\ \id_1, \id_2, g.\ d_2[\id_1] = \field{\oneof{g}}{\_} \rightarrow d_2[\id_2] = \field{\oneof{g}}{\_} \to
+  \m[\id_1] = \none \vee \m[\id_2] = \none \]
 Which is wouldn't be true for all messages under $d_1$, but might be provable
 as a weakened version of Theorem~\ref{thm:trans-valid} for some systems.
 
@@ -179,8 +179,8 @@ as a weakened version of Theorem~\ref{thm:trans-valid} for some systems.
 The Protobuf compatibility framework might drop the message compatibility
 relation in favor of only having the transformation. In that case, we'd end up
 needing to argue that the transformation is total over all possible messages
-being converted between two descriptors, i.e. $\coercion{d_1}{m}{d_2}$ produces
-some $m'$ for all $\validv{m}{d_2}$.
+being converted between two descriptors, i.e. $\coercion{d_1}{\m}{d_2}$ produces
+some $\m'$ for all $\validv{\m}{d_2}$.
 
 The current transformation function is \emph{always total} by falling back to
 injecting field type defaults, so in the context of Protobuf, we want to show
@@ -188,7 +188,7 @@ that we can produce a total transformation without needing this behavior outside
 of injecting the new values for new fields (since any other place were a default
 value is injected would imply that something failed to reinterpret). Note that
 this theorem can't be solely stated about the output of
-$\coercion{d_1}{m}{d_2}$ since the output can't differentiate between the
+$\coercion{d_1}{\m}{d_2}$ since the output can't differentiate between the
 default value naturally occurring and being injected due to a problematic
 update.
 
@@ -204,13 +204,13 @@ value fallback anyways. This could be built into a faithfulness theorem.
 
 \vspace{1em}
 \begin{theorem}[Faithfulness]\label{thm:faith}
-  For two compatible descriptors, $d_1 \dcompat d_2$ and a valid value $m$ under
-  $d_1$, $\validv{m}{d_1}$ such that for all keys $k$, $d_1[k] = f_1$ and $d_2[k] =
+  For two compatible descriptors, $d_1 \dcompat d_2$ and a valid value $\m$ under
+  $d_1$, $\validv{\m}{d_1}$ such that for all keys $\id$, $d_1[\id] = f_1$ and $d_2[\id] =
   f_2$ there must exist a value $x$ and $y$ such that
   \begin{itemize}
-  \item $m[k] = x$
-  \item $\coercion{f_1}{m}{f_2} = y$
-  \item $\coercion{d_1}{m}{d_2}[k] = y$
+  \item $\m[\id] = x$
+  \item $\coercion{f_1}{\m}{f_2} = y$
+  \item $\coercion{d_1}{\m}{d_2}[\id] = y$
   \end{itemize}
 \end{theorem}
 
@@ -228,14 +228,14 @@ theorem Value.get?_reinterpret_of_compat {d₁ d₂ : Desc} {v : Value} {k f₁ 
 Some corollaries from this include the fact that repeated slots don't drop
 values. If the scalar transformation is only the identity function, which is
 presently the case, we also have that
-$\coercion{d_2}{\coercion{d_1}{m}{d_2}}{d_{2}} = m$ since the newly injected
+$\coercion{d_2}{\coercion{d_1}{\m}{d_2}}{d_{2}} = \m$ since the newly injected
 fields are simply dropped in the backwards directly. This means that no data is
 lost, but the statement is too strong to handle scalar conversion and in
 particular integer width changes which might truncate values.
 
 \vspace{1em}
 \begin{theorem}[Point-wise Field Compatibility]\label{thm:pointwise-compat}
-  \[ \wfd{d_1} \rightarrow \forall\ k \in \dom{d_1} \cap \dom{d_2}. d_1[k] \fieldrel d_2[k] \] 
+  \[ \wfd{d_1} \rightarrow \forall\ \id \in \dom{d_1} \cap \dom{d_2}. d_1[\id] \fieldrel d_2[\id] \]
 \end{theorem}
 
 Combined with Theorem~\ref{thm:faith}, Theorem~\ref{thm:pointwise-compat} states

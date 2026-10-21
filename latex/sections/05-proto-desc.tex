@@ -40,7 +40,7 @@ Outside of Lean, we'll use this syntax for the Protobuf descriptors.
     \category[Message Name]{a}
     \alternative{\mathit{id}}
     
-    \category[Scalar Type]{\tau_s}
+    \category[Scalar Type]{\ty_s}
     \alternative{\double}
     \alternative{\float}
     \alternative{\ints}
@@ -63,26 +63,26 @@ Outside of Lean, we'll use this syntax for the Protobuf descriptors.
       \alternative{\byt}
     }
 
-    \category[Cardinality]{\kappa}
+    \category[Cardinality]{\card}
     \alternative{\sig}
     \alternative{\opt}
     \alternative{\rep}
     \alternative{\oneoft{n}}
 
     \category[Field]{f}
-    \alternative{\field{\kappa}{\tau_s}}
-    \alternative{\field{\kappa}{a}}
+    \alternative{\field{\card}{\ty_s}}
+    \alternative{\field{\card}{a}}
 
     \category[Field List]{l}
-    \alternative{\texttt{[]}}
-    \alternative{(n, f) \Colon l}
+    \alternative{\nil}
+    \alternative{\cons{(\id, f)}{l}}
 
-    \category[Reserved Set]{r}
-    \alternative{\varnothing_r}
-    \alternative{n, r}
+    \category[Reserved Set]{\res}
+    \alternative{\varnothing_{\res}}
+    \alternative{\id, \res}
 
     \category[Descriptor]{d}
-    \alternative{\desc{r}{l}}
+    \alternative{\desc{\res}{l}}
   \end{syntax}
   \caption{Pollux syntax for Protobuf descriptors.}\label{fig:proto-desc-syn}
 \end{figure}
@@ -153,51 +153,51 @@ interface. We define a function to compute the size of the descriptor below.
 
 \vspace{1em}
 \begin{definition}[Descriptor Size]\label{def:dsize}
-  The size of a descriptor $d$ is defined as $\mathrm{size}_d$ below.
+  The size of a descriptor $d$ is defined as $\dsize$ below.
   \begin{mathpar}
 
-    \mathrm{size}_d\left(\lAngle r, l \rAngle\right) = 1 + \mathrm{size}_d(l)
+    \dsize\left(\desc{\res}{l}\right) = 1 + \dsize(l)
 
-    \mathrm{size}_d(\field{\_}{\tau_s}) = 1
-    
-    \mathrm{size}_d(\field{\_}{d}) = 1 + \mathrm{size}_d(d) 
+    \dsize(\field{\_}{\ty_s}) = 1
 
-    \mathrm{size}_d(l) =
+    \dsize(\field{\_}{d}) = 1 + \dsize(d)
+
+    \dsize(l) =
     \begin{cases}
-      0 & \text{if } l = \texttt{[]} \\
-      \mathrm{size}_d(f) + \mathrm{size}_d(l') & \text{if } l = (\_, f) :: l'
+      0 & \text{if } l = \nil \\
+      \dsize(f) + \dsize(l') & \text{if } l = (\_, f) :: l'
     \end{cases}
   \end{mathpar}
 \end{definition}
 
-Finally, the \texttt{oneof} cardinality needs some explanation. When looking at
+Finally, the \Oneof{} cardinality needs some explanation. When looking at
 the syntactic structure of a Protobuf message in a \texttt{.proto} file, the
-logical way to model a \texttt{oneof} is likely to have a set of fields or some
+logical way to model a \Oneof{} is likely to have a set of fields or some
 other similar grouped structure. However, this isn't how Protobuf actually
-models a \texttt{oneof} internally, and there are good reasons for Pollux to
-follow their lead. 
+models a \Oneof{} internally, and there are good reasons for Pollux to
+follow their lead.
 
 \begin{itemize}
-\item Members of a \texttt{oneof} share a field number namespace with the rest
-  of the message. You can't define a field with identifier $n$ in two
-  \texttt{oneof}'s in the same message, and using the \texttt{oneof} cardinality
+\item Members of a \Oneof{} share a field number namespace with the rest
+  of the message. You can't define a field with identifier $\id$ in two
+  \Oneof{}'s in the same message, and using the \Oneof{} cardinality
   like we have it lets the well-formedness condition handle this automatically.
-\item A \texttt{oneof} field doesn't have a unique field number, so there is no
-  key available to insert a dedicated \texttt{oneof} representation into the
+\item A \Oneof{} field doesn't have a unique field number, so there is no
+  key available to insert a dedicated \Oneof{} representation into the
   finite map the descriptor is modeled as.
-\item A field in a \texttt{oneof} can't be repeated, and \texttt{oneof}'s can't
+\item A field in a \Oneof{} can't be repeated, and \Oneof{}'s can't
   be empty. Both of those requirements are structurally impossible.
-\item The Protobuf underlying \texttt{oneof} index isn't evolution stable, since
-  introducing a new \texttt{oneof} will shift the assigned index of everything
-  later. This complicates the \texttt{oneof} compatibility rules, but at least
+\item The Protobuf underlying \Oneof{} index isn't evolution stable, since
+  introducing a new \Oneof{} will shift the assigned index of everything
+  later. This complicates the \Oneof{} compatibility rules, but at least
   by adopting the same representation, everything is transparent.
-\item If a program called \texttt{get?} with a field in a \texttt{oneof}, the
-  \texttt{get?} operation would need to explore the inside of the \texttt{oneof}
+\item If a program called \texttt{get?} with a field in a \Oneof{}, the
+  \texttt{get?} operation would need to explore the inside of the \Oneof{}
   (via a mechanism perhaps similar to \texttt{explode}) anyways.
 \end{itemize}
 
 Fortunately, checking equality on the natural number included with each
-\texttt{oneof} cardinality provides the required information. Even with a nested
+\Oneof{} cardinality provides the required information. Even with a nested
 or grouped representation, the parser would still have to manually unset the
 previously set field, so this representation doesn't add any unnecessary work.
 

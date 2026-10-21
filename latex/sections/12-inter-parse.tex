@@ -105,7 +105,7 @@ self-contained manner.
 
 \vspace{1em}
 \begin{definition}[Intermediate Descriptor Well-Formedness]\label{def:inter-dwf}
-  A descriptor $d$ is considered well-formed, denoted $\wfd{d}$, if
+  A descriptor $\dc$ is considered well-formed, denoted $\wfd{\dc}$, if
   \begin{itemize}
   \item The keys are stored in sorted order.
   \item There are no duplicate keys.
@@ -114,7 +114,7 @@ self-contained manner.
 
 \vspace{1em}
 \begin{definition}[Intermediate Value Well-Formedness]\label{def:inter-vwf}
-  A message $m$ is well-formed, denoted $\wfm{m}$, if
+  A message $\m$ is well-formed, denoted $\wfm{\m}$, if
   \begin{itemize}
   \item All keys are in the range 0 to 256.
   \item All values in the message are type-aligned with the descriptor
@@ -164,9 +164,9 @@ need a modified version of Definition~\ref{def:simp-pc}.
 \vspace{1em}
 \begin{definition}[Relational Parser Correctness]
   A serializer $ser$ with well-formed condition $wf$ is relational correct with
-  respect to a parser $par$, descriptor $d$ and relation $R$ if
-  \[ \forall\ x\ enc,\;wf\ x \to ser\ d\ x = \mathtt{Success}\ enc \rightarrow \exists\ x',\;par\ d\ enc
-    = \mathtt{Success}\ x'\ \texttt{[]} \wedge R\ d\ x\ x' \]
+  respect to a parser $par$, descriptor $\dc$ and relation $R$ if
+  \[ \forall\ x\ enc,\;wf\ x \to ser\ \dc\ x = \mathtt{Success}\ enc \rightarrow \exists\ x',\;par\ \dc\ enc
+    = \mathtt{Success}\ x'\ \nil \wedge R\ \dc\ x\ x' \]
 \end{definition}\label{def:rpc}
 
 This definition already looks like our definition of compatibility
@@ -179,33 +179,33 @@ In order to simplify proof burdens for the moment, there is another important
 concept here: when a value is \emph{fully described} or \emph{schema correct} by
 a descriptor. Intuitively, this means that every value is the message has a
 corresponding field in the descriptor and vice versa. This relation is denoted
-as $\langle v : d \rangle$ and is defined with these two rules:
+as $\langle v : \dc \rangle$ and is defined with these two rules:
 
 \vspace{1em}
 \begin{definition}[Schema Correct]
-  A value $v$ is \emph{schema correct} with respect to a descriptor $d$ if
+  A value $v$ is \emph{schema correct} with respect to a descriptor $\dc$ if
   \begin{itemize}
-  \item Every value in $v$ is declared in $d$.
-  \item Every field in $d$ id present in $v$.
+  \item Every value in $v$ is declared in $\dc$.
+  \item Every field in $\dc$ id present in $v$.
   \item Every value in $v$ matches the type required by the corresponding field
-    in $d$.
+    in $\dc$.
   \item All nested messages are schema correct with respect to the descriptors
-    embedded in $d$.
+    embedded in $\dc$.
   \end{itemize}
 \end{definition}
 
 \begin{mathpar}
   \infer[SC-emp]{ }{\langle \emptyset : \emptyset \rangle}
 
-  \infer[SC-insert-bool]{ \langle m : d \rangle \\ k \not \in \dom{m} \\ k \not \in \dom{d}}
-  { \langle m[k \mapsto \mathtt{M\_BOOL}\ b] : d[k \mapsto \mathtt{F\_BOOL}] \rangle}
+  \infer[SC-insert-bool]{ \langle \m : \dc \rangle \\ \id \not \in \dom{\m} \\ \id \not \in \dom{\dc}}
+  { \langle \m[\id \mapsto \mathtt{M\_BOOL}\ b] : \dc[\id \mapsto \mathtt{F\_BOOL}] \rangle}
 
-  \infer[SC-insert-int]{ \langle m : d \rangle \\ k \not \in \dom{m} \\ k \not \in \dom{d}}
-  { \langle m[k \mapsto \mathtt{M\_INT}\ z] : d[k \mapsto \mathtt{F\_INT}] \rangle}
+  \infer[SC-insert-int]{ \langle \m : \dc \rangle \\ \id \not \in \dom{\m} \\ \id \not \in \dom{\dc}}
+  { \langle \m[\id \mapsto \mathtt{M\_INT}\ z] : \dc[\id \mapsto \mathtt{F\_INT}] \rangle}
 
-  \infer[SC-insert-msg]{ \langle m : d \rangle \\ k \not \in \dom{m} \\ k \not \in \dom{d} \\ \langle
-    m' : d' \rangle}
-  { \langle m[k \mapsto \mathtt{M\_MSG}\ m'] : d[k \mapsto \mathtt{F\_MSG}\ d'] \rangle}
+  \infer[SC-insert-msg]{ \langle \m : \dc \rangle \\ \id \not \in \dom{\m} \\ \id \not \in \dom{\dc} \\ \langle
+    \m' : \dc' \rangle}
+  { \langle \m[\id \mapsto \mathtt{M\_MSG}\ \m'] : \dc[\id \mapsto \mathtt{F\_MSG}\ \dc'] \rangle}
 \end{mathpar}
 
 This relation is designed to ensure that the related message and descriptor are
@@ -217,13 +217,13 @@ both sides of the compatibility relation, it's been written for maximum
 flexibility and to generalize to a more complex relation.
 
 \begin{mathpar}
-  \infer[Compat-Refl]{\langle m : d_1 \rangle \\ \langle m : d_2 \rangle}{\langle m : d_1 \msgrel m : d_2 \rangle}
+  \infer[Compat-Refl]{\langle \m : \dc_1 \rangle \\ \langle \m : \dc_2 \rangle}{\langle \m : \dc_1 \msgrel \m : \dc_2 \rangle}
 
-  \infer[Compat-Add]{\langle m_1 : d_1 \msgrel m_2 : d_2 \rangle \\\\ k \not \in \dom{m_1} \\ k \not \in
-    \dom{d_2} \\ k \not \in \dom{m_2} \\ k \not \in \dom{d_2} \\\\ v_1 = v_2 \\ f_1
+  \infer[Compat-Add]{\langle \m_1 : \dc_1 \msgrel \m_2 : \dc_2 \rangle \\\\ \id \not \in \dom{\m_1} \\ \id \not \in
+    \dom{\dc_2} \\ \id \not \in \dom{\m_2} \\ \id \not \in \dom{\dc_2} \\\\ v_1 = v_2 \\ f_1
     = f_2}
-  { \langle m_1[k \mapsto v_1] : d[k \mapsto f_1] \msgrel
-    m_2[k \mapsto v_2] : d_2[k \mapsto f_2] \rangle}
+  { \langle \m_1[\id \mapsto v_1] : \dc[\id \mapsto f_1] \msgrel
+    \m_2[\id \mapsto v_2] : \dc_2[\id \mapsto f_2] \rangle}
 \end{mathpar}
 
 That is also why the \textsc{Compat-Add} rule has premises $v_1 = v_2$ and $f_1
@@ -233,30 +233,30 @@ relation (Section~\ref{sec:val-rel}) and type relation (Section~\ref{sec:typ-rel
 \vspace{1em}
 \begin{lemma}[Intermediate Schema Correct Equal]\label{lem:inter-sc-eq}
   \[
-    \forall\ m_1, m_2, d_1, d_2.\ \langle m_1 : d_1 \msgrel m_2 : d_2 \rangle
-    \rightarrow d_1 = d_2 \rightarrow v_1 = v_2
+    \forall\ \m_1, \m_2, \dc_1, \dc_2.\ \langle \m_1 : \dc_1 \msgrel \m_2 : \dc_2 \rangle
+    \rightarrow \dc_1 = \dc_2 \rightarrow v_1 = v_2
   \] 
 \end{lemma}
 
 \vspace{1em}
 \begin{theorem}[Intermediate Schema Correct Round-trip]\label{thm:inter-schema-correct}
   \[
-    \langle m_1 : d \rangle \rightarrow \wfm{m_1} \rightarrow \forall\ bs, \mathrm{ser}_d(m_1) =
-    bs \rightarrow \exists\ m_2, \mathrm{par}_d(bs) = m_2 \wedge \langle m_1
-    : d \msgrel m_2 : d \rangle
+    \langle \m_1 : \dc \rangle \rightarrow \wfm{\m_1} \rightarrow \forall\ \bs, \mathrm{ser}_{\dc}(\m_1) =
+    \bs \rightarrow \exists\ \m_2, \mathrm{par}_{\dc}(\bs) = \m_2 \wedge \langle \m_1
+    : \dc \msgrel \m_2 : \dc \rangle
   \]
 \end{theorem}
 
 The immediate corollary of Lemma~\ref{lem:inter-sc-eq} and
-Theorem~\ref{thm:inter-schema-correct} is that the $m_1$ and $m_2$ in the
+Theorem~\ref{thm:inter-schema-correct} is that the $\m_1$ and $\m_2$ in the
 theorem statement are equal.  
 
 \subsection{The Identity Compatibility Relation}\label{sec:id-compat}
 Naturally then, we can pose the descriptor mismatch problem in terms of a
 compatibility relation where the descriptor doesn't change. Since the descriptor
 is always related to itself, this is known as the \emph{identity compatibility
-  relation}. Let $\langle v_1 : d_1 \msgrel v_2 : d_2 \rangle$ denote that $v_1$
-when interpreted under $d_1$ is compatible with $v_2$ under $d_2$.
+  relation}. Let $\langle v_1 : \dc_1 \msgrel v_2 : \dc_2 \rangle$ denote that $v_1$
+when interpreted under $\dc_1$ is compatible with $v_2$ under $\dc_2$.
 
 
 \subsubsection{Full Identity Compatibility Relation}\label{sec:full-id-compat}
@@ -269,30 +269,30 @@ matching types.
 \begin{mathpar}
   \infer[Empty]{ }{\langle \emptyset : \emptyset \msgrel \emptyset : \emptyset \rangle}
 
-  \infer[Insert-Int]{d' = d[k \mapsto \mathtt{F\_INT}] \\ \langle m' : d \msgrel m : d \rangle}{\langle m'[k \mapsto z]
-    : d' \msgrel m[k \mapsto z] : d' \rangle}
+  \infer[Insert-Int]{\dc' = \dc[\id \mapsto \mathtt{F\_INT}] \\ \langle \m' : \dc \msgrel \m : \dc \rangle}{\langle \m'[\id \mapsto z]
+    : \dc' \msgrel \m[\id \mapsto z] : \dc' \rangle}
 
-  \infer[Insert-Bool]{d' = d[k \mapsto \mathtt{F\_BOOL}] \\ \langle m' : d \msgrel m : d \rangle}{\langle m'[k \mapsto b]
-    : d' \msgrel m[k \mapsto b] : d' \rangle}
+  \infer[Insert-Bool]{\dc' = \dc[\id \mapsto \mathtt{F\_BOOL}] \\ \langle \m' : \dc \msgrel \m : \dc \rangle}{\langle \m'[\id \mapsto b]
+    : \dc' \msgrel \m[\id \mapsto b] : \dc' \rangle}
 
-  \infer[Insert-Msg]{d' = d[k \mapsto \mathtt{F\_MSG}\ d_n] \\\\ \langle m' : d \msgrel m : d \rangle \\ \langle
-    m_n' : d_n \msgrel m_n : d_n \rangle}{\langle m'[k \mapsto \mathtt{M\_MSG}\ m_n'] : d' \msgrel m[k \mapsto
-    \mathtt{M\_MSG}\ m_n] : d' \rangle}
+  \infer[Insert-Msg]{\dc' = \dc[\id \mapsto \mathtt{F\_MSG}\ \dc_n] \\\\ \langle \m' : \dc \msgrel \m : \dc \rangle \\ \langle
+    \m_n' : \dc_n \msgrel \m_n : \dc_n \rangle}{\langle \m'[\id \mapsto \mathtt{M\_MSG}\ \m_n'] : \dc' \msgrel \m[\id \mapsto
+    \mathtt{M\_MSG}\ \m_n] : \dc' \rangle}
 
-  \infer[Drop]{k \not \in \dom{d} \\ k \not \in \dom{m} \\ \langle m' : d \msgrel m : d \rangle}{\langle m'[k \mapsto z] : d \msgrel m : d \rangle}
+  \infer[Drop]{\id \not \in \dom{\dc} \\ \id \not \in \dom{\m} \\ \langle \m' : \dc \msgrel \m : \dc \rangle}{\langle \m'[\id \mapsto z] : \dc \msgrel \m : \dc \rangle}
 
-  \infer[Add-Missing]{ k \not \in \dom{m} \\ d' = d[k \mapsto f] \\ \langle m' : d \msgrel m :
-    d \rangle}{ \langle m' : d' \msgrel m[k \mapsto \mathtt{M\_MISSING}] : d' \rangle}
+  \infer[Add-Missing]{ \id \not \in \dom{\m} \\ \dc' = \dc[\id \mapsto f] \\ \langle \m' : \dc \msgrel \m :
+    \dc \rangle}{ \langle \m' : \dc' \msgrel \m[\id \mapsto \mathtt{M\_MISSING}] : \dc' \rangle}
 
-  \infer[Input-Missing]{k \not \in \dom{d} \\ k \not \in \dom{m} \\ k \not \in
-    \dom{m'} \\\\ d' = d[k \mapsto f]}{\langle m'[k \mapsto \mathtt{M\_MISSING}] : d' \msgrel m[k \mapsto \mathtt{M\_MISSING}] : d' \rangle}
+  \infer[Input-Missing]{\id \not \in \dom{\dc} \\ \id \not \in \dom{\m} \\ \id \not \in
+    \dom{\m'} \\\\ \dc' = \dc[\id \mapsto f]}{\langle \m'[\id \mapsto \mathtt{M\_MISSING}] : \dc' \msgrel \m[\id \mapsto \mathtt{M\_MISSING}] : \dc' \rangle}
 \end{mathpar}
 
 \begin{theorem}[Intermediate Identity Compatibility]\label{thm:inter-id-compat}
   \[
-    \wfd{d} \rightarrow \wfm{m_1} \rightarrow \forall\ bs, \mathrm{ser}_d(m_1) =
-    bs \rightarrow \exists\ m_2, \mathrm{par}_d(bs) = m_2 \wedge \langle m_1
-    : d \msgrel m_2 : d \rangle
+    \wfd{\dc} \rightarrow \wfm{\m_1} \rightarrow \forall\ \bs, \mathrm{ser}_{\dc}(\m_1) =
+    \bs \rightarrow \exists\ \m_2, \mathrm{par}_{\dc}(\bs) = \m_2 \wedge \langle \m_1
+    : \dc \msgrel \m_2 : \dc \rangle
   \] 
 \end{theorem}
 
@@ -308,20 +308,20 @@ Now we develop the full compatibility relation for the intermediate encoding
 format. Like with the protobuf relations, this will be separated into a value
 relation, type relation and message relation.
 \begin{align*}
-  m &: \text{message} & v &: \text{value} \\
-  d &: \text{descriptor} & f &: \text{field} \\
-  k &: \text{field number}
+  \m &: \text{message} & v &: \text{value} \\
+  \dc &: \text{descriptor} & f &: \text{field} \\
+  \id &: \text{field number}
 \end{align*}
 Below is a list of the relations about to be defined, along with an English
 explanation of how to read them.
 \begin{align*}
-  \valrel &: \text{Value relation} & v_1 : \tau_1 \valrel v_2 : \tau_2 &\rightarrow ``\text{value } v_1 : \tau_1 \text{ becomes } v_2 :
-                                           \tau_2 " \\
+  \valrel &: \text{Value relation} & v_1 : \ty_1 \valrel v_2 : \ty_2 &\rightarrow ``\text{value } v_1 : \ty_1 \text{ becomes } v_2 :
+                                           \ty_2 " \\
   \fieldrel &: \text{Field type relation} & f_1 \fieldrel f_2 &\rightarrow ``f_1 \text{ is type-compatible with }
                                           f_2" \\
-  \dcompat &: \text{Descriptor type relation} & d_1 \dcompat d_2 &\rightarrow ``d_1 \text{ is
-                                                     descriptor-compatible with } d_2" \\
-  \msgrel &: \text{Message relation} & m_1 \msgrel m_2 &\rightarrow ``\text{message } m_1 \text{ becomes } m_2"
+  \dcompat &: \text{Descriptor type relation} & \dc_1 \dcompat \dc_2 &\rightarrow ``\dc_1 \text{ is
+                                                     descriptor-compatible with } \dc_2" \\
+  \msgrel &: \text{Message relation} & \m_1 \msgrel \m_2 &\rightarrow ``\text{message } \m_1 \text{ becomes } \m_2"
 \end{align*}
 
 \subsubsection{Value Relation}\label{sec:ip-val-rel}
@@ -338,8 +338,8 @@ to make updates to nested messages.
       \true & \mathrm{otherwise}
     \end{array}}\right.}{v_1 : \mathtt{int} \valrel v_2 : \bool}
 
-  \infer[V-Msg]{m_1 : d_1 \msgrel m_2 : d_2}{\mathtt{M\_MSG}\ m_1 : \mathtt{F\_MSG}\
-    d_1 \valrel \mathtt{M\_MSG}\ m_2 : \mathtt{F\_MSG}\ d_2}
+  \infer[V-Msg]{\m_1 : \dc_1 \msgrel \m_2 : \dc_2}{\mathtt{M\_MSG}\ \m_1 : \mathtt{F\_MSG}\
+    \dc_1 \valrel \mathtt{M\_MSG}\ \m_2 : \mathtt{F\_MSG}\ \dc_2}
 
   \infer[V-Refl]{ }{v : f \valrel v : f}
 
@@ -355,7 +355,7 @@ boolean fields.
 
  \infer[F-Int-Bool]{ }{\mathtt{int} \typrel \mathtt{bool}}
 
- \infer[F-Msg]{d_1 \dcompat d_2}{\mathtt{F\_MSG}\ d_1 \typrel \mathtt{F\_MSG}\ d_2}
+ \infer[F-Msg]{\dc_1 \dcompat \dc_2}{\mathtt{F\_MSG}\ \dc_1 \typrel \mathtt{F\_MSG}\ \dc_2}
 
  \infer[F-Refl]{ }{f \fieldrel f}
 
@@ -371,19 +371,19 @@ moment I've decided to split them out.
 
 \begin{mathpar}
   {\color{red}
-  \infer[D-Update]{ \dom{d_{mand}} \supseteq \dom{d_{mand}'} \\ \forall\ k \in
-    \dom{d} \cap \dom{d'}.\ d[k] \fieldrel d'[k] }{ d \dcompat d' }
+  \infer[D-Update]{ \dom{\dc_{mand}} \supseteq \dom{\dc_{mand}'} \\ \forall\ \id \in
+    \dom{\dc} \cap \dom{\dc'}.\ \dc[\id] \fieldrel \dc'[\id] }{ \dc \dcompat \dc' }
   }
 
   \infer[D-Emp]{ }{\emptyset \dcompat \emptyset}
 
-  \infer[D-Add]{k \not \in \dom{d}}{d \dcompat d[k \mapsto f]}
+  \infer[D-Add]{\id \not \in \dom{\dc}}{\dc \dcompat \dc[\id \mapsto f]}
 
-  \infer[D-Chg]{d[k] \fieldrel f}{d \dcompat d[k \mapsto f]}
+  \infer[D-Chg]{\dc[\id] \fieldrel f}{\dc \dcompat \dc[\id \mapsto f]}
 
-  \infer[D-Refl]{ }{d \dcompat d}
+  \infer[D-Refl]{ }{\dc \dcompat \dc}
 
-  \infer[D-Trans]{d_1 \dcompat d_2 \\ d_2 \dcompat d_3}{d_1 \dcompat d_3}
+  \infer[D-Trans]{\dc_1 \dcompat \dc_2 \\ \dc_2 \dcompat \dc_3}{\dc_1 \dcompat \dc_3}
 \end{mathpar}
 
 Just like with the Protobuf relation, we can add fields or change existing
@@ -405,29 +405,29 @@ implementation.
 \begin{mathpar}
   \infer[M-Emp]{ }{\emptyset : \emptyset \msgrel \emptyset : \emptyset}
 
-  {\color{red}\infer[M-Add]{m_1 : d_1 \msgrel m_2 : d_2 \\ v : f \\\\ k \not \in \dom{m_1} \\ k \not \in
-    \dom{d_1}}{ m_1 : d_1 \msgrel m_2[k \mapsto v] : d_2[k \mapsto f]}}
+  {\color{red}\infer[M-Add]{\m_1 : \dc_1 \msgrel \m_2 : \dc_2 \\ v : f \\\\ \id \not \in \dom{\m_1} \\ \id \not \in
+    \dom{\dc_1}}{ \m_1 : \dc_1 \msgrel \m_2[\id \mapsto v] : \dc_2[\id \mapsto f]}}
 
-  \infer[M-Missing]{m_1 : d_1 \msgrel m_2 : d_2 \\\\ k \not \in \dom{m_1} \\ k \not \in
-    \dom{d_1}}{ m_1 : d_1 \msgrel m_2[k \mapsto \mathtt{M\_MISSING}] : d_2[k \mapsto f]}
+  \infer[M-Missing]{\m_1 : \dc_1 \msgrel \m_2 : \dc_2 \\\\ \id \not \in \dom{\m_1} \\ \id \not \in
+    \dom{\dc_1}}{ \m_1 : \dc_1 \msgrel \m_2[\id \mapsto \mathtt{M\_MISSING}] : \dc_2[\id \mapsto f]}
 
-  \infer[M-Declare]{m_1 : d_1 \msgrel m_2 : d_2 \\\\ k \not \in \dom{d_1} \\ k \not \in
-    \dom{m_1} \\ f_1 \fieldrel f_2}{ m_1 : d_1[k \mapsto f_1] \msgrel m_2[k \mapsto \mathtt{M\_MISSING}] :
-    d_2[k \mapsto f_2]}
+  \infer[M-Declare]{\m_1 : \dc_1 \msgrel \m_2 : \dc_2 \\\\ \id \not \in \dom{\dc_1} \\ \id \not \in
+    \dom{\m_1} \\ f_1 \fieldrel f_2}{ \m_1 : \dc_1[\id \mapsto f_1] \msgrel \m_2[\id \mapsto \mathtt{M\_MISSING}] :
+    \dc_2[\id \mapsto f_2]}
 
-  \infer[M-Update]{m_1 : d_1 \msgrel m_2 : d_2 \\\\ m_1[k] : d_1[k] \valrel v : f \\
-    d_1[k] \fieldrel f}{ m_1 : d_1 \msgrel m_2[k \mapsto v] : d_2[k \mapsto f]}
+  \infer[M-Update]{\m_1 : \dc_1 \msgrel \m_2 : \dc_2 \\\\ \m_1[\id] : \dc_1[\id] \valrel v : f \\
+    \dc_1[\id] \fieldrel f}{ \m_1 : \dc_1 \msgrel \m_2[\id \mapsto v] : \dc_2[\id \mapsto f]}
 
-  \infer[M-Drop]{m_1 : d_1 \msgrel m_2 : d_2 \\\\ k \not \in \dom{m_2} \\ k \not
-    \in \dom{d_2}}{ m_1[k \mapsto v] : d_1[k \mapsto f] \msgrel m_2 : d_2 }
+  \infer[M-Drop]{\m_1 : \dc_1 \msgrel \m_2 : \dc_2 \\\\ \id \not \in \dom{\m_2} \\ \id \not
+    \in \dom{\dc_2}}{ \m_1[\id \mapsto v] : \dc_1[\id \mapsto f] \msgrel \m_2 : \dc_2 }
 
-  \infer[M-Drop-Unknown]{m_1 : d_1 \msgrel m_2 : d_2 \\\\ k \not \in \dom{m_2} \\ k \not
-    \in \dom{d_2} \\ k \not \in \dom{d_1}}{ m_1[k \mapsto v] : d_1 \msgrel m_2 : d_2 }
+  \infer[M-Drop-Unknown]{\m_1 : \dc_1 \msgrel \m_2 : \dc_2 \\\\ \id \not \in \dom{\m_2} \\ \id \not
+    \in \dom{\dc_2} \\ \id \not \in \dom{\dc_1}}{ \m_1[\id \mapsto v] : \dc_1 \msgrel \m_2 : \dc_2 }
 
-  \infer[M-Refl]{ }{ m : d \msgrel m : d}
+  \infer[M-Refl]{ }{ \m : \dc \msgrel \m : \dc}
 
-  \infer[M-Trans]{m_1 : d_1 \msgrel m_2 : d_2 \\ m_2 : d_2 \msgrel m_3 : d_3}{m_1 : d_1 \msgrel
-    m_3 : d_3}
+  \infer[M-Trans]{\m_1 : \dc_1 \msgrel \m_2 : \dc_2 \\ \m_2 : \dc_2 \msgrel \m_3 : \dc_3}{\m_1 : \dc_1 \msgrel
+    \m_3 : \dc_3}
 \end{mathpar}
 
 We can add new key-value pairs to a message, or update the value in a message
@@ -449,10 +449,10 @@ parser and serializer would actually behave.
 \vspace{1em}
 \begin{theorem}[Intermediate Compatibility]\label{thm:inter-compat}
   \[
-    \wfd{d_1} \rightarrow \wfm{m_1} \rightarrow \wfd{d_2}
-    \rightarrow d_1 \dcompat d_2 \rightarrow \forall\ bs, \mathrm{ser}_{d_1}(m_1) =
-    bs \rightarrow \exists\ m_2, \mathrm{par}_{d_2}(bs) = m_2 \wedge \langle m_1
-    : d_1 \msgrel m_2 : d_2 \rangle
+    \wfd{\dc_1} \rightarrow \wfm{\m_1} \rightarrow \wfd{\dc_2}
+    \rightarrow \dc_1 \dcompat \dc_2 \rightarrow \forall\ \bs, \mathrm{ser}_{\dc_1}(\m_1) =
+    \bs \rightarrow \exists\ \m_2, \mathrm{par}_{\dc_2}(\bs) = \m_2 \wedge \langle \m_1
+    : \dc_1 \msgrel \m_2 : \dc_2 \rangle
   \] 
 \end{theorem}
 

@@ -66,12 +66,12 @@ message takes and then the encoded message.
 There has been some discussion about implicitly well-typed or explicitly
 well-typed parsers. In this case, implicitly well-typed means that we have the
 final parser type as
-$\mathtt{parse}\ (d : Desc)\ :\ \mathtt{Parser}\;\llbracket d \rrbracket$ while
+$\mathtt{parse}\ (\dc : Desc)\ :\ \mathtt{Parser}\;\denote{\dc}$ while
 an explicitly well-typed parser setup would have the top-level type of
-$\mathtt{parse}\ (d : Desc)\ :\ \mathtt{Parser}\ \mathtt{Val}$ for some generic,
+$\mathtt{parse}\ (\dc : Desc)\ :\ \mathtt{Parser}\ \mathtt{Val}$ for some generic,
 universal document model \texttt{Val}. We'd also need to provide a theorem
 standing that ``if \texttt{parse d enc} leads to $x$ then
-$\vdash_{\mathrm{doc}} x\ :\ d$'', basically that if calling \texttt{parse} on an
+$\vdash_{\mathrm{doc}} x\ :\ \dc$'', basically that if calling \texttt{parse} on an
 encoding returns a result, the structure of that result will be well-typed under
 some document type system.
 
@@ -91,9 +91,9 @@ serializer and the byte parser / serializer have been formally proved.
 
 \begin{theorem}[Simple Parse Correctness]
   \begin{multline*}
-  \forall\;x,\;d,\;enc,\;rest.\ wf\;x \rightarrow \mathtt{SerialDesc}\ d\ x = \mathtt{SerialSuccess}\
+  \forall\;x,\;\dc,\;enc,\;rest.\ wf\;x \rightarrow \mathtt{SerialDesc}\ \dc\ x = \mathtt{SerialSuccess}\
   enc \rightarrow \\
-    \mathtt{ParseDesc}\ d\ (enc\;++\;rest) = \mathtt{ParseSuccess}\ x\ rest
+    \mathtt{ParseDesc}\ \dc\ (enc\;++\;rest) = \mathtt{ParseSuccess}\ x\ rest
   \end{multline*}
 \end{theorem}
 

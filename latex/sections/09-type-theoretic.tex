@@ -10,28 +10,28 @@ coercions~\cite{breazu-tannenInheritanceImplicitCoercion1991,brandtCoinductiveAx
 
 Pollux's goal is to be able to look at a pair of data descriptors and
 characterize what happens to values under the first descriptor when parsed under
-the updated one. Our derivations, of the form $\judg{\varnothing}{d_1 \dcompat d_2}$
+the updated one. Our derivations, of the form $\judg{\varnothing}{\dc_1 \dcompat \dc_2}$
 provide more than a certificate of compatibility between the descriptors: read
-rule by rule, it is a program $c : \denote{d_1} \rightarrow \denote{d_2}$, a coercion the
+rule by rule, it is a program $\co : \denote{\dc_1} \rightarrow \denote{\dc_2}$, a coercion the
 reader applies to the writer's message.
 
 \vspace{1em}
 \begin{definition}[Well-behaved Transformation]\label{def:well-behaved}
-  A coercion $c : \denote{d_1} \to \denote{d_2}$ is \emph{well-behaved} when,
-  for all $\validv{m}{d_1}$ and all $bs$ with $\encodes{d_1}(m, bs)$,
-  \[ \mathrm{parse}_{d_2}(bs) = \some{(c(m), U)} \quad\text{with}\quad
-    U \subseteq \dom{d_1} \setminus \dom{d_2}. \]
+  A coercion $\co : \denote{\dc_1} \to \denote{\dc_2}$ is \emph{well-behaved} when,
+  for all $\validv{\m}{\dc_1}$ and all $\bs$ with $\encodes{\dc_1}(\m, \bs)$,
+  \[ \mathrm{parse}_{\dc_2}(\bs) = \some{(\co(\m), U)} \quad\text{with}\quad
+    U \subseteq \dom{\dc_1} \setminus \dom{\dc_2}. \]
 \end{definition}
 
 \vspace{1em}
 \begin{definition}[Compatibility]\label{def:compat}
-  Two descriptors $d_1$ and $d_2$ are compatible if there exists a well-behaved
+  Two descriptors $\dc_1$ and $\dc_2$ are compatible if there exists a well-behaved
   transformation between them. 
 \end{definition}
 
 Here $U$ is the set of fields skipped during parsing (i.e.\ writer-only fields or
 fields with mismatched wire types). The second condition that
-$U \subseteq \dom{d_1} \setminus \dom{d_2}$ is essential to this definition. Wire-soundness,
+$U \subseteq \dom{\dc_1} \setminus \dom{\dc_2}$ is essential to this definition. Wire-soundness,
 that the message parses, would admit something like $\ints \dcompat \String$ when the
 reader skips the mistyped record and injects the default $\String$ value. This
 condition rules out the trivial transformation which always injects the default
@@ -39,16 +39,16 @@ values for all fields.
 
 There are two conditions part of Definition~\ref{def:well-behaved}, wire
 soundness and faithfulness. Wire soundness states that a valid encoding of a
-message under $d_1$ will parse to the coerced version under $d_2$. Faithfulness
+message under $\dc_1$ will parse to the coerced version under $\dc_2$. Faithfulness
 states that there are no skipped fields during parsing.  An immediate
 consequence of this definition is that coherence is free. Wire soundness pins
 $f$ down on every valid message that has at least one encoding. So if
-$\encodes{d_1}$ is total on valid messages (i.e. a serializer exists), any two
+$\encodes{\dc_1}$ is total on valid messages (i.e. a serializer exists), any two
 derivations of the same judgment yield coercions that agree on valid messages.
 
 \subsubsection{Pollux Judgements}
 
-A Pollux judgment has the form $\judg{\Gamma}{d_1 \dcompat d_2 \coerce c}$ where
+A Pollux judgment has the form $\judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \co}$ where
 \begin{itemize}
 \item $\Sigma$ is a symbol table, mapping names of descriptors to descriptor
   values. Representing this as a table allows us to store (mutually) recursive
@@ -60,19 +60,19 @@ A Pollux judgment has the form $\judg{\Gamma}{d_1 \dcompat d_2 \coerce c}$ where
   between those descriptors in the completed derivation. An alternative
   formulation would be so that $\Gamma$ maps a pair of descriptors to a value of type
   $x : \denote{\Sigma(a_1)} \rightarrow \denote{\Sigma(a_2)}$ 
-\item $c$ is a function $c : \denote{\Sigma(d_1)} \rightarrow \denote{\Sigma(d_2)}$, the coercion
+\item $\co$ is a function $\co : \denote{\Sigma(\dc_1)} \rightarrow \denote{\Sigma(\dc_2)}$, the coercion
   built by the derivation.
 \end{itemize}
 
 This is actually a stratified definition, yielding slightly different coercions
 for each type of object:
 \begin{align*}
-  &\judg{\Gamma}{d_1 \dcompat d_2 \coerce c}
-  && c : \denote{d_1} \to \denote{d_2} \text{ (message bodies)} \\
-  &\judg{\Gamma}{f_1 \fieldrel f_2 \coerce c}
-  && c : \mathrm{Slot}(f_1) \to \mathrm{Slot}(f_2) \text{ (fields: cardinality and type)} \\
-  &\judg{\Gamma}{\tau_1 \typrel \tau_2 \coerce c}
-  && c : \denote{\tau_1} \to \denote{\tau_2} \text{ (payloads)}
+  &\judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \co}
+  && \co : \denote{\dc_1} \to \denote{\dc_2} \text{ (message bodies)} \\
+  &\judg{\Gamma}{f_1 \fieldrel f_2 \coerce \co}
+  && \co : \denote{f_1} \to \denote{f_2} \text{ (fields: cardinality and type)} \\
+  &\judg{\Gamma}{\ty_1 \typrel \ty_2 \coerce \co}
+  && \co : \denote{\ty_1} \to \denote{\ty_2} \text{ (payloads)}
 \end{align*}
 
 \subsubsection{Names \& Recursion}
@@ -84,8 +84,8 @@ for each type of object:
 
   \infer[N-Unfold]
     { (a_1, a_2) \notin \dom{\Gamma} \\
-      \judg{\Gamma, (a_1, a_2) \mapsto x}{\Sigma(a_1) \dcompat \Sigma(a_2) \coerce c} }
-    { \judg{\Gamma}{a_1 \dcompat a_2 \coerce \mathsf{fix}\ x.\ c} }
+      \judg{\Gamma, (a_1, a_2) \mapsto x}{\Sigma(a_1) \dcompat \Sigma(a_2) \coerce \co} }
+    { \judg{\Gamma}{a_1 \dcompat a_2 \coerce \mathsf{fix}\ x.\ \co} }
 \end{mathpar}
 
 The fix-point operator $\mathsf{fix}$ is well founded on the writer's value
@@ -96,14 +96,14 @@ it's applied to a nested message of strictly smaller depth.
 
 \begin{mathpar}
   \infer[D-Update]
-  { \forall k \in \dom{d_1} \cap \dom{d_2}.\ \judg{\Gamma}{d_1[k] \fieldrel d_2[k] \coerce c_k} \\
-    \mathrm{OneofPreserved}(d_1, d_2) }
+  { \forall \id \in \dom{\dc_1} \cap \dom{\dc_2}.\ \judg{\Gamma}{\dc_1[\id] \fieldrel \dc_2[\id] \coerce \co_{\id}} \\
+    \mathrm{OneofPreserved}(\dc_1, \dc_2) }
   {
-    \judg{\Gamma}{d_1 \dcompat d_2 \coerce \lambda m.\
-      \forall\ k \in d_2.
+    \judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \lambda \m.\
+      \forall\ \id \in \dc_2.
       {\begin{cases}
-        k \mapsto c_k(m[k]) & k \in \dom {d_1} \cap \dom{d_2} \\
-        k \mapsto \init(d_2[k]) & k \in \dom{d_2} \setminus \dom{d_1}
+        \id \mapsto \co_{\id}(\m[\id]) & \id \in \dom {\dc_1} \cap \dom{\dc_2} \\
+        \id \mapsto \init(\dc_2[\id]) & \id \in \dom{\dc_2} \setminus \dom{\dc_1}
       \end{cases}}
   }
 }
@@ -117,12 +117,12 @@ them using the wire type in the tag during parsing.
 
 The OneofPreserved definition is part of Theorem~\ref{thm:trans-valid}. Placing
 the one layer definition here means that a derivation
-$\judg{\Gamma}{d_1 \dcompat d_2 \coerce c}$ already contains OneofPreservedAll over
+$\judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \co}$ already contains OneofPreservedAll over
 every pair that it actually touches during the derivation.
 
 Once descriptors model the reserved set, a premise will need to be added to
-\textsc{D-Update} requiring that the reserved set of $d_1$ is a subset of the
-reserved set of $d_2$. % TODO
+\textsc{D-Update} requiring that the reserved set of $\dc_1$ is a subset of the
+reserved set of $\dc_2$. % TODO
 
 \textbf{Example.}
 
@@ -145,37 +145,37 @@ message Tree' {
     of the cardinality table.
   \item \textbf{Key 2.} \textsc{F-Msg}, then \textsc{N-Assum}, gives $x$, lifted to the OPT slot as ``map $x$''.
   \end{itemize}
-\item Result: $\mathsf{fix}\ x.\ \lambda m.\ \{1 \mapsto \decop{\intl}\circ\encop{\ints}(m[1]),\ 2 \mapsto \mathrm{map}\ x\ (m[2])\}$
+\item Result: $\mathsf{fix}\ x.\ \lambda \m.\ \{1 \mapsto \decop{\intl}\circ\encop{\ints}(\m[1]),\ 2 \mapsto \mathrm{map}\ x\ (\m[2])\}$
 \end{enumerate}
 
 This is the recursive function you would write by hand. $x$ is only ever applied
-to m[2], which is a nested message of strictly smaller depth. That's why the
+to \m[2], which is a nested message of strictly smaller depth. That's why the
 note says the $\mathsf{fix}$ is well founded on the writer's value.
 
 \subsubsection{Fields \& Cardinality}
 
 To prove
-$\judg{\Gamma}{\field{\kappa_1}{\tau_1} \fieldrel \field{\kappa_2}{\tau_2}}$, we'll need
-$\judg{\Gamma}{\tau_1 \typrel \tau_2 \coerce c}$ as a premise and some statement that the
+$\judg{\Gamma}{\field{\card_1}{\ty_1} \fieldrel \field{\card_2}{\ty_2}}$, we'll need
+$\judg{\Gamma}{\ty_1 \typrel \ty_2 \coerce \co}$ as a premise and some statement that the
 cardinality pair.
 
 The slot holds both the payload type an a cardinality marker. In order to
 coerce a slot, we need to know that the payload types are compatible and lift
 that to the whole slot.
 
-\[ \kappa_1 \cardrel{\tau_1}{\tau_2} \kappa_2 \coerce \left( L : (\denote{\tau_1} \to \denote{\tau_2}) \rightarrow
-    \mathrm{Slot}_{\kappa_1}(\tau_1) \rightarrow \mathrm{Slot}_{\kappa_2}(\tau_2) \right) \]
+\[ \card_1 \cardrel{\ty_1}{\ty_2} \card_2 \coerce \left( L : \left(\denote{\ty_1} \to \denote{\ty_2}\right) \rightarrow
+    \denote{\field{\card_1}{\ty_1}} \rightarrow \denote{\field{\card_2}{\ty_2}} \right) \]
 
 The judgment here is indexed by both types since
 \begin{itemize}
 \item Some rules need to access the default for a type, like converting from an
   implicit field to an optional one. If the input payload has the default, we
-  need to convert that to \texttt{None}. 
+  need to convert that to \texttt{None}.
 \item Message merge semantics need to trigger if the payload types are
   messages. More generally, there are several cases where a single payload can
   be split or combined with others. For some types, that's a last-write-wins
   operation, but messages merge. To accomplish this, we use a \emph{combine}
-  operator $\combine{\tau}$ which takes the right argument for last-write-wins types
+  operator $\combine{\ty}$ which takes the right argument for last-write-wins types
   and merges messages.
 \item If the payload is a packed scalar type, converting from repeated to
   implicit might cause a wire type mismatch.
@@ -184,63 +184,63 @@ Also note that implicit presence on a message field doesn't exist in Proto3, and
 descriptor well-formedness excludes it (Definition~\ref{def:dwf}), so the rule
 doesn't need to handle this.
 
-\[ \infer[F-Field]{ \judg{\Gamma}{\tau_1 \typrel \tau_2 \coerce c} \\ \kappa_1 \cardrel{\tau_1}{\tau_2} \kappa_2 \coerce L
-  }{ \judg{\Gamma}{\field{\kappa_1}{\tau_1} \typrel \field{\kappa_2}{\tau_2} \coerce L(c)} } \]
+\[ \infer[F-Field]{ \judg{\Gamma}{\ty_1 \typrel \ty_2 \coerce \co} \\ \card_1 \cardrel{\ty_1}{\ty_2} \card_2 \coerce L
+  }{ \judg{\Gamma}{\field{\card_1}{\ty_1} \typrel \field{\card_2}{\ty_2} \coerce L(\co)} } \]
 
 Then, we introduce Protobuf cardinality rules
 
 \begin{mathpar}
-  \infer[K-Imp]{ }{ \imp \cardrel{\tau_1}{\tau_2} \imp \coerce \lambda\ c.\ \lambda\ (\impslot{p}). \impslot{(c\ 
-      p)} }
+  \infer[K-Imp]{ }{ \imp \cardrel{\ty_1}{\ty_2} \imp \coerce \lambda\ \co.\ \lambda\ (\impslot{\pay}). \impslot{(\co\
+      \pay)} }
 
-  \infer[K-Opt]{ }{ \opt \cardrel{\tau_1}{\tau_2} \opt \coerce \lambda\
-    c.\ \mathrm{map}_{\mathtt{option}}\ c}
+  \infer[K-Opt]{ }{ \opt \cardrel{\ty_1}{\ty_2} \opt \coerce \lambda\
+    \co.\ \mathrm{map}_{\mathtt{option}}\ \co}
 
-  \infer[K-Rep]{ }{ \rep \cardrel{\tau_1}{\tau_2} \rep \coerce \lambda\ c.\
-    \mathrm{map}_{\mathtt{List}}\ c}
+  \infer[K-Rep]{ }{ \rep \cardrel{\ty_1}{\ty_2} \rep \coerce \lambda\ \co.\
+    \mathrm{map}_{\mathtt{List}}\ \co}
 
   {\color{red}
-  \infer[K-OptImp]{ } { \opt \cardrel{\tau_1}{\tau_2} \imp \coerce \lambda c.\ \lambda s.\
-    \mathbf{case}\ s\ \mathbf{of}\ \none \Rightarrow \impslot{\init_{\tau_2}} \mid \some{p} \Rightarrow \imp\ (c\
-    p) }
+  \infer[K-OptImp]{ } { \opt \cardrel{\ty_1}{\ty_2} \imp \coerce \lambda \co.\ \lambda \slot.\
+    \mathbf{case}\ \slot\ \mathbf{of}\ \none \Rightarrow \impslot{\init_{\ty_2}} \mid \some{\pay} \Rightarrow \imp\ (\co\
+    \pay) }
   }
 
   {\color{red}
-  \infer[K-ImpOpt\ (open)]{ } { \imp \cardrel{\tau_1}{\tau_2} \opt \coerce \lambda c.\ \lambda
-    (\impslot{p}).\ \mathbf{if}\ p = \init_{\tau_1}\ \mathbf{then}\ \none\
-    \mathbf{else}\ \some{(c\ p)} }
+  \infer[K-ImpOpt\ (open)]{ } { \imp \cardrel{\ty_1}{\ty_2} \opt \coerce \lambda \co.\ \lambda
+    (\impslot{\pay}).\ \mathbf{if}\ \pay = \init_{\ty_1}\ \mathbf{then}\ \none\
+    \mathbf{else}\ \some{(\co\ \pay)} }
   }
 
   {\color{red}
   \infer[K-OptRep]{ }
-    { \opt \cardrel{\tau_1}{\tau_2} \rep \coerce
-      \lambda c.\ \lambda s.\ \mathbf{case}\ s\ \mathbf{of}\
-        \none \Rightarrow [\,] \mid \some{p} \Rightarrow [c\ p] }
+    { \opt \cardrel{\ty_1}{\ty_2} \rep \coerce
+      \lambda \co.\ \lambda \slot.\ \mathbf{case}\ \slot\ \mathbf{of}\
+        \none \Rightarrow [\,] \mid \some{\pay} \Rightarrow [\co\ \pay] }
    }
 
   {\color{red}
   \infer[K-RepOpt]
-    { \neg\packable(\tau_1) }
-    { \rep \cardrel{\tau_1}{\tau_2} \opt \coerce
-      \lambda c.\ \lambda l.\ \mathbf{case}\ l\ \mathbf{of}\
+    { \neg\packable(\ty_1) }
+    { \rep \cardrel{\ty_1}{\ty_2} \opt \coerce
+      \lambda \co.\ \lambda l.\ \mathbf{case}\ l\ \mathbf{of}\
         [\,] \Rightarrow \none \mid
-        p :: ps \Rightarrow \some{(\mathrm{foldl}\ \combine{\tau_2}\ (c\ p)\ (\mathrm{map}\ c\ ps))} }
+        \pay :: ps \Rightarrow \some{(\mathrm{foldl}\ \combine{\ty_2}\ (\co\ \pay)\ (\mathrm{map}\ \co\ ps))} }
   }
 
   {\color{red}
   \infer[K-ImpRep\ (open)]{ }
-    { \imp \cardrel{\tau_1}{\tau_2} \rep \coerce
-      \lambda c.\ \lambda (\impslot{p}).\
-        \mathbf{if}\ p = \init_{\tau_1}\ \mathbf{then}\ [\,]\ \mathbf{else}\ [c\ p] }
+    { \imp \cardrel{\ty_1}{\ty_2} \rep \coerce
+      \lambda \co.\ \lambda (\impslot{\pay}).\
+        \mathbf{if}\ \pay = \init_{\ty_1}\ \mathbf{then}\ [\,]\ \mathbf{else}\ [\co\ \pay] }
    }
 
   {\color{red}
   \infer[K-RepImp]
-    { \neg\packable(\tau_1) }
-    { \rep \cardrel{\tau_1}{\tau_2} \imp \coerce
-      \lambda c.\ \lambda l.\ \mathbf{case}\ l\ \mathbf{of}\
-        [\,] \Rightarrow \impslot{\init_{\tau_2}} \mid
-        p :: ps \Rightarrow \impslot{(\mathrm{foldl}\ \combine{\tau_2}\ (c\ p)\ (\mathrm{map}\ c\ ps))} }
+    { \neg\packable(\ty_1) }
+    { \rep \cardrel{\ty_1}{\ty_2} \imp \coerce
+      \lambda \co.\ \lambda l.\ \mathbf{case}\ l\ \mathbf{of}\
+        [\,] \Rightarrow \impslot{\init_{\ty_2}} \mid
+        \pay :: ps \Rightarrow \impslot{(\mathrm{foldl}\ \combine{\ty_2}\ (\co\ \pay)\ (\mathrm{map}\ \co\ ps))} }
    }
 \end{mathpar}
 
@@ -271,11 +271,11 @@ which can be derived. They're stated here for clarity.
 Some notes on the cardinality rules:
 \begin{itemize}
 \item Every axiom except the two marked open have the form
-  $L(c) = \eta \circ \mathrm{map}\ c$ (or could be rewritten into the form) where
+  $L(\co) = \eta \circ \mathrm{map}\ \co$ (or could be rewritten into the form) where
   $\eta$ is a function that never inspects the payload. \textsc{K-ImpRep} and
   \textsc{K-ImpOpt} involve comparisons against the initial value for that type,
   which is why their soundness depends on what the encoding relation allows.
-\item \textsc{K-Rep} doesn't need a $\packable(\tau_1)$ premise since the payload
+\item \textsc{K-Rep} doesn't need a $\packable(\ty_1)$ premise since the payload
   rules (defined below) \emph{never} allow us to cross from packable types to
   unpackable types and vice versa.
 \item \textsc{K-RepImp} excludes all packed scalars, which might be overly
@@ -292,11 +292,11 @@ Some notes on the cardinality rules:
 \subsubsection{Payloads}
 
 \begin{mathpar}
-  \infer[T-Refl]{ }{ \judg{\Gamma}{\tau \typrel \tau \coerce \mathrm{id}} }
+  \infer[T-Refl]{ }{ \judg{\Gamma}{\ty \typrel \ty \coerce \mathrm{id}} }
 
   \infer[T-Varint]
-    { \tau_1, \tau_2 \in \vints }
-    { \judg{\Gamma}{\tau_1 \typrel \tau_2 \coerce \decop{\tau_2} \circ \encop{\tau_1}} } 
+    { \ty_1, \ty_2 \in \vints }
+    { \judg{\Gamma}{\ty_1 \typrel \ty_2 \coerce \decop{\ty_2} \circ \encop{\ty_1}} }
 
   \infer[T-StrByt]{ }{ \judg{\Gamma}{\String \typrel \byt \coerce \mathrm{id}} }
 
@@ -304,8 +304,8 @@ Some notes on the cardinality rules:
       \String \coerce \mathrm{id}} }
 
   \infer[F-Msg]
-    { \judg{\Gamma}{a_1 \dcompat a_2 \coerce c} }
-    { \judg{\Gamma}{\mathtt{msg}\ a_1 \typrel \mathtt{msg}\ a_2 \coerce c} }
+    { \judg{\Gamma}{a_1 \dcompat a_2 \coerce \co} }
+    { \judg{\Gamma}{\mathtt{msg}\ a_1 \typrel \mathtt{msg}\ a_2 \coerce \co} }
 \end{mathpar}
 
 Pairs of wire-compatible but undesirable rules, such as $\double$ to $\fixedl$
@@ -326,63 +326,63 @@ to the new type.
 
 \vspace{1em}
 \begin{definition}[Semantic compatibility, type level]\label{def:sem-compat-typ}
-  A coercion $g : \denote{\tau_1} \rightarrow \denote{\tau_2}$ \emph{carries
-    $\tau_1$ into $\tau_2$ up to depth $n$}, written
-  $\semjudg[n]{g : \tau_1 \typrel \tau_2}$, when
-  \[ \forall\ \validv{v}{\tau_1} \text{ with } \mathrm{depth}_f(v) \le n,\
-    \forall\ bs.\ \encodes{\tau_1}(v, bs) \rightarrow
-    \mathrm{parse}_{\tau_2}(bs) = \some{g(v)}. \]
+  A coercion $g : \denote{\ty_1} \rightarrow \denote{\ty_2}$ \emph{carries
+    $\ty_1$ into $\ty_2$ up to depth $n$}, written
+  $\semjudg[n]{g : \ty_1 \typrel \ty_2}$, when
+  \[ \forall\ \validv{v}{\ty_1} \text{ with } \mathrm{depth}_f(v) \le n,\
+    \forall\ \bs.\ \encodes{\ty_1}(v, \bs) \rightarrow
+    \mathrm{parse}_{\ty_2}(\bs) = \some{g(v)}. \]
 \end{definition}
 
 \vspace{1em}
 \begin{definition}[Semantic compatibility, field level]\label{def:sem-compat-fld}
-  A coercion $g : \denote{s_1} \rightarrow \denote{s_2}$ \emph{carries $s_1$ into $s_2$ up
-  to depth $n$}, written $\semjudg[n]{g : s_1 \dcompat s_2}$, when 
-\[ \forall\ \validv{s}{f_1}, rs.\ \mathrm{depth}(s) \le n \rightarrow \encodes[k]{f_1}(s, rs) \rightarrow
-  \assemble_{f_2}^k(rs) = \some{(g\ s)} \]
+  A coercion $g : \denote{\slot_1} \rightarrow \denote{\slot_2}$ \emph{carries $\slot_1$ into $\slot_2$ up
+  to depth $n$}, written $\semjudg[n]{g : \slot_1 \dcompat \slot_2}$, when
+\[ \forall\ \validv{\slot}{f_1}, rs.\ \mathrm{depth}(\slot) \le n \rightarrow \encodes[\id]{f_1}(\slot, rs) \rightarrow
+  \assemble_{f_2}^{\id}(rs) = \some{(g\ \slot)} \]
 and no record of $rs$ is skipped.
 \end{definition}
 
-Here $\encodes[k]{f}(s, rs)$ says that $rs$, a list of records with field
-number $k$, is a valid encoding of slot $s$. The message-level relation is
+Here $\encodes[\id]{f}(\slot, rs)$ says that $rs$, a list of records with field
+number $\id$, is a valid encoding of slot $\slot$. The message-level relation is
 defined from it:
 \[
-  \encodes{d}(m, bs) \iff
-  \records(bs) = \some{rs}
-  \wedge \forall (k, w, p) \in rs.\ k \in \dom{d}
-  \wedge \forall k \in \dom{d}.\ \encodes[k]{d[k]}(m[k], \restr{rs}{k}).
+  \encodes{\dc}(\m, \bs) \iff
+  \records(\bs) = \some{rs}
+  \wedge \forall (\id, w, \pay) \in rs.\ \id \in \dom{\dc}
+  \wedge \forall \id \in \dom{\dc}.\ \encodes[\id]{\dc[\id]}(\m[\id], \restr{rs}{\id}).
 \]
 Records of different fields may appear in any order. $\assemble_f(rs)$ is the
 part of $\mathrm{parse}$ that builds one slot from that field's records
 (Section~\ref{sec:philosophy}):
 \begin{itemize}
-\item An empty list gives $\init_\tau$, $\none$, or $[\,]$.
-\item Singular slots combine the records' values with $\combine{\tau}$.
+\item An empty list gives $\init_{\ty}$, $\none$, or $[\,]$.
+\item Singular slots combine the records' values with $\combine{\ty}$.
 \item Repeated slots concatenate the records' values, packed or unpacked.
 \end{itemize}
 "No record of $rs$ is skipped" means
-$\forall (k, w, p) \in rs.\ \accepts(f_2, w)$.
+$\forall (\id, w, \pay) \in rs.\ \accepts(f_2, w)$.
 
 \vspace{1em}
 \begin{lemma}[Message from fields]\label{lem:msg-from-fields}
-  Suppose $\mathrm{OneofPreserved}(d_1, d_2)$, and
-  $\semjudg[n]{g_k : d_1[k] \fieldrel d_2[k]}$ for every
-  $k \in \dom{d_1} \cap \dom{d_2}$. Let $f$ be the coercion
-  \textsc{D-Update} builds from the $g_k$. Then for all
-  $\validv{m}{d_1}$ with $\mathrm{depth}_v(m) \le n$ and all $bs$ with
-  $\encodes{d_1}(m, bs)$,
-  \[ \mathrm{parse}_{d_2}(bs) = \some{(f(m), U)} \quad\text{with}\quad
-     U \subseteq \dom{d_1} \setminus \dom{d_2}. \]
+  Suppose $\mathrm{OneofPreserved}(\dc_1, \dc_2)$, and
+  $\semjudg[n]{g_{\id} : \dc_1[\id] \fieldrel \dc_2[\id]}$ for every
+  $\id \in \dom{\dc_1} \cap \dom{\dc_2}$. Let $f$ be the coercion
+  \textsc{D-Update} builds from the $g_{\id}$. Then for all
+  $\validv{\m}{\dc_1}$ with $\mathrm{depth}_v(\m) \le n$ and all $\bs$ with
+  $\encodes{\dc_1}(\m, \bs)$,
+  \[ \mathrm{parse}_{\dc_2}(\bs) = \some{(f(\m), U)} \quad\text{with}\quad
+     U \subseteq \dom{\dc_1} \setminus \dom{\dc_2}. \]
 \end{lemma}
 
 The \textsc{F-Field} case of the inner induction reduces to one lemma per axiom,
 none of which require the $\Sigma$ or $\Gamma$ context. If
-$\forall\ j \le n. \semjudg[j]{c : \tau_1 \typrel \tau_2}$ and
-$\kappa_1 \cardrel{\tau_1}{\tau_2} \coerce L$ then
-$\semjudg[n]{L(c) : \field{\kappa_1}{\tau_1} \fieldrel \field{\kappa_2}{\tau_2}}$.
+$\forall\ j \le n. \semjudg[j]{\co : \ty_1 \typrel \ty_2}$ and
+$\card_1 \cardrel{\ty_1}{\ty_2} \coerce L$ then
+$\semjudg[n]{L(\co) : \field{\card_1}{\ty_1} \fieldrel \field{\card_2}{\ty_2}}$.
 
-For message payloads, those lemmas would need $c$ to be a merge homomorphism,
-$c(\mathrm{merge}\ m\ m') = \mathrm{merge}\ (c\ m)\ (c\ m')$. It's required when
+For message payloads, those lemmas would need $\co$ to be a merge homomorphism,
+$\co(\mathrm{merge}\ \m\ \m') = \mathrm{merge}\ (\co\ \m)\ (\co\ \m')$. It's required when
 updating from a repeated field to a singular one, i.e. \textsc{K-RepOpt} and
 \textsc{K-RepImp}. It would also be required in \textsc{K-Opt} if Encodes may
 split a singular message across several records (which is can, this is the merge
@@ -390,23 +390,23 @@ semantics of Protobuf). This property may come for free naturally, like
 coherence.
 
 There are also considerations here about if Encodes is closed under
-concatenation. If some byte string $bs$ encodes $m$ and $bs'$ encodes $m'$, then
-$bs \doubleplus bs'$ encodes $\mathsf{merge}(m, m')$. Then wire-soundness
+concatenation. If some byte string $\bs$ encodes $\m$ and $\bs'$ encodes $\m'$, then
+$\bs \doubleplus \bs'$ encodes $\mathsf{merge}(\m, \m')$. Then wire-soundness
 applied to the concatenated byte string, together with $\mathsf{parse}$
 respecting concatenation forces this equation on all valid messages. Validity of
-$\mathsf{merge}(m, m')$ would need to check for oneofs, where the late member
+$\mathsf{merge}(\m, \m')$ would need to check for oneofs, where the late member
 wins.
 
 \vspace{1em}
 \begin{definition}[Semantic compatibility]\label{def:sem-compat}
-  A coercion $c : \denote{d_1} \rightarrow \denote{d_2}$ \emph{carries $d_1$ into
-  $d_2$ up to depth $n$}, written $\semjudg[n]{c : d_1 \dcompat d_2}$, when
-  \[ \forall\ \validv{m}{d_1} \text{ with } \mathrm{depth}_v(m) \le n,\
-    \forall\ bs.\ \encodes{d_1}(m, bs) \rightarrow
-    \mathrm{parse}_{d_2}(bs) = \some{c(m)}. \]
-  It \emph{carries $d_1$ into $d_2$}, written $\semjudg{f : d_1 \dcompat d_2}$, when
-  it does so at every depth, and $\semjudg{d_1 \dcompat d_2}$ abbreviates
-  $\exists\ f.\ \semjudg{f : d_1 \dcompat d_2}$.
+  A coercion $\co : \denote{\dc_1} \rightarrow \denote{\dc_2}$ \emph{carries $\dc_1$ into
+  $\dc_2$ up to depth $n$}, written $\semjudg[n]{\co : \dc_1 \dcompat \dc_2}$, when
+  \[ \forall\ \validv{\m}{\dc_1} \text{ with } \mathrm{depth}_v(\m) \le n,\
+    \forall\ \bs.\ \encodes{\dc_1}(\m, \bs) \rightarrow
+    \mathrm{parse}_{\dc_2}(\bs) = \some{\co(\m)}. \]
+  It \emph{carries $\dc_1$ into $\dc_2$}, written $\semjudg{f : \dc_1 \dcompat \dc_2}$, when
+  it does so at every depth, and $\semjudg{\dc_1 \dcompat \dc_2}$ abbreviates
+  $\exists\ f.\ \semjudg{f : \dc_1 \dcompat \dc_2}$.
 \end{definition}
 
 \vspace{1em}
@@ -419,25 +419,25 @@ wins.
 
 \vspace{1em}
 \begin{definition}[Soundness]\label{def:soundness}
-  \[ \judg{\emptyset}{d_1 \dcompat d_2 \coerce c} \implies \wfd{d_1} \implies \wfd{d_2}
-    \implies c \text{ is well behaved} \]
+  \[ \judg{\emptyset}{\dc_1 \dcompat \dc_2 \coerce \co} \implies \wfd{\dc_1} \implies \wfd{\dc_2}
+    \implies \co \text{ is well behaved} \]
 \end{definition} % TODO link this definition with semantic compatibility
 
 \vspace{1em}
 \begin{corollary}[Soundness of the compatibility relation]\label{cor:compat-sound}
   $\semjudg[n]{\emptyset}$ holds vacuously at every $n$, so
-  \[ \judg{\emptyset}{d_1 \dcompat d_2} \implies\ \semjudg{ \coercion{d_1}{\cdot}{d_2} : d_1
-      \dcompat d_2} \]
+  \[ \judg{\emptyset}{\dc_1 \dcompat \dc_2} \implies\ \semjudg{ \coercion{\dc_1}{\cdot}{\dc_2} : \dc_1
+      \dcompat \dc_2} \]
 \end{corollary}
 
 
 A proof of these theorems would require strong induction on $n$, since a nested
 message might be of any depth less than the current message. At each inductive
 step of depth $n$, a nested induction on the derivation of the descriptor
-relation would be required. 
+relation would be required.
 
 \begin{itemize}
-\item Induction on the $\judg{\Gamma}{d_1 \dcompat d_2}$ derivation itself is not enough, due to
+\item Induction on the $\judg{\Gamma}{\dc_1 \dcompat \dc_2}$ derivation itself is not enough, due to
   \textsc{N-Assum}. When doing induction on the derivation, the inductive
   hypothesis would state that the conclusion holds for all sub-derivations,
   which \textsc{N-Assum} doesn't have. We get the fact that $(a_1, a_2) \in \Gamma$ but
@@ -471,22 +471,22 @@ Start with the view that the descriptors are recursive record types (some
 examples are discussed in Section~\ref{sec:recursive-types}).  Then the
 descriptor relation I'm proposing would be a small proof system where we want to
 show that two descriptors are compatible using the judgment
-$\judg{\emptyset}{d_1 \dcompat d_2}$ (explained below), but we could \emph{define} what
+$\judg{\emptyset}{\dc_1 \dcompat \dc_2}$ (explained below), but we could \emph{define} what
 it means for two descriptor to be compatible as
 \begin{mathpar}
-  d_1 := \mu\ X.\ F\ X 
+  \dc_1 := \mu\ X.\ F\ X
 
-  d_2 := \mu\ X.\ G\ X 
+  \dc_2 := \mu\ X.\ G\ X
 
-  \semjudg{d_1 \dcompat d_2 := \exists\ f: \denote{d_1} \rightarrow \denote{d_2}.\ \forall\
-    \validv{m}{d_1}, bs.\ \encodes{d_1}(m, bs) \rightarrow \mathrm{parse}_{d_2}(bs) =
-    f(m)}
+  \semjudg{\dc_1 \dcompat \dc_2 := \exists\ f: \denote{\dc_1} \rightarrow \denote{\dc_2}.\ \forall\
+    \validv{\m}{\dc_1}, \bs.\ \encodes{\dc_1}(\m, \bs) \rightarrow \mathrm{parse}_{\dc_2}(\bs) =
+    f(\m)}
 \end{mathpar}
 
 In English, then the definition of two descriptors being compatible is that
 there exists a transformation such that for all valid messages under descriptor
-$d_1$, we can serialize that message into some encoding that can be parsed to
-produce the image of $m$ under the transformation.
+$\dc_1$, we can serialize that message into some encoding that can be parsed to
+produce the image of $\m$ under the transformation.
 
 However, the lean formalization doesn't use the $\mu$-bound version of descriptor
 types (See Section~\ref{sec:log-rel-lean}), but instead a flat symbol table
@@ -494,17 +494,17 @@ $\Sigma$. This symbol table is global and fixed by the \texttt{.proto} file,
 containing names and descriptors for all the cycles the descriptor of interest
 is part of. Additionally, there is $A$, a set of name pairs currently assumed to
 be compatible; it grows as the derivation descends. The judgment is then
-$\judg{\Gamma}{d_1 \dcompat d_2}$, with two rules for the assumption context $\Gamma$:
+$\judg{\Gamma}{\dc_1 \dcompat \dc_2}$, with two rules for the assumption context $\Gamma$:
 \begin{mathpar}
   \infer[N-Assum]{ (a_1, a_2) \in \Gamma }{ \judg{\Gamma}{a_1 \dcompat a_2 }}
 
   \infer[N-Unfold]
     { (a_1, a_2) \notin \dom{\Gamma} \\
-      \judg{\Gamma, (a_1, a_2) \mapsto x}{\Sigma(a_1) \dcompat \Sigma(a_2) \coerce c} }
-    { \judg{\Gamma}{a_1 \dcompat a_2 \coerce \mathsf{fix}\ x.\ c} }
+      \judg{\Gamma, (a_1, a_2) \mapsto x}{\Sigma(a_1) \dcompat \Sigma(a_2) \coerce \co} }
+    { \judg{\Gamma}{a_1 \dcompat a_2 \coerce \mathsf{fix}\ x.\ \co} }
 \end{mathpar}
 
-Compatibility of the top level descriptors is $\judg{\emptyset}{d_1 \dcompat d_2}$. The
+Compatibility of the top level descriptors is $\judg{\emptyset}{\dc_1 \dcompat \dc_2}$. The
 \textsc{N-Unfold} rule is equivalent to $\mu$ unfolding, with a side condition
 that $A$ grows.
 
@@ -512,10 +512,10 @@ Using that framing, we can define a logical relation as such:
 
 \vspace{1em}
 \begin{definition}[Message Depth]\label{def:msg-depth}
-\[ \mathrm{depth}_v(m) = \max_{(k,v) \in m} \mathrm{depth}_f(v), \qquad
+\[ \mathrm{depth}_v(\m) = \max_{(\id,v) \in \m} \mathrm{depth}_f(v), \qquad
    \mathrm{depth}_f(v) = \begin{cases}
      0 & v \text{ scalar or missing} \\
-     \mathrm{depth}_v(m') + 1 & v = \mathtt{F\_MSG}\ m'
+     \mathrm{depth}_v(\m') + 1 & v = \mathtt{F\_MSG}\ \m'
    \end{cases} \]
 \end{definition}
 
@@ -525,11 +525,11 @@ Using that framing, we can define a logical relation as such:
   $A \subseteq \dom{\Sigma} \times \dom{\Sigma}$. Fix $n$ and assume
   $\semjudg[n]{\Gamma}$. Then
   \begin{enumerate}
-    \item if $\judg{\Gamma}{d_1 \dcompat d_2}$ with $\wfd{d_1}$ and
-      $\wfd{d_2}$, then
-      $\semjudg[n]{\coercion{d_1}{\cdot}{d_2} : d_1 \dcompat d_2}$;
-    \item if $\judg{\Gamma}{\tau_1 \typrel \tau_2}$, then
-      $\semjudg[n]{\coercion{\tau_1}{\cdot}{\tau_2} : \tau_1 \typrel \tau_2}$;
+    \item if $\judg{\Gamma}{\dc_1 \dcompat \dc_2}$ with $\wfd{\dc_1}$ and
+      $\wfd{\dc_2}$, then
+      $\semjudg[n]{\coercion{\dc_1}{\cdot}{\dc_2} : \dc_1 \dcompat \dc_2}$;
+    \item if $\judg{\Gamma}{\ty_1 \typrel \ty_2}$, then
+      $\semjudg[n]{\coercion{\ty_1}{\cdot}{\ty_2} : \ty_1 \typrel \ty_2}$;
     \item if $\judg{\Gamma}{a_1 \dcompat a_2}$, then $\semjudg[n]{\{(a_1, a_2)\}}$.
   \end{enumerate}
 \end{theorem}
@@ -537,7 +537,7 @@ Using that framing, we can define a logical relation as such:
 \subsection{Adding Recursion}\label{sec:recursive-types}
 
 Rather than trying to prove
-$\judg{\emptyset}{d_1 \dcompat d_2}$, which would require co-induction, we show that 
+$\judg{\emptyset}{\dc_1 \dcompat \dc_2}$, which would require co-induction, we show that
 \[ \mu\ F \dcompat \mu\ G \vdash F (\mu\ F) \dcompat G (\mu\ G) \]
 which can be done with normal induction. This should be equivalent to the
 original statement using the relation-based definition, when viewed through the
@@ -546,16 +546,16 @@ right lens of folding and unfolding recursive types.
 Consider the addition of recursive descriptors to the Pollux formalization. With
 a descriptor rule like this one
 \[
-  \infer[D-Update]{ \forall\ k \in \dom{d} \cap \dom{d'}.\ d[k] \fieldrel d'[k] }{ d \dcompat d' }
+  \infer[D-Update]{ \forall\ \id \in \dom{\dc} \cap \dom{\dc'}.\ \dc[\id] \fieldrel \dc'[\id] }{ \dc \dcompat \dc' }
 \]
 (Note that for mandatory messages, which aren't supported in Protobuf, we'd need
-that $\dom{d_{mand}} \supseteq \dom{d_{mand}'}$, i.e.\ that mandatory fields can
+that $\dom{\dc_{mand}} \supseteq \dom{\dc_{mand}'}$, i.e.\ that mandatory fields can
 become optional.) the descriptor relation would become co-inductive since an
-update to this descriptor would require showing $d_1[k] \fieldrel d_2[k]$ if
-$k$ is the field where we see the recursive type and the field relation would
+update to this descriptor would require showing $\dc_1[\id] \fieldrel \dc_2[\id]$ if
+$\id$ is the field where we see the recursive type and the field relation would
 include:
-\[ \infer[F-Msg]{ \judg{\Gamma}{a_1 \dcompat a_2 } }{ \field{\kappa}{a_1} \fieldrel \field{\kappa}{a_2} } \]
-So a derivation that $d_1[k] \dcompat d_2[k]$ would need to include a derivation of
+\[ \infer[F-Msg]{ \judg{\Gamma}{a_1 \dcompat a_2 } }{ \field{\card}{a_1} \fieldrel \field{\card}{a_2} } \]
+So a derivation that $\dc_1[\id] \dcompat \dc_2[\id]$ would need to include a derivation of
 itself! The natural solution here is to make $\dcompat$ co-inductive. 
 
 However, if we more closely model the descriptors as proper recursive types, it
@@ -596,7 +596,7 @@ finiteness facts:
   unfolds to, and that unfolding is a regular tree. The checker exploit this by
   carrying an assumption set $A$ of pairs of message names where
   $(a_1, a_2) \in A$ records that $\Sigma(a_1) \dcompat \Sigma(a_2)$ has already been assumed. It
-  is what the $\varnothing$ in $\judg{\emptyset}{d \dcompat d'}$ is referencing and grows
+  is what the $\varnothing$ in $\judg{\emptyset}{\dc \dcompat \dc'}$ is referencing and grows
   over the course of a derivation. Before recursing on a pair of names
   encountered while checking compatibility, the checker checks if that pair is
   already in $A$ and immediately succeeds if so, adding the pair
@@ -627,11 +627,11 @@ finiteness facts:
   finiteness of Protobuf messages.
 \end{enumerate}
 
-Note that an earlier definition of this featured $\exists\ bs$, which is a weaker
+Note that an earlier definition of this featured $\exists\ \bs$, which is a weaker
 statement than the current version. Under the $\exists$ version, we know that there is
-some way to encode $m$ so that we get $f(m)$ but for some sequence of bytes, we
+some way to encode $\m$ so that we get $f(\m)$ but for some sequence of bytes, we
 won't know if a serializer was used which happens to produce that encoding. What
-we really want to say is that every possible way to encode $m$ with a
+we really want to say is that every possible way to encode $\m$ with a
 spec-complaint Protobuf encoding would produce the same, known semantically
 compatible value after parsing.
 
@@ -647,8 +647,8 @@ provides a nice way to check compatibility without having to construct the
 transformation directly. But what is the relationship between the compatibility
 relation and the transformation based definition above? The compatibility
 relation is a \emph{sound} check for the semantic definition:
-\[ \judg{\emptyset}{d_1 \dcompat d_2} \implies\ \semjudg{ \coercion{d_1}{\cdot}{d_2} : d_1
-    \dcompat d_2} \]
+\[ \judg{\emptyset}{\dc_1 \dcompat \dc_2} \implies\ \semjudg{ \coercion{\dc_1}{\cdot}{\dc_2} : \dc_1
+    \dcompat \dc_2} \]
 Completeness, on the other hand, would say that every pair
 of descriptors admitting \emph{some} compatible transformation is accepted by
 the relation. We do not claim completeness for the compatibility relation, which
@@ -713,7 +713,7 @@ and the induction rule for proving things on the descriptor is modeled with the
 assumption context $\Gamma$.
 
 The paper formalization can use the derivation of
-$\judg{\Gamma}{d_1 \dcompat d_2 \coerce c}$ to build the coercion, but lean can't
+$\judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \co}$ to build the coercion, but lean can't
 eliminate a \texttt{Prop} into a coercion. There are two alternatives here.
 \begin{itemize}
 \item Put the derivation into \texttt{Type}. Define \texttt{coerce : Deriv Σ Γ

@@ -18,20 +18,20 @@ encoding formats. When multiple of these variables are needed, you will see
 variants with subscript numbers or apostrophes.
 
 \begin{align*}
-  m &: \text{message} & v &: \text{value} \\
-  k &: \text{field number} & \tau &: \text{type} \\
-  r &: \text{Reserved field set} & \mathtt{n},\ \mathtt{m} &: \text{bit width} \\
-  f &: \text{Field} & \kappa &: \text{cardinality}
+  \m &: \text{message} & v &: \text{value} \\
+  \id &: \text{field number} & \ty &: \text{type} \\
+  \res &: \text{Reserved field set} & \mathtt{n},\ \mathtt{m} &: \text{bit width} \\
+  f &: \text{Field} & \card &: \text{cardinality}
 \end{align*}
 
 Below is a list of the relations about to be defined, along with an English
 explanation of how to read them.
 
 \begin{align*}
-  \valrel &: \text{Value relation} & v_1 : \tau_1 \valrel v_2 : \tau_2 &\rightarrow \text{``}v_1 : \tau_1 \text{ becomes } v_2 :
-                                           \tau_2 \text{''} \\
-  \typrel &: \text{Type relation} & \tau_1 \typrel \tau_2 &\rightarrow \text{``}\tau_1\text{ is type-compatible with }
-                                          \tau_2\text{''} \\
+  \valrel &: \text{Value relation} & v_1 : \ty_1 \valrel v_2 : \ty_2 &\rightarrow \text{``}v_1 : \ty_1 \text{ becomes } v_2 :
+                                           \ty_2 \text{''} \\
+  \typrel &: \text{Type relation} & \ty_1 \typrel \ty_2 &\rightarrow \text{``}\ty_1\text{ is type-compatible with }
+                                          \ty_2\text{''} \\
   \dcompat &: \text{Descriptor relation} & d_1 \dcompat d_2 &\rightarrow \text{``}d_1 \text{ is compatible with } d_2\text{''}
 \end{align*}
 
@@ -71,14 +71,14 @@ information to allow the specification type into include \texttt{option} or
 While it might be tempting to have a roundtrip theorem where the output of the
 serializer is passed directly to the parser, this would require a canonical
 encoding, which Protobuf doesn't have. Instead we make use of a relational
-encoding specification, where $\encodes{\tau}(v, bs)$ means that $v$ can be encoded
-as bytes $bs$ under type $\tau$.
+encoding specification, where $\encodes{\ty}(v, \bs)$ means that $v$ can be encoded
+as bytes $\bs$ under type $\ty$.
 
 \vspace{1em}
 \begin{definition}[Value Relation]
-  A protobuf value at the specification level $v_1$ with protobuf type $\tau_1$ is
-  related to another value $v_2$ at type $\tau_2$, denoted $v_1 : \tau_1 \valrel v_2 : \tau_2$
-  if $\forall\ bs, \encodes{\tau_1}(v_1, bs) \rightarrow parse_{\tau_2}(bs) = v_2$.
+  A protobuf value at the specification level $v_1$ with protobuf type $\ty_1$ is
+  related to another value $v_2$ at type $\ty_2$, denoted $v_1 : \ty_1 \valrel v_2 : \ty_2$
+  if $\forall\ \bs, \encodes{\ty_1}(v_1, \bs) \rightarrow parse_{\ty_2}(\bs) = v_2$.
 \end{definition}
 
 \subsubsection{Basic Rules}
@@ -87,27 +87,27 @@ The value relation is reflexive and transitive, however a direct transitivity
 rules isn't included in the relation. To understand why, first consult the
 integer rules in Section~\ref{sec:proto-compat-ints} and consider what happens
 when an integer is cast to a smaller byte width. Specifically, consider $2^{40}$
-as a \uintl. Casting this value to a \uints can be done with
+as a \uintl. Casting this value to a \uints{} can be done with
 the \textsc{Uint-Chg-W} rule, resulting in
-$2^{40} : \mathtt{uint64} \valrel 0 : \mathtt{uint32}$, which describes changing
+$2^{40} : \uintl \valrel 0 : \uints$, which describes changing
 the field perfectly. However, we can then promote this field back to
-\texttt{uint64} with another application of \textsc{Uint-Chg-W}, getting
-$0 : \mathtt{uint32} \valrel 0 : \mathtt{uint64}$. Having a transitive rule
-would result in $2^{40} : \mathtt{uint64} \valrel 0 : \mathtt{uint64}$ but
-clearly parsing a serialization of $2^{40}$ as a \texttt{uint64} when it was
-serialized as a \texttt{uint64} should recover the original value!
+\uintl{} with another application of \textsc{Uint-Chg-W}, getting
+$0 : \uints \valrel 0 : \uintl$. Having a transitive rule
+would result in $2^{40} : \uintl \valrel 0 : \uintl$ but
+clearly parsing a serialization of $2^{40}$ as a \uintl{} when it was
+serialized as a \uintl{} should recover the original value!
 
 \begin{mathpar}
-  \infer[Refl]{ }{v:\tau \valrel v:\tau}
+  \infer[Refl]{ }{v:\ty \valrel v:\ty}
 \end{mathpar}
 
 \subsubsection{String \& Byte Rules}
 
-It is possible to convert been the \texttt{string} and \texttt{bytes} types,
+It is possible to convert been the \String{} and \byt{} types,
 although the host program may have to deal with control character bytes being
 present in the resulting string. Technically the Protobuf specification requires
 that all strings are encoded in UTF-8, so we can optionally add that requirement
-to converting from \texttt{bytes} to \texttt{string}.
+to converting from \byt{} to \String.
 
 \begin{mathpar}
   \infer[Str-Byte]{ }{v: \String \valrel v: \byt}
@@ -125,11 +125,11 @@ rule as using the writer's type to convert it to the wire value, then the
 reader's type to convert it to the new parsed value.
 
 As a shorthand, statements like \uintn{n} represent a variable length integer
-encoding into $n$ bits. In order to result in valid protobuf types,
-$n \in \{32, 64\}$. 
+encoding into $\width$ bits. In order to result in valid protobuf types,
+$\width \in \{32, 64\}$.
 
-It is also worth noting that the expression $v : \tau$ actually refers to a value
-of type $\denote{\tau}$ with a label of the type. All of the integer
+It is also worth noting that the expression $v : \ty$ actually refers to a value
+of type $\denote{\ty}$ with a label of the type. All of the integer
 types have $\denote{\cdot} = \mathbb{Z}$, as shown in Table~\ref{tab:val-spec},
 which allows for the free conversion between integer types. Finally, $\%$ refers
 to modulus using floored division, so $-1 \fmod 2 = 1$ and the rules are
@@ -137,16 +137,16 @@ written with truncated integer division.
 
 Let $\vints = \left\{ \uintn{n}, \intn{n}, \sintn{n}, \bool \right\}$ represent
 the protobuf types encoded on the wire as a variable-width integer. For each
-$\tau \in \vints$, let
+$\ty \in \vints$, let
 \begin{align*}
-  \encop{\tau} &: \denote{\tau} \rightarrow \payload \\
-  \decop{\tau} &: \payload \rightarrow \denote{\tau}
+  \encop{\ty} &: \denote{\ty} \rightarrow \payload \\
+  \decop{\ty} &: \payload \rightarrow \denote{\ty}
 \end{align*}
-be functions that convert from a $\tau$-typed writer to the payload number and
-the value recovered by a $\tau$-typed reader respectively.
+be functions that convert from a $\ty$-typed writer to the payload number and
+the value recovered by a $\ty$-typed reader respectively.
 \[
-  \infer[Varint]{ \tau_1, \tau_2 \in \vints \\ v_2 =
-    \dec{\tau_2}{\enc{\tau_1}{v_1}}}{v_1 : \tau_1 \valrel v_2 : \tau_2}
+  \infer[Varint]{ \ty_1, \ty_2 \in \vints \\ v_2 =
+    \dec{\ty_2}{\enc{\ty_1}{v_1}}}{v_1 : \ty_1 \valrel v_2 : \ty_2}
 \]
 
 The table below gives the decoding and encoding functions for each type, and
@@ -156,11 +156,11 @@ makes use of the following definitions.
   \centering
   \begin{tabular}{l c c}
     \toprule
-    $\tau$ & $\enc{\tau}{v}$ & $\dec{\tau}{x}$ \\
+    $\ty$ & $\enc{\ty}{v}$ & $\dec{\ty}{x}$ \\
     \midrule
-    \uintn{n} & $v$ & $x \fmod 2^n$ \\
-    \intn{n} & $v \fmod 2^n$ & $((x + 2^{n-1}) \fmod 2^n) - 2^{n-1}$ \\
-    \sintn{n} & $\zz{v}$ & $\unzz{x \fmod 2^n}$ \\
+    \uintn{n} & $v$ & $x \fmod 2^{\width}$ \\
+    \intn{n} & $v \fmod 2^{\width}$ & $((x + 2^{\width-1}) \fmod 2^{\width}) - 2^{\width-1}$ \\
+    \sintn{n} & $\zz{v}$ & $\unzz{x \fmod 2^{\width}}$ \\
     \bool & $\ind{v}$ & $x \ne 0$ \\
     \bottomrule
   \end{tabular}
@@ -196,7 +196,7 @@ converting between varint scalars.
   \centering
   \begin{tabular}{lcccc}
     \toprule
-    \multirow{2}{*}{writer $v_1 : \tau_1$} & \multicolumn{4}{c}{reader $\tau_2$} \\
+    \multirow{2}{*}{writer $v_1 : \ty_1$} & \multicolumn{4}{c}{reader $\ty_2$} \\
     & \uintn{m} & \intn{m} & \sintn{m} & \bool{} \\
     \midrule
     \uintn{n} & $v_1 \fmod 2^m$      & $\tosigned{m}{v_1}$      & $\unzz{v_1 \fmod 2^m}$      & $v_1 \ne 0$ \\
@@ -208,7 +208,7 @@ converting between varint scalars.
   \caption{The transform induced by \textsc{Varint} on every pair of
     varint-encoded types, writing
     $\tosigned{m}{x} = \left((x + 2^{m-1}) \fmod 2^m\right) - 2^{m-1}$ for the
-    reader's signed truncation.  Widths $n$ and $m$ are independent, so this
+    reader's signed truncation.  Widths $\width$ and $m$ are independent, so this
     covers all thirty non-identity conversions.}\label{tab:varint-derived}
 \end{table}
 
@@ -219,9 +219,9 @@ Section~\ref{sec:msg-rel}. The values are represented as a mapping from the id
 number of each field to the value and type of that field. 
 
 \begin{mathpar}
-  \infer[Msg]{\desc{r_1}{f_1} \msgrel \desc{r_2}{f_2} \\ \forall\;i \in \dom{v_2}.\;\left( f_1(i) =
-      (s, \tau_1) \wedge v_1(i) \valrel v_2(i) \right) \vee v_2(i) = default\left(\mathtt{snd}\ f_2(i)\right)}
-  {v_1 : \mathtt{MSG}\ \desc{r_1}{f_1} \valrel v_2 : \mathtt{MSG}\ \desc{r_2}{f_2} }
+  \infer[Msg]{\desc{\res_1}{f_1} \msgrel \desc{\res_2}{f_2} \\ \forall\;i \in \dom{v_2}.\;\left( f_1(i) =
+      (s, \ty_1) \wedge v_1(i) \valrel v_2(i) \right) \vee v_2(i) = default\left(\mathtt{snd}\ f_2(i)\right)}
+  {v_1 : \mathtt{MSG}\ \desc{\res_1}{f_1} \valrel v_2 : \mathtt{MSG}\ \desc{\res_2}{f_2} }
 \end{mathpar}
 
 The first rule is complex. It stands that a message with some reserved fields
@@ -248,19 +248,19 @@ underlying type of each decorator. Implicit fields require no special
 consideration.
 
 \begin{mathpar}
-  \infer[Rep-Pass]{v_1:\tau_1 \valrel v_1':\tau_2 \\ \cdots \\ v_n:\tau_1 \valrel v_n':\tau_2}{[v_1; \dots;
-    v_n]: \rept{\tau_1} \valrel [v_1'; \dots; v_n']: \rept{\tau_2}}
+  \infer[Rep-Pass]{v_1:\ty_1 \valrel v_1':\ty_2 \\ \cdots \\ v_n:\ty_1 \valrel v_n':\ty_2}{[v_1; \dots;
+    v_n]: \rept{\ty_1} \valrel [v_1'; \dots; v_n']: \rept{\ty_2}}
 
-  \infer[Opt-Some-Pass]{v_1:\tau_1 \valrel v_2:\tau_2}{(\some{v_1}): \optt{\tau_1} \prec
-    (\some{v_2}): \optt{\tau_2}}
+  \infer[Opt-Some-Pass]{v_1:\ty_1 \valrel v_2:\ty_2}{(\some{v_1}): \optt{\ty_1} \valrel
+    (\some{v_2}): \optt{\ty_2}}
 
-  \infer[Opt-None-Pass]{ }{\none: \optt{\tau_1} \valrel \none: \optt{\tau_2}}
+  \infer[Opt-None-Pass]{ }{\none: \optt{\ty_1} \valrel \none: \optt{\ty_2}}
   
-  \infer[Opt-Intro]{ }{v:\tau \valrel (\some{v}): \optt{\tau}}
+  \infer[Opt-Intro]{ }{v:\ty \valrel (\some{v}): \optt{\ty}}
 
-  \infer[Rep-Intro]{ }{v:\tau \valrel [v]: \rept{\tau}}
+  \infer[Rep-Intro]{ }{v:\ty \valrel [v]: \rept{\ty}}
 
-  \infer[Missing-Imp]{\tau_1 \typrel \tau_2}{\none: \tau_1 \valrel default(\tau_2):\tau_2}
+  \infer[Missing-Imp]{\ty_1 \typrel \ty_2}{\none: \ty_1 \valrel default(\ty_2):\ty_2}
 \end{mathpar}
 
 \subsection{Type Relation}~\label{sec:typ-rel}
@@ -270,8 +270,8 @@ relation. Recall that this relation is needed to reason about descriptor-only
 compatibility, which doesn't have any concrete values associated with it.
 
 \begin{definition}[Type Relation]
-  The type relation relates two protobuf type $\tau_1$ and $\tau_2$, denoted $\tau_1 \typrel
-  \tau_2$ if for all $v_1:\tau_1$ there exists a $v_2:\tau_2$ such that $v_1:\tau_1 \valrel v_2:\tau_2$.
+  The type relation relates two protobuf type $\ty_1$ and $\ty_2$, denoted $\ty_1 \typrel
+  \ty_2$ if for all $v_1:\ty_1$ there exists a $v_2:\ty_2$ such that $v_1:\ty_1 \valrel v_2:\ty_2$.
 \end{definition}
 
 These rules compress many of the rules in the previous section into one rule,
@@ -284,12 +284,12 @@ stating that types are compatible with each other.
 
   \infer[Byt-Str-T]{ }{\byt \typrel \String}
 
-  \infer[Int-Int-T]{\tau_1, \tau_2 \in \left\{{
+  \infer[Int-Int-T]{\ty_1, \ty_2 \in \left\{{
         \begin{array}{c}
           \ints, \intl, \uints, \uintl \\
           \sints, \sintl, \bool
         \end{array}
-      }\right\}}{\tau_1 \typrel \tau_2}
+      }\right\}}{\ty_1 \typrel \ty_2}
 \end{mathpar}
 
 It's worth pointing out that converting to and from \sintn{n} is tricky, since
@@ -312,15 +312,15 @@ need to ensure that decorator restrictions like moving from a repeated field to
 a singleton one aren't violated.
 
 \begin{mathpar}
-  \infer[Opt-Add-T]{ }{\tau \fieldrel \optt{\tau}}
+  \infer[Opt-Add-T]{ }{\ty \fieldrel \optt{\ty}}
 
-  \infer[Opt-Rm-T]{ }{\optt{\tau} \fieldrel \tau}
+  \infer[Opt-Rm-T]{ }{\optt{\ty} \fieldrel \ty}
 
-  \infer[Opt-T]{\tau_1 \typrel \tau_2}{\optt{\tau_1} \fieldrel \optt{\tau_2}}
+  \infer[Opt-T]{\ty_1 \typrel \ty_2}{\optt{\ty_1} \fieldrel \optt{\ty_2}}
 
-  \infer[Rep-Add-T]{ }{\tau \fieldrel \rept{\tau}}
+  \infer[Rep-Add-T]{ }{\ty \fieldrel \rept{\ty}}
 
-  \infer[Rep-T]{\tau_1 \typrel \tau_2}{\rept{\tau_1} \fieldrel \rept{\tau_2}}
+  \infer[Rep-T]{\ty_1 \typrel \ty_2}{\rept{\ty_1} \fieldrel \rept{\ty_2}}
 \end{mathpar}
 
 \subsection{Message Relation}~\label{sec:msg-rel}
@@ -331,7 +331,7 @@ it is important to discuss the structure of fields and messages.
 A message value is a tuple containing a set of reserved field numbers and names,
 then a map from an identifier to a tuple with the name of the field and the type
 of the field. The identifier is either a tag for a single field, or a set of
-integers which is used for a \texttt{oneof}, where multiple fields must be
+integers which is used for a \Oneof, where multiple fields must be
 mutually exclusively set.
 
 Enums will be modeled as a set of integers, likewise ignoring the name given to
@@ -368,14 +368,14 @@ Generally speaking, we can change the type of a field, add a new field or update
 a field in a map.
 
 \begin{mathpar}
-  \infer[Field-Type]{f(id) = \tau_1 \\ \tau_1 \typrel \tau_2}{\desc{r}{f} \msgrel \desc{r}{f[id \mapsto \tau_2]}}
+  \infer[Field-Type]{f(id) = \ty_1 \\ \ty_1 \typrel \ty_2}{\desc{\res}{f} \msgrel \desc{\res}{f[id \mapsto \ty_2]}}
 
-  \infer[Field-Add]{id \not \in \dom{f}}{\desc{r}{f} \msgrel \desc{r}{f[id \mapsto \tau]}}
+  \infer[Field-Add]{id \not \in \dom{f}}{\desc{\res}{f} \msgrel \desc{\res}{f[id \mapsto \ty]}}
 
   % TODO: May need restrictions about maps in maps...
-  \infer[Map-Type-F]{f(id) = (\map{\tau_1}{\impt{\tau_2})} \\ \tau_1 \typrel \tau_1' \\ \tau_2
-    \fieldrel \impt{\tau_2'} \\ \tau_1 \ne \byt} {\desc{r}{f} \msgrel \desc{r}{f[id \mapsto
-      (\map{\tau_1'}{\impt{\tau_2'}})]}}
+  \infer[Map-Type-F]{f(id) = (\map{\ty_1}{\impt{\ty_2})} \\ \ty_1 \typrel \ty_1' \\ \ty_2
+    \fieldrel \impt{\ty_2'} \\ \ty_1 \ne \byt} {\desc{\res}{f} \msgrel \desc{\res}{f[id \mapsto
+      (\map{\ty_1'}{\impt{\ty_2'}})]}}
 \end{mathpar}
 
 Messages are similar to records in Lean or other functional languages and
@@ -387,7 +387,7 @@ remains the same, but other attributes of the field are updated compatible ways.
 
 \subsubsection{Oneof Rules}
 
-The \texttt{oneof} rules are a bit complicated because a \texttt{oneof}
+The \Oneof{} rules are a bit complicated because a \Oneof{}
 struggles against the notion that the field relations only connects one field to
 one field by encapsulating several fields into a singular field.
 
@@ -395,29 +395,29 @@ one field by encapsulating several fields into a singular field.
 % no clear choice of key.
 
 \begin{mathpar}
-  \infer[Oneof-Intro-Field]{\kappa \in \{\imp, \optt\} \\ f(id) = \field{\kappa}{\tau}}
-  {\desc{r}{f} \msgrel \desc{r}{f[\{id\} \mapsto \oneof{id \mapsto \field{\kappa}{\tau}}]}}
+  \infer[Oneof-Intro-Field]{\card \in \{\imp, \optt\} \\ f(id) = \field{\card}{\ty}}
+  {\desc{\res}{f} \msgrel \desc{\res}{f[\{id\} \mapsto \oneof{id \mapsto \field{\card}{\ty}}]}}
 
   % May need some statement about f_{n+1} not already being in the message?
   % You can introduce a new field, but not move an existing one.
-  \infer[Oneof-Add-F]{\kappa \in \{\imp, \optt\} \\ id_n \not \in
-    id_s \\ f(id_s) = m \\ id_n \not \in  \dom{m} \\ \tau \not= \mathtt{MAP}}
-  {\desc{r}{f} \msgrel \desc{r}{f[id_s \cup \{id_n\} \mapsto (m[id_n \mapsto \field{\kappa}{\tau}])]}}
+  \infer[Oneof-Add-F]{\card \in \{\imp, \optt\} \\ id_n \not \in
+    id_s \\ f(id_s) = m \\ id_n \not \in  \dom{m} \\ \ty \not= \mathtt{MAP}}
+  {\desc{\res}{f} \msgrel \desc{\res}{f[id_s \cup \{id_n\} \mapsto (m[id_n \mapsto \field{\card}{\ty}])]}}
 
   % This rule should just be a combination of the above two rules...
   \infer[Oneof-Intro-New]{\dom{ f } \cap \dom{ f_o } = \emptyset
     \\ \rep \not \in dec(f_o) \\ \forall\;id_n \in \dom{f_o}.\
-    \texttt{snd}\ f_o(id_n) \ne \mathtt{MAP}}{\desc{r}{f} \msgrel \desc{r}{f[\dom{f_o}
+    \texttt{snd}\ f_o(id_n) \ne \mathtt{MAP}}{\desc{\res}{f} \msgrel \desc{\res}{f[\dom{f_o}
       \mapsto f_o]}}
 
   \infer[Oneof-Elim]{f(id_n) = m \\ id \in id_n }
-  {\desc{r}{f} \msgrel \desc{r}{f[id_n \setminus id \mapsto m \setminus id]}}
+  {\desc{\res}{f} \msgrel \desc{\res}{f[id_n \setminus id \mapsto m \setminus id]}}
 
   % I'm not sure about the premise of this rule, but it seems better than having
   % to making another version of all the other rules. This is the first instance
   % where having a field relation would be very helpful.
-  \infer[Oneof-Field-Update]{f_o(id') = \tau \\ \tau \typrel \tau'}
-  {\desc{r}{f[id \mapsto f_o]} \msgrel \desc{r}{f[id \mapsto ( f_o[id' \mapsto \tau'] )]}}
+  \infer[Oneof-Field-Update]{f_o(id') = \ty \\ \ty \typrel \ty'}
+  {\desc{\res}{f[id \mapsto f_o]} \msgrel \desc{\res}{f[id \mapsto ( f_o[id' \mapsto \ty'] )]}}
 \end{mathpar}
 
 \subsubsection{Enum Rules}
@@ -438,10 +438,10 @@ contain extra information, no depth rules is allowed.
 \subsubsection{Reserved Field Rules}
 
 \begin{mathpar}
-  \infer[Reserved-Add]{r \subset r'}{\desc{r}{f} \msgrel \desc{r'}{f}}
+  \infer[Reserved-Add]{\res \subset \res'}{\desc{\res}{f} \msgrel \desc{\res'}{f}}
 
   {\color{red}
-    \infer[Reserved-Rm]{r \supset r'}{\desc{r}{f} \msgrel \desc{r'}{f}}
+    \infer[Reserved-Rm]{\res \supset \res'}{\desc{\res}{f} \msgrel \desc{\res'}{f}}
   }
 \end{mathpar}
 
@@ -449,7 +449,7 @@ contain extra information, no depth rules is allowed.
 
 \begin{definition}[Valid Protobuf Descriptors]
   A protobuf message descriptor is \emph{valid}, denoted $v(d)$ if
-  $\desc{\emptyset}{\emptyset} \msgrel \desc{r}{f}$.
+  $\desc{\emptyset}{\emptyset} \msgrel \desc{\res}{f}$.
 \end{definition}
 
 \subsubsection{Compatibility Theorem}
@@ -459,8 +459,8 @@ The main field-level compatibility theorem is stated below.
 \vspace{1em}
 \begin{theorem}[Protobuf Compatibility]
   If $d_1 \dcompat d_2$ and $d_2$ is well-formed, then for all binary strings
-  $bs$ such that $\mathtt{parse}_{d_1}\ bs = \some{m_1}$,
-  $\mathtt{parse}_{d_2}\ bs = \some{m_2}$ and $m_1 \msgrel m_2$
+  $\bs$ such that $\mathtt{parse}_{d_1}\ \bs = \some{\m_1}$,
+  $\mathtt{parse}_{d_2}\ \bs = \some{\m_2}$ and $\m_1 \msgrel \m_2$
 \end{theorem}
 
 % Local Variables:

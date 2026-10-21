@@ -1,4 +1,4 @@
-Status: open
+Status: closed
 Report: preamble of pollux.tex; sec:proto, sec:philosophy, sec:proto-desc, sec:proto-msg, sec:proto-parse, sec:proto-transform, sec:proto-relations, sec:type-theory, sec:simpl-parse, sec:inter-parse @ 5f5d68c + uncommitted working tree (2026-10-13)
 Lean:   none
 

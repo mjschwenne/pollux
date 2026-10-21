@@ -54,32 +54,32 @@ needed.}
 
     \categoryFromSet[Booleans]{b}{\mathbb{B}}
 
-    \abstractCategory[Byte Strings]{bs}
+    \abstractCategory[Byte Strings]{\bs}
 
-    \abstractCategory[Strings]{\mathrm{s}}
+    \abstractCategory[Strings]{\str}
 
     \categoryFromSet[32-bit Unsigned Integers]{\mathrm{u^{32}}}{[0, 2^{32})}
 
     \categoryFromSet[64-bit Unsigned Integers]{\mathrm{u^{64}}}{[0, 2^{64})}
 
-    \category[Payload]{p}
+    \category[Payload]{\pay}
     \alternative{z}
     \alternative{b}
-    \alternative{\mathrm{s}}
-    \alternative{bs}
+    \alternative{\str}
+    \alternative{\bs}
     \alternative{\mathrm{u^{32}}}
     \alternative{\mathrm{u^{64}}}
     \alternative{v}
 
-    \category[Slot]{s}
-    \alternative{\impslot{p}}
+    \category[Slot]{\slot}
+    \alternative{\impslot{\pay}}
     \alternative{\optslot{\none}}
-    \alternative{\optslot{p}}
-    \alternative{\repslot{[p_1; \dots; p_m]}}
+    \alternative{\optslot{\pay}}
+    \alternative{\repslot{[\pay_1; \dots; \pay_m]}}
 
     \category[Value List]{l}
-    \alternative{\texttt{[]}}
-    \alternative{(n, s) :: l}
+    \alternative{\nil}
+    \alternative{\cons{(\id, \slot)}{l}}
 
     \category[Value]{v}
     \alternative{\msg{l}}
@@ -122,9 +122,9 @@ isn't present in the value, and the reader gets a missing value (a
 intermediate format feature not present in Protobuf, this would become the
 default for the type of the field).
 \[
-  \infer[M-Declare]{m_1 : d_1 \msgrel m_2 : d_2 \\\\ k \not \in \dom{d_1} \\ k \not \in
-    \dom{m_1} \\ f_1 \fieldrel f_2}{ m_1 : d_1[k \mapsto f_1] \msgrel m_2[k \mapsto
-    \mathtt{M\_MISSING}] : d_2[k \mapsto f_2]}
+  \infer[M-Declare]{\m_1 : d_1 \msgrel \m_2 : d_2 \\\\ \id \not \in \dom{d_1} \\ \id \not \in
+    \dom{\m_1} \\ f_1 \fieldrel f_2}{ \m_1 : d_1[\id \mapsto f_1] \msgrel \m_2[\id \mapsto
+    \mathtt{M\_MISSING}] : d_2[\id \mapsto f_2]}
 \]
 For that format, this rule was required since without it, the message
 compatibility relation could not follow the ID compatibility relation which
@@ -176,8 +176,8 @@ modification made to the value on the network; well outside our scope).
 \subsection{Cardinality and Scalar Carriers}
 
 The presence marker in the value layer has three constructors, while the
-cardinality marker in the descriptor layer has four, with \texttt{oneof} being
-the missing one. Be default in Protobuf, all \texttt{oneof} fields are treated
+cardinality marker in the descriptor layer has four, with \Oneof{} being
+the missing one. Be default in Protobuf, all \Oneof{} fields are treated
 as \texttt{optional}, which Pollux also respects. The requirement that only one
 is set is a cross-field constraint, which will live in value's legal predicate.
 
@@ -235,22 +235,22 @@ combinator library.
 
 \vspace{1em}
 \begin{definition}[Valid Message]\label{def:vvalid}
-  A message $m$ is valid against a descriptor $d$, denoted $\validv{m}{d}$ if
-  both $\wfm{m}$ and $\legalv{m}{d}$. 
+  A message $\m$ is valid against a descriptor $d$, denoted $\validv{\m}{d}$ if
+  both $\wfm{\m}$ and $\legalv{\m}{d}$.
 \end{definition}
 
 \vspace{1em}
 \begin{definition}[Message Well-Formedness]\label{def:vwf}
-  A message $m$ is well-formed, denoted $\wfm{m}$, if all fields in
+  A message $\m$ is well-formed, denoted $\wfm{\m}$, if all fields in
   the message have a unique field number, the fields are stored in sorted
   order, and all nested messages are also well-formed.
 \end{definition}
 
 \vspace{1em}
 \begin{definition}[Legal Message]\label{def:vlegal}
-  A message $m$ is legal with regards to descriptor $d$, denoted $\legalv{m}{d}$, if
+  A message $\m$ is legal with regards to descriptor $d$, denoted $\legalv{\m}{d}$, if
   \begin{itemize}
-  \item Totality, $\dom{m} = \dom{d}$.
+  \item Totality, $\dom{\m} = \dom{d}$.
   \item For all values in the message
     \begin{itemize}
     \item The presence of the field agrees with the cardinality in the
@@ -258,9 +258,9 @@ combinator library.
     \item The type of the value agrees with the type of the field in the
       descriptor. For integer scalars, this condition also enforces the range
       bounds associated with the various Protobuf integer types (i.e.\ \ints{},
-      \uintl{}, etc.) while for nested messages, that means $\validv{m'}{d'}$.
+      \uintl{}, etc.) while for nested messages, that means $\validv{\m'}{d'}$.
     \end{itemize}
-  \item At most one key in a \texttt{oneof} group defined in the descriptor is
+  \item At most one key in a \Oneof{} group defined in the descriptor is
     set. This is the only non-pairwise requirement that a well-formed message has
     to respect.
   \end{itemize}
@@ -292,15 +292,15 @@ have a decidable equality instance defined.
 
     \mathrm{size}_v(v) =
     \begin{cases}
-      1 + \mathrm{size}_v(p) & \text{if } v = \impslot{p} \\
+      1 + \mathrm{size}_v(\pay) & \text{if } v = \impslot{\pay} \\
       1 & \text{if } v = \optslot{\none} \\
-      1 + \mathrm{size}_v(p) & \text{if } v = \optslot{p} \\
-      1 + \mathrm{size}_v(p_1) + \dots + \mathrm{size}_v(p_n) & \text{if } v = \repslot{[p_1;\dots;p_n]}
+      1 + \mathrm{size}_v(\pay) & \text{if } v = \optslot{\pay} \\
+      1 + \mathrm{size}_v(\pay_1) + \dots + \mathrm{size}_v(\pay_n) & \text{if } v = \repslot{[\pay_1;\dots;\pay_n]}
     \end{cases}
 
-    \mathrm{size}_v(p) =
+    \mathrm{size}_v(\pay) =
     \begin{cases}
-      \mathrm{size}_v(\lAngle l' \rAngle) & \text{if } p = \lAngle l'
+      \mathrm{size}_v(\lAngle l' \rAngle) & \text{if } \pay = \lAngle l'
                                               \rAngle \\
       1 & \text{otherwise}
     \end{cases}
