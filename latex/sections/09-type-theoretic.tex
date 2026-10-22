@@ -59,7 +59,7 @@ A Pollux judgment has the form $\judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \co}$
   descriptor names to \emph{assumption variables} which will hold the coercion
   between those descriptors in the completed derivation. An alternative
   formulation would be so that $\Gamma$ maps a pair of descriptors to a value of type
-  $x : \denote{\Sigma(a_1)} \rightarrow \denote{\Sigma(a_2)}$ 
+  $x : \denote{\Sigma(\nm_1)} \rightarrow \denote{\Sigma(\nm_2)}$ 
 \item $\co$ is a function $\co : \denote{\Sigma(\dc_1)} \rightarrow \denote{\Sigma(\dc_2)}$, the coercion
   built by the derivation.
 \end{itemize}
@@ -69,8 +69,8 @@ for each type of object:
 \begin{align*}
   &\judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \co}
   && \co : \denote{\dc_1} \to \denote{\dc_2} \text{ (message bodies)} \\
-  &\judg{\Gamma}{f_1 \fieldrel f_2 \coerce \co}
-  && \co : \denote{f_1} \to \denote{f_2} \text{ (fields: cardinality and type)} \\
+  &\judg{\Gamma}{\fd_1 \fieldrel \fd_2 \coerce \co}
+  && \co : \denote{\fd_1} \to \denote{\fd_2} \text{ (fields: cardinality and type)} \\
   &\judg{\Gamma}{\ty_1 \typrel \ty_2 \coerce \co}
   && \co : \denote{\ty_1} \to \denote{\ty_2} \text{ (payloads)}
 \end{align*}
@@ -79,13 +79,13 @@ for each type of object:
 
 \begin{mathpar}
   \infer[N-Assum]
-    { \Gamma((a_1, a_2)) \mapsto x }
-    { \judg{\Gamma}{a_1 \dcompat a_2 \coerce x} }
+    { \Gamma((\nm_1, \nm_2)) \mapsto x }
+    { \judg{\Gamma}{\nm_1 \dcompat \nm_2 \coerce x} }
 
   \infer[N-Unfold]
-    { (a_1, a_2) \notin \dom{\Gamma} \\
-      \judg{\Gamma, (a_1, a_2) \mapsto x}{\Sigma(a_1) \dcompat \Sigma(a_2) \coerce \co} }
-    { \judg{\Gamma}{a_1 \dcompat a_2 \coerce \mathsf{fix}\ x.\ \co} }
+    { (\nm_1, \nm_2) \notin \dom{\Gamma} \\
+      \judg{\Gamma, (\nm_1, \nm_2) \mapsto x}{\Sigma(\nm_1) \dcompat \Sigma(\nm_2) \coerce \co} }
+    { \judg{\Gamma}{\nm_1 \dcompat \nm_2 \coerce \mathsf{fix}\ x.\ \co} }
 \end{mathpar}
 
 The fix-point operator $\mathsf{fix}$ is well founded on the writer's value
@@ -224,7 +224,7 @@ Then, we introduce Protobuf cardinality rules
     { \rep \cardrel{\ty_1}{\ty_2} \opt \coerce
       \lambda \co.\ \lambda l.\ \mathbf{case}\ l\ \mathbf{of}\
         [\,] \Rightarrow \none \mid
-        \pay :: ps \Rightarrow \some{(\mathrm{foldl}\ \combine{\ty_2}\ (\co\ \pay)\ (\mathrm{map}\ \co\ ps))} }
+        \pay \Colon ps \Rightarrow \some{(\mathrm{foldl}\ \combine{\ty_2}\ (\co\ \pay)\ (\mathrm{map}\ \co\ ps))} }
   }
 
   {\color{red}
@@ -240,7 +240,7 @@ Then, we introduce Protobuf cardinality rules
     { \rep \cardrel{\ty_1}{\ty_2} \imp \coerce
       \lambda \co.\ \lambda l.\ \mathbf{case}\ l\ \mathbf{of}\
         [\,] \Rightarrow \impslot{\init_{\ty_2}} \mid
-        \pay :: ps \Rightarrow \impslot{(\mathrm{foldl}\ \combine{\ty_2}\ (\co\ \pay)\ (\mathrm{map}\ \co\ ps))} }
+        \pay \Colon ps \Rightarrow \impslot{(\mathrm{foldl}\ \combine{\ty_2}\ (\co\ \pay)\ (\mathrm{map}\ \co\ ps))} }
    }
 \end{mathpar}
 
@@ -304,8 +304,8 @@ Some notes on the cardinality rules:
       \String \coerce \mathrm{id}} }
 
   \infer[F-Msg]
-    { \judg{\Gamma}{a_1 \dcompat a_2 \coerce \co} }
-    { \judg{\Gamma}{\mathtt{msg}\ a_1 \typrel \mathtt{msg}\ a_2 \coerce \co} }
+    { \judg{\Gamma}{\nm_1 \dcompat \nm_2 \coerce \co} }
+    { \judg{\Gamma}{\mathtt{msg}\ \nm_1 \typrel \mathtt{msg}\ \nm_2 \coerce \co} }
 \end{mathpar}
 
 Pairs of wire-compatible but undesirable rules, such as $\double$ to $\fixedl$
@@ -329,21 +329,21 @@ to the new type.
   A coercion $g : \denote{\ty_1} \rightarrow \denote{\ty_2}$ \emph{carries
     $\ty_1$ into $\ty_2$ up to depth $n$}, written
   $\semjudg[n]{g : \ty_1 \typrel \ty_2}$, when
-  \[ \forall\ \validv{v}{\ty_1} \text{ with } \mathrm{depth}_f(v) \le n,\
-    \forall\ \bs.\ \encodes{\ty_1}(v, \bs) \rightarrow
-    \mathrm{parse}_{\ty_2}(\bs) = \some{g(v)}. \]
+  \[ \forall\ \validv{\pay}{\ty_1} \text{ with } \mathrm{depth}_f(\pay) \le n,\
+    \forall\ \bs.\ \encodes{\ty_1}(\pay, \bs) \rightarrow
+    \mathrm{parse}_{\ty_2}(\bs) = \some{g(\pay)}. \]
 \end{definition}
 
 \vspace{1em}
 \begin{definition}[Semantic compatibility, field level]\label{def:sem-compat-fld}
   A coercion $g : \denote{\slot_1} \rightarrow \denote{\slot_2}$ \emph{carries $\slot_1$ into $\slot_2$ up
   to depth $n$}, written $\semjudg[n]{g : \slot_1 \dcompat \slot_2}$, when
-\[ \forall\ \validv{\slot}{f_1}, rs.\ \mathrm{depth}(\slot) \le n \rightarrow \encodes[\id]{f_1}(\slot, rs) \rightarrow
-  \assemble_{f_2}^{\id}(rs) = \some{(g\ \slot)} \]
+\[ \forall\ \validv{\slot}{\fd_1}, rs.\ \mathrm{depth}(\slot) \le n \rightarrow \encodes[\id]{\fd_1}(\slot, rs) \rightarrow
+  \assemble_{\fd_2}^{\id}(rs) = \some{(g\ \slot)} \]
 and no record of $rs$ is skipped.
 \end{definition}
 
-Here $\encodes[\id]{f}(\slot, rs)$ says that $rs$, a list of records with field
+Here $\encodes[\id]{\fd}(\slot, rs)$ says that $rs$, a list of records with field
 number $\id$, is a valid encoding of slot $\slot$. The message-level relation is
 defined from it:
 \[
@@ -352,7 +352,7 @@ defined from it:
   \wedge \forall (\id, w, \pay) \in rs.\ \id \in \dom{\dc}
   \wedge \forall \id \in \dom{\dc}.\ \encodes[\id]{\dc[\id]}(\m[\id], \restr{rs}{\id}).
 \]
-Records of different fields may appear in any order. $\assemble_f(rs)$ is the
+Records of different fields may appear in any order. $\assemble_{\fd}(rs)$ is the
 part of $\mathrm{parse}$ that builds one slot from that field's records
 (Section~\ref{sec:philosophy}):
 \begin{itemize}
@@ -361,7 +361,7 @@ part of $\mathrm{parse}$ that builds one slot from that field's records
 \item Repeated slots concatenate the records' values, packed or unpacked.
 \end{itemize}
 "No record of $rs$ is skipped" means
-$\forall (\id, w, \pay) \in rs.\ \accepts(f_2, w)$.
+$\forall (\id, w, \pay) \in rs.\ \accepts(\fd_2, w)$.
 
 \vspace{1em}
 \begin{lemma}[Message from fields]\label{lem:msg-from-fields}
@@ -413,8 +413,8 @@ wins.
 \begin{definition}[Semantic reading of an Assumption Set]\label{def:sem-assum}
   $\semjudg[n]{\Gamma}$ holds when every assumed pair is semantically compatible at every
   strictly smaller depth:
-  \[ \forall\ (a_1, a_2) \in \Gamma.\ \forall\ j < n.\ \semjudg[j]{ \coercion{\Sigma(a_1)}{\cdot}{\Sigma(a_2)} :
-      \Sigma(a_1) \dcompat \Sigma(a_2)} \]
+  \[ \forall\ (\nm_1, \nm_2) \in \Gamma.\ \forall\ j < n.\ \semjudg[j]{ \coercion{\Sigma(\nm_1)}{\cdot}{\Sigma(\nm_2)} :
+      \Sigma(\nm_1) \dcompat \Sigma(\nm_2)} \]
 \end{definition}
 
 \vspace{1em}
@@ -440,7 +440,7 @@ relation would be required.
 \item Induction on the $\judg{\Gamma}{\dc_1 \dcompat \dc_2}$ derivation itself is not enough, due to
   \textsc{N-Assum}. When doing induction on the derivation, the inductive
   hypothesis would state that the conclusion holds for all sub-derivations,
-  which \textsc{N-Assum} doesn't have. We get the fact that $(a_1, a_2) \in \Gamma$ but
+  which \textsc{N-Assum} doesn't have. We get the fact that $(\nm_1, \nm_2) \in \Gamma$ but
   not anything else to prove a semantic fact about the descriptors referenced by
   those names.
 \item Induction on the depth of the message also doesn't work. The message depth
@@ -496,12 +496,12 @@ is part of. Additionally, there is $A$, a set of name pairs currently assumed to
 be compatible; it grows as the derivation descends. The judgment is then
 $\judg{\Gamma}{\dc_1 \dcompat \dc_2}$, with two rules for the assumption context $\Gamma$:
 \begin{mathpar}
-  \infer[N-Assum]{ (a_1, a_2) \in \Gamma }{ \judg{\Gamma}{a_1 \dcompat a_2 }}
+  \infer[N-Assum]{ (\nm_1, \nm_2) \in \Gamma }{ \judg{\Gamma}{\nm_1 \dcompat \nm_2 }}
 
   \infer[N-Unfold]
-    { (a_1, a_2) \notin \dom{\Gamma} \\
-      \judg{\Gamma, (a_1, a_2) \mapsto x}{\Sigma(a_1) \dcompat \Sigma(a_2) \coerce \co} }
-    { \judg{\Gamma}{a_1 \dcompat a_2 \coerce \mathsf{fix}\ x.\ \co} }
+    { (\nm_1, \nm_2) \notin \dom{\Gamma} \\
+      \judg{\Gamma, (\nm_1, \nm_2) \mapsto x}{\Sigma(\nm_1) \dcompat \Sigma(\nm_2) \coerce \co} }
+    { \judg{\Gamma}{\nm_1 \dcompat \nm_2 \coerce \mathsf{fix}\ x.\ \co} }
 \end{mathpar}
 
 Compatibility of the top level descriptors is $\judg{\emptyset}{\dc_1 \dcompat \dc_2}$. The
@@ -530,7 +530,7 @@ Using that framing, we can define a logical relation as such:
       $\semjudg[n]{\coercion{\dc_1}{\cdot}{\dc_2} : \dc_1 \dcompat \dc_2}$;
     \item if $\judg{\Gamma}{\ty_1 \typrel \ty_2}$, then
       $\semjudg[n]{\coercion{\ty_1}{\cdot}{\ty_2} : \ty_1 \typrel \ty_2}$;
-    \item if $\judg{\Gamma}{a_1 \dcompat a_2}$, then $\semjudg[n]{\{(a_1, a_2)\}}$.
+    \item if $\judg{\Gamma}{\nm_1 \dcompat \nm_2}$, then $\semjudg[n]{\{(\nm_1, \nm_2)\}}$.
   \end{enumerate}
 \end{theorem}
 
@@ -554,7 +554,7 @@ become optional.) the descriptor relation would become co-inductive since an
 update to this descriptor would require showing $\dc_1[\id] \fieldrel \dc_2[\id]$ if
 $\id$ is the field where we see the recursive type and the field relation would
 include:
-\[ \infer[F-Msg]{ \judg{\Gamma}{a_1 \dcompat a_2 } }{ \field{\card}{a_1} \fieldrel \field{\card}{a_2} } \]
+\[ \infer[F-Msg]{ \judg{\Gamma}{\nm_1 \dcompat \nm_2 } }{ \field{\card}{\nm_1} \fieldrel \field{\card}{\nm_2} } \]
 So a derivation that $\dc_1[\id] \dcompat \dc_2[\id]$ would need to include a derivation of
 itself! The natural solution here is to make $\dcompat$ co-inductive. 
 
@@ -595,7 +595,7 @@ finiteness facts:
   equivalent to the $\mu$-bound version. What is infinite is what the descriptor
   unfolds to, and that unfolding is a regular tree. The checker exploit this by
   carrying an assumption set $A$ of pairs of message names where
-  $(a_1, a_2) \in A$ records that $\Sigma(a_1) \dcompat \Sigma(a_2)$ has already been assumed. It
+  $(\nm_1, \nm_2) \in A$ records that $\Sigma(\nm_1) \dcompat \Sigma(\nm_2)$ has already been assumed. It
   is what the $\varnothing$ in $\judg{\emptyset}{\dc \dcompat \dc'}$ is referencing and grows
   over the course of a derivation. Before recursing on a pair of names
   encountered while checking compatibility, the checker checks if that pair is

@@ -179,15 +179,15 @@ In order to simplify proof burdens for the moment, there is another important
 concept here: when a value is \emph{fully described} or \emph{schema correct} by
 a descriptor. Intuitively, this means that every value is the message has a
 corresponding field in the descriptor and vice versa. This relation is denoted
-as $\langle v : \dc \rangle$ and is defined with these two rules:
+as $\langle \m : \dc \rangle$ and is defined with these two rules:
 
 \vspace{1em}
 \begin{definition}[Schema Correct]
-  A value $v$ is \emph{schema correct} with respect to a descriptor $\dc$ if
+  A value $\m$ is \emph{schema correct} with respect to a descriptor $\dc$ if
   \begin{itemize}
-  \item Every value in $v$ is declared in $\dc$.
-  \item Every field in $\dc$ id present in $v$.
-  \item Every value in $v$ matches the type required by the corresponding field
+  \item Every value in $\m$ is declared in $\dc$.
+  \item Every field in $\dc$ id present in $\m$.
+  \item Every value in $\m$ matches the type required by the corresponding field
     in $\dc$.
   \item All nested messages are schema correct with respect to the descriptors
     embedded in $\dc$.
@@ -220,14 +220,14 @@ flexibility and to generalize to a more complex relation.
   \infer[Compat-Refl]{\langle \m : \dc_1 \rangle \\ \langle \m : \dc_2 \rangle}{\langle \m : \dc_1 \msgrel \m : \dc_2 \rangle}
 
   \infer[Compat-Add]{\langle \m_1 : \dc_1 \msgrel \m_2 : \dc_2 \rangle \\\\ \id \not \in \dom{\m_1} \\ \id \not \in
-    \dom{\dc_2} \\ \id \not \in \dom{\m_2} \\ \id \not \in \dom{\dc_2} \\\\ v_1 = v_2 \\ f_1
-    = f_2}
-  { \langle \m_1[\id \mapsto v_1] : \dc[\id \mapsto f_1] \msgrel
-    \m_2[\id \mapsto v_2] : \dc_2[\id \mapsto f_2] \rangle}
+    \dom{\dc_2} \\ \id \not \in \dom{\m_2} \\ \id \not \in \dom{\dc_2} \\\\ v_1 = v_2 \\ \fd_1
+    = \fd_2}
+  { \langle \m_1[\id \mapsto v_1] : \dc[\id \mapsto \fd_1] \msgrel
+    \m_2[\id \mapsto v_2] : \dc_2[\id \mapsto \fd_2] \rangle}
 \end{mathpar}
 
-That is also why the \textsc{Compat-Add} rule has premises $v_1 = v_2$ and $f_1
-= f_2$ for a more complex compatibility story, this was call out to the value
+That is also why the \textsc{Compat-Add} rule has premises $v_1 = v_2$ and $\fd_1
+= \fd_2$ for a more complex compatibility story, this was call out to the value
 relation (Section~\ref{sec:val-rel}) and type relation (Section~\ref{sec:typ-rel}).
 
 \vspace{1em}
@@ -255,8 +255,8 @@ theorem statement are equal.
 Naturally then, we can pose the descriptor mismatch problem in terms of a
 compatibility relation where the descriptor doesn't change. Since the descriptor
 is always related to itself, this is known as the \emph{identity compatibility
-  relation}. Let $\langle v_1 : \dc_1 \msgrel v_2 : \dc_2 \rangle$ denote that $v_1$
-when interpreted under $\dc_1$ is compatible with $v_2$ under $\dc_2$.
+  relation}. Let $\langle \m_1 : \dc_1 \msgrel \m_2 : \dc_2 \rangle$ denote that $\m_1$
+when interpreted under $\dc_1$ is compatible with $\m_2$ under $\dc_2$.
 
 
 \subsubsection{Full Identity Compatibility Relation}\label{sec:full-id-compat}
@@ -281,11 +281,11 @@ matching types.
 
   \infer[Drop]{\id \not \in \dom{\dc} \\ \id \not \in \dom{\m} \\ \langle \m' : \dc \msgrel \m : \dc \rangle}{\langle \m'[\id \mapsto z] : \dc \msgrel \m : \dc \rangle}
 
-  \infer[Add-Missing]{ \id \not \in \dom{\m} \\ \dc' = \dc[\id \mapsto f] \\ \langle \m' : \dc \msgrel \m :
+  \infer[Add-Missing]{ \id \not \in \dom{\m} \\ \dc' = \dc[\id \mapsto \fd] \\ \langle \m' : \dc \msgrel \m :
     \dc \rangle}{ \langle \m' : \dc' \msgrel \m[\id \mapsto \mathtt{M\_MISSING}] : \dc' \rangle}
 
   \infer[Input-Missing]{\id \not \in \dom{\dc} \\ \id \not \in \dom{\m} \\ \id \not \in
-    \dom{\m'} \\\\ \dc' = \dc[\id \mapsto f]}{\langle \m'[\id \mapsto \mathtt{M\_MISSING}] : \dc' \msgrel \m[\id \mapsto \mathtt{M\_MISSING}] : \dc' \rangle}
+    \dom{\m'} \\\\ \dc' = \dc[\id \mapsto \fd]}{\langle \m'[\id \mapsto \mathtt{M\_MISSING}] : \dc' \msgrel \m[\id \mapsto \mathtt{M\_MISSING}] : \dc' \rangle}
 \end{mathpar}
 
 \begin{theorem}[Intermediate Identity Compatibility]\label{thm:inter-id-compat}
@@ -309,7 +309,7 @@ format. Like with the protobuf relations, this will be separated into a value
 relation, type relation and message relation.
 \begin{align*}
   \m &: \text{message} & v &: \text{value} \\
-  \dc &: \text{descriptor} & f &: \text{field} \\
+  \dc &: \text{descriptor} & \fd &: \text{field} \\
   \id &: \text{field number}
 \end{align*}
 Below is a list of the relations about to be defined, along with an English
@@ -317,8 +317,8 @@ explanation of how to read them.
 \begin{align*}
   \valrel &: \text{Value relation} & v_1 : \ty_1 \valrel v_2 : \ty_2 &\rightarrow ``\text{value } v_1 : \ty_1 \text{ becomes } v_2 :
                                            \ty_2 " \\
-  \fieldrel &: \text{Field type relation} & f_1 \fieldrel f_2 &\rightarrow ``f_1 \text{ is type-compatible with }
-                                          f_2" \\
+  \fieldrel &: \text{Field type relation} & \fd_1 \fieldrel \fd_2 &\rightarrow ``\fd_1 \text{ is type-compatible with }
+                                          \fd_2" \\
   \dcompat &: \text{Descriptor type relation} & \dc_1 \dcompat \dc_2 &\rightarrow ``\dc_1 \text{ is
                                                      descriptor-compatible with } \dc_2" \\
   \msgrel &: \text{Message relation} & \m_1 \msgrel \m_2 &\rightarrow ``\text{message } \m_1 \text{ becomes } \m_2"
@@ -341,9 +341,9 @@ to make updates to nested messages.
   \infer[V-Msg]{\m_1 : \dc_1 \msgrel \m_2 : \dc_2}{\mathtt{M\_MSG}\ \m_1 : \mathtt{F\_MSG}\
     \dc_1 \valrel \mathtt{M\_MSG}\ \m_2 : \mathtt{F\_MSG}\ \dc_2}
 
-  \infer[V-Refl]{ }{v : f \valrel v : f}
+  \infer[V-Refl]{ }{v : \fd \valrel v : \fd}
 
-  \infer[V-Trans]{v_1 : f_1 \valrel v_2 : f_2 \\ v_2 : f_2 \valrel v_3 : f_3}{v_1 : f_1 \valrel v_3 : f_3}
+  \infer[V-Trans]{v_1 : \fd_1 \valrel v_2 : \fd_2 \\ v_2 : \fd_2 \valrel v_3 : \fd_3}{v_1 : \fd_1 \valrel v_3 : \fd_3}
 \end{mathpar}
 
 \subsubsection{Field Type Relation}\label{sec:ip-f-typ-rel}
@@ -357,9 +357,9 @@ boolean fields.
 
  \infer[F-Msg]{\dc_1 \dcompat \dc_2}{\mathtt{F\_MSG}\ \dc_1 \typrel \mathtt{F\_MSG}\ \dc_2}
 
- \infer[F-Refl]{ }{f \fieldrel f}
+ \infer[F-Refl]{ }{\fd \fieldrel \fd}
 
- \infer[F-Trans]{f_1 \fieldrel f_2 \\ f_2 \fieldrel f_3}{f_1 \fieldrel f_3}
+ \infer[F-Trans]{\fd_1 \fieldrel \fd_2 \\ \fd_2 \fieldrel \fd_3}{\fd_1 \fieldrel \fd_3}
 \end{mathpar}
 
 The more complex thing here is handling the descriptors. We need to be able to
@@ -377,9 +377,9 @@ moment I've decided to split them out.
 
   \infer[D-Emp]{ }{\emptyset \dcompat \emptyset}
 
-  \infer[D-Add]{\id \not \in \dom{\dc}}{\dc \dcompat \dc[\id \mapsto f]}
+  \infer[D-Add]{\id \not \in \dom{\dc}}{\dc \dcompat \dc[\id \mapsto \fd]}
 
-  \infer[D-Chg]{\dc[\id] \fieldrel f}{\dc \dcompat \dc[\id \mapsto f]}
+  \infer[D-Chg]{\dc[\id] \fieldrel \fd}{\dc \dcompat \dc[\id \mapsto \fd]}
 
   \infer[D-Refl]{ }{\dc \dcompat \dc}
 
@@ -405,21 +405,21 @@ implementation.
 \begin{mathpar}
   \infer[M-Emp]{ }{\emptyset : \emptyset \msgrel \emptyset : \emptyset}
 
-  {\color{red}\infer[M-Add]{\m_1 : \dc_1 \msgrel \m_2 : \dc_2 \\ v : f \\\\ \id \not \in \dom{\m_1} \\ \id \not \in
-    \dom{\dc_1}}{ \m_1 : \dc_1 \msgrel \m_2[\id \mapsto v] : \dc_2[\id \mapsto f]}}
+  {\color{red}\infer[M-Add]{\m_1 : \dc_1 \msgrel \m_2 : \dc_2 \\ v : \fd \\\\ \id \not \in \dom{\m_1} \\ \id \not \in
+    \dom{\dc_1}}{ \m_1 : \dc_1 \msgrel \m_2[\id \mapsto v] : \dc_2[\id \mapsto \fd]}}
 
   \infer[M-Missing]{\m_1 : \dc_1 \msgrel \m_2 : \dc_2 \\\\ \id \not \in \dom{\m_1} \\ \id \not \in
-    \dom{\dc_1}}{ \m_1 : \dc_1 \msgrel \m_2[\id \mapsto \mathtt{M\_MISSING}] : \dc_2[\id \mapsto f]}
+    \dom{\dc_1}}{ \m_1 : \dc_1 \msgrel \m_2[\id \mapsto \mathtt{M\_MISSING}] : \dc_2[\id \mapsto \fd]}
 
   \infer[M-Declare]{\m_1 : \dc_1 \msgrel \m_2 : \dc_2 \\\\ \id \not \in \dom{\dc_1} \\ \id \not \in
-    \dom{\m_1} \\ f_1 \fieldrel f_2}{ \m_1 : \dc_1[\id \mapsto f_1] \msgrel \m_2[\id \mapsto \mathtt{M\_MISSING}] :
-    \dc_2[\id \mapsto f_2]}
+    \dom{\m_1} \\ \fd_1 \fieldrel \fd_2}{ \m_1 : \dc_1[\id \mapsto \fd_1] \msgrel \m_2[\id \mapsto \mathtt{M\_MISSING}] :
+    \dc_2[\id \mapsto \fd_2]}
 
-  \infer[M-Update]{\m_1 : \dc_1 \msgrel \m_2 : \dc_2 \\\\ \m_1[\id] : \dc_1[\id] \valrel v : f \\
-    \dc_1[\id] \fieldrel f}{ \m_1 : \dc_1 \msgrel \m_2[\id \mapsto v] : \dc_2[\id \mapsto f]}
+  \infer[M-Update]{\m_1 : \dc_1 \msgrel \m_2 : \dc_2 \\\\ \m_1[\id] : \dc_1[\id] \valrel v : \fd \\
+    \dc_1[\id] \fieldrel \fd}{ \m_1 : \dc_1 \msgrel \m_2[\id \mapsto v] : \dc_2[\id \mapsto \fd]}
 
   \infer[M-Drop]{\m_1 : \dc_1 \msgrel \m_2 : \dc_2 \\\\ \id \not \in \dom{\m_2} \\ \id \not
-    \in \dom{\dc_2}}{ \m_1[\id \mapsto v] : \dc_1[\id \mapsto f] \msgrel \m_2 : \dc_2 }
+    \in \dom{\dc_2}}{ \m_1[\id \mapsto v] : \dc_1[\id \mapsto \fd] \msgrel \m_2 : \dc_2 }
 
   \infer[M-Drop-Unknown]{\m_1 : \dc_1 \msgrel \m_2 : \dc_2 \\\\ \id \not \in \dom{\m_2} \\ \id \not
     \in \dom{\dc_2} \\ \id \not \in \dom{\dc_1}}{ \m_1[\id \mapsto v] : \dc_1 \msgrel \m_2 : \dc_2 }
@@ -432,16 +432,16 @@ implementation.
 
 We can add new key-value pairs to a message, or update the value in a message
 (assuming we keep the fields in the descriptor updated too). Note that the
-premise $v : f$ in the rule \textsc{M-Add} denotes that the value $v$ is aligns
-with the field $f$, i.e. $v$ is an integer and $f$ is \verb|F_INT|. It would not
-hold if $v = \mathtt{true}$ and $f$ was \verb|F_INT|.
+premise $v : \fd$ in the rule \textsc{M-Add} denotes that the value $v$ is aligns
+with the field $\fd$, i.e. $v$ is an integer and $\fd$ is \verb|F_INT|. It would not
+hold if $v = \mathtt{true}$ and $\fd$ was \verb|F_INT|.
 
 The highlighted rule would let the parser pull any correctly typed value out of
 thin air. Do we want this? No, the $\msgrel$ relation defines how a message is
 transmuted during the serializer / parser round trip, and that's not how the
 parser would behave.
 
-In \textsc{M-Declare}, we require $f_1 \fieldrel f_2$ so that we can handle examples
+In \textsc{M-Declare}, we require $\fd_1 \fieldrel \fd_2$ so that we can handle examples
 were an empty message under a descriptor with one boolean parses to an empty
 field under a different, compatible type. This continues to mirror how the
 parser and serializer would actually behave.

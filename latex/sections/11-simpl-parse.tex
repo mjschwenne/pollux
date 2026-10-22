@@ -113,7 +113,7 @@ serializer and the byte parser / serializer have been formally proved.
   this case 0) as a prefix to the payload. Continuing to unfold, we're presented
   with another \texttt{SerialBind} which applies the inner tag (also 0 in this
   case) before encoding the integer itself. Thus, we know that the encoding
-  $enc$ can be broken down as $0 :: 0 :: enc_z$ where we have two explicit tags
+  $enc$ can be broken down as $0 \Colon 0 \Colon enc_z$ where we have two explicit tags
   and the integer encoding, learning along the way that
   $\mathtt{SerialZ}_{32}\ z = \mathtt{Success}\ enc_z$. On the parsing side, we
   first parse the outer tag, 0, then the inner tag to reduce the parser to

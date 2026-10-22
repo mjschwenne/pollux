@@ -92,7 +92,7 @@ a wire type, and a raw payload. The wire type says where each payload ends, so
 this needs no descriptor:
 \[ \records : \mathrm{Bytes} \to \mathrm{Option}\ (\mathrm{List}\ (\id, w, \pay)). \]
 The second step builds the reader's message one field at a time. The slot for
-field $\id$ is $\assemble_{d[\id]}$ applied to $\restr{\records(\bs)}{\id}$, the
+field $\id$ is $\assemble_{\dc[\id]}$ applied to $\restr{\records(\bs)}{\id}$, the
 records with field number $\id$. A oneof group is handled as one unit, since a
 record for one member clears the others. Records whose field number is unknown
 to the reader, or whose wire type doesn't fit, are skipped. For Protobuf this

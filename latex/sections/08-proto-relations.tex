@@ -21,7 +21,7 @@ variants with subscript numbers or apostrophes.
   \m &: \text{message} & v &: \text{value} \\
   \id &: \text{field number} & \ty &: \text{type} \\
   \res &: \text{Reserved field set} & \mathtt{n},\ \mathtt{m} &: \text{bit width} \\
-  f &: \text{Field} & \card &: \text{cardinality}
+  \fd &: \text{Field} & \card &: \text{cardinality}
 \end{align*}
 
 Below is a list of the relations about to be defined, along with an English
@@ -32,7 +32,7 @@ explanation of how to read them.
                                            \ty_2 \text{''} \\
   \typrel &: \text{Type relation} & \ty_1 \typrel \ty_2 &\rightarrow \text{``}\ty_1\text{ is type-compatible with }
                                           \ty_2\text{''} \\
-  \dcompat &: \text{Descriptor relation} & d_1 \dcompat d_2 &\rightarrow \text{``}d_1 \text{ is compatible with } d_2\text{''}
+  \dcompat &: \text{Descriptor relation} & \dc_1 \dcompat \dc_2 &\rightarrow \text{``}\dc_1 \text{ is compatible with } \dc_2\text{''}
 \end{align*}
 
 
@@ -219,8 +219,8 @@ Section~\ref{sec:msg-rel}. The values are represented as a mapping from the id
 number of each field to the value and type of that field. 
 
 \begin{mathpar}
-  \infer[Msg]{\desc{\res_1}{f_1} \msgrel \desc{\res_2}{f_2} \\ \forall\;i \in \dom{v_2}.\;\left( f_1(i) =
-      (s, \ty_1) \wedge v_1(i) \valrel v_2(i) \right) \vee v_2(i) = default\left(\mathtt{snd}\ f_2(i)\right)}
+  \infer[Msg]{\desc{\res_1}{f_1} \msgrel \desc{\res_2}{f_2} \\ \forall\;\id \in \dom{v_2}.\;\left( f_1(\id) =
+      (\card, \ty_1) \wedge v_1(\id) \valrel v_2(\id) \right) \vee v_2(\id) = default\left(\mathtt{snd}\ f_2(\id)\right)}
   {v_1 : \mathtt{MSG}\ \desc{\res_1}{f_1} \valrel v_2 : \mathtt{MSG}\ \desc{\res_2}{f_2} }
 \end{mathpar}
 
@@ -448,7 +448,7 @@ contain extra information, no depth rules is allowed.
 \subsubsection{Valid Descriptors}
 
 \begin{definition}[Valid Protobuf Descriptors]
-  A protobuf message descriptor is \emph{valid}, denoted $v(d)$ if
+  A protobuf message descriptor is \emph{valid}, denoted $v(\dc)$ if
   $\desc{\emptyset}{\emptyset} \msgrel \desc{\res}{f}$.
 \end{definition}
 
@@ -458,9 +458,9 @@ The main field-level compatibility theorem is stated below.
 
 \vspace{1em}
 \begin{theorem}[Protobuf Compatibility]
-  If $d_1 \dcompat d_2$ and $d_2$ is well-formed, then for all binary strings
-  $\bs$ such that $\mathtt{parse}_{d_1}\ \bs = \some{\m_1}$,
-  $\mathtt{parse}_{d_2}\ \bs = \some{\m_2}$ and $\m_1 \msgrel \m_2$
+  If $\dc_1 \dcompat \dc_2$ and $\dc_2$ is well-formed, then for all binary strings
+  $\bs$ such that $\mathtt{parse}_{\dc_1}\ \bs = \some{\m_1}$,
+  $\mathtt{parse}_{\dc_2}\ \bs = \some{\m_2}$ and $\m_1 \msgrel \m_2$
 \end{theorem}
 
 % Local Variables:

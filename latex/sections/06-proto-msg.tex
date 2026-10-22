@@ -122,9 +122,9 @@ isn't present in the value, and the reader gets a missing value (a
 intermediate format feature not present in Protobuf, this would become the
 default for the type of the field).
 \[
-  \infer[M-Declare]{\m_1 : d_1 \msgrel \m_2 : d_2 \\\\ \id \not \in \dom{d_1} \\ \id \not \in
-    \dom{\m_1} \\ f_1 \fieldrel f_2}{ \m_1 : d_1[\id \mapsto f_1] \msgrel \m_2[\id \mapsto
-    \mathtt{M\_MISSING}] : d_2[\id \mapsto f_2]}
+  \infer[M-Declare]{\m_1 : \dc_1 \msgrel \m_2 : \dc_2 \\\\ \id \not \in \dom{\dc_1} \\ \id \not \in
+    \dom{\m_1} \\ \fd_1 \fieldrel \fd_2}{ \m_1 : \dc_1[\id \mapsto \fd_1] \msgrel \m_2[\id \mapsto
+    \mathtt{M\_MISSING}] : \dc_2[\id \mapsto \fd_2]}
 \]
 For that format, this rule was required since without it, the message
 compatibility relation could not follow the ID compatibility relation which
@@ -150,10 +150,10 @@ things:
 
 \begin{enumerate}
 \item The transformations output (Section~\ref{sec:proto-transform}) will always
-  have a domain of $\dom{d_2}$ since we want to provide a value when viewed
-  against $d_2$. So the keys that we lose when transforming a value $v$ are
-  exactly $\dom{v} \setminus \dom{d_2}$. Having exact domain equality between
-  $v$ and $d_1$ means that this is the same as $\dom{d_1} \setminus \dom{d_2}$
+  have a domain of $\dom{\dc_2}$ since we want to provide a value when viewed
+  against $\dc_2$. So the keys that we lose when transforming a value $v$ are
+  exactly $\dom{v} \setminus \dom{\dc_2}$. Having exact domain equality between
+  $v$ and $\dc_1$ means that this is the same as $\dom{\dc_1} \setminus \dom{\dc_2}$
   and enables the descriptor level compatibility relation to characterize the
   value-level transformation. The drop rule in both the descriptor compatibility
   relation and the message one for Protobuf will be applied only at write-only
@@ -235,8 +235,8 @@ combinator library.
 
 \vspace{1em}
 \begin{definition}[Valid Message]\label{def:vvalid}
-  A message $\m$ is valid against a descriptor $d$, denoted $\validv{\m}{d}$ if
-  both $\wfm{\m}$ and $\legalv{\m}{d}$.
+  A message $\m$ is valid against a descriptor $\dc$, denoted $\validv{\m}{\dc}$ if
+  both $\wfm{\m}$ and $\legalv{\m}{\dc}$.
 \end{definition}
 
 \vspace{1em}
@@ -248,9 +248,9 @@ combinator library.
 
 \vspace{1em}
 \begin{definition}[Legal Message]\label{def:vlegal}
-  A message $\m$ is legal with regards to descriptor $d$, denoted $\legalv{\m}{d}$, if
+  A message $\m$ is legal with regards to descriptor $\dc$, denoted $\legalv{\m}{\dc}$, if
   \begin{itemize}
-  \item Totality, $\dom{\m} = \dom{d}$.
+  \item Totality, $\dom{\m} = \dom{\dc}$.
   \item For all values in the message
     \begin{itemize}
     \item The presence of the field agrees with the cardinality in the
@@ -258,7 +258,7 @@ combinator library.
     \item The type of the value agrees with the type of the field in the
       descriptor. For integer scalars, this condition also enforces the range
       bounds associated with the various Protobuf integer types (i.e.\ \ints{},
-      \uintl{}, etc.) while for nested messages, that means $\validv{\m'}{d'}$.
+      \uintl{}, etc.) while for nested messages, that means $\validv{\m'}{\dc'}$.
     \end{itemize}
   \item At most one key in a \Oneof{} group defined in the descriptor is
     set. This is the only non-pairwise requirement that a well-formed message has
@@ -275,7 +275,7 @@ have a decidable equality instance defined.
 
 \vspace{1em}
 \begin{lemma}
-  For all descriptors $d$, $\validv{\init(d)}{d}$.
+  For all descriptors $\dc$, $\validv{\init(\dc)}{\dc}$.
 \end{lemma}
 
 \vspace{1em}
@@ -287,7 +287,7 @@ have a decidable equality instance defined.
     \mathrm{size}_v(l) =
     \begin{cases}
       0 & \text{if } l = \texttt{[]} \\
-      \mathrm{size}_v(v) + \mathrm{size}_v(l') & \text{if } l = (\_, v) :: l'
+      \mathrm{size}_v(v) + \mathrm{size}_v(l') & \text{if } l = (\_, v) \Colon l'
     \end{cases}
 
     \mathrm{size}_v(v) =

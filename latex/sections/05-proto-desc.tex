@@ -69,19 +69,19 @@ Outside of Lean, we'll use this syntax for the Protobuf descriptors.
     \alternative{\rep}
     \alternative{\oneoft{n}}
 
-    \category[Field]{f}
+    \category[Field]{\fd}
     \alternative{\field{\card}{\ty_s}}
     \alternative{\field{\card}{a}}
 
     \category[Field List]{l}
     \alternative{\nil}
-    \alternative{\cons{(\id, f)}{l}}
+    \alternative{\cons{(\id, \fd)}{l}}
 
     \category[Reserved Set]{\res}
     \alternative{\varnothing_{\res}}
     \alternative{\id, \res}
 
-    \category[Descriptor]{d}
+    \category[Descriptor]{\dc}
     \alternative{\desc{\res}{l}}
   \end{syntax}
   \caption{Pollux syntax for Protobuf descriptors.}\label{fig:proto-desc-syn}
@@ -129,21 +129,21 @@ other from the Protobuf compiler (Definition~\ref{def:dlegal}).
 
 \vspace{1em}
 \begin{definition}[Descriptor Well-Formedness]\label{def:dwf}
-  A descriptor $d$ is well-formed, denoted $\wfd{d}$, if all fields in
+  A descriptor $\dc$ is well-formed, denoted $\wfd{\dc}$, if all fields in
   the descriptor have a unique field number, the fields are stored in sorted
   order, and all nested descriptors are also well-formed.
 \end{definition}
 
 \vspace{1em}
 \begin{definition}[Legal Descriptor]\label{def:dlegal}
-  A descriptor $d$ is legal, denoted $\legald{d}$, if
+  A descriptor $\dc$ is legal, denoted $\legald{\dc}$, if
   \begin{itemize}
   \item All field numbers are between 1 and $2^{29}-1$, excluding the range
     19,000 to 19,999, which are reserved by the Protobuf compiler.
   \item Message fields are always explicitly marked as optional. This conforms
     with Protobuf, which will generate a method to check message presence, and
     will allow us to initialize recursive messages.
-  \item All nested descriptors within $d$ are also legal.
+  \item All nested descriptors within $\dc$ are also legal.
   \end{itemize}
 \end{definition}
 
@@ -153,19 +153,19 @@ interface. We define a function to compute the size of the descriptor below.
 
 \vspace{1em}
 \begin{definition}[Descriptor Size]\label{def:dsize}
-  The size of a descriptor $d$ is defined as $\dsize$ below.
+  The size of a descriptor $\dc$ is defined as $\dsize$ below.
   \begin{mathpar}
 
     \dsize\left(\desc{\res}{l}\right) = 1 + \dsize(l)
 
     \dsize(\field{\_}{\ty_s}) = 1
 
-    \dsize(\field{\_}{d}) = 1 + \dsize(d)
+    \dsize(\field{\_}{\dc}) = 1 + \dsize(\dc)
 
     \dsize(l) =
     \begin{cases}
       0 & \text{if } l = \nil \\
-      \dsize(f) + \dsize(l') & \text{if } l = (\_, f) :: l'
+      \dsize(\fd) + \dsize(l') & \text{if } l = (\_, \fd) \Colon l'
     \end{cases}
   \end{mathpar}
 \end{definition}
@@ -175,7 +175,7 @@ the syntactic structure of a Protobuf message in a \texttt{.proto} file, the
 logical way to model a \Oneof{} is likely to have a set of fields or some
 other similar grouped structure. However, this isn't how Protobuf actually
 models a \Oneof{} internally, and there are good reasons for Pollux to
-follow their lead.
+follow their lead. 
 
 \begin{itemize}
 \item Members of a \Oneof{} share a field number namespace with the rest
