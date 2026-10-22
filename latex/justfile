@@ -1,2 +1,2 @@
 report:
-	latexmk -lualatex -shell-escape -interaction=nonstopmode -synctex=m pollux.tex
+	latexmk -lualatex -shell-escape -interaction=nonstopmode -synctex=1 pollux.tex

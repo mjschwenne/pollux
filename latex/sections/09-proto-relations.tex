@@ -1,26 +1,18 @@
 \section{Protobuf Compatibility Relations}~\label{sec:proto-relations}
 
-Compatibility between protobuf entities is defined with a series of
-relations. The first and most self-contained relation is the value relation,
-which relates two values at the specification level if serializing just a value
-(such as a variable width integer) and then parsing it to a different protobuf
-type would lead to a different value. After that is the protobuf type relation,
-which relates two protobuf types if any value of the first type is related to
-some value of the second type in the value relation. Since protobuf field and
-message definitions will not have concrete values associated with them, the type
-relation can be used in place of the value relation to make safe type
-changes. Finally, the message relation connects compatible messages such that
-all instances of the original message can be parsed into instances of the updated
-message.
+This section documents the concrete Protobuf specific instance of the Pollux
+relation, including coercions. Like with the framework presented in
+Section~\ref{sec:framework}, this relation will be stratified across
+descriptors, fields and scalar types.
 
 Below is a list of all meta-variables used across all relations, and even across
 encoding formats. When multiple of these variables are needed, you will see
 variants with subscript numbers or apostrophes.
 
 \begin{align*}
-  \m &: \text{message} & v &: \text{value} \\
-  \id &: \text{field number} & \ty &: \text{type} \\
-  \res &: \text{Reserved field set} & \mathtt{n},\ \mathtt{m} &: \text{bit width} \\
+  \m &: \text{message} & \fd &: \text{field} \\
+  \id &: \text{field number} & \ty &: \text{scalar type} \\
+  \res &: \text{Reserved field set} & \width &: \text{bit width} \\
   \fd &: \text{Field} & \card &: \text{cardinality}
 \end{align*}
 
@@ -28,13 +20,103 @@ Below is a list of the relations about to be defined, along with an English
 explanation of how to read them.
 
 \begin{align*}
-  \valrel &: \text{Value relation} & v_1 : \ty_1 \valrel v_2 : \ty_2 &\rightarrow \text{``}v_1 : \ty_1 \text{ becomes } v_2 :
-                                           \ty_2 \text{''} \\
-  \typrel &: \text{Type relation} & \ty_1 \typrel \ty_2 &\rightarrow \text{``}\ty_1\text{ is type-compatible with }
-                                          \ty_2\text{''} \\
-  \dcompat &: \text{Descriptor relation} & \dc_1 \dcompat \dc_2 &\rightarrow \text{``}\dc_1 \text{ is compatible with } \dc_2\text{''}
+  \dcompat &: \text{Descriptor relation} & \dc_1 \dcompat \dc_2 \coerce \co &\rightarrow \text{``}\dc_1
+                                                                              \text{ is
+                                                                              compatible
+                                                                              with }
+                                                                              \dc_2 \text{
+                                                                              under
+                                                                              }
+                                                                              \co
+                                                                              \text{''} \\ 
+  \fieldrel &: \text{field relation} & \fd_1 \fieldrel \fd_2 \coerce \co &\rightarrow
+                                                                           \text{``}\fd_1
+                                                                           \text{
+                                                                           becomes
+                                                                           }
+                                                                           \fd_2
+                                                                           \text{
+                                                                           under
+                                                                           }
+                                                                           \co \text{''} \\
+  \typrel &: \text{Type relation} & \ty_1 \typrel \ty_2 \coerce \co &\rightarrow \text{``}\ty_1\text{
+                                                          is coerced to }
+                                                          \ty_2 \text{ by } \co \text{''} \\
 \end{align*}
 
+\subsection{Descriptor Relation}~\label{sec:desc-rel}
+
+The descriptor compatibility relation $\dcompat$ is defined as below.
+
+\subsubsection{Basic Rules}
+
+A compatibility relation is both reflexive and transitive, although it is
+neither symmetric nor anti-symmetric.  
+
+\begin{mathpar}
+   \infer[D-Refl]{ }{\judg{\Gamma}{\dc \dcompat \dc \coerce \mathrm{id}}}
+
+   \infer[D-Trans]{\judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \co_1} \\ \judg{\Gamma}{\dc_2
+       \dcompat \dc_3 \coerce \co_2}}{\judg{\Gamma}{\dc_1 \dcompat \dc_3 \coerce \co_2 \circ \co_1}}
+\end{mathpar}
+
+\subsubsection{Field Update Rules}
+
+For the moment, names are recorded the protobuf field descriptors for accuracy
+and to allow the relations to expand in the future. However, since names are not
+recorded in the encoded message, they are currently allowed to freely change.
+
+Generally speaking, we can change the type of a field, add a new field or update
+a field in a map.
+
+\begin{mathpar}
+\infer[D-Update]
+  { \forall \id \in \dom{\dc_1} \cap \dom{\dc_2}.\ \judg{\Gamma}{\dc_1[\id] \fieldrel \dc_2[\id] \coerce \co_{\id}} \\
+    \oneofpres(\dc_1, \dc_2) }
+  {
+    \judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \lambda \m.\
+      \forall\ \id \in \dc_2.
+      {\begin{cases}
+        \id \mapsto \co_{\id}(\m[\id]) & \id \in \dom {\dc_1} \cap \dom{\dc_2} \\
+        \id \mapsto \init(\dc_2[\id]) & \id \in \dom{\dc_2} \setminus \dom{\dc_1}
+      \end{cases}}
+  }
+}
+
+\infer[D-Add]
+{
+  \judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \co} \\
+  \id \not \in \dom{\dc_2}
+}{
+  \judg{\Gamma}{\dc_1 \dcompat \dc_2[\id \mapsto \fd] \coerce \lambda\ \m.\ \co(\m)[\id \mapsto \default{\fd}]}
+}
+
+\infer[D-Rm]
+{
+  \judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \co} \\
+  \id \in \dom{\dc_2} \\
+  \dc_2 = \desc{\res}{l}
+}{
+  \judg{\Gamma}{\dc_1 \dcompat \desc{\res \uplus \id}{l} \setminus \id \coerce \lambda\ \m.\ \co(\m) \setminus \id}
+}
+\end{mathpar}
+
+These three rules cover updates to existing fields, the addition of reader-only
+fields and the removable of fields from the reader's descriptor. Note that we
+require that 
+
+\subsubsection{Reserved Field Rules}
+
+We can always add something to the reserved field set, so long as that field
+isn't set in the reader's descriptor. The other rule which updates the reserved
+field set is \textsc{D-Rm}.
+
+\begin{mathpar}
+  \infer[D-ResAdd]{\judg{\Gamma}{\desc{\res_1}{l_1} \dcompat \desc{\res_2}{l_2}
+      \coerce \co} \\ \res_1 \subset \res_2 \\ \id \not \in \dom{\desc{\res_2}{l_2}} \cup
+    \dom{\desc{\res_1}{l_1}}}{\judg{\Gamma}{\desc{\res_1}{l_1} \dcompat \desc{\res_2
+        \uplus \id}{l_2} \coerce \co}}
+\end{mathpar}
 
 \subsection{Value Relation}~\label{sec:val-rel}
 
@@ -215,7 +297,7 @@ converting between varint scalars.
 \subsubsection{Message Rules}
 
 Definitions for the structure of a messages are given in
-Section~\ref{sec:msg-rel}. The values are represented as a mapping from the id
+Section~\ref{sec:desc-rel}. The values are represented as a mapping from the id
 number of each field to the value and type of that field. 
 
 \begin{mathpar}
@@ -323,135 +405,6 @@ a singleton one aren't violated.
   \infer[Rep-T]{\ty_1 \typrel \ty_2}{\rept{\ty_1} \fieldrel \rept{\ty_2}}
 \end{mathpar}
 
-\subsection{Message Relation}~\label{sec:msg-rel}
-
-The descriptor compatibility relation $\dcompat$ is defined as below, but first
-it is important to discuss the structure of fields and messages.
-
-A message value is a tuple containing a set of reserved field numbers and names,
-then a map from an identifier to a tuple with the name of the field and the type
-of the field. The identifier is either a tag for a single field, or a set of
-integers which is used for a \Oneof, where multiple fields must be
-mutually exclusively set.
-
-Enums will be modeled as a set of integers, likewise ignoring the name given to
-each element to favor the integer which is used in the encoding. The enum
-relation is defined using $\enumrel$ to differentiate it from the message
-relation.
-
-\subsubsection{Basic Rules}
-
-A compatibility relation is both reflexive and transitive, although it is
-neither symmetric nor anti-symmetric.  
-
-\begin{mathpar}
-   \infer[Refl-M]{ }{m \msgrel m}
-
-   \infer[Refl-E]{ }{e \enumrel e}
-
-   \infer[Trans-M]{m_1 \msgrel m_2 \\ m_2 \msgrel m_3}{m_1 \msgrel m_3}
-
-   \infer[Trans-E]{e_1 \enumrel e_2 \\ e_2 \enumrel e_3}{e_1 \enumrel e_3}
-\end{mathpar}
-
-\subsubsection{Field Update Rules}
-
-For the moment, names are recorded the protobuf field descriptors for accuracy
-and to allow the relations to expand in the future. However, since names are not
-recorded in the encoded message, they are currently allowed to freely change.
-
-{\color{red} I seem to remember Tej saying that we \emph{should} have the name
-  information available somewhere in the descriptor. I need to check my notes
-  about that.}
-
-Generally speaking, we can change the type of a field, add a new field or update
-a field in a map.
-
-\begin{mathpar}
-  \infer[Field-Type]{f(id) = \ty_1 \\ \ty_1 \typrel \ty_2}{\desc{\res}{f} \msgrel \desc{\res}{f[id \mapsto \ty_2]}}
-
-  \infer[Field-Add]{id \not \in \dom{f}}{\desc{\res}{f} \msgrel \desc{\res}{f[id \mapsto \ty]}}
-
-  % TODO: May need restrictions about maps in maps...
-  \infer[Map-Type-F]{f(id) = (\map{\ty_1}{\impt{\ty_2})} \\ \ty_1 \typrel \ty_1' \\ \ty_2
-    \fieldrel \impt{\ty_2'} \\ \ty_1 \ne \byt} {\desc{\res}{f} \msgrel \desc{\res}{f[id \mapsto
-      (\map{\ty_1'}{\impt{\ty_2'}})]}}
-\end{mathpar}
-
-Messages are similar to records in Lean or other functional languages and
-message compatibility can take the same two routes that record subtyping can:
-width compatibility and depth compatibility. In width compatibility updates, new
-fields are added to the message, making the updated version a strict superset of
-the original message. In depth compatibility updates, the number of fields
-remains the same, but other attributes of the field are updated compatible ways.
-
-\subsubsection{Oneof Rules}
-
-The \Oneof{} rules are a bit complicated because a \Oneof{}
-struggles against the notion that the field relations only connects one field to
-one field by encapsulating several fields into a singular field.
-
-% FIXME: Oneof fields don't cleanly fit into the map abstractions since there is
-% no clear choice of key.
-
-\begin{mathpar}
-  \infer[Oneof-Intro-Field]{\card \in \{\imp, \optt\} \\ f(id) = \field{\card}{\ty}}
-  {\desc{\res}{f} \msgrel \desc{\res}{f[\{id\} \mapsto \oneof{id \mapsto \field{\card}{\ty}}]}}
-
-  % May need some statement about f_{n+1} not already being in the message?
-  % You can introduce a new field, but not move an existing one.
-  \infer[Oneof-Add-F]{\card \in \{\imp, \optt\} \\ id_n \not \in
-    id_s \\ f(id_s) = m \\ id_n \not \in  \dom{m} \\ \ty \not= \mathtt{MAP}}
-  {\desc{\res}{f} \msgrel \desc{\res}{f[id_s \cup \{id_n\} \mapsto (m[id_n \mapsto \field{\card}{\ty}])]}}
-
-  % This rule should just be a combination of the above two rules...
-  \infer[Oneof-Intro-New]{\dom{ f } \cap \dom{ f_o } = \emptyset
-    \\ \rep \not \in dec(f_o) \\ \forall\;id_n \in \dom{f_o}.\
-    \texttt{snd}\ f_o(id_n) \ne \mathtt{MAP}}{\desc{\res}{f} \msgrel \desc{\res}{f[\dom{f_o}
-      \mapsto f_o]}}
-
-  \infer[Oneof-Elim]{f(id_n) = m \\ id \in id_n }
-  {\desc{\res}{f} \msgrel \desc{\res}{f[id_n \setminus id \mapsto m \setminus id]}}
-
-  % I'm not sure about the premise of this rule, but it seems better than having
-  % to making another version of all the other rules. This is the first instance
-  % where having a field relation would be very helpful.
-  \infer[Oneof-Field-Update]{f_o(id') = \ty \\ \ty \typrel \ty'}
-  {\desc{\res}{f[id \mapsto f_o]} \msgrel \desc{\res}{f[id \mapsto ( f_o[id' \mapsto \ty'] )]}}
-\end{mathpar}
-
-\subsubsection{Enum Rules}
-
-The enum rules are similar to the message rules at least in the sense that enums
-can be updated to have new fields without issue. However, when considering
-removing fields from an enum definition, it is important to know if the enum is
-treated as open or closed~\cite{EnumBehavior}. By default, \texttt{proto3}
-treats all enums as open, so it should be possible to write a rule allowing for
-the deletion of an enum field. This naturally aligns with how \texttt{go}
-handles enums, since it doesn't support closed enums. Since protobuf enums don't
-contain extra information, no depth rules is allowed.
-
-\begin{mathpar}
-  \infer[Enum-Width]{vals(e_1) \subset vals(e_2)}{e_1 \enumrel e_2}
-\end{mathpar}
-
-\subsubsection{Reserved Field Rules}
-
-\begin{mathpar}
-  \infer[Reserved-Add]{\res \subset \res'}{\desc{\res}{f} \msgrel \desc{\res'}{f}}
-
-  {\color{red}
-    \infer[Reserved-Rm]{\res \supset \res'}{\desc{\res}{f} \msgrel \desc{\res'}{f}}
-  }
-\end{mathpar}
-
-\subsubsection{Valid Descriptors}
-
-\begin{definition}[Valid Protobuf Descriptors]
-  A protobuf message descriptor is \emph{valid}, denoted $v(\dc)$ if
-  $\desc{\emptyset}{\emptyset} \msgrel \desc{\res}{f}$.
-\end{definition}
-
 \subsubsection{Compatibility Theorem}
 
 The main field-level compatibility theorem is stated below.
@@ -468,4 +421,5 @@ The main field-level compatibility theorem is stated below.
 % TeX-master: "../pollux.tex"
 % TeX-command-default: "Make"
 % jinx-local-words: "protobuf"
+% texmathp-search-n-paragraphs: 30
 % End:

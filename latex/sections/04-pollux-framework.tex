@@ -1,19 +1,46 @@
-\section{A Type-Theoretic Approach}\label{sec:type-theory}
+\section{The Pollux Framework}\label{sec:framework}
 
-If we view descriptors as record types (which they clearly are), we can borrow
-concepts from Programming Languages theory. Specifically, taking the view that
-serializing then parsing under a different descriptor is a coercion and can be
-modeled as such, we can draw some literature on subtyping as
-coercions~\cite{breazu-tannenInheritanceImplicitCoercion1991,brandtCoinductiveAxiomatizationRecursive1998}. 
+The first step is to define what it means for two descriptors to be compatible
+with each other. This definition needs to be practical and flexible enough to
+talk about real-world updates while also enabling formal reasoning about the
+update process. To this end, Pollux considers two descriptors compatible if
+there exists a well-behaved coercion between all messages of the writer's
+descriptor into the reader's descriptor. The idea of a coercion as a function
+also captures the idea that we should be able to reason about what message comes
+out of the parser. If we don't know what message the parser might return, the
+host program reading the encoding can't perform the necessary steps to recover
+the original value, if that's desired. This framing is also grounded in
+Programming Languages theory, were a line of research explored sub-typing is a
+form of
+coercion~\cite{breazu-tannenInheritanceImplicitCoercion1991,brandtCoinductiveAxiomatizationRecursive1998}.
+Pollux extends this philiosphy, but rather than sub-typing between record types
+(which our descriptors could easily be classified as), we're sub-typing through
+the encoding format.
 
 \subsection{Compatibility as Coercion}
 
 Pollux's goal is to be able to look at a pair of data descriptors and
 characterize what happens to values under the first descriptor when parsed under
-the updated one. Our derivations, of the form $\judg{\varnothing}{\dc_1 \dcompat \dc_2}$
-provide more than a certificate of compatibility between the descriptors: read
-rule by rule, it is a program $\co : \denote{\dc_1} \rightarrow \denote{\dc_2}$, a coercion the
-reader applies to the writer's message.
+the updated one. Our derivations, of the form
+$\judg{\varnothing}{\dc_1 \dcompat \dc_2}$ provide more than a certificate of
+compatibility between the descriptors: read rule by rule, it is a program
+$\co : \denote{\dc_1} \rightarrow \denote{\dc_2}$, a coercion the reader applies to the
+writer's message. We formalize this notion by making the coercion explicit, and
+writing the judgment of the form
+$\judg{\varnothing}{\dc_1 \dcompat \dc_2 \coerce \co}$.
+
+But first, some definitions. Pollux operates on descriptors $\dc$, which are
+written in a data descriptor language like Protobuf or CDDL. This can be thought
+of as types for messages. On the other side is a message $\m$, which contains
+some data while conforming to a descriptor. We'll use $\validv{m}{d}$ to
+represent a message conforming to the descriptor, although the exact definition
+of this will be format dependent. Likewise, $\denote{d}$ will be used as a type
+to represent all messages which conform to the descriptor $\dc$.
+
+I asserted earlier that two descriptors are compatible if a well-behaved
+coercion exists. What does it mean for the coercion to be well-behaved? Clearly
+we want to eliminate some coercions which arbitrarily change values in the
+output message.
 
 \vspace{1em}
 \begin{definition}[Well-behaved Transformation]\label{def:well-behaved}
@@ -23,19 +50,20 @@ reader applies to the writer's message.
     U \subseteq \dom{\dc_1} \setminus \dom{\dc_2}. \]
 \end{definition}
 
+Basically, a conforming descriptor and any possible encoding of that message
+will yield the same message. Additionally, the parser reports which records in
+the encoding were skipped (i.e. are writer only fields). The second condition
+that $U \subseteq \dom{\dc_1} \setminus \dom{\dc_2}$ is essential to this
+definition. Wire-soundness, that the message parses, would admit something like
+$\ints \dcompat \String$ when the reader skips the mistyped record and injects
+the default $\String$ value. This condition rules out the trivial transformation
+which always injects the default values for all fields.
+
 \vspace{1em}
 \begin{definition}[Compatibility]\label{def:compat}
   Two descriptors $\dc_1$ and $\dc_2$ are compatible if there exists a well-behaved
   transformation between them. 
 \end{definition}
-
-Here $U$ is the set of fields skipped during parsing (i.e.\ writer-only fields or
-fields with mismatched wire types). The second condition that
-$U \subseteq \dom{\dc_1} \setminus \dom{\dc_2}$ is essential to this definition. Wire-soundness,
-that the message parses, would admit something like $\ints \dcompat \String$ when the
-reader skips the mistyped record and injects the default $\String$ value. This
-condition rules out the trivial transformation which always injects the default
-values for all fields.
 
 There are two conditions part of Definition~\ref{def:well-behaved}, wire
 soundness and faithfulness. Wire soundness states that a valid encoding of a
@@ -46,9 +74,9 @@ $f$ down on every valid message that has at least one encoding. So if
 $\encodes{\dc_1}$ is total on valid messages (i.e. a serializer exists), any two
 derivations of the same judgment yield coercions that agree on valid messages.
 
-\subsubsection{Pollux Judgements}
+\subsubsection{Pollux Judgments}\label{sec:judgments}
 
-A Pollux judgment has the form $\judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \co}$ where
+A Pollux judgment has the form $\judg{\Gamma}{\nm_1 \dcompat \nm_2 \coerce \co}$ where
 \begin{itemize}
 \item $\Sigma$ is a symbol table, mapping names of descriptors to descriptor
   values. Representing this as a table allows us to store (mutually) recursive
@@ -60,7 +88,7 @@ A Pollux judgment has the form $\judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \co}$
   between those descriptors in the completed derivation. An alternative
   formulation would be so that $\Gamma$ maps a pair of descriptors to a value of type
   $x : \denote{\Sigma(\nm_1)} \rightarrow \denote{\Sigma(\nm_2)}$ 
-\item $\co$ is a function $\co : \denote{\Sigma(\dc_1)} \rightarrow \denote{\Sigma(\dc_2)}$, the coercion
+\item $\co$ is a function $\co : \denote{\Sigma(\nm_1)} \rightarrow \denote{\Sigma(\nm_2)}$, the coercion
   built by the derivation.
 \end{itemize}
 
@@ -75,29 +103,53 @@ for each type of object:
   && \co : \denote{\ty_1} \to \denote{\ty_2} \text{ (payloads)}
 \end{align*}
 
+\subsection{Data Descriptor Format Independent Rules}
+
+This section details some general rules that should apply to most common data
+descriptor languages.
+
 \subsubsection{Names \& Recursion}
+
+As discussed in Section~\ref{sec:judgments}, the context $\Gamma$ maps pairs of names
+to assumption variables, which represent coercions (although since this is
+building a co-inductive proof, we might use a variable to represent a coercion
+we don't have a definition for yet).
 
 \begin{mathpar}
   \infer[N-Assum]
     { \Gamma((\nm_1, \nm_2)) \mapsto x }
     { \judg{\Gamma}{\nm_1 \dcompat \nm_2 \coerce x} }
 
-  \infer[N-Unfold]
+    \infer[N-Unfold]
     { (\nm_1, \nm_2) \notin \dom{\Gamma} \\
-      \judg{\Gamma, (\nm_1, \nm_2) \mapsto x}{\Sigma(\nm_1) \dcompat \Sigma(\nm_2) \coerce \co} }
-    { \judg{\Gamma}{\nm_1 \dcompat \nm_2 \coerce \mathsf{fix}\ x.\ \co} }
+      \judg{\Gamma, (\nm_1, \nm_2) \mapsto x}{\Sigma(\nm_1) \dcompat \Sigma(\nm_2) \coerce \co} } {
+      \judg{\Gamma}{\field{\kappa}{\nm_1} \dcompat \field{\kappa}{\nm_2} \coerce \mathsf{fix}\
+        x.\ \co} }
 \end{mathpar}
 
-The fix-point operator $\mathsf{fix}$ is well founded on the writer's value
-since the $x$ is only ever applied under the \textsc{F-Msg} rule, which means
-it's applied to a nested message of strictly smaller depth.
+The \textsc{N-Assum} rules states that when we encounter two descriptor names
+which are in the context $\Gamma$, we use the stored coercion between them. The
+\textsc{N-Unfold} rule is what adds things to the $\Gamma$ context. Importantly, the
+well-foundedness of the fix-point operator $\mathsf{fix}$ is dependent on the
+fact that the names in the conclusion exist under some constructor which means
+that $x$ is only every applied to nested messages of strictly smaller depth, in
+this case burrowing the as-of-yet unintroduced notation for a Protobuf field.
 
 \subsubsection{Descriptors}
+
+Since Pollux can be used for other data descriptor languages as well, we wanted
+to have a general rule which reasons about far-reaching updates to a descriptor. 
+
+This rule is currently presented in a Protobuf-specific form, including an extra
+condition that the \Oneof{} fields are correctly preserved. While Pollux tries
+to reason about descriptor updates in a field-by-field manner, some language
+features may require predicates which examine multiple fields at once, like
+Protobuf's \Oneof{}.
 
 \begin{mathpar}
   \infer[D-Update]
   { \forall \id \in \dom{\dc_1} \cap \dom{\dc_2}.\ \judg{\Gamma}{\dc_1[\id] \fieldrel \dc_2[\id] \coerce \co_{\id}} \\
-    \mathrm{OneofPreserved}(\dc_1, \dc_2) }
+    \oneofpres(\dc_1, \dc_2) }
   {
     \judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \lambda \m.\
       \forall\ \id \in \dc_2.

@@ -102,7 +102,7 @@
 % Compatibility relations
 \newcommand{\dcompat}{\ll}
 \newcommand{\valrel}{\prec}
-\newcommand{\typrel}{\propto}
+\newcommand{\typrel}{\prec}
 \newcommand{\fieldrel}{\propto}
 \newcommand{\msgrel}{\preceq}
 \newcommand{\enumrel}{\msgrel_e}
@@ -212,6 +212,7 @@
 \newcommand{\vints}{\mathcal{V}}
 \newcommand{\payload}{\left[0, 2^{64}\right)}
 \newcommand{\ind}[1]{\mathbb{1}\left[#1\right]}
+\newcommand{\default}[1]{\mathrm{default}(#1)}
 
 % Auxiliary Data Structures
 \newcommand{\nil}{\texttt{[]}}
@@ -261,17 +262,17 @@ descriptors.
 
 \input{sections/03-philosophy.tex}
 
+\input{sections/04-pollux-framework.tex}
+
 \input{sections/05-proto-desc.tex}
 
 \input{sections/06-proto-msg.tex}
 
-\input{sections/YY-proto-parse.tex}
+\input{sections/07-proto-parse.tex}
 
-\input{sections/07-proto-trans.tex}
+\input{sections/08-proto-trans.tex}
 
-\input{sections/08-proto-relations.tex}
-
-\input{sections/09-type-theoretic.tex}
+\input{sections/09-proto-relations.tex}
 
 \input{sections/10-eval.tex}
 
