@@ -35,12 +35,12 @@ Outside of Lean, we'll use this syntax for the Protobuf descriptors.
 \begin{figure}[H]
   \centering
   \begin{syntax}
-    \categoryFromSet[Naturals]{n}{\mathbb{N}}
+    \categoryFromSet[Naturals]{g, k}{\mathbb{N}}
 
     \category[Message Name]{a}
     \alternative{\mathit{id}}
     
-    \category[Scalar Type]{\ty}
+    \category[Scalar Type]{\ty_s}
     \alternative{\double}
     \alternative{\float}
     \alternative{\ints}
@@ -57,15 +57,18 @@ Outside of Lean, we'll use this syntax for the Protobuf descriptors.
     \alternative{\String}
     \alternative{\byt}
 
+    \category[Field Type]{\ty}
+    \alternative{\ty_s}
+    \alternative{\nm}
+
     \category[Cardinality]{\card}
     \alternative{\sig}
     \alternative{\opt}
     \alternative{\rep}
-    \alternative{\oneoft{n}}
+    \alternative{\oneoft{g}}
 
     \category[Field]{\fd}
     \alternative{\field{\card}{\ty}}
-    \alternative{\field{\card}{a}}
 
     \category[Field List]{l}
     \alternative{\nil}
@@ -147,21 +150,28 @@ interface. We define a function to compute the size of the descriptor below.
 
 \vspace{1em}
 \begin{definition}[Descriptor Size]\label{def:dsize}
-  The size of a descriptor $\dc$ is defined as $\dsize$ below.
+  The size of a descriptor $\dc$ is defined as $\dsize$ below, mutually
+  recursive with the size of a field $\fd$, $\fsize$.
   \begin{mathpar}
 
-    \dsize\left(\desc{\res}{l}\right) = 1 + \dsize(l)
-
-    \dsize(\field{\_}{\ty_s}) = 1
-
-    \dsize(\field{\_}{\dc}) = 1 + \dsize(\dc)
-
-    \dsize(l) =
-    \begin{cases}
+    \dsize\left(\desc{\res}{l}\right) = \begin{cases}
       0 & \text{if } l = \nil \\
-      \dsize(\fd) + \dsize(l') & \text{if } l = (\_, \fd) \Colon l'
+      \fsize(\fd) + \dsize \left( \desc{\res}{l'} \right) & \text{if } l = \fd
+                                                            \Colon l'
     \end{cases}
+
+    \fsize(\field{\card}{\ty_s}) = 1
+
+    \fsize(\field{\card}{\nm}) = 1 + \dsize(\Sigma(\nm))
   \end{mathpar}
+\end{definition}
+
+\vspace{1em}
+\begin{definition}[Descriptor Depth]\label{def:ddepth}
+\[ \ddepth(\desc{\res}{l}) = \max_{f \in l} \fdepth(\fd), \qquad
+  \fdepth(\field{\card}{\ty_s}) = 0 \qquad
+  \fdepth(\field{\card}{\nm}) = 1 + \ddepth \left( \Sigma(\nm) \right)
+  \]
 \end{definition}
 
 Finally, the \Oneof{} cardinality needs some explanation. When looking at

@@ -50,14 +50,39 @@ The descriptor compatibility relation $\dcompat$ is defined as below.
 
 \subsubsection{Basic Rules}
 
-A compatibility relation is both reflexive and transitive, although it is
-neither symmetric nor anti-symmetric.  
+A compatibility relation is cleary reflexive. While it would be nice to also
+have transitivity, which would provide infinite backwards compatibility (See
+Section~\ref{sec:compat-props}), allowing for the deletion of fields can
+complicate this.
+
+Consider this sequence of transformations:
+
+\begin{minted}{proto}
+  message Msg {
+    int32 field = 1;
+    int32 other = 2;
+  } 
+
+  message Msg' {
+    int32 other = 2;
+  }
+
+  message Msg'' {
+    string field = 1;
+    int32 other = 2;
+  }
+\end{minted}
+
+Now we have a sequence of two valid updates, dropping a field and then adding a
+new field, but it doesn't compose correctly since we can't move directly from
+\texttt{Msg} to \texttt{Msg''} since the wire types of field 1 are different.
+Fortunately, Protobuf has a mechanism for this, reserved field numbers, which
+would disallow this and restore our ability to compose updates, but it does mean
+that our Protobuf compatibility relation doesn't have an explicit transitivity
+rule.
 
 \begin{mathpar}
    \infer[D-Refl]{ }{\judg{\Gamma}{\dc \dcompat \dc \coerce \mathrm{id}}}
-
-   \infer[D-Trans]{\judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \co_1} \\ \judg{\Gamma}{\dc_2
-       \dcompat \dc_3 \coerce \co_2}}{\judg{\Gamma}{\dc_1 \dcompat \dc_3 \coerce \co_2 \circ \co_1}}
 \end{mathpar}
 
 \subsubsection{Field Update Rules}
@@ -102,8 +127,7 @@ a field in a map.
 \end{mathpar}
 
 These three rules cover updates to existing fields, the addition of reader-only
-fields and the removable of fields from the reader's descriptor. Note that we
-require that 
+fields and the removable of fields from the reader's descriptor.
 
 \subsubsection{Reserved Field Rules}
 
@@ -113,20 +137,17 @@ field set is \textsc{D-Rm}.
 
 \begin{mathpar}
   \infer[D-ResAdd]{\judg{\Gamma}{\desc{\res_1}{l_1} \dcompat \desc{\res_2}{l_2}
-      \coerce \co} \\ \res_1 \subset \res_2 \\ \id \not \in \dom{\desc{\res_2}{l_2}} \cup
+      \coerce \co} \\ \res_1 \subseteq \res_2 \\ \id \not \in \dom{\desc{\res_2}{l_2}} \cup
     \dom{\desc{\res_1}{l_1}}}{\judg{\Gamma}{\desc{\res_1}{l_1} \dcompat \desc{\res_2
         \uplus \id}{l_2} \coerce \co}}
 \end{mathpar}
 
-\subsection{Value Relation}~\label{sec:val-rel}
+\subsection{Type Relation}~\label{sec:typ-rel}
 
-The value relation is the base level of the compatibility relations, relating
-just two individual values. Protobuf values are modeled here as a specification
-level type in Lean associated with a protobuf type as listed in
-Table~\ref{tab:val-spec}. Finally, while protobuf decorators are technically
-part of the field level specification, they have been incorporated into the type
-information to allow the specification type into include \texttt{option} or
-\texttt{list} Lean types.
+The type level compatibility relation tells us which Protobuf field types we
+can convert between. Protobuf values are modeled here as a specification level
+type in Lean associated with a protobuf type as listed in
+Table~\ref{tab:val-spec}. 
 
 \begin{table}[H]
 	\centering
@@ -150,37 +171,24 @@ information to allow the specification type into include \texttt{option} or
       defined below.}\label{tab:val-spec}
 \end{table}
 
-While it might be tempting to have a roundtrip theorem where the output of the
-serializer is passed directly to the parser, this would require a canonical
-encoding, which Protobuf doesn't have. Instead we make use of a relational
-encoding specification, where $\encodes{\ty}(v, \bs)$ means that $v$ can be encoded
-as bytes $\bs$ under type $\ty$.
-
-\vspace{1em}
-\begin{definition}[Value Relation]
-  A protobuf value at the specification level $v_1$ with protobuf type $\ty_1$ is
-  related to another value $v_2$ at type $\ty_2$, denoted $v_1 : \ty_1 \valrel v_2 : \ty_2$
-  if $\forall\ \bs, \encodes{\ty_1}(v_1, \bs) \rightarrow parse_{\ty_2}(\bs) = v_2$.
-\end{definition}
-
 \subsubsection{Basic Rules}
 
-The value relation is reflexive and transitive, however a direct transitivity
-rules isn't included in the relation. To understand why, first consult the
-integer rules in Section~\ref{sec:proto-compat-ints} and consider what happens
-when an integer is cast to a smaller byte width. Specifically, consider $2^{40}$
-as a \uintl. Casting this value to a \uints{} can be done with
-the \textsc{Uint-Chg-W} rule, resulting in
-$2^{40} : \uintl \valrel 0 : \uints$, which describes changing
-the field perfectly. However, we can then promote this field back to
-\uintl{} with another application of \textsc{Uint-Chg-W}, getting
-$0 : \uints \valrel 0 : \uintl$. Having a transitive rule
-would result in $2^{40} : \uintl \valrel 0 : \uintl$ but
-clearly parsing a serialization of $2^{40}$ as a \uintl{} when it was
-serialized as a \uintl{} should recover the original value!
+The value relation is reflexive. A direct transitivity
+rules isn't included in the relation since some type coercions lose information
+(See Section~\ref{sec:proto-compat-ints}). If we allow coercions in both
+directions for such a scalar type and compose them, we end up back in the
+original scalar type but with a different value.
+
+As an example, consider $2^{40}$ as a \uintl{}. Casting this value to a \uints{}
+results in $2^{40} : \uintl \valrel 0 : \uints$, which describes changing the
+field perfectly. However, we can then promote this field back to \uintl{},
+getting $0 : \uints \valrel 0 : \uintl$. Having a transitive rule would result
+in $2^{40} : \uintl \valrel 0 : \uintl$ but clearly parsing a serialization of
+$2^{40}$ as a \uintl{} when it was serialized as a \uintl{} should recover the
+original value!
 
 \begin{mathpar}
-  \infer[Refl]{ }{v:\ty \valrel v:\ty}
+  \infer[T-Refl]{ }{\judg{\Gamma}{\ty_s \typrel \ty_s \coerce id}}
 \end{mathpar}
 
 \subsubsection{String \& Byte Rules}
@@ -191,10 +199,15 @@ present in the resulting string. Technically the Protobuf specification requires
 that all strings are encoded in UTF-8, so we can optionally add that requirement
 to converting from \byt{} to \String.
 
-\begin{mathpar}
-  \infer[Str-Byte]{ }{v: \String \valrel v: \byt}
+% TODO: Since the rules know operate solely at the descriptor / type level, I
+% don't think it's possible to state a requirement like "the bytes are valid
+% UTF-8" since that would only be true of some byte strings...
 
-  \infer[Byte-Str]{ {\color{red} v \text{ is valid UTF-8}} }{v: \byt \valrel v: \String}
+\begin{mathpar}
+  \infer[T-Str-Byte]{ }{\judg{\Gamma}{\String \typrel \byt \coerce id}}
+
+  \infer[T-Byte-Str]{ {\color{red} b \text{ is valid UTF-8}} }{\judg{\Gamma}{\byt
+      \typrel \String \coerce id}}
 \end{mathpar}
 
 \subsubsection{Varint Scalar Rules}\label{sec:proto-compat-ints}
@@ -210,13 +223,6 @@ As a shorthand, statements like \uintn{n} represent a variable length integer
 encoding into $\width$ bits. In order to result in valid protobuf types,
 $\width \in \{32, 64\}$.
 
-It is also worth noting that the expression $v : \ty$ actually refers to a value
-of type $\denote{\ty}$ with a label of the type. All of the integer
-types have $\denote{\cdot} = \mathbb{Z}$, as shown in Table~\ref{tab:val-spec},
-which allows for the free conversion between integer types. Finally, $\%$ refers
-to modulus using floored division, so $-1 \fmod 2 = 1$ and the rules are
-written with truncated integer division.
-
 Let $\vints = \left\{ \uintn{n}, \intn{n}, \sintn{n}, \bool \right\}$ represent
 the protobuf types encoded on the wire as a variable-width integer. For each
 $\ty \in \vints$, let
@@ -227,8 +233,8 @@ $\ty \in \vints$, let
 be functions that convert from a $\ty$-typed writer to the payload number and
 the value recovered by a $\ty$-typed reader respectively.
 \[
-  \infer[Varint]{ \ty_1, \ty_2 \in \vints \\ v_2 =
-    \dec{\ty_2}{\enc{\ty_1}{v_1}}}{v_1 : \ty_1 \valrel v_2 : \ty_2}
+  \infer[T-Varint]{ \ty_1, \ty_2 \in \vints}{\judg{\Gamma}{\ty_1 \typrel \ty_2 \coerce
+      \decop{\ty_2} \circ \encop{\ty_1}}}
 \]
 
 The table below gives the decoding and encoding functions for each type, and
@@ -252,8 +258,7 @@ makes use of the following definitions.
     $\encop{\intn{n}}$ row is the ten-byte sign extension: protobuf writes every
     negative $\intn{n}$ as its two's complement at 64 bits, which is exactly
     $v \fmod 2^{64}$.
-  }
-  \label{tab:varint-conversion}
+  }\label{tab:varint-conversion}
 \end{table}
 
 Which uses these definitions for converting to and from the zig-zag encoding
@@ -294,127 +299,154 @@ converting between varint scalars.
     covers all thirty non-identity conversions.}\label{tab:varint-derived}
 \end{table}
 
-\subsubsection{Message Rules}
+\subsubsection{Message Fields}
 
-Definitions for the structure of a messages are given in
-Section~\ref{sec:desc-rel}. The values are represented as a mapping from the id
-number of each field to the value and type of that field. 
+If two descriptors are compatible, then using them as nested messages for a
+field is also compatible. The notation isn't great here, but there is an elided
+constructor in the conclusion required to use the $\typrel$ form of the
+compatibility relation.
 
-\begin{mathpar}
-  \infer[Msg]{\desc{\res_1}{f_1} \msgrel \desc{\res_2}{f_2} \\ \forall\;\id \in \dom{v_2}.\;\left( f_1(\id) =
-      (\card, \ty_1) \wedge v_1(\id) \valrel v_2(\id) \right) \vee v_2(\id) = default\left(\mathtt{snd}\ f_2(\id)\right)}
-  {v_1 : \mathtt{MSG}\ \desc{\res_1}{f_1} \valrel v_2 : \mathtt{MSG}\ \desc{\res_2}{f_2} }
-\end{mathpar}
+\[
+  \infer[T-Msg]{\judg{\Gamma}{\nm_1 \dcompat \nm_2 \coerce \co}}{\judg{\Gamma}{\nm_1
+      \typrel \nm_2 \coerce \co}}
+\]
 
-The first rule is complex. It stands that a message with some reserved fields
-and field definitions can be interpreted as a message with a different set of
-reserved fields and field definitions if the two descriptors are compatible and
-if for all fields in the resulting value, either (1) it has a compatible value
-(2) it has the default value.
+\subsection{Field Relation}
 
-\subsubsection{Decorator Rules}
+To prove
+$\judg{\Gamma}{\field{\card_1}{\ty_1} \fieldrel \field{\card_2}{\ty_2}}$, we'll need
+$\judg{\Gamma}{\ty_1 \typrel \ty_2 \coerce \co}$ as a premise and some statement that
+the cardinality pair.
 
-Since the specification type can include \texttt{option}'s and
-\texttt{repeated}'s, rules for handling these must also be present in the value
-relation. These rules are grouped into introduction rules, which take implicit
-values and make them optional or repeated, pass through rules which enable the
-above rules to operate on these modified types.
+The slot holds both the payload type an a cardinality marker. In order to
+coerce a slot, we need to know that the payload types are compatible and lift
+that to the whole slot.
 
-Generally speaking, we can introduce, eliminate {\color{red} (It's clear what
-  happens when we eliminate a non-packed \texttt{repeated} field; the last
-  writer wins. What happens when we eliminate a packed field? We'll end up
-  skipping the field as unknown. This difference is actually why we can't have a
-  \textsc{Rep-Elim} rule since we can't implement the elimination as a function
-  without more knowledge.)} or change the
-underlying type of each decorator. Implicit fields require no special
-consideration.
+\[ \card_1 \cardrel{\ty_1}{\ty_2} \card_2 \coerce \left( L : \left(\denote{\ty_1} \to \denote{\ty_2}\right) \rightarrow
+    \denote{\field{\card_1}{\ty_1}} \rightarrow \denote{\field{\card_2}{\ty_2}} \right) \]
 
-\begin{mathpar}
-  \infer[Rep-Pass]{v_1:\ty_1 \valrel v_1':\ty_2 \\ \cdots \\ v_n:\ty_1 \valrel v_n':\ty_2}{[v_1; \dots;
-    v_n]: \rept{\ty_1} \valrel [v_1'; \dots; v_n']: \rept{\ty_2}}
+The judgment here is indexed by both types since
+\begin{itemize}
+\item Some rules need to access the default for a type, like converting from an
+  implicit field to an optional one. If the input payload has the default, we
+  need to convert that to \texttt{None}.
+\item Message merge semantics need to trigger if the payload types are
+  messages. More generally, there are several cases where a single payload can
+  be split or combined with others. For some types, that's a last-write-wins
+  operation, but messages merge. To accomplish this, we use a \emph{combine}
+  operator $\combine{\ty}$ which takes the right argument for last-write-wins types
+  and merges messages.
+\item If the payload is a packed scalar type, converting from repeated to
+  implicit might cause a wire type mismatch.
+\end{itemize}
+Also note that implicit presence on a message field doesn't exist in Proto3, and
+descriptor well-formedness excludes it (Definition~\ref{def:dwf}), so the rule
+doesn't need to handle this.
 
-  \infer[Opt-Some-Pass]{v_1:\ty_1 \valrel v_2:\ty_2}{(\some{v_1}): \optt{\ty_1} \valrel
-    (\some{v_2}): \optt{\ty_2}}
+\[ \infer[K-Field]{ \judg{\Gamma}{\ty_1 \typrel \ty_2 \coerce \co} \\ \card_1 \cardrel{\ty_1}{\ty_2} \card_2 \coerce L
+  }{ \judg{\Gamma}{\field{\card_1}{\ty_1} \typrel \field{\card_2}{\ty_2} \coerce L(\co)} } \]
 
-  \infer[Opt-None-Pass]{ }{\none: \optt{\ty_1} \valrel \none: \optt{\ty_2}}
-  
-  \infer[Opt-Intro]{ }{v:\ty \valrel (\some{v}): \optt{\ty}}
+Then, we introduce Protobuf cardinality rules
 
-  \infer[Rep-Intro]{ }{v:\ty \valrel [v]: \rept{\ty}}
+\begin{mathparpagebreakable}
+  \infer[K-Imp]{ }{ \imp \cardrel{\ty_1}{\ty_2} \imp \coerce \lambda\ \co.\ \lambda\ (\impslot{\pay}). \impslot{(\co\
+      \pay)} }
 
-  \infer[Missing-Imp]{\ty_1 \typrel \ty_2}{\none: \ty_1 \valrel default(\ty_2):\ty_2}
-\end{mathpar}
+  \infer[K-Opt]{ }{ \opt \cardrel{\ty_1}{\ty_2} \opt \coerce \lambda\
+    \co.\ \mathrm{map}_{\mathtt{option}}\ \co}
 
-\subsection{Type Relation}~\label{sec:typ-rel}
+  \infer[K-Rep]{ }{ \rep \cardrel{\ty_1}{\ty_2} \rep \coerce \lambda\ \co.\
+    \mathrm{map}_{\mathtt{List}}\ \co}
 
-This relation relates types which can be converted via the value
-relation. Recall that this relation is needed to reason about descriptor-only
-compatibility, which doesn't have any concrete values associated with it.
+  {\color{red}
+  \infer[K-OptImp]{ } { \opt \cardrel{\ty_1}{\ty_2} \imp \coerce \lambda \co.\ \lambda \st.\
+    \mathbf{case}\ \st\ \mathbf{of}\ \none \Rightarrow \impslot{\init_{\ty_2}} \mid \some{\pay} \Rightarrow \imp\ (\co\
+    \pay) }
+  }
 
-\begin{definition}[Type Relation]
-  The type relation relates two protobuf type $\ty_1$ and $\ty_2$, denoted $\ty_1 \typrel
-  \ty_2$ if for all $v_1:\ty_1$ there exists a $v_2:\ty_2$ such that $v_1:\ty_1 \valrel v_2:\ty_2$.
-\end{definition}
+  {\color{red}
+  \infer[K-ImpOpt\ (open)]{ } { \imp \cardrel{\ty_1}{\ty_2} \opt \coerce \lambda \co.\ \lambda
+    (\impslot{\pay}).\ \mathbf{if}\ \pay = \init_{\ty_1}\ \mathbf{then}\ \none\
+    \mathbf{else}\ \some{(\co\ \pay)} }
+  }
 
-These rules compress many of the rules in the previous section into one rule,
-stating that types are compatible with each other.
+  {\color{red}
+  \infer[K-OptRep]{ }
+    { \opt \cardrel{\ty_1}{\ty_2} \rep \coerce
+      \lambda \co.\ \lambda \st.\ \mathbf{case}\ \st\ \mathbf{of}\
+        \none \Rightarrow [\,] \mid \some{\pay} \Rightarrow [\co\ \pay] }
+   }
 
-\subsubsection{Base Type Rules}
+  {\color{red}
+  \infer[K-RepOpt]
+    { \neg\packable(\ty_1) }
+    { \rep \cardrel{\ty_1}{\ty_2} \opt \coerce
+      \lambda \co.\ \lambda l.\ \mathbf{case}\ l\ \mathbf{of}\
+        [\,] \Rightarrow \none \mid
+        \pay \Colon ps \Rightarrow \some{(\mathrm{foldl}\ \combine{\ty_2}\ (\co\ \pay)\ (\mathrm{map}\ \co\ ps))} }
+  }
 
-\begin{mathpar}
-  \infer[Str-Byt-T]{ }{\String \typrel \byt}
+  {\color{red}
+  \infer[K-ImpRep\ (open)]{ }
+    { \imp \cardrel{\ty_1}{\ty_2} \rep \coerce
+      \lambda \co.\ \lambda (\impslot{\pay}).\
+        \mathbf{if}\ \pay = \init_{\ty_1}\ \mathbf{then}\ [\,]\ \mathbf{else}\ [\co\ \pay] }
+   }
 
-  \infer[Byt-Str-T]{ }{\byt \typrel \String}
+  {\color{red}
+  \infer[K-RepImp]
+    { \neg\packable(\ty_1) }
+    { \rep \cardrel{\ty_1}{\ty_2} \imp \coerce
+      \lambda \co.\ \lambda l.\ \mathbf{case}\ l\ \mathbf{of}\
+        [\,] \Rightarrow \impslot{\init_{\ty_2}} \mid
+        \pay \Colon ps \Rightarrow \impslot{(\mathrm{foldl}\ \combine{\ty_2}\ (\co\ \pay)\ (\mathrm{map}\ \co\ ps))} }
+   }
+\end{mathparpagebreakable}
 
-  \infer[Int-Int-T]{\ty_1, \ty_2 \in \left\{{
-        \begin{array}{c}
-          \ints, \intl, \uints, \uintl \\
-          \sints, \sintl, \bool
-        \end{array}
-      }\right\}}{\ty_1 \typrel \ty_2}
-\end{mathpar}
+The red rules are unsound and should not be included in the official
+formalization. However, I think it's a good idea to include them somewhere since
+it's possible that custom Protobuf implementations make it possible to
+re-introduce some of them.
+\begin{itemize}
+\item An encoding can write an implicit field that holds its default. Thus,
+  \textsc{K-ImpOpt} and \textsc{K-ImpRep} aren't wire-sound and have to go.
+\item An encoding can repeat a singular field's record. Thus, \textsc{K-OptRep}
+  is unsound too, because a $\rep$ reader keeps every copy. \textsc{K-ImpRep}
+  has the same problem.
+\item We have to disallow \textsc{K-RepImp} for packable fields since it isn't
+  possible to write a function which can handle packed and unpacked lists of
+  scalars. Either we have a wire type mismatch and the field is skipped or the
+  last element of the list becomes the singular value but there is no way to
+  know which encoding the serializable will pick. (OK, it \emph{should} always
+  be the packed representation for Proto3, but I'd be willing to bet that not
+  all serializes are strictly spec compliant here.)
+\item An encoding can split a singular message across several records. Thus
+  \textsc{K-Opt} needs the merge-homomorphism lemma for message payloads.
+\end{itemize}
 
-It's worth pointing out that converting to and from \sintn{n} is tricky, since
-the values can change in ways that most programmers aren't expecting, although
-that integer type is perfectly compatible with Protobuf's wire format. Practical
-usage of Pollux as a rule should probably remove \sints{} and \sintl{} from the
-\textsc{Int-Int-T} rule. The inclusion of those integer types here also diverges
-from Protobuf's official compatibility guide \cite{LanguageGuideProto}.
+The last two rules, \textsc{K-ImpRep} and \textsc{K-RepImp} are composite rules
+which can be derived. They're stated here for clarity.
 
-\subsubsection{Message Rules}
-
-\begin{mathpar}
-  \infer[Msg-T]{m_1 \msgrel m_2}{\mathtt{MSG}\ m_1 \typrel \mathtt{MSG}\ m_2}
-\end{mathpar}
-
-\subsubsection{Decorator Rules}
-
-Since the type relation is designed for checking for safe type changes, it also
-need to ensure that decorator restrictions like moving from a repeated field to
-a singleton one aren't violated.
-
-\begin{mathpar}
-  \infer[Opt-Add-T]{ }{\ty \fieldrel \optt{\ty}}
-
-  \infer[Opt-Rm-T]{ }{\optt{\ty} \fieldrel \ty}
-
-  \infer[Opt-T]{\ty_1 \typrel \ty_2}{\optt{\ty_1} \fieldrel \optt{\ty_2}}
-
-  \infer[Rep-Add-T]{ }{\ty \fieldrel \rept{\ty}}
-
-  \infer[Rep-T]{\ty_1 \typrel \ty_2}{\rept{\ty_1} \fieldrel \rept{\ty_2}}
-\end{mathpar}
-
-\subsubsection{Compatibility Theorem}
-
-The main field-level compatibility theorem is stated below.
-
-\vspace{1em}
-\begin{theorem}[Protobuf Compatibility]
-  If $\dc_1 \dcompat \dc_2$ and $\dc_2$ is well-formed, then for all binary strings
-  $\bs$ such that $\mathtt{parse}_{\dc_1}\ \bs = \some{\m_1}$,
-  $\mathtt{parse}_{\dc_2}\ \bs = \some{\m_2}$ and $\m_1 \msgrel \m_2$
-\end{theorem}
+Some notes on the cardinality rules:
+\begin{itemize}
+\item Every axiom except the two marked open have the form
+  $L(\co) = \eta \circ \mathrm{map}\ \co$ (or could be rewritten into the form) where
+  $\eta$ is a function that never inspects the payload. \textsc{K-ImpRep} and
+  \textsc{K-ImpOpt} involve comparisons against the initial value for that type,
+  which is why their soundness depends on what the encoding relation allows.
+\item \textsc{K-Rep} doesn't need a $\packable(\ty_1)$ premise since the payload
+  rules (defined below) \emph{never} allow us to cross from packable types to
+  unpackable types and vice versa.
+\item \textsc{K-RepImp} excludes all packed scalars, which might be overly
+  conservative. However, Protobuf 3 packs scalars by default, which will produce
+  a wire type mismatch. An easy extension to this work would be to add a packed
+  flag to a field and add a side condition that only unpacked fields can go from
+  repeated to implicit cardinalities. This would also lift the whole judgment to
+  fields rather than just types, but that should be trivial.
+\item A oneof field is represented here as an $\opt$ and don't have explicit
+  rules. Remember that a $\oneof$ is an $\opt$ with an extra condition, handled in
+  \textsc{D-Update}, that only one in a set can be non-\texttt{None}.
+\end{itemize}
 
 % Local Variables:
 % citar-bibliography: ("../pollux.bib")

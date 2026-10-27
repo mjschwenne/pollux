@@ -69,19 +69,19 @@ needed.}
     \alternative{\bs}
     \alternative{\mathrm{u^{32}}}
     \alternative{\mathrm{u^{64}}}
-    \alternative{v}
+    \alternative{\m}
 
-    \category[Slot]{\slot}
+    \category[Slot]{\st}
     \alternative{\impslot{\pay}}
     \alternative{\optslot{\none}}
     \alternative{\optslot{\pay}}
-    \alternative{\repslot{[\pay_1; \dots; \pay_m]}}
+    \alternative{\repslot{[\pay_1; \dots; \pay_i]}}
 
     \category[Value List]{l}
     \alternative{\nil}
-    \alternative{\cons{(\id, \slot)}{l}}
+    \alternative{\cons{(\id, \st)}{l}}
 
-    \category[Value]{v}
+    \category[Message]{\m}
     \alternative{\msg{l}}
   \end{syntax}
   \caption{Pollux syntax for Protobuf values.}\label{fig:proto-val-syn}
@@ -282,27 +282,42 @@ have a decidable equality instance defined.
 \begin{definition}[Message Size]\label{def:vsize}
   The size of a message, $\mathrm{size}_v$, is defined below. 
   \begin{mathpar}
-    \mathrm{size}_v(\lAngle l \rAngle) = 1 + \mathrm{size}_v(l)
-
-    \mathrm{size}_v(l) =
-    \begin{cases}
-      0 & \text{if } l = \texttt{[]} \\
-      \mathrm{size}_v(v) + \mathrm{size}_v(l') & \text{if } l = (\_, v) \Colon l'
+    \msize(\msg{l}) = \begin{cases}
+      0 & \text{if } l = \nil \\
+      \ssize(\st) + \msize(\msg{l'}) & \text{if } l = \cons{\slot{\id}{\st}}{l'}
     \end{cases}
 
-    \mathrm{size}_v(v) =
+    \ssize(\st) =
     \begin{cases}
-      1 + \mathrm{size}_v(\pay) & \text{if } v = \impslot{\pay} \\
-      1 & \text{if } v = \optslot{\none} \\
-      1 + \mathrm{size}_v(\pay) & \text{if } v = \optslot{\pay} \\
-      1 + \mathrm{size}_v(\pay_1) + \dots + \mathrm{size}_v(\pay_n) & \text{if } v = \repslot{[\pay_1;\dots;\pay_n]}
+      \psize(\pay) & \text{if } \st = \impslot{\pay} \\
+      1 & \text{if } \st = \optslot{\none} \\
+      \psize(\pay) & \text{if } \st = \optslot{\pay} \\
+      \psize(\pay_1) + \dots + \psize(\pay_n) & \text{if } \st = \repslot{[\pay_1;\dots;\pay_n]}
     \end{cases}
 
-    \mathrm{size}_v(\pay) =
+    \psize(\pay) =
     \begin{cases}
-      \mathrm{size}_v(\lAngle l' \rAngle) & \text{if } \pay = \lAngle l'
-                                              \rAngle \\
+      \msize(\msg{l}) & \text{if } \pay = \msg{l} \\
       1 & \text{otherwise}
+    \end{cases}
+  \end{mathpar}
+\end{definition}
+
+\vspace{1em}
+\begin{definition}[Message Depth]
+  \begin{mathpar}
+    \mdepth(\msg{l}) = \max_{s \in l} \sdepth(s)
+
+    \sdepth(\slot{\id}{\pay}) = \begin{cases}
+      \pdepth(\pay) & \text{if } \pay = \impslot{\pay} \\
+      0 & \text{if } \pay = \optslot{\none} \\
+      \pdepth(\pay) & \text{if } \pay = \optslot{\some{\pay}} \\
+      \max_{0 \le i \le n} \pdepth(\pay[i]) & \text{if } \pay = \repslot{[\pay_1;\dots;\pay_n]}
+    \end{cases}
+
+    \pdepth(\pay) = \begin{cases}
+      1 + \mdepth(\msg{l}) & \text{if } \pay = \msg{l} \\
+      0 & \text{otherwise}
     \end{cases}
   \end{mathpar}
 \end{definition}

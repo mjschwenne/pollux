@@ -113,7 +113,7 @@
 \NewMetaVariable{c}[\co]{c} % Coercion
 \NewMetaVariable{m}{m} % Message
 \NewMetaVariable{i}[\id]{k} % Field Number
-\NewMetaVariable{s}[\slot]{s} % Slot
+\NewMetaVariable{s}[\st]{s} % Slot
 \NewMetaVariable{p}[\pay]{p} % Payload
 \NewMetaVariable{n}[\width]{n} % bit width, or misc. natural number
 \NewMetaVariable{b}[\bs]{bs} % byte string
@@ -183,10 +183,11 @@
 \newcommand{\none}{\mathtt{None}}
 
 \newcommand{\field}[2]{\langle#1, #2\rangle}
+\newcommand{\slot}[2]{(#1, #2)}
 \newcommand{\map}[2]{#1 \rightharpoonup{} #2}
 
 \newcommand{\init}{\mathrm{init}}
-\newcommand{\msg}[1]{\lAngle #1 \rAngle_v}
+\newcommand{\msg}[1]{\lAngle #1 \rAngle}
 \newcommand{\desc}[2]{\lAngle #1, #2 \rAngle}
 
 \newcommand{\dom}[1]{\mathrm{dom}(#1)}
@@ -220,10 +221,15 @@
 
 % Auxiliary Functions
 \newcommand{\dsize}{\mathrm{size}_d}
+\newcommand{\fsize}{\mathrm{size}_f}
 \newcommand{\msize}{\mathrm{size}_m}
-\newcommand{\ddepth}{\mathrm{depth}_m}
-\newcommand{\mdepth}{\mathrm{depth}_m}
+\newcommand{\ssize}{\mathrm{size}_s}
+\newcommand{\psize}{\mathrm{size}_p}
+\newcommand{\ddepth}{\mathrm{depth}_d}
 \newcommand{\fdepth}{\mathrm{depth}_f}
+\newcommand{\mdepth}{\mathrm{depth}_m}
+\newcommand{\sdepth}{\mathrm{depth}_s}
+\newcommand{\pdepth}{\mathrm{depth}_p}
 \newcommand{\parse}[1]{\mathrm{parse}_{#1}}
 \newcommand{\ser}[1]{\mathrm{serial}_{#1}}
 

@@ -35,7 +35,7 @@ the integer example, with only one integer encoding it is clear that the range
 can only grow. The CDDL schema has to start restrictive to be updated to be less
 restrictive since it can never shrink. In this sense, CDDL is more rigid than
 protobuf, without the flexibility to transition between types of integer in
-protobuf, stripping out a lot of the rules in Section~\ref{sec:val-rel}. In that
+protobuf, stripping out a lot of the rules in Section~\ref{sec:typ-rel}. In that
 sense, protobuf offers a lot of interesting features, like a form of
 post-processing as integer types change.
 
@@ -80,7 +80,7 @@ the header is the rest of the payload.
 CBOR itself is designed to be self-describing, so any valid CBOR value can be
 parsed without referencing a schema definition. This doesn't mean that CBOR is
 deterministic, with only one way to represent a value, it certainly is not. The
-value relation, as described for Protobuf in Section~\ref{sec:val-rel} only has
+value relation, as described for Protobuf in Section~\ref{sec:typ-rel} only has
 a trivial relation with a reflexivity rule (and I guess a transitivity rule, but
 that doesn't expand the domain of the relation at all).
 
