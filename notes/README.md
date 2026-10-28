@@ -53,6 +53,6 @@ Which Lean work waits on this, and what can proceed meanwhile.
 
 These were written before this convention existed and have no header:
 
-- `2026-09-01-review-proto-relations.md`: review of the relations section (then §5, now `sec:comp-rel`).
+- `2026-09-01-review-proto-relations.md`: review of the relations section (then §5, now `sec:proto-relations`). Re-reviewed 2026-10-28, when it gained a header.
 - `2026-09-08-review-lean-proto-layer.md`: a reader's guide to `Pollux/Proto` as of `e3f436f`, written as source material for the report.
 - `2026-09-16-review-type-theory.txt`: transcript of a discussion of `sec:type-theory` against the Lean.

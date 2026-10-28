@@ -23,7 +23,20 @@ A protobuf message on the wire is a sequence of records.
 \end{definition}
 
 As described in Section~\ref{sec:philosophy}, the first step of parsing a
-Protobuf value is creating a sequence of records. 
+Protobuf value is creating a sequence of records. Once the records are created,
+they're sorted, which will group each record by which field is relevant. Then
+one linear pass over the list of sorted records can reconstruct the final
+message. This is the pass which references the descriptor, converting \wtvar{}
+fields into the final integer or boolean, etc.
+
+If there are multiple records for one field, they are combined using the
+$\combine{\tau}$ operation. For most types, including all implicit numeric types
+and strings, the right-most record is selected. Interestingly, the related
+$\byt$ fields aren't mentioned in the specification~\cite{Encoding}, but we've
+elected to have then follow the last write wins rule. Elements of repeated
+fields can be broken over multiple records, which are merged by the
+operator. Messages also follow the merging semantics as per
+Section~\ref{sec:proto}.
 
 % Local Variables:
 % citar-bibliography: ("../pollux.bib")

@@ -99,6 +99,105 @@ is only \emph{weakly} decreasing within one layer, so the measures are scaled by
 4 with a per-step offset to ensure that the termination metric will actually
 decrease with each application. 
 
+\subsection{Preserving \Oneof{} Groups}\label{sec:oneof-pres}
+
+Most of the compatibility conditions in Pollux concern one field at a time. The
+\Oneof{} is the exception. A reader parsing a \Oneof{} keeps only the last
+member it sees, so whether a message is valid under the reader depends on
+\emph{pairs} of fields. Consider a writer with two ordinary optional fields that
+are both set. If the reader places those two fields in the same \Oneof{}, it
+discards one of them, and the transformed message is not a valid reader message.
+The writer could legitimately set both, so no field-level check can rule this
+out.
+
+The condition we need is that the reader never groups together two fields the
+writer could set independently. In the writer, the only fields that can never be
+set together are members of the same \Oneof{}.
+
+\vspace{1em}
+\begin{definition}[\Oneof{} Preservation]\label{def:oneof-pres}
+  \[ \begin{aligned}
+    \oneofpres(\dc_1, \dc_2) \triangleq{}
+      & \forall\ \id_1, \id_2, \fd_1, \fd_2, \fd_1', \fd_2', g.\ \id_1 \neq \id_2 \rightarrow \\
+      & \quad \dc_1[\id_1] = \fd_1 \rightarrow \dc_1[\id_2] = \fd_2 \rightarrow
+              \dc_2[\id_1] = \fd_1' \rightarrow \dc_2[\id_2] = \fd_2' \rightarrow \\
+      & \quad \fd_1' = \field{\oneof{g}}{\_} \rightarrow \fd_2' = \field{\oneof{g}}{\_} \rightarrow \\
+      & \quad \exists\ g_0.\ \fd_1 = \field{\oneof{g_0}}{\_} \wedge \fd_2 = \field{\oneof{g_0}}{\_}
+  \end{aligned} \]
+\end{definition}
+
+In words: take any two distinct field numbers that appear in both descriptors.
+If the reader $\dc_2$ puts them in the same \Oneof{} $g$, then the writer
+$\dc_1$ must already have put them in a single \Oneof{} $g_0$. The group
+numbers $g$ and $g_0$ need not match. A group number only identifies a \Oneof{}
+within its own descriptor, so a reader is free to renumber its \Oneof{}s.
+
+The condition constrains only fields that are present in both descriptors.
+This choice makes the following updates allowed.
+
+\begin{itemize}
+\item \textbf{Adding a new field to a \Oneof{}.} A reader-only field is never
+  set by the writer, so it cannot conflict with anything the writer sends.
+\item \textbf{Moving a single existing field into a new \Oneof{}.} Because the
+  quantified field numbers must be distinct, a reader \Oneof{} with only one
+  shared member is unconstrained. Its remaining members, if any, are
+  reader-only. The writer sets at most that one member, so last-wins never
+  discards anything. The Protobuf language guide~\cite{LanguageGuideProto}
+  lists this update as safe.
+\item \textbf{Splitting a \Oneof{}.} The implication runs from reader groups to
+  writer groups, so a writer \Oneof{} may be divided among several reader
+  \Oneof{}s, or its members may leave the \Oneof{} entirely. Either way the
+  writer still sets at most one of them, which every reader grouping accepts.
+\end{itemize}
+
+The following update is ruled out.
+
+\begin{itemize}
+\item \textbf{Moving an existing field into a \Oneof{} that already holds
+  another existing field}, and likewise merging two existing fields, or two
+  writer \Oneof{}s, into one reader \Oneof{}. In each case some pair of shared
+  fields lands in the same reader group without having been in the same writer
+  group. The language guide marks these updates as unsafe, for exactly the
+  reason given above.
+\end{itemize}
+
+The condition $\id_1 \neq \id_2$ is needed. Without it, instantiating both
+quantified field numbers with the same $\id$ yields the requirement that every
+shared field in a reader \Oneof{} was already in a writer \Oneof{}, and that
+requirement forbids even the safe single-field move.
+
+Like the rest of the compatibility relation, $\oneofpres$ looks at one layer of
+a descriptor. A field whose type is a message has its own \Oneof{}s, and those
+must be preserved too, because a nested message is transformed and validated in
+the same way as the outer one.
+
+\vspace{1em}
+\begin{definition}[Recursive \Oneof{} Preservation]\label{def:oneof-pres-all}
+  \[ \begin{aligned}
+    \oneofpresall(\dc_1, \dc_2) \triangleq{}
+      & \oneofpres(\dc_1, \dc_2)\ \wedge \\
+      & \forall\ \id, \card_1, \dc_1', \card_2, \dc_2'.\
+        \dc_1[\id] = \field{\card_1}{\dc_1'} \rightarrow
+        \dc_2[\id] = \field{\card_2}{\dc_2'} \rightarrow \\
+      & \oneofpresall(\dc_1', \dc_2')
+  \end{aligned} \]
+\end{definition}
+
+$\oneofpresall$ requires $\oneofpres$ at the top level and at every message
+field shared by both descriptors, all the way down. The recursion follows only
+shared fields, because a field that exists in only one descriptor is either
+skipped by the reader or initialized to its default, and neither produces a
+nested message that could contain a conflict.
+
+Theorem~\ref{thm:trans-valid} takes $\oneofpresall$ as a hypothesis, because
+validity of the transformed message is checked at every depth. The compatibility
+relation needs only the one-layer $\oneofpres$, as a premise of
+\textsc{D-Update}. A derivation of $\dc_1 \dcompat \dc_2$ uses \textsc{D-Update}
+at every pair of nested message descriptors it relates, so the derivation as a
+whole establishes $\oneofpresall$ for every pair it touches.
+
+\subsection{Theorems}
+
 \vspace{1em}
 \begin{theorem}[Transformation Specification]
   For all messages $\m$ and descriptors $\dc_1$, $\dc_2$, each value of the
@@ -124,16 +223,6 @@ decrease with each application.
 \vspace{1em}
 \begin{theorem}[Transform Valid]\label{thm:trans-valid}
   \[ \forall\ \m, \dc_1, \dc_2.\ \validv{\m}{\dc_1} \rightarrow \wfd{\dc_2} \rightarrow \oneofpresall(\dc_1, \dc_2) \rightarrow \validv{\coercion{\dc_1}{\m}{\dc_2}}{\dc_2} \]
-  Where
-  \begin{itemize}
-  \item $\oneofpresall(\dc_1, \dc_2) = \oneofpres(\dc_1, \dc_2) \wedge
-    \forall\ \id, \card_1, \dc_1', \card_2, \dc_2'.\ \dc_1[\id] = \field{\card_1}{\dc_1'} \rightarrow \dc_2[\id] = \field{\card_2}{\dc_2'} \rightarrow
-    \oneofpresall(\dc_1', \dc_2')$
-  \item $\oneofpres(\dc_1, \dc_2) = \forall\ \id_1, \id_2, \fd_1, \fd_1', \fd_2, \fd_2',
-    g. \dc_1[\id_1] = \fd_1 \rightarrow \dc_1[\id_2] = \fd_2 \rightarrow \dc_2[\id_1] = \fd_1' \rightarrow \dc_2[\id_2] = \fd_2' \rightarrow
-    \fd_1' = \field{\oneof{g}}{\_} \rightarrow \fd_2' = \field{\oneof{g}}{\_} \rightarrow \exists\ g_0. \fd_1 =
-    \field{\oneof{g_0}}{\_} \wedge \fd_2 = \field{\oneof{g_0}}{\_}$
-  \end{itemize}
 \end{theorem}
 
 The two important theorems here are Theorem~\ref{thm:trans-self}, which states

@@ -1,0 +1,438 @@
+#+TITLE: Descriptor recursion under the symbol table, and a review of the depth-indexed theorems in sec:framework
+#+STARTUP: latexpreview
+#+LATEX_HEADER: \usepackage{amsmath,amssymb,mathtools,mathpartir,stmaryrd}
+#+LATEX_HEADER: \newcommand{\dom}[1]{\mathrm{dom}(#1)}
+#+LATEX_HEADER: \newcommand{\denote}[1]{\llbracket{} #1 \rrbracket{}}
+#+LATEX_HEADER: \newcommand{\dcompat}{\ll}
+#+LATEX_HEADER: \newcommand{\typrel}{\prec}
+#+LATEX_HEADER: \newcommand{\fieldrel}{\propto}
+#+LATEX_HEADER: \newcommand{\coerce}{\rightsquigarrow}
+#+LATEX_HEADER: \newcommand{\judg}[2]{\Sigma; #1 \vdash #2}
+#+LATEX_HEADER: \newcommand{\semjudg}[2][]{\vDash_{#1} #2}
+#+LATEX_HEADER: \newcommand{\field}[2]{\langle#1, #2\rangle}
+#+LATEX_HEADER: \newcommand{\oneof}{\mathtt{ONE}}
+#+LATEX_HEADER: \newcommand{\opt}{\mathtt{OPT}}
+#+LATEX_HEADER: \newcommand{\some}[1]{\mathtt{Some}(#1)}
+#+LATEX_HEADER: \newcommand{\oneofpres}{\mathrm{OneofPreserved}}
+#+LATEX_HEADER: \newcommand{\oneofpresall}{\mathrm{OneofPreservedAll}}
+#+LATEX_HEADER: \newcommand{\wfd}[1]{\mathrm{wfd}(#1)}
+#+LATEX_HEADER: \newcommand{\legald}[1]{\mathrm{legal}(#1)}
+#+LATEX_HEADER: \newcommand{\validv}[2]{#1 :: #2}
+#+LATEX_HEADER: \newcommand{\encodes}[2][]{\mathrm{Encodes}_{#2}^{#1}}
+#+LATEX_HEADER: \newcommand{\dsize}{\mathrm{size}_d}
+#+LATEX_HEADER: \newcommand{\fsize}{\mathrm{size}_f}
+#+LATEX_HEADER: \newcommand{\ddepth}{\mathrm{depth}_d}
+#+LATEX_HEADER: \newcommand{\fdepth}{\mathrm{depth}_f}
+#+LATEX_HEADER: \newcommand{\mdepth}{\mathrm{depth}_m}
+#+LATEX_HEADER: \newcommand{\sdepth}{\mathrm{depth}_s}
+#+LATEX_HEADER: \newcommand{\pdepth}{\mathrm{depth}_p}
+#+LATEX_HEADER: \newcommand{\Reach}{\mathcal{R}}
+#+LATEX_HEADER: \newcommand{\dc}{d}
+#+LATEX_HEADER: \newcommand{\coercion}[3]{{}_{#1}\llbracket{} #2 \rrbracket{}_{#3}}
+
+Status: open
+Report: def:oneof-pres-all, thm:trans-valid, sec:oneof-pres (uncommitted), def:dwf, def:dlegal, def:dsize, def:ddepth, fig:proto-desc-syn, sec:judgments, sec:recursive-types, N-Assum/N-Unfold, def:sem-compat-typ, def:sem-compat-fld, lem:msg-from-fields, def:sem-compat, def:sem-assum, def:soundness, cor:compat-sound, sec:log-rel-lean, Message Depth (unlabeled, sec:proto-msg) @ 6aa5da8 (04, 05, 08 have uncommitted edits)
+Lean:   Pollux/Proto/Transform.lean (Value.reinterpret, Desc.OneofPreservedAll), Pollux/Proto/Descriptor.lean (Desc.AllWF), Pollux/Proto/Validity.lean (Desc.Legal, Value.Valid) @ 6aa5da8
+
+* Summary
+
+The report's grammar (=fig:proto-desc-syn=) now gives a message-typed field a
+*name* $a$, resolved through the symbol table $\Sigma$. This is the change that
+lets =sec:recursive-types= represent cyclic schemas such as =Stream=. Several
+definitions were written for the older model, in which a field holds its nested
+descriptor directly, and they still recurse *into the descriptor*. When $\Sigma$
+has a cycle, that recursion has nothing to bottom out on.
+
+You asked whether everything depth-indexed should move to reachable name
+pairs. *No.* The useful split is by what each definition recurses on:
+
+| Recurses on      | Definitions                                                                                         | Under a cyclic $\Sigma$                       | Fix |
+|------------------+-----------------------------------------------------------------------------------------------------+-----------------------------------------------+-----|
+| the descriptor   | =def:dsize=, =def:ddepth=, =def:dwf=, =def:dlegal=, =def:oneof-pres-all=; in Lean, the =descSize= measures | broken: no value, or the wrong fixed point | per-entry conditions on $\Sigma$, or reachable pairs (Part 1) |
+| the writer value | Message Depth, =def:vvalid=, =def:vsize=, all of the $\semjudg[n]{}$ definitions, =lem:msg-from-fields=, =Value.reinterpret= once its measure changes | fine: values are finite | keep; small repairs (Part 2) |
+| the derivation   | $\judg{\Gamma}{\cdot}$ with N-Assum/N-Unfold                                                        | fine: $\Gamma$ grows, and it is bounded by $\dom{\Sigma}^2$ | keep |
+
+The depth-indexed theorems are the *right* tool. Indexing by the writer
+value's depth is exactly what makes a cyclic schema harmless, and the indices
+line up with the Message Depth definition (checked below). Only the
+descriptor-recursive definitions need replacing. Among those, only
+$\oneofpresall$ needs *pairs*. The unary ones (=wfd=, =legal=) become plain
+conditions on every entry of $\Sigma$. Size and depth of a descriptor cannot be
+repaired by any reachability construction, because for a cyclic schema they
+are genuinely infinite.
+
+Part 2 also finds that soundness never needs $\oneofpresall$. Only
+=thm:trans-valid= does. That keeps the pairwise construction to one theorem.
+
+* Part 1: Definitions That Recurse on Descriptors
+
+** 1.1 =def:dsize= and =def:ddepth= have no solution for a cyclic schema
+
+Take =Stream= from =sec:recursive-types=, with $\Sigma(\mathtt{Stream}) =
+\langle r, [(1, \field{\opt}{\mathtt{int32}}), (2, \field{\opt}{\mathtt{Stream}})]\rangle$.
+Then =def:dsize= requires
+
+\[ \dsize(\Sigma(\mathtt{Stream})) = 1 + \fsize(\field{\opt}{\mathtt{Stream}})
+   = 1 + 1 + \dsize(\Sigma(\mathtt{Stream})), \]
+
+and =def:ddepth= requires
+$\ddepth(\Sigma(\mathtt{Stream})) = 1 + \ddepth(\Sigma(\mathtt{Stream}))$.
+Neither equation has a solution in $\mathbb{N}$. The text before =def:dsize=
+says "in preparation for needing to support recursive messages, Pollux uses
+well-founded recursion on the size of the descriptor". Under $\Sigma$ the
+opposite holds: a size measure is exactly what recursive messages take away.
+The bullet "Termination Measures" in =sec:proto-desc= says as much about the
+older metric, but the replacement has the same flaw.
+
+Options:
+1. *(Recommended)* Drop both as termination measures. Nothing in Part 2
+   needs them, because every recursion that matters runs on values or on
+   derivations. If =def:dsize= is still wanted for statistics, define it one
+   layer at a time, $\dsize(\langle r, l\rangle) = |l|$, and sum over $\dom{\Sigma}$.
+2. If the recursion survey in =sec:proto-desc= wants a descriptor depth, take
+   it in $\mathbb{N} \cup \{\infty\}$ as the longest path in the name graph, which
+   is $\infty$ exactly when a cycle is reachable. That is a statistic, not a
+   measure.
+
+** 1.2 =def:dwf= and =def:dlegal= ("all nested descriptors are also …")
+
+These recurse the same way. Read as an inductive definition, "=Stream= is
+well-formed if its fields are and =Stream= is well-formed" is satisfied only by
+the least fixed point, which makes every cyclic descriptor ill-formed. Read
+coinductively, it is fine, but =sec:log-rel-lean= wants to avoid coinduction.
+
+Both are unary, so they don't need reachability at all. State them once per
+entry of $\Sigma$, and add the condition that the table is *closed*. Closedness
+is currently unstated: nothing says every name a field mentions is in
+$\dom{\Sigma}$, so $\Sigma(a)$ may be undefined.
+
+\[ \mathrm{closed}(\Sigma) \triangleq \forall a \in \dom{\Sigma}.\ \forall \mathit{id}, \kappa, b.\
+     \Sigma(a)[\mathit{id}] = \field{\kappa}{b} \rightarrow b \in \dom{\Sigma} \]
+\[ \mathrm{wfd}(\Sigma) \triangleq \mathrm{closed}(\Sigma) \wedge \forall a \in \dom{\Sigma}.\ \mathrm{wfd}_1(\Sigma(a)) \qquad
+   \mathrm{legal}(\Sigma) \triangleq \forall a \in \dom{\Sigma}.\ \mathrm{legal}_1(\Sigma(a)) \]
+
+Here $\mathrm{wfd}_1$ and $\mathrm{legal}_1$ are the current definitions with
+the "nested descriptors" bullet deleted. Lean already has the one-layer parts
+(=Desc.WF=, =Desc.FieldOk=). A protobuf =FileDescriptorSet= is closed by
+construction, since =protoc= rejects unresolved names, so quantifying over the
+whole table costs nothing in practice.
+
+The alternative is to quantify over the names reachable from a root,
+$\Reach(a)$. That is only worth it if $\Sigma$ may contain junk entries that
+should not have to be well-formed. I don't see a reason for that.
+
+** 1.3 =def:oneof-pres-all= needs reachable pairs
+
+This is the definition from the earlier discussion, now in the uncommitted
+=sec:oneof-pres=. As pasted, it still uses the old model,
+$\dc_1[\mathit{id}] = \field{\kappa_1}{\dc_1'}$, which places a descriptor where
+=fig:proto-desc-syn= allows only a name. Written faithfully, it becomes
+self-referential: checking =Stream= against =Stream'= asks
+$\oneofpresall(\Sigma(\mathtt{Stream}), \Sigma(\mathtt{Stream'}))$ again. As an
+inductive predicate it is *false* for every cyclic pair, so =thm:trans-valid=
+could not be applied even to the identity =Stream= $\dcompat$ =Stream=.
+
+Unlike =wfd= it is binary, and it cannot be required of every pair in
+$\dom{\Sigma} \times \dom{\Sigma}$, since unrelated pairs fail. So define the
+pairs the transform can actually reach, and require the one-layer condition at
+each of them:
+
+\begin{mathpar}
+\inferrule{ }{(a_1, a_2) \in \Reach(a_1, a_2)}
+
+\inferrule{(b_1, b_2) \in \Reach(a_1, a_2) \\
+           \Sigma(b_1)[\mathit{id}] = \field{\kappa_1}{c_1} \\
+           \Sigma(b_2)[\mathit{id}] = \field{\kappa_2}{c_2}}
+          {(c_1, c_2) \in \Reach(a_1, a_2)}
+\end{mathpar}
+
+\[ \oneofpresall(a_1, a_2) \triangleq \forall (b_1, b_2) \in \Reach(a_1, a_2).\
+   \oneofpres(\Sigma(b_1), \Sigma(b_2)) \]
+
+$\Reach$ is an ordinary least fixed point. It is a subset of
+$\dom{\Sigma} \times \dom{\Sigma}$, so it is finite and decidable, which matches
+the $\mathcal{O}(|\dom{\Sigma}|^2)$ bound on $\Gamma$ in =sec:recursive-types=.
+This is the "finite conjunction over reachable pairs" that the TODO at the end
+of =sec:log-rel-lean= anticipates. =thm:trans-valid= then goes by induction on
+the writer value's depth. Each descent through a shared message field moves to
+another pair of $\Reach$, so the hypothesis carries down with no extra work.
+
+The closing paragraph of =sec:oneof-pres= ("the derivation as a whole
+establishes $\oneofpresall$ for every pair it touches") becomes a lemma:
+
+\[ \judg{\varnothing}{a_1 \dcompat a_2 \coerce f} \implies \oneofpresall(a_1, a_2). \]
+
+Proof idea: every pair in $\Reach(a_1, a_2)$ is unfolded by some N-Unfold,
+because D-Update covers every shared key. N-Assum fires only on a pair that an
+enclosing N-Unfold has already unfolded. D-Update checks $\oneofpres$ at each
+unfolding. The lemma is worth stating, because it means a user of the relation
+never has to check $\oneofpresall$ separately.
+
+** 1.4 One table or two
+
+=sec:judgments= has a single $\Sigma$, and the =Tree=/=Tree'= and
+=Stream=/=Stream'= examples sidestep the problem by priming the reader's names.
+In practice the writer's and reader's =FileDescriptorSet=s use the *same*
+names: =Tree= in v1 and =Tree= in v2. One table can't hold both. Options:
+
+1. *(Recommended)* Two tables, $\Sigma_1; \Sigma_2; \Gamma \vdash a_1 \dcompat a_2$,
+   with $\Gamma \subseteq \dom{\Sigma_1} \times \dom{\Sigma_2}$, and $\Reach$ over
+   the same product. Every $\Sigma(a_1)$ becomes $\Sigma_1(a_1)$ and every
+   $\Sigma(a_2)$ becomes $\Sigma_2(a_2)$. This is notation only, and nothing in
+   the argument changes.
+2. Keep one table and tag names by version. This is what the examples already
+   do informally, but every statement then has to say which half of the table
+   each name belongs to.
+
+** 1.5 Lean
+
+Lean is consistent with itself today, because =Desc= nests descriptors
+(=FieldType.msg (d : Desc)=), so every =termination_by descSize= is
+well-founded. When Lean moves to $\Sigma$, these are the declarations that break
+and what each one becomes:
+
+| Declaration                                  | Measure today                         | Under $\Sigma$                                 |
+|----------------------------------------------+---------------------------------------+------------------------------------------------|
+| =Desc.AllWF= (=Descriptor.lean:356-359=)     | =descSize d=                          | =closed Σ ∧ ∀ a ∈ Σ, (Σ a).WF=, no recursion   |
+| =Desc.Legal= (=Validity.lean:55-59=)         | =descSize d=                          | =∀ a ∈ Σ, ∀ k f, … → FieldOk k f=, no recursion |
+| =Desc.OneofPreservedAll= (=Transform.lean:382-388=) | =descSize d₂=                  | =∀ p ∈ Reach Σ₁ Σ₂ a₁ a₂, OneofPreserved …=    |
+| =Value.reinterpret= block (=Transform.lean:82-135=) | =4 * descSize d₂= and friends  | recursion on the writer value, as =sec:log-rel-lean= already says |
+
+=Value.Valid= (=Validity.lean:130=) is already structural on the value, and
+=Field.init= never recurses into a message (its =singular=/=msg= arm returns
+=none=). Both carry over unchanged.
+
+* Part 2: Review of the Depth-Indexed Definitions in =sec:framework=
+
+** 2.1 Verdict
+
+The shape is right: an outer strong induction on the writer value's depth $n$,
+an inner induction on the derivation, and $\semjudg[n]{\Gamma}$ asking only for
+$j < n$. I checked the indices against Message Depth in =sec:proto-msg=:
+
+\[ \pdepth(\text{message } m') = 1 + \mdepth(m'), \qquad
+   \sdepth(s) = \max \pdepth \text{ over } s, \qquad
+   \mdepth(m) = \max \sdepth \text{ over } m. \]
+
+So if $\mdepth(m) \le n$, every nested message $m'$ of $m$ has
+$\mdepth(m') \le n - 1$. When N-Assum produces $x$ for a message field, the
+field-level judgment at depth $n$ only ever applies $x$ to messages of depth
+at most $n - 1$. $\semjudg[n]{\Gamma}$ supplies $j = n - 1$, which is exactly
+enough. The "+1" sits on the payload, and it is what makes the whole scheme
+work. That is worth a sentence in the report, since it is easy to break by
+moving the "+1" to $\mdepth$.
+
+What follows are repairs. None of them changes the approach.
+
+** 2.2 Issues
+
+*R1. Depth notation.* =def:sem-compat-typ= writes $\mathrm{depth}_f(p)$. That
+is the macro =\fdepth=, which =def:ddepth= defines as the depth of a
+*descriptor field*. It should be $\pdepth(p)$. =def:sem-compat= and
+=lem:msg-from-fields= write $\mathrm{depth}_v(m)$, which isn't defined
+anywhere. It should be $\mdepth(m)$. =def:sem-compat-fld= correctly uses
+$\sdepth$. (E5 in =2026-09-01-review-proto-relations.md= noted the drift.
+This item names the right symbol for each use.) Message Depth also has no
+=\label=, though these definitions depend on it, and its $\sdepth$ cases test
+=\pay = \impslot{\pay}= where the slot metavariable $s$ is meant.
+
+*R2. The type level and the message level need a bridge.* For a payload type
+that is a name, =def:sem-compat-typ= says $\mathrm{parse}_{a_2}(bs) = \some{g(p)}$,
+while message-level parsing returns $\some{(f(m), U)}$. The induction needs,
+for $n \ge 1$,
+
+\[ \semjudg[n]{g : a_1 \typrel a_2} \iff
+   \semjudg[n-1]{g : \Sigma(a_1) \dcompat \Sigma(a_2)} \]
+
+(both sides are vacuous at $n = 0$), with the nested $U$ discarded on the
+left. As a side effect this settles which judgment N-Unfold concludes, the
+level mix E5 noted. It concludes at the type level, $a_1 \typrel a_2$, and
+then the payload case of F-Msg is just the bridge.
+
+*R3. Monotonicity in $n$.* Both the N-Unfold case and the K-Field lemma
+("if $\forall j \le n.\ \semjudg[j]{\cdots}$") use the fact that a judgment at
+$n$ implies it at every $j \le n$. This is immediate, because each definition
+quantifies over values of depth $\le n$, but it should be stated. With it, the
+K-Field premise $\forall j \le n$ simplifies to just $n$.
+
+*R4. The N-Unfold case isn't argued, and it is the only non-routine case.*
+The paragraph after =cor:compat-sound= explains why both inductions are
+needed, but not how the $\mathsf{fix}$ case closes. Under "the derivation is
+the program", the statement proved by the outer induction must be
+
+\[ P(n) \triangleq \forall \Gamma, \rho, D.\ D : \judg{\Gamma}{J \coerce f} \rightarrow
+   \semjudg[n]{\rho : \Gamma} \rightarrow \semjudg[n]{f[\rho] : J} \]
+
+for all three judgment forms $J$ at once, where $\rho$ maps each assumption
+variable to a coercion and $\semjudg[n]{\rho : \Gamma}$ says
+$\semjudg[j]{\rho(x) : \Sigma(a_1) \dcompat \Sigma(a_2)}$ for every
+$(a_1, a_2) \mapsto x$ in $\Gamma$ and every $j < n$. For N-Unfold with inner
+derivation $D'$ of $\Gamma, (a_1, a_2) \mapsto x \vdash \Sigma(a_1) \dcompat
+\Sigma(a_2) \coerce f$:
+
+1. Write $F = \mathsf{fix}\,x.\,f[\rho]$. It satisfies the unfolding equation
+   $F = f[\rho, x \mapsto F]$. This requires $\mathsf{fix}$ to be well-defined,
+   which is the guardedness property from =sec:framework= ("$x$ is only applied
+   to strictly smaller messages"). That property belongs to the K-rules
+   (=map= on =OPT= and =REP=, last element for =REP= to =OPT=), and it is
+   worth listing there.
+2. By strong induction on $j < n$, show $\semjudg[j]{F}$. Given $\semjudg[j']{F}$
+   for all $j' < j$, the extended environment satisfies
+   $\semjudg[j]{(\rho, x \mapsto F) : \Gamma, (a_1, a_2) \mapsto x}$. The
+   $\Gamma$ part follows from R3, because $j < n$. Then the outer hypothesis
+   $P(j)$ applied to $D'$ gives $\semjudg[j]{f[\rho, x \mapsto F]} = \semjudg[j]{F}$.
+3. The same step at $j = n$, using the inner induction hypothesis for $D'$
+   instead of $P(n)$, gives $\semjudg[n]{F}$. Then R2 lifts it to the type
+   level.
+
+=def:sem-assum= as written reads $\Gamma$ through
+$\coercion{\Sigma(a_1)}{\cdot}{\Sigma(a_2)}$, the transform function, rather
+than through $\rho$. That is the other route in =sec:log-rel-lean=. In that
+route, step 1 is replaced by an agreement lemma: =reinterpret= on
+$\Sigma(a_1), \Sigma(a_2)$ equals $f$ with $x$ instantiated by =reinterpret=
+itself. Either works, but the definitions should commit to one (E5, second
+bullet).
+
+*R5. Soundness never needs $\oneofpresall$.* =lem:msg-from-fields= takes only
+the one-layer $\oneofpres$, and it is right to. Nested layers are covered by
+the $g_{\mathit{id}}$, each of which comes from a sub-derivation whose own
+D-Update checked $\oneofpres$ one layer down. Also, =def:well-behaved= never
+asks for $f(m)$ to be *valid* under $\dc_2$, only that it is what the parser
+returns. So the recursive condition is needed only by =thm:trans-valid=, a
+statement about the transform function that doesn't involve a derivation.
+That is why Part 1 needs reachable pairs for that one theorem and nowhere else.
+If =thm:trans-valid= were restated with a derivation as its hypothesis, the
+1.3 lemma would supply $\oneofpresall$, and $\Reach$ would appear only inside
+the proof.
+
+*R6. =def:soundness= and =cor:compat-sound= state judgments about descriptors,
+but =sec:judgments= defines judgments about names.* Under $\Sigma$ (and 1.4),
+soundness reads
+
+\[ \mathrm{legal}(\Sigma_1) \rightarrow \mathrm{legal}(\Sigma_2) \rightarrow
+   \Sigma_1; \Sigma_2; \varnothing \vdash a_1 \dcompat a_2 \coerce f \rightarrow
+   f \text{ is well-behaved from } \Sigma_1(a_1) \text{ to } \Sigma_2(a_2). \]
+
+This also settles the =% TODO= on =def:soundness=. Being well-behaved is the
+same as being semantically compatible at every depth, once
+=def:sem-compat= carries the $U$ clause (E5, first bullet):
+
+\[ f \text{ well-behaved} \iff \forall n.\ \semjudg[n]{f : \Sigma_1(a_1) \dcompat \Sigma_2(a_2)}. \]
+
+This holds because every valid message has a finite $\mdepth$. Then
+=cor:compat-sound= is $P(n)$ at $\Gamma = \varnothing$ for all $n$, and the
+corollary implies =def:soundness=. The legality hypotheses are used only by
+K-Imp (implicit message fields are excluded, E5 third bullet) and by the
+reserved-set argument for transitivity. Neither is needed for $P(n)$ itself.
+
+*R7. "Strong induction on $n$" should name what $n$ bounds.* The paragraph
+after =cor:compat-sound= says "a nested message might be of any depth less
+than the current message". That is $\mdepth$ of the *writer* value. The
+reader's message can be deeper (reader-only fields), but it is never inducted
+on. One clause in the text would stop readers wondering which depth is meant.
+
+* Options and Recommendation
+
+1. *(Recommended)* Change only the descriptor-recursive definitions:
+   - per-entry =wfd(Σ)= and =legal(Σ)=, plus =closed(Σ)= (1.2);
+   - $\Reach$-based $\oneofpresall$ (1.3), with the derivation lemma;
+   - drop =def:dsize= and =def:ddepth= as measures (1.1);
+   - two tables (1.4).
+
+   Keep the depth-indexed semantics and apply R1–R7.
+2. Move *everything* to reachable pairs, including the semantic definitions.
+   This doesn't work. A semantic judgment about a pair of names still has to
+   quantify over values, and the only well-founded thing to induct on is the
+   value. Pairs would replace the depth index in the statements, but the
+   proof would put it back.
+3. Go coinductive: greatest fixed points for =wfd=, =legal= and
+   $\oneofpresall$. This is faithful to the old nested model, but it is
+   exactly what =sec:log-rel-lean= rules out for Lean, and option 1 gets the
+   same predicates inductively.
+
+* Suggested Report Text
+
+For =sec:proto-desc=, after =fig:proto-desc-syn=:
+
+#+begin_src latex
+A symbol table $\Sigma$ is \emph{closed} if every name a field mentions is
+defined: $\forall a \in \dom{\Sigma}.\ \forall \id, \card, b.\
+\Sigma(a)[\id] = \field{\card}{b} \rightarrow b \in \dom{\Sigma}$. The
+conditions below are stated for one descriptor and lifted to a table entrywise:
+$\wfd{\Sigma}$ holds when $\Sigma$ is closed and $\wfd{\Sigma(a)}$ for every
+$a \in \dom{\Sigma}$, and similarly for $\legald{\Sigma}$. Because a cyclic
+schema has no innermost descriptor, these definitions never recurse into a
+nested descriptor. Recursion in Pollux always runs on a message, which is
+finite, or on a derivation, whose assumption set is bounded by
+$|\dom{\Sigma}|^2$.
+#+end_src
+
+with the "all nested descriptors are also …" bullets removed from =def:dwf=
+and =def:dlegal=.
+
+For =sec:oneof-pres=, replacing =def:oneof-pres-all=:
+
+#+begin_src latex
+\begin{definition}[Reachable pairs]\label{def:reach}
+  $\mathcal{R}(\nm_1, \nm_2)$ is the least set of name pairs such that
+  \begin{mathpar}
+    \inferrule{ }{(\nm_1, \nm_2) \in \mathcal{R}(\nm_1, \nm_2)}
+
+    \inferrule{(b_1, b_2) \in \mathcal{R}(\nm_1, \nm_2) \\
+               \Sigma_1(b_1)[\id] = \field{\card_1}{c_1} \\
+               \Sigma_2(b_2)[\id] = \field{\card_2}{c_2}}
+              {(c_1, c_2) \in \mathcal{R}(\nm_1, \nm_2)}
+  \end{mathpar}
+\end{definition}
+
+\begin{definition}[Recursive \Oneof{} Preservation]\label{def:oneof-pres-all}
+  \[ \oneofpresall(\nm_1, \nm_2) \triangleq
+     \forall (b_1, b_2) \in \mathcal{R}(\nm_1, \nm_2).\
+     \oneofpres(\Sigma_1(b_1), \Sigma_2(b_2)) \]
+\end{definition}
+
+$\mathcal{R}(\nm_1, \nm_2)$ collects the pairs of message descriptors the
+transform visits: it starts at the root pair and follows every field number
+that both sides type as a message. It is a subset of
+$\dom{\Sigma_1} \times \dom{\Sigma_2}$, so it is finite even when the
+descriptors are recursive, and $\oneofpresall$ is a finite conjunction of
+one-layer checks.
+
+\begin{lemma}\label{lem:deriv-oneof-pres-all}
+  If $\judg{\varnothing}{\nm_1 \dcompat \nm_2 \coerce \co}$, then
+  $\oneofpresall(\nm_1, \nm_2)$.
+\end{lemma}
+Every pair in $\mathcal{R}(\nm_1, \nm_2)$ is unfolded by \textsc{N-Unfold}
+somewhere in the derivation, \textsc{N-Assum} only closes a pair an enclosing
+\textsc{N-Unfold} has already unfolded, and each unfolding is followed by a
+\textsc{D-Update}, which checks $\oneofpres$.
+#+end_src
+
+For =sec:framework=, after the Message Depth reference (R2, R3):
+
+#+begin_src latex
+Because $\pdepth$ adds one for every message payload, every nested message of
+a message of depth $n$ has depth at most $n-1$. Two facts follow from the
+definitions:
+\begin{itemize}
+\item \textbf{Monotonicity.} If $\semjudg[n]{\co : J}$ and $j \le n$, then
+  $\semjudg[j]{\co : J}$.
+\item \textbf{Bridge.} For $n \ge 1$,
+  $\semjudg[n]{g : \nm_1 \typrel \nm_2} \iff
+   \semjudg[n-1]{g : \Sigma(\nm_1) \dcompat \Sigma(\nm_2)}$.
+\end{itemize}
+The bridge is why $\semjudg[n]{\Gamma}$ asks only for depths $j < n$: an
+assumption variable is only ever applied to a nested message.
+#+end_src
+
+* Blocked
+
+- The Lean move to $\Sigma$, and with it =Desc.AllWF=, =Desc.Legal=,
+  =Desc.OneofPreservedAll= and the =Value.reinterpret= measure, waits on 1.2–1.4.
+  Nothing in Lean is broken today, because Lean still nests descriptors.
+- Formalizing the $\semjudg[n]{}$ definitions and the soundness proof waits on
+  R2 and R4, plus E5's choice between the two routes. R1, R3 and R7 are wording.
+- Unaffected, and can proceed meanwhile: the varint layer, the cardinality
+  lemmas (the K-Field lemma needs no $\Sigma$ or $\Gamma$), and
+  =thm:trans-valid= in the current nested model with the $\mathit{id}_1 \neq
+  \mathit{id}_2$ premise, since that change is independent of $\Sigma$.

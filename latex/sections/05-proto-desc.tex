@@ -35,7 +35,7 @@ Outside of Lean, we'll use this syntax for the Protobuf descriptors.
 \begin{figure}[H]
   \centering
   \begin{syntax}
-    \categoryFromSet[Naturals]{g, k}{\mathbb{N}}
+    \categoryFromSet[Naturals]{g, k, n}{\mathbb{N}}
 
     \category[Message Name]{a}
     \alternative{\mathit{id}}
@@ -75,8 +75,8 @@ Outside of Lean, we'll use this syntax for the Protobuf descriptors.
     \alternative{\cons{(\id, \fd)}{l}}
 
     \category[Reserved Set]{\res}
-    \alternative{\varnothing_{\res}}
-    \alternative{\id \uplus \res}
+    \alternative{\nil}
+    \alternative{\cons{(n_1, n_2)}{\res}}
 
     \category[Descriptor]{\dc}
     \alternative{\desc{\res}{l}}
@@ -88,7 +88,8 @@ An alternative representation of the reserved set is to insert an artificial
 empty type, which all other types can be updated to but cannot be updated to any
 other type itself. Then ``removing'' a field is updating a field to this empty
 type $\bot$ and that would prevent that field from ever being added again,
-enforcing the same mechanism as the reserved field set.
+enforcing the same mechanism as the reserved field set. However, this would
+violate the totality modeling choice which closely mirrors real world Protobuf.
 
 The use of the sigma type is important, since it let's us tie into the existing
 Mathlib infrastructure for building a finite map from from the list
@@ -128,15 +129,22 @@ other from the Protobuf compiler (Definition~\ref{def:dlegal}).
 \begin{definition}[Descriptor Well-Formedness]\label{def:dwf}
   A descriptor $\dc$ is well-formed, denoted $\wfd{\dc}$, if all fields in
   the descriptor have a unique field number, the fields are stored in sorted
-  order, and all nested descriptors are also well-formed.
+  order, and all nested descriptors are also well-formed. Additionally, the
+  reserved field intervals must have $n_1 \le n_2$ and be sorted by the lower
+  bound. 
 \end{definition}
 
 \vspace{1em}
 \begin{definition}[Legal Descriptor]\label{def:dlegal}
   A descriptor $\dc$ is legal, denoted $\legald{\dc}$, if
   \begin{itemize}
-  \item All field numbers are between 1 and $2^{29}-1$, excluding the range
-    19,000 to 19,999, which are reserved by the Protobuf compiler.
+  \item All field numbers are between 1 and $2^{29}-1$, excluding anything
+    listed in the reserved set.
+  \item The range 19,000 to 19,999 is included in the reserved set. This range
+    is reserved by the Protobuf compiler.
+  \item Pairwise, the lower bound of a reserved range must be at least two
+    larger than the upper bound of the previous element. This ensures that all
+    ranges which can be merged are.
   \item Message fields are always explicitly marked as optional. This conforms
     with Protobuf, which will generate a method to check message presence, and
     will allow us to initialize recursive messages.
@@ -204,6 +212,27 @@ Fortunately, checking equality on the natural number included with each
 \Oneof{} cardinality provides the required information. Even with a nested
 or grouped representation, the parser would still have to manually unset the
 previously set field, so this representation doesn't add any unnecessary work.
+
+\subsection{Reserved Field Numbers}
+
+Reserved field numbers are modeled as a list of reserved ranges. These ranges
+are defined using a lower and upper limit on the range, inclusive on both
+sides. This is a compact way to model a set and mirrors Protobuf syntax which
+allows things like \texttt{reserved 1000 to max} which would inject thousands of
+elements into the reserved set. 
+
+We've also implemented a \texttt{contains}, \texttt{containsRange}, \texttt{add}
+and \textrm{remove} operation for reserved sets which provable keep the
+descriptor legal (Definition~\ref{def:dlegal}). We will use set theoretic
+notations for these operations since the reserved field numbers should be
+semantically thought of as a set.
+
+Some rules might state $\id \in \res_1 \cup \res_2$ or $\id \in \res_1 \cap \res_2$, which
+can be de-sugared as $\id \in \res_1 \vee \id \in \res_2$ and $\id \in \res_1 \wedge \id \in
+\res_2$ respectively.
+
+At the moment, I don't believe that full support for set unions, intersections
+and subset relations are needed, but these could be implemented if required.
 
 \subsection{Sealed \& Unsealed}
 

@@ -2,18 +2,19 @@
 
 This section documents the concrete Protobuf specific instance of the Pollux
 relation, including coercions. Like with the framework presented in
-Section~\ref{sec:framework}, this relation will be stratified across
-descriptors, fields and scalar types.
+Section~\ref{sec:framework}, this relation will be mutually recursive with
+relations across descriptors, fields and scalar types.
 
 Below is a list of all meta-variables used across all relations, and even across
 encoding formats. When multiple of these variables are needed, you will see
 variants with subscript numbers or apostrophes.
 
 \begin{align*}
-  \m &: \text{message} & \fd &: \text{field} \\
-  \id &: \text{field number} & \ty &: \text{scalar type} \\
+  \m &: \text{Message} & \dc &: \text{Descriptor} \\
+  \id &: \text{Field Number} & \ty &: \text{Field Type} \\
   \res &: \text{Reserved field set} & \width &: \text{bit width} \\
-  \fd &: \text{Field} & \card &: \text{cardinality}
+  \fd &: \text{Field} & \card &: \text{cardinality} \\
+  \nm &: \text{Message Name}
 \end{align*}
 
 Below is a list of the relations about to be defined, along with an English
@@ -95,52 +96,29 @@ Generally speaking, we can change the type of a field, add a new field or update
 a field in a map.
 
 \begin{mathpar}
-\infer[D-Update]
+  \infer[D-Update]
   { \forall \id \in \dom{\dc_1} \cap \dom{\dc_2}.\ \judg{\Gamma}{\dc_1[\id] \fieldrel \dc_2[\id] \coerce \co_{\id}} \\
-    \oneofpres(\dc_1, \dc_2) }
-  {
-    \judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \lambda \m.\
-      \forall\ \id \in \dc_2.
-      {\begin{cases}
-        \id \mapsto \co_{\id}(\m[\id]) & \id \in \dom {\dc_1} \cap \dom{\dc_2} \\
-        \id \mapsto \init(\dc_2[\id]) & \id \in \dom{\dc_2} \setminus \dom{\dc_1}
-      \end{cases}}
-  }
-}
-
-\infer[D-Add]
-{
-  \judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \co} \\
-  \id \not \in \dom{\dc_2}
-}{
-  \judg{\Gamma}{\dc_1 \dcompat \dc_2[\id \mapsto \fd] \coerce \lambda\ \m.\ \co(\m)[\id \mapsto \default{\fd}]}
-}
-
-\infer[D-Rm]
-{
-  \judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \co} \\
-  \id \in \dom{\dc_2} \\
-  \dc_2 = \desc{\res}{l}
-}{
-  \judg{\Gamma}{\dc_1 \dcompat \desc{\res \uplus \id}{l} \setminus \id \coerce \lambda\ \m.\ \co(\m) \setminus \id}
-}
+    \oneofpres(\dc_1, \dc_2) \\ \res_1 \subseteq \res_2 \\ \dom{d_1} \setminus \dom{d_2} \subseteq
+    \res_2 } { \judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \lambda \m.\ \left\{ \id \mapsto \id \in
+        \dom{\dc_1} \;?\; \co_{\id}(\m[\id]) : \init(\dc_2[\id]) \mid \id \in \dom{\dc_2}
+      \right\} } }
 \end{mathpar}
 
-These three rules cover updates to existing fields, the addition of reader-only
-fields and the removable of fields from the reader's descriptor.
+This one rule covers all structural updates to a message descriptor. Clearly in
+enforces that fields which exist in both descriptors must have a compatible
+field-level update. Additionally, fields can be freely added to $\dc_2$, which
+will return in the default value being injected. The requirement that
+$\res_1 \subseteq \res_2$ and the \textbf{external} assumption that
+$\legald{\dc_2}$ (See Definition~\ref{def:soundness}) will prevent $\dc_2$ from
+introducing fields using reserved field numbers in $d_1$. Likewise, requiring
+that $\dom{d_1} \setminus \dom{d_2} \subseteq \res_2$ means that any field which
+$\dc_2$ removed will have been added to the reserved field set, something we
+need to maintain any hope of transitivity.
 
-\subsubsection{Reserved Field Rules}
-
-We can always add something to the reserved field set, so long as that field
-isn't set in the reader's descriptor. The other rule which updates the reserved
-field set is \textsc{D-Rm}.
-
-\begin{mathpar}
-  \infer[D-ResAdd]{\judg{\Gamma}{\desc{\res_1}{l_1} \dcompat \desc{\res_2}{l_2}
-      \coerce \co} \\ \res_1 \subseteq \res_2 \\ \id \not \in \dom{\desc{\res_2}{l_2}} \cup
-    \dom{\desc{\res_1}{l_1}}}{\judg{\Gamma}{\desc{\res_1}{l_1} \dcompat \desc{\res_2
-        \uplus \id}{l_2} \coerce \co}}
-\end{mathpar}
+The $\oneofpres$ definition is part of Theorem~\ref{thm:trans-valid}. Placing
+the one layer definition here means that a derivation
+$\judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \co}$ already contains
+$\oneofpresall$ over every pair that it actually touches during the derivation.
 
 \subsection{Type Relation}~\label{sec:typ-rel}
 
@@ -180,12 +158,14 @@ directions for such a scalar type and compose them, we end up back in the
 original scalar type but with a different value.
 
 As an example, consider $2^{40}$ as a \uintl{}. Casting this value to a \uints{}
-results in $2^{40} : \uintl \valrel 0 : \uints$, which describes changing the
-field perfectly. However, we can then promote this field back to \uintl{},
-getting $0 : \uints \valrel 0 : \uintl$. Having a transitive rule would result
-in $2^{40} : \uintl \valrel 0 : \uintl$ but clearly parsing a serialization of
-$2^{40}$ as a \uintl{} when it was serialized as a \uintl{} should recover the
-original value!
+results in a coercion $(\decop{\uints} \circ \encop{\uintl})$, which describes
+changing the field perfectly. However, we can then promote this field back to
+\uintl{}, getting $(\decop{\uintl} \circ \encop{\uints})$. Having a transitive rule
+would result in
+$(\decop{\uintl} \circ \encop{\uintl}) \circ (\decop{\uintl} \circ \encop{\uints})$ which is
+provably not the identity function. Clearly parsing a serialization of $2^{40}$
+as a \uintl{} when it was serialized as a \uintl{} should recover the original
+value!
 
 \begin{mathpar}
   \infer[T-Refl]{ }{\judg{\Gamma}{\ty_s \typrel \ty_s \coerce id}}
@@ -199,16 +179,27 @@ present in the resulting string. Technically the Protobuf specification requires
 that all strings are encoded in UTF-8, so we can optionally add that requirement
 to converting from \byt{} to \String.
 
-% TODO: Since the rules know operate solely at the descriptor / type level, I
-% don't think it's possible to state a requirement like "the bytes are valid
-% UTF-8" since that would only be true of some byte strings...
-
 \begin{mathpar}
-  \infer[T-Str-Byte]{ }{\judg{\Gamma}{\String \typrel \byt \coerce id}}
+  \infer[T-StrByte]{ }{\judg{\Gamma}{\String \typrel \byt \coerce \mathtt{String.toUTF8}}}
 
-  \infer[T-Byte-Str]{ {\color{red} b \text{ is valid UTF-8}} }{\judg{\Gamma}{\byt
-      \typrel \String \coerce id}}
+  {\color{red}
+  \infer[T-ByteStr\ (unrepresentable)]{ b \text{ is valid UTF-8} }{\judg{\Gamma}{\byt
+      \typrel \String \coerce \mathtt{String.fromUTF8}}}
+  }
 \end{mathpar}
+
+The \texttt{String.toUTF8} is a specific Lean function. In reality, this needs
+to be something host-language equivalent which returns a list of bytes rather
+than a string. This rule isn't written as a $\lambda$-calculus like rule since that
+function is host-language specific and possibly a complex function.
+
+The red rule \textsc{T-BytStr} can't be written in Pollux. Being a valid UTF-8
+byte string is something that \emph{some} $\byt$ fields will satisfy but not
+all. Pollux's compatibility rules reason at the type level about all possible
+byte strings we could encode in a $\byt$ field. There isn't a mechanism for
+partial coercions. If you ``relaxed the Protobuf specification'' to not require
+strings be valid UTF-8 or assumed that all byte strings in your system's
+messages were valid UTF-8, it's possible to re-introduce this rule.
 
 \subsubsection{Varint Scalar Rules}\label{sec:proto-compat-ints}
 
@@ -247,7 +238,7 @@ makes use of the following definitions.
     $\ty$ & $\enc{\ty}{v}$ & $\dec{\ty}{x}$ \\
     \midrule
     \uintn{n} & $v$ & $x \fmod 2^{\width}$ \\
-    \intn{n} & $v \fmod 2^{\width}$ & $((x + 2^{\width-1}) \fmod 2^{\width}) - 2^{\width-1}$ \\
+    \intn{n} & $v \fmod 2^{64}$ & $((x + 2^{\width-1}) \fmod 2^{\width}) - 2^{\width-1}$ \\
     \sintn{n} & $\zz{v}$ & $\unzz{x \fmod 2^{\width}}$ \\
     \bool & $\ind{v}$ & $x \ne 0$ \\
     \bottomrule
@@ -296,8 +287,34 @@ converting between varint scalars.
     varint-encoded types, writing
     $\tosigned{m}{x} = \left((x + 2^{m-1}) \fmod 2^m\right) - 2^{m-1}$ for the
     reader's signed truncation.  Widths $\width$ and $m$ are independent, so this
-    covers all thirty non-identity conversions.}\label{tab:varint-derived}
+    covers all forty-two non-identity conversions.}\label{tab:varint-derived}
 \end{table}
+
+\subsubsection{Fixed-Width Fields}
+
+Converting from $\fixeds$ to $\sfixeds$ (and likewise $\fixedl$ and $\sfixedl$)
+results in casting to and from valid two's-complement values which, while
+potentially burdensome, can be handled robustly and deterministically. Let
+$\mathcal{F}[\width] = \left\{ \fixedn{\width}, \sfixedn{\width} \right\}$.
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{lcc}
+    \toprule
+    $\ty$ & $\enc{\ty}{v}$ & $\dec{\ty}{x}$ \\
+    \midrule
+    $\fixedn{\width}$ & $v$ & $x$ \\
+    $\sfixedn{\width}$ & $v \fmod 2^{\width}$ & $\tosigned{\width}{x}$ \\
+    \bottomrule
+  \end{tabular}
+  \caption{Encoding and decoding operations for fixed width
+    integers.}\label{tab:fixed-conversion}
+\end{table}
+
+\[
+  \infer[T-Fixed]{ \ty_1, \ty_2 \in \mathcal{F}[\width]}{\judg{\Gamma}{\ty_1 \typrel \ty_2 \coerce
+       \decop{\ty_2} \circ \encop{\ty_1}}}
+\]
 
 \subsubsection{Message Fields}
 
@@ -344,7 +361,7 @@ descriptor well-formedness excludes it (Definition~\ref{def:dwf}), so the rule
 doesn't need to handle this.
 
 \[ \infer[K-Field]{ \judg{\Gamma}{\ty_1 \typrel \ty_2 \coerce \co} \\ \card_1 \cardrel{\ty_1}{\ty_2} \card_2 \coerce L
-  }{ \judg{\Gamma}{\field{\card_1}{\ty_1} \typrel \field{\card_2}{\ty_2} \coerce L(\co)} } \]
+  }{ \judg{\Gamma}{\field{\card_1}{\ty_1} \fieldrel \field{\card_2}{\ty_2} \coerce L(\co)} } \]
 
 Then, we introduce Protobuf cardinality rules
 
@@ -352,55 +369,51 @@ Then, we introduce Protobuf cardinality rules
   \infer[K-Imp]{ }{ \imp \cardrel{\ty_1}{\ty_2} \imp \coerce \lambda\ \co.\ \lambda\ (\impslot{\pay}). \impslot{(\co\
       \pay)} }
 
-  \infer[K-Opt]{ }{ \opt \cardrel{\ty_1}{\ty_2} \opt \coerce \lambda\
-    \co.\ \mathrm{map}_{\mathtt{option}}\ \co}
+  \infer[K-Opt]{ \card_1, \card_2 \in \left\{ \opt, \oneof{g} \right\} }{ \card_1
+    \cardrel{\ty_1}{\ty_2} \card_2 \coerce \lambda\ \co.\ \mathrm{map}_{\mathtt{option}}\
+    \co}
 
   \infer[K-Rep]{ }{ \rep \cardrel{\ty_1}{\ty_2} \rep \coerce \lambda\ \co.\
     \mathrm{map}_{\mathtt{List}}\ \co}
 
-  {\color{red}
-  \infer[K-OptImp]{ } { \opt \cardrel{\ty_1}{\ty_2} \imp \coerce \lambda \co.\ \lambda \st.\
-    \mathbf{case}\ \st\ \mathbf{of}\ \none \Rightarrow \impslot{\init_{\ty_2}} \mid \some{\pay} \Rightarrow \imp\ (\co\
-    \pay) }
+  \infer[K-OptImp]{ \card \in \left\{ \opt, \oneof{g} \right\} } { \card
+    \cardrel{\ty_1}{\ty_2} \imp \coerce \lambda \co.\ \lambda \st.\ \mathbf{case}\ \st\
+    \mathbf{of}\ \none \Rightarrow \impslot{\init_{\ty_2}} \mid \some{\pay} \Rightarrow \imp\ (\co\ \pay)
   }
 
   {\color{red}
-  \infer[K-ImpOpt\ (open)]{ } { \imp \cardrel{\ty_1}{\ty_2} \opt \coerce \lambda \co.\ \lambda
+  \infer[K-ImpOpt\ (unsound)]{ } { \imp \cardrel{\ty_1}{\ty_2} \opt \coerce \lambda \co.\ \lambda
     (\impslot{\pay}).\ \mathbf{if}\ \pay = \init_{\ty_1}\ \mathbf{then}\ \none\
     \mathbf{else}\ \some{(\co\ \pay)} }
   }
 
   {\color{red}
-  \infer[K-OptRep]{ }
+  \infer[K-OptRep\ (unsound)]{ }
     { \opt \cardrel{\ty_1}{\ty_2} \rep \coerce
       \lambda \co.\ \lambda \st.\ \mathbf{case}\ \st\ \mathbf{of}\
         \none \Rightarrow [\,] \mid \some{\pay} \Rightarrow [\co\ \pay] }
    }
 
-  {\color{red}
   \infer[K-RepOpt]
-    { \neg\packable(\ty_1) }
+    { \neg\packable(\ty_1) \\ \ty_1 \text{ not message} }
     { \rep \cardrel{\ty_1}{\ty_2} \opt \coerce
       \lambda \co.\ \lambda l.\ \mathbf{case}\ l\ \mathbf{of}\
         [\,] \Rightarrow \none \mid
         \pay \Colon ps \Rightarrow \some{(\mathrm{foldl}\ \combine{\ty_2}\ (\co\ \pay)\ (\mathrm{map}\ \co\ ps))} }
-  }
 
   {\color{red}
-  \infer[K-ImpRep\ (open)]{ }
+  \infer[K-ImpRep\ (unsound)]{ }
     { \imp \cardrel{\ty_1}{\ty_2} \rep \coerce
       \lambda \co.\ \lambda (\impslot{\pay}).\
         \mathbf{if}\ \pay = \init_{\ty_1}\ \mathbf{then}\ [\,]\ \mathbf{else}\ [\co\ \pay] }
    }
 
-  {\color{red}
   \infer[K-RepImp]
-    { \neg\packable(\ty_1) }
+    { \neg\packable(\ty_1) \\ \ty_1 \text{ not message} }
     { \rep \cardrel{\ty_1}{\ty_2} \imp \coerce
       \lambda \co.\ \lambda l.\ \mathbf{case}\ l\ \mathbf{of}\
         [\,] \Rightarrow \impslot{\init_{\ty_2}} \mid
         \pay \Colon ps \Rightarrow \impslot{(\mathrm{foldl}\ \combine{\ty_2}\ (\co\ \pay)\ (\mathrm{map}\ \co\ ps))} }
-   }
 \end{mathparpagebreakable}
 
 The red rules are unsound and should not be included in the official
@@ -424,8 +437,10 @@ re-introduce some of them.
   \textsc{K-Opt} needs the merge-homomorphism lemma for message payloads.
 \end{itemize}
 
-The last two rules, \textsc{K-ImpRep} and \textsc{K-RepImp} are composite rules
-which can be derived. They're stated here for clarity.
+The last two rules, \textsc{K-ImpRep} and \textsc{K-RepImp} agree with the
+composites \textsc{K-ImpOpt} $\rightarrow$ \textsc{K-OptRep} and \textsc{K-RepOpt} $\rightarrow$
+\textsc{K-OptImp}. Since there is no way to compose cardinality rules, they must
+be explicitly stated.
 
 Some notes on the cardinality rules:
 \begin{itemize}

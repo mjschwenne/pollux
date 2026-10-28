@@ -92,8 +92,8 @@ A Pollux judgment has the form $\judg{\Gamma}{\nm_1 \dcompat \nm_2 \coerce \co}$
   built by the derivation.
 \end{itemize}
 
-This is actually a stratified definition, yielding slightly different coercions
-for each type of object:
+This is actually a large mutually recursive definition, yielding slightly
+different coercions for each type of object:
 \begin{align*}
   &\judg{\Gamma}{\nm_1 \dcompat \nm_2 \coerce \co}
   && \co : \denote{\Sigma(\nm_1)} \to \denote{\Sigma(\nm_2)} \text{ (message bodies)} \\
@@ -291,15 +291,6 @@ coercions are applied. For new keys in the reader, a default value is
 injected. Keys that only the writer has are ignored, since the reader will skip
 them using the wire type in the tag during parsing.
 
-The OneofPreserved definition is part of Theorem~\ref{thm:trans-valid}. Placing
-the one layer definition here means that a derivation
-$\judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \co}$ already contains OneofPreservedAll over
-every pair that it actually touches during the derivation.
-
-Once descriptors model the reserved set, a premise will need to be added to
-\textsc{D-Update} requiring that the reserved set of $\dc_1$ is a subset of the
-reserved set of $\dc_2$. % TODO
-
 \textbf{Example.}
 
 \begin{minted}{proto}
@@ -328,34 +319,6 @@ This is the recursive function you would write by hand. $x$ is only ever applied
 to \m[2], which is a nested message of strictly smaller depth. That's why the
 note says the $\mathsf{fix}$ is well founded on the writer's value.
 
-\subsubsection{Payloads}
-
-\begin{mathpar}
-  \infer[T-Refl]{ }{ \judg{\Gamma}{\ty \typrel \ty \coerce \mathrm{id}} }
-
-  \infer[T-Varint]
-    { \ty_1, \ty_2 \in \vints }
-    { \judg{\Gamma}{\ty_1 \typrel \ty_2 \coerce \decop{\ty_2} \circ \encop{\ty_1}} }
-
-  \infer[T-StrByt]{ }{ \judg{\Gamma}{\String \typrel \byt \coerce \mathrm{id}} }
-
-  \infer[T-BytStr]{ \text{bytes are UTF-8} }{ \judg{\Gamma}{\byt \typrel
-      \String \coerce \mathrm{id}} }
-
-  \infer[F-Msg]
-    { \judg{\Gamma}{\nm_1 \dcompat \nm_2 \coerce \co} }
-    { \judg{\Gamma}{\mathtt{msg}\ \nm_1 \typrel \mathtt{msg}\ \nm_2 \coerce \co} }
-\end{mathpar}
-
-Pairs of wire-compatible but undesirable rules, such as $\double$ to $\fixedl$
-get no rule.
-
-Once again, there is no transitivity rule, which would allow us to arbitrarily
-compose coercions. That is wire unsafe, for reasons explained
-elsewhere. Transitivity can be a lemma about the plain relation (without
-coercions) although that might not be useful. It cannot be a rule with a
-coercion and thus can't be stated into the relation.
-
 \subsection{Definitions \& Theorems}
 
 To start with, we have to define compatibility for every level of our
@@ -377,7 +340,7 @@ to the new type.
 \begin{definition}[Semantic compatibility, field level]\label{def:sem-compat-fld}
   A coercion $g : \denote{\st_1} \rightarrow \denote{\st_2}$ \emph{carries $\st_1$ into $\st_2$ up
   to depth $n$}, written $\semjudg[n]{g : \st_1 \dcompat \st_2}$, when
-\[ \forall\ \validv{\st}{\fd_1}, rs.\ \mathrm{depth}(\st) \le n \rightarrow \encodes[\id]{\fd_1}(\st, rs) \rightarrow
+\[ \forall\ \validv{\st}{\fd_1}, rs.\ \sdepth(\st) \le n \rightarrow \encodes[\id]{\fd_1}(\st, rs) \rightarrow
   \assemble_{\fd_2}^{\id}(rs) = \some{(g\ \st)} \]
 and no record of $rs$ is skipped.
 \end{definition}
@@ -420,22 +383,6 @@ $\forall\ j \le n. \semjudg[j]{\co : \ty_1 \typrel \ty_2}$ and
 $\card_1 \cardrel{\ty_1}{\ty_2} \coerce L$ then
 $\semjudg[n]{L(\co) : \field{\card_1}{\ty_1} \fieldrel \field{\card_2}{\ty_2}}$.
 
-For message payloads, those lemmas would need $\co$ to be a merge homomorphism,
-$\co(\mathrm{merge}\ \m\ \m') = \mathrm{merge}\ (\co\ \m)\ (\co\ \m')$. It's required when
-updating from a repeated field to a singular one, i.e. \textsc{K-RepOpt} and
-\textsc{K-RepImp}. It would also be required in \textsc{K-Opt} if Encodes may
-split a singular message across several records (which is can, this is the merge
-semantics of Protobuf). This property may come for free naturally, like
-coherence.
-
-There are also considerations here about if Encodes is closed under
-concatenation. If some byte string $\bs$ encodes $\m$ and $\bs'$ encodes $\m'$, then
-$\bs \doubleplus \bs'$ encodes $\mathsf{merge}(\m, \m')$. Then wire-soundness
-applied to the concatenated byte string, together with $\mathsf{parse}$
-respecting concatenation forces this equation on all valid messages. Validity of
-$\mathsf{merge}(\m, \m')$ would need to check for oneofs, where the late member
-wins.
-
 \vspace{1em}
 \begin{definition}[Semantic compatibility]\label{def:sem-compat}
   A coercion $\co : \denote{\dc_1} \rightarrow \denote{\dc_2}$ \emph{carries $\dc_1$ into
@@ -458,8 +405,8 @@ wins.
 
 \vspace{1em}
 \begin{definition}[Soundness]\label{def:soundness}
-  \[ \judg{\emptyset}{\dc_1 \dcompat \dc_2 \coerce \co} \implies \wfd{\dc_1} \implies \wfd{\dc_2}
-    \implies \co \text{ is well behaved} \]
+  \[ \legald{\dc_1} \implies \legald{\dc_2} \implies \judg{\emptyset}{\dc_1 \dcompat
+      \dc_2 \coerce \co} \implies \co \text{ is well behaved} \]
 \end{definition} % TODO link this definition with semantic compatibility
 
 \vspace{1em}
@@ -468,7 +415,6 @@ wins.
   \[ \judg{\emptyset}{\dc_1 \dcompat \dc_2} \implies\ \semjudg{ \coercion{\dc_1}{\cdot}{\dc_2} : \dc_1
       \dcompat \dc_2} \]
 \end{corollary}
-
 
 A proof of these theorems would require strong induction on $n$, since a nested
 message might be of any depth less than the current message. At each inductive
@@ -492,62 +438,6 @@ However both approaches used together would be able to discharge the proof, with
 the outer induction on message depth able to handle when we step into a nested
 message and the inner induction on the derivation able to walk all the sibling
 fields being updated without a change in index.
-
-\subsection{Not a Logical Relation}
-
-In past version of Pollux attempted to state this as a logical relation. That
-was the wrong framing for this project. A logical relation is a family of
-relations defined via induction on types. Typically, a logical relation wants to
-relate two different terms to the same semantic type. The semantic compatibility
-definition I stated did not have those features, it was a flat statement that a
-the encoded version of any message (of bounded depth) would parse to the
-transformed value. The step indexing (a.k.a depth bounding) was just a strong
-induction on the depth of the message and the ``fundamental theorem'' stated the
-soundness of the syntactic judgment on descriptors against an independent
-semantics capturing the coercion as already formalized above.
-
-Start with the view that the descriptors are recursive record types (some
-examples are discussed in Section~\ref{sec:recursive-types}).  Then the
-descriptor relation I'm proposing would be a small proof system where we want to
-show that two descriptors are compatible using the judgment
-$\judg{\emptyset}{\dc_1 \dcompat \dc_2}$ (explained below), but we could \emph{define} what
-it means for two descriptor to be compatible as
-\begin{mathpar}
-  \dc_1 := \mu\ X.\ F\ X
-
-  \dc_2 := \mu\ X.\ G\ X
-
-  \semjudg{\dc_1 \dcompat \dc_2 := \exists\ f: \denote{\dc_1} \rightarrow \denote{\dc_2}.\ \forall\
-    \validv{\m}{\dc_1}, \bs.\ \encodes{\dc_1}(\m, \bs) \rightarrow \mathrm{parse}_{\dc_2}(\bs) =
-    f(\m)}
-\end{mathpar}
-
-In English, then the definition of two descriptors being compatible is that
-there exists a transformation such that for all valid messages under descriptor
-$\dc_1$, we can serialize that message into some encoding that can be parsed to
-produce the image of $\m$ under the transformation.
-
-However, the lean formalization doesn't use the $\mu$-bound version of descriptor
-types (See Section~\ref{sec:log-rel-lean}), but instead a flat symbol table
-$\Sigma$. This symbol table is global and fixed by the \texttt{.proto} file,
-containing names and descriptors for all the cycles the descriptor of interest
-is part of. Additionally, there is $A$, a set of name pairs currently assumed to
-be compatible; it grows as the derivation descends. The judgment is then
-$\judg{\Gamma}{\dc_1 \dcompat \dc_2}$, with two rules for the assumption context $\Gamma$:
-\begin{mathpar}
-  \infer[N-Assum]{ (\nm_1, \nm_2) \in \Gamma }{ \judg{\Gamma}{\nm_1 \dcompat \nm_2 }}
-
-  \infer[N-Unfold]
-    { (\nm_1, \nm_2) \notin \dom{\Gamma} \\
-      \judg{\Gamma, (\nm_1, \nm_2) \mapsto x}{\Sigma(\nm_1) \dcompat \Sigma(\nm_2) \coerce \co} }
-    { \judg{\Gamma}{\nm_1 \dcompat \nm_2 \coerce \mathsf{fix}\ x.\ \co} }
-\end{mathpar}
-
-Compatibility of the top level descriptors is $\judg{\emptyset}{\dc_1 \dcompat \dc_2}$. The
-\textsc{N-Unfold} rule is equivalent to $\mu$ unfolding, with a side condition
-that $A$ grows.
-
-Using that framing, we can define a logical relation as such:
 
 \subsection{Formalizing in Lean}\label{sec:log-rel-lean}
 
