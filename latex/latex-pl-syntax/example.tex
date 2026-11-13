@@ -5,22 +5,6 @@
 \usepackage{pl-syntax}
 \usepackage{metavarsx}
 
-% ---------------------------------------------------------------------------
-% Meta-variable declarations (metavarsx).
-%
-% \NewMetaVariable{<key>}[<\command>]{<display>}
-%
-% declares a meta-variable and a command that typesets it. Without the
-% optional argument the command is \<key>. From <display> the package derives
-%   set          \makefirstuc{<display>}
-%   set of sets  \widehat{<set>}
-%   universe     \mathbb{<set>}
-% Any derived form can be replaced with \RenewMetaSet, \RenewMetaSetSet, or
-% \RenewMetaUniverse.
-% ---------------------------------------------------------------------------
-
-% The simplest case: key e, command \e, displayed as e.
-\NewMetaVariable{e}{e}
 
 % \x and \n are free, so the key can double as the command name.
 \NewMetaVariable{x}{x}

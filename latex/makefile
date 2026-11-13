@@ -15,10 +15,10 @@ dvi : $(ALL_DVI)
 ps : $(ALL_PS)
 
 pollux.pdf: pollux.tex $(SECTIONS)
-	latexmk -lualatex -shell-escape -synctex=1 -interaction=nonstopmode pollux.tex
+	latexmk -lualatex -shell-escape -synctex=1 pollux.tex
 
 %.pdf: %.tex
-	latexmk -lualatex -shell-escape -synctex=1 -interaction=nonstopmode $*.tex
+	latexmk -lualatex -shell-escape -synctex=1 $*.tex
 
 %.dvi : %.tex
 	latexmk -dvi $*.tex

@@ -116,21 +116,19 @@ set together are members of the same \Oneof{}.
 
 \vspace{1em}
 \begin{definition}[\Oneof{} Preservation]\label{def:oneof-pres}
+  A descriptor $\dc_2$ preserves the \Oneof{} fields of $\dc_1$ if every pair of
+  field numbers present in both that $\dc_2$ has in the same \Oneof{} group were
+  already in the same group in $\dc_1$. The group numbers don't need to match
+  since the number only identifies a \Oneof{} within it's own descriptor.
   \[ \begin{aligned}
-    \oneofpres(\dc_1, \dc_2) \triangleq{}
+    \Sigma \vDash \oneofpres(\nm_1, \nm_2) \triangleq{}
       & \forall\ \id_1, \id_2, \fd_1, \fd_2, \fd_1', \fd_2', g.\ \id_1 \neq \id_2 \rightarrow \\
-      & \quad \dc_1[\id_1] = \fd_1 \rightarrow \dc_1[\id_2] = \fd_2 \rightarrow
-              \dc_2[\id_1] = \fd_1' \rightarrow \dc_2[\id_2] = \fd_2' \rightarrow \\
+      & \quad \Sigma(\nm_1)[\id_1] = \fd_1 \rightarrow \Sigma(\nm_1)[\id_2] = \fd_2 \rightarrow
+              \Sigma(\nm_2)[\id_1] = \fd_1' \rightarrow \Sigma(\nm_2)[\id_2] = \fd_2' \rightarrow \\
       & \quad \fd_1' = \field{\oneof{g}}{\_} \rightarrow \fd_2' = \field{\oneof{g}}{\_} \rightarrow \\
       & \quad \exists\ g_0.\ \fd_1 = \field{\oneof{g_0}}{\_} \wedge \fd_2 = \field{\oneof{g_0}}{\_}
   \end{aligned} \]
 \end{definition}
-
-In words: take any two distinct field numbers that appear in both descriptors.
-If the reader $\dc_2$ puts them in the same \Oneof{} $g$, then the writer
-$\dc_1$ must already have put them in a single \Oneof{} $g_0$. The group
-numbers $g$ and $g_0$ need not match. A group number only identifies a \Oneof{}
-within its own descriptor, so a reader is free to renumber its \Oneof{}s.
 
 The condition constrains only fields that are present in both descriptors.
 This choice makes the following updates allowed.
@@ -169,7 +167,10 @@ requirement forbids even the safe single-field move.
 Like the rest of the compatibility relation, $\oneofpres$ looks at one layer of
 a descriptor. A field whose type is a message has its own \Oneof{}s, and those
 must be preserved too, because a nested message is transformed and validated in
-the same way as the outer one.
+the same way as the outer one. However, eventually we're interested in \Oneof{}s
+being preserved for every nested message as well. Since the descriptor table
+might be cyclic, we can't blindly recurse through it and unlike Definitions
+\ref{def:sym-wf} and \ref{def:sym-legal}.
 
 \vspace{1em}
 \begin{definition}[Recursive \Oneof{} Preservation]\label{def:oneof-pres-all}

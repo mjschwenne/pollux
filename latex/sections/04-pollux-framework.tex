@@ -110,6 +110,18 @@ admitted. Some rules are omitted not for causing wire-type incompatibilities but
 because the results aren't meaningful, like converting from $\fixeds$ to
 $\float$. Thus we claim that Pollux is sound, but not complete.
 
+\vspace{1em}
+\begin{definition}[Closed Symbol Table]\label{def:sym-closed}
+  A descriptor table $\Sigma$ is closed if and only if for all messages in the table,
+  any nested messages named in a descriptor is also contained in the symbol
+  table. 
+  \[ \closed{\Sigma} \triangleq \forall\;a \in \dom{\Sigma}.\ \forall\;\id,\card,b.\ \Sigma(a)[\id] = \field{\card}{b}
+    \implies b \in \dom{\Sigma} \]
+\end{definition}
+
+A Protobuf file descriptor set is closed by definition since \texttt{protoc}
+will reject anything that isn't closed.
+
 \subsection{Adding Recursion}\label{sec:recursive-types}
 
 It is reasonable to ask why we add the indirection of a symbol table. Most

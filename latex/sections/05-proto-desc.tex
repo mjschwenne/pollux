@@ -123,15 +123,33 @@ requirements:
 
 There is a well-formedness requirement on descriptors, one coming from the
 internal structure of the descriptor in Lean (Definition~\ref{def:dwf}) and the
-other from the Protobuf compiler (Definition~\ref{def:dlegal}).
+other from the Protobuf compiler (Definition~\ref{def:dlegal}). Since Pollux
+supports recursive messages within a file descriptor set, like Protobuf, we can
+define this properties over one name in the symbol table $\Sigma$ and enforce it
+everywhere by requiring it holds independently for the whole table.
 
 \vspace{1em}
 \begin{definition}[Descriptor Well-Formedness]\label{def:dwf}
-  A descriptor $\dc$ is well-formed, denoted $\wfd{\dc}$, if all fields in
-  the descriptor have a unique field number, the fields are stored in sorted
-  order, and all nested descriptors are also well-formed. Additionally, the
-  reserved field intervals must have $n_1 \le n_2$ and be sorted by the lower
-  bound. 
+  A descriptor $\dc$ is well-formed, denoted $\wfd{\dc}$, if
+  \begin{itemize}
+  \item All fields in the descriptor have a unique field number.
+  \item Fields are stored in sorted order.
+  \item Reserved field intervals must have $n_1 \le n_2$.
+  \item Reserved field intervals are sorted by the lower bound.
+  \item For any two adjacent reserved field intervals $[(n_1, n_2), (n_1',
+    n_2')]$, $n_2 + 1 < n_1$ so that there is some gap which would prevent the
+    ranges from being merged.
+  \end{itemize}
+\end{definition}
+
+Note that this definition doesn't cover nested messages, which is covered by
+requiring the whole symbol table is closed and well-formed.
+
+\vspace{1em}
+\begin{definition}[Symbol Table Well-Formedness]\label{def:sym-wf}
+   A symbol table $\Sigma$ is well-formed, denoted $\wft{\Sigma}$ if all descriptors in
+   the table are well-formed (Definition~\ref{def:dwf}) and the table is closed.
+   \[ \wft{\Sigma} \triangleq \closed{\Sigma} \wedge \forall\;\nm \in \dom{\Sigma}.\ \wfd{\Sigma(\nm)} \]
 \end{definition}
 
 \vspace{1em}
@@ -142,44 +160,17 @@ other from the Protobuf compiler (Definition~\ref{def:dlegal}).
     listed in the reserved set.
   \item The range 19,000 to 19,999 is included in the reserved set. This range
     is reserved by the Protobuf compiler.
-  \item Pairwise, the lower bound of a reserved range must be at least two
-    larger than the upper bound of the previous element. This ensures that all
-    ranges which can be merged are.
-  \item Message fields are always explicitly marked as optional. This conforms
+  \item Message fields are always not marked implicit. This conforms
     with Protobuf, which will generate a method to check message presence, and
     will allow us to initialize recursive messages.
-  \item All nested descriptors within $\dc$ are also legal.
   \end{itemize}
 \end{definition}
 
-In preparation for needing to support recursive messages, Pollux uses
-well-founded recursion on the size of the descriptor through the \texttt{get?}
-interface. We define a function to compute the size of the descriptor below.
-
 \vspace{1em}
-\begin{definition}[Descriptor Size]\label{def:dsize}
-  The size of a descriptor $\dc$ is defined as $\dsize$ below, mutually
-  recursive with the size of a field $\fd$, $\fsize$.
-  \begin{mathpar}
-
-    \dsize\left(\desc{\res}{l}\right) = \begin{cases}
-      0 & \text{if } l = \nil \\
-      \fsize(\fd) + \dsize \left( \desc{\res}{l'} \right) & \text{if } l = \fd
-                                                            \Colon l'
-    \end{cases}
-
-    \fsize(\field{\card}{\ty_s}) = 1
-
-    \fsize(\field{\card}{\nm}) = 1 + \dsize(\Sigma(\nm))
-  \end{mathpar}
-\end{definition}
-
-\vspace{1em}
-\begin{definition}[Descriptor Depth]\label{def:ddepth}
-\[ \ddepth(\desc{\res}{l}) = \max_{f \in l} \fdepth(\fd), \qquad
-  \fdepth(\field{\card}{\ty_s}) = 0 \qquad
-  \fdepth(\field{\card}{\nm}) = 1 + \ddepth \left( \Sigma(\nm) \right)
-  \]
+\begin{definition}[Legal Descriptor Map]\label{def:sym-legal}
+  A descriptor table $\Sigma$ is legal if it is closed and all descriptors in the
+  table are legal per Definition \ref{def:dlegal}. 
+  \[ \legalt{\Sigma} \triangleq \closed{\Sigma} \wedge \forall\;\nm \in \dom{\Sigma}.\ \legald{\Sigma(\nm)} \]
 \end{definition}
 
 Finally, the \Oneof{} cardinality needs some explanation. When looking at

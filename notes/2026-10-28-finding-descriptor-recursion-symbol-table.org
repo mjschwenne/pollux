@@ -46,11 +46,11 @@ has a cycle, that recursion has nothing to bottom out on.
 You asked whether everything depth-indexed should move to reachable name
 pairs. *No.* The useful split is by what each definition recurses on:
 
-| Recurses on      | Definitions                                                                                         | Under a cyclic $\Sigma$                       | Fix |
-|------------------+-----------------------------------------------------------------------------------------------------+-----------------------------------------------+-----|
-| the descriptor   | =def:dsize=, =def:ddepth=, =def:dwf=, =def:dlegal=, =def:oneof-pres-all=; in Lean, the =descSize= measures | broken: no value, or the wrong fixed point | per-entry conditions on $\Sigma$, or reachable pairs (Part 1) |
-| the writer value | Message Depth, =def:vvalid=, =def:vsize=, all of the $\semjudg[n]{}$ definitions, =lem:msg-from-fields=, =Value.reinterpret= once its measure changes | fine: values are finite | keep; small repairs (Part 2) |
-| the derivation   | $\judg{\Gamma}{\cdot}$ with N-Assum/N-Unfold                                                        | fine: $\Gamma$ grows, and it is bounded by $\dom{\Sigma}^2$ | keep |
+| Recurses on      | Definitions                                                                                                                                   | Under a cyclic $\Sigma$                               | Fix                                                      |
+|------------------+-----------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------+----------------------------------------------------------|
+| the descriptor   | =def:dsize=, =def:ddepth=, =def:dwf=, =def:dlegal=, =def:oneof-pres-all=; in Lean, the =descSize= measures                                                | broken: no value, or the wrong fixed point       | per-entry conditions on $\Sigma$, or reachable pairs (Part 1) |
+| the writer value | Message Depth, =def:vvalid=, =def:vsize=, all of the $\semjudg[n]{}$ definitions, =lem:msg-from-fields=, =Value.reinterpret= once its measure changes | fine: values are finite                          | keep; small repairs (Part 2)                             |
+| the derivation   | $\judg{\Gamma}{\cdot}$ with N-Assum/N-Unfold                                                                                                            | fine: $\Gamma$ grows, and it is bounded by $\dom{\Sigma}^2$ | keep                                                     |
 
 The depth-indexed theorems are the *right* tool. Indexing by the writer
 value's depth is exactly what makes a cyclic schema harmless, and the indices
@@ -66,7 +66,8 @@ Part 2 also finds that soundness never needs $\oneofpresall$. Only
 
 * Part 1: Definitions That Recurse on Descriptors
 
-** 1.1 =def:dsize= and =def:ddepth= have no solution for a cyclic schema
+** DONE 1.1 =def:dsize= and =def:ddepth= have no solution for a cyclic schema
+CLOSED: [2026-11-13 Fri 16:15]
 
 Take =Stream= from =sec:recursive-types=, with $\Sigma(\mathtt{Stream}) =
 \langle r, [(1, \field{\opt}{\mathtt{int32}}), (2, \field{\opt}{\mathtt{Stream}})]\rangle$.
@@ -94,7 +95,8 @@ Options:
    is $\infty$ exactly when a cycle is reachable. That is a statistic, not a
    measure.
 
-** 1.2 =def:dwf= and =def:dlegal= ("all nested descriptors are also …")
+** DONE 1.2 =def:dwf= and =def:dlegal= ("all nested descriptors are also …")
+CLOSED: [2026-11-13 Fri 16:15]
 
 These recurse the same way. Read as an inductive definition, "=Stream= is
 well-formed if its fields are and =Stream= is well-formed" is satisfied only by
@@ -121,7 +123,7 @@ The alternative is to quantify over the names reachable from a root,
 $\Reach(a)$. That is only worth it if $\Sigma$ may contain junk entries that
 should not have to be well-formed. I don't see a reason for that.
 
-** 1.3 =def:oneof-pres-all= needs reachable pairs
+** TODO 1.3 =def:oneof-pres-all= needs reachable pairs
 
 This is the definition from the earlier discussion, now in the uncommitted
 =sec:oneof-pres=. As pasted, it still uses the old model,
@@ -168,7 +170,7 @@ enclosing N-Unfold has already unfolded. D-Update checks $\oneofpres$ at each
 unfolding. The lemma is worth stating, because it means a user of the relation
 never has to check $\oneofpresall$ separately.
 
-** 1.4 One table or two
+** TODO 1.4 One table or two
 
 =sec:judgments= has a single $\Sigma$, and the =Tree=/=Tree'= and
 =Stream=/=Stream'= examples sidestep the problem by priming the reader's names.
@@ -184,19 +186,19 @@ names: =Tree= in v1 and =Tree= in v2. One table can't hold both. Options:
    do informally, but every statement then has to say which half of the table
    each name belongs to.
 
-** 1.5 Lean
+** TODO 1.5 Lean
 
 Lean is consistent with itself today, because =Desc= nests descriptors
 (=FieldType.msg (d : Desc)=), so every =termination_by descSize= is
 well-founded. When Lean moves to $\Sigma$, these are the declarations that break
 and what each one becomes:
 
-| Declaration                                  | Measure today                         | Under $\Sigma$                                 |
-|----------------------------------------------+---------------------------------------+------------------------------------------------|
-| =Desc.AllWF= (=Descriptor.lean:356-359=)     | =descSize d=                          | =closed Σ ∧ ∀ a ∈ Σ, (Σ a).WF=, no recursion   |
-| =Desc.Legal= (=Validity.lean:55-59=)         | =descSize d=                          | =∀ a ∈ Σ, ∀ k f, … → FieldOk k f=, no recursion |
-| =Desc.OneofPreservedAll= (=Transform.lean:382-388=) | =descSize d₂=                  | =∀ p ∈ Reach Σ₁ Σ₂ a₁ a₂, OneofPreserved …=    |
-| =Value.reinterpret= block (=Transform.lean:82-135=) | =4 * descSize d₂= and friends  | recursion on the writer value, as =sec:log-rel-lean= already says |
+| Declaration                                     | Measure today               | Under $\Sigma$                                                       |
+|-------------------------------------------------+-----------------------------+-----------------------------------------------------------------|
+| =Desc.AllWF= (=Descriptor.lean:356-359=)            | =descSize d=                  | =closed Σ ∧ ∀ a ∈ Σ, (Σ a).WF=, no recursion                      |
+| =Desc.Legal= (=Validity.lean:55-59=)                | =descSize d=                  | =∀ a ∈ Σ, ∀ k f, … → FieldOk k f=, no recursion                   |
+| =Desc.OneofPreservedAll= (=Transform.lean:382-388=) | =descSize d₂=                 | =∀ p ∈ Reach Σ₁ Σ₂ a₁ a₂, OneofPreserved …=                       |
+| =Value.reinterpret= block (=Transform.lean:82-135=) | =4 * descSize d₂= and friends | recursion on the writer value, as =sec:log-rel-lean= already says |
 
 =Value.Valid= (=Validity.lean:130=) is already structural on the value, and
 =Field.init= never recurses into a message (its =singular=/=msg= arm returns
@@ -226,6 +228,8 @@ What follows are repairs. None of them changes the approach.
 
 ** 2.2 Issues
 
+*** TODO R1: Depth Notation
+
 *R1. Depth notation.* =def:sem-compat-typ= writes $\mathrm{depth}_f(p)$. That
 is the macro =\fdepth=, which =def:ddepth= defines as the depth of a
 *descriptor field*. It should be $\pdepth(p)$. =def:sem-compat= and
@@ -235,6 +239,8 @@ $\sdepth$. (E5 in =2026-09-01-review-proto-relations.md= noted the drift.
 This item names the right symbol for each use.) Message Depth also has no
 =\label=, though these definitions depend on it, and its $\sdepth$ cases test
 =\pay = \impslot{\pay}= where the slot metavariable $s$ is meant.
+
+*** TODO R2: Type-Message Bridge
 
 *R2. The type level and the message level need a bridge.* For a payload type
 that is a name, =def:sem-compat-typ= says $\mathrm{parse}_{a_2}(bs) = \some{g(p)}$,
@@ -249,11 +255,15 @@ left. As a side effect this settles which judgment N-Unfold concludes, the
 level mix E5 noted. It concludes at the type level, $a_1 \typrel a_2$, and
 then the payload case of F-Msg is just the bridge.
 
+*** TODO R3: Monotonicity in /n/
+
 *R3. Monotonicity in $n$.* Both the N-Unfold case and the K-Field lemma
 ("if $\forall j \le n.\ \semjudg[j]{\cdots}$") use the fact that a judgment at
 $n$ implies it at every $j \le n$. This is immediate, because each definition
 quantifies over values of depth $\le n$, but it should be stated. With it, the
 K-Field premise $\forall j \le n$ simplifies to just $n$.
+
+*** TODO R4: N-Unfold Justification
 
 *R4. The N-Unfold case isn't argued, and it is the only non-routine case.*
 The paragraph after =cor:compat-sound= explains why both inductions are
@@ -293,6 +303,8 @@ $\Sigma(a_1), \Sigma(a_2)$ equals $f$ with $x$ instantiated by =reinterpret=
 itself. Either works, but the definitions should commit to one (E5, second
 bullet).
 
+*** TODO R5: Soundness and OneofPreservedAll
+
 *R5. Soundness never needs $\oneofpresall$.* =lem:msg-from-fields= takes only
 the one-layer $\oneofpres$, and it is right to. Nested layers are covered by
 the $g_{\mathit{id}}$, each of which comes from a sub-derivation whose own
@@ -304,6 +316,8 @@ That is why Part 1 needs reachable pairs for that one theorem and nowhere else.
 If =thm:trans-valid= were restated with a derivation as its hypothesis, the
 1.3 lemma would supply $\oneofpresall$, and $\Reach$ would appear only inside
 the proof.
+
+*** TODO R6: Switch to names
 
 *R6. =def:soundness= and =cor:compat-sound= state judgments about descriptors,
 but =sec:judgments= defines judgments about names.* Under $\Sigma$ (and 1.4),
@@ -325,6 +339,8 @@ corollary implies =def:soundness=. The legality hypotheses are used only by
 K-Imp (implicit message fields are excluded, E5 third bullet) and by the
 reserved-set argument for transitivity. Neither is needed for $P(n)$ itself.
 
+*** TODO R7: Clarify /n/
+
 *R7. "Strong induction on $n$" should name what $n$ bounds.* The paragraph
 after =cor:compat-sound= says "a nested message might be of any depth less
 than the current message". That is $\mdepth$ of the *writer* value. The
@@ -335,7 +351,7 @@ on. One clause in the text would stop readers wondering which depth is meant.
 
 1. *(Recommended)* Change only the descriptor-recursive definitions:
    - per-entry =wfd(Σ)= and =legal(Σ)=, plus =closed(Σ)= (1.2);
-   - $\Reach$-based $\oneofpresall$ (1.3), with the derivation lemma;
+   - $\Reach$ -based $\oneofpresall$ (1.3), with the derivation lemma;
    - drop =def:dsize= and =def:ddepth= as measures (1.1);
    - two tables (1.4).
 

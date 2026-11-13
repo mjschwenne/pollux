@@ -186,24 +186,24 @@
 \newcommand{\slot}[2]{(#1, #2)}
 \newcommand{\map}[2]{#1 \rightharpoonup{} #2}
 
-\newcommand{\init}{\mathrm{init}}
+\newcommand{\init}{\mathsf{init}}
 \newcommand{\msg}[1]{\lAngle #1 \rAngle}
 \newcommand{\desc}[2]{\lAngle #1, #2 \rAngle}
 
-\newcommand{\dom}[1]{\mathrm{dom}(#1)}
+\newcommand{\dom}[1]{\mathsf{dom}(#1)}
 \newcommand{\denote}[1]{\llbracket{} #1 \rrbracket{}}
 \newcommand{\coerce}{\rightsquigarrow}
 \newcommand{\coercion}[3]{{}_{#1}\llbracket{} #2 \rrbracket{}_{#3}}
 
 % Varint encode/decode pipeline (Section 5 integer rules).
 % Bare forms for signatures and composition; applied forms for everything else.
-\newcommand{\encop}[1]{\mathrm{enc}_{#1}}
-\newcommand{\decop}[1]{\mathrm{dec}_{#1}}
+\newcommand{\encop}[1]{\mathsf{enc}_{#1}}
+\newcommand{\decop}[1]{\mathsf{dec}_{#1}}
 \newcommand{\enc}[2]{\encop{#1}\left(#2\right)}
 \newcommand{\dec}[2]{\decop{#1}\left(#2\right)}
 
-\newcommand{\zzop}{\mathrm{zz}}
-\newcommand{\unzzop}{\mathrm{zz}^{-1}}
+\newcommand{\zzop}{\mathsf{zz}}
+\newcommand{\unzzop}{\mathsf{zz}^{-1}}
 \newcommand{\zz}[1]{\zzop\left(#1\right)}
 \newcommand{\unzz}[1]{\unzzop\left(#1\right)}
 
@@ -213,43 +213,46 @@
 \newcommand{\vints}{\mathcal{V}}
 \newcommand{\payload}{\left[0, 2^{64}\right)}
 \newcommand{\ind}[1]{\mathbb{1}\left[#1\right]}
-\newcommand{\default}[1]{\mathrm{default}(#1)}
+\newcommand{\default}[1]{\mathsf{default}(#1)}
 
 % Auxiliary Data Structures
 \newcommand{\nil}{\texttt{[]}}
 \newcommand{\cons}[2]{#1 \Colon #2}
 
 % Auxiliary Functions
-\newcommand{\dsize}{\mathrm{size}_d}
-\newcommand{\fsize}{\mathrm{size}_f}
-\newcommand{\msize}{\mathrm{size}_m}
-\newcommand{\ssize}{\mathrm{size}_s}
-\newcommand{\psize}{\mathrm{size}_p}
-\newcommand{\ddepth}{\mathrm{depth}_d}
-\newcommand{\fdepth}{\mathrm{depth}_f}
-\newcommand{\mdepth}{\mathrm{depth}_m}
-\newcommand{\sdepth}{\mathrm{depth}_s}
-\newcommand{\pdepth}{\mathrm{depth}_p}
-\newcommand{\parse}[1]{\mathrm{parse}_{#1}}
-\newcommand{\ser}[1]{\mathrm{serial}_{#1}}
+\newcommand{\dsize}{\mathsf{size}_d}
+\newcommand{\fsize}{\mathsf{size}_f}
+\newcommand{\msize}{\mathsf{size}_m}
+\newcommand{\ssize}{\mathsf{size}_s}
+\newcommand{\psize}{\mathsf{size}_p}
+\newcommand{\ddepth}{\mathsf{depth}_d}
+\newcommand{\fdepth}{\mathsf{depth}_f}
+\newcommand{\mdepth}{\mathsf{depth}_m}
+\newcommand{\sdepth}{\mathsf{depth}_s}
+\newcommand{\pdepth}{\mathsf{depth}_p}
+\newcommand{\parse}[1]{\mathsf{parse}_{#1}}
+\newcommand{\ser}[1]{\mathsf{serial}_{#1}}
+\newcommand{\closed}[1]{\mathsf{closed}\left({#1}\right)}
 
 % Auxiliary Definitions
-\newcommand{\oneofpres}{\mathrm{OneofPreserved}}
-\newcommand{\oneofpresall}{\mathrm{OneofPreservedAll}}
+\newcommand{\oneofpres}{\mathsf{OneofPreserved}}
+\newcommand{\oneofpresall}{\mathsf{OneofPreservedAll}}
 
 % Theory
 \newcommand{\combine}[1]{\oplus_{#1}}
-\newcommand{\packable}{\mathrm{Packable}}
-\newcommand{\assemble}{\mathrm{assemble}}
-\newcommand{\encodes}[2][]{\mathrm{Encodes}_{#2}^{#1}}
-\newcommand{\records}{\mathrm{records}}
-\newcommand{\groups}{\mathrm{groups}}
+\newcommand{\packable}{\mathsf{Packable}}
+\newcommand{\assemble}{\mathsf{assemble}}
+\newcommand{\encodes}[2][]{\mathsf{Encodes}_{#2}^{#1}}
+\newcommand{\records}{\mathsf{records}}
+\newcommand{\groups}{\mathsf{groups}}
 \newcommand{\restr}[2]{#1|_{#2}}
-\newcommand{\accepts}{\mathrm{accepts}}
-\newcommand{\wfd}[1]{\mathrm{wfd}(#1)}
-\newcommand{\legald}[1]{\mathrm{legal}(#1)}
-\newcommand{\wfm}[1]{\mathrm{wfm}(#1)}
-\newcommand{\legalv}[2]{\mathrm{legal}_{#1}(#2)}
+\newcommand{\accepts}{\mathsf{accepts}}
+\newcommand{\wfd}[1]{\mathsf{wfd}_1(#1)}
+\newcommand{\wft}[1]{\mathsf{wfd}(#1)}
+\newcommand{\legald}[1]{\mathsf{legal}_1(#1)}
+\newcommand{\legalt}[1]{\mathsf{legal}(#1)}
+\newcommand{\wfm}[1]{\mathsf{wfm}(#1)}
+\newcommand{\legalv}[2]{\mathsf{legal}_{#1}(#2)}
 \DeclareSymbolFont{bbsymbol}{U}{bbold}{m}{n}
 \DeclareMathSymbol{\bbcolon}{\mathbin}{bbsymbol}{'072}
 \newcommand{\validv}[2]{#1 \bbcolon #2}
