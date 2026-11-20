@@ -1,0 +1,464 @@
+#+TITLE: The coercion as a judgment output: a third rendering in Lean
+#+STARTUP: latexpreview
+#+LATEX_HEADER: \usepackage{amsmath,amssymb,mathtools,mathpartir,stmaryrd}
+#+LATEX_HEADER: \newcommand{\dom}[1]{\mathrm{dom}(#1)}
+#+LATEX_HEADER: \newcommand{\denote}[1]{\llbracket{} #1 \rrbracket{}}
+#+LATEX_HEADER: \newcommand{\dcompat}{\ll}
+#+LATEX_HEADER: \newcommand{\coerce}{\rightsquigarrow}
+#+LATEX_HEADER: \newcommand{\judg}[2]{\Sigma; #1 \vdash #2}
+#+LATEX_HEADER: \newcommand{\field}[2]{\langle#1, #2\rangle}
+#+LATEX_HEADER: \newcommand{\dc}{d}
+#+LATEX_HEADER: \newcommand{\co}{c}
+#+LATEX_HEADER: \newcommand{\nm}{a}
+#+LATEX_HEADER: \newcommand{\id}{\mathit{id}}
+#+LATEX_HEADER: \newcommand{\card}{\kappa}
+#+LATEX_HEADER: \newcommand{\m}{m}
+#+LATEX_HEADER: \newcommand{\init}{\mathrm{init}}
+#+LATEX_HEADER: \newcommand{\mdepth}{\mathrm{depth}_m}
+#+LATEX_HEADER: \newcommand{\Coe}{\mathsf{Coe}}
+#+LATEX_HEADER: \newcommand{\interp}[1]{\llbracket{} #1 \rrbracket{}}
+
+Status: open
+Report: sec:log-rel-lean, sec:judgments, N-Assum/N-Unfold, def:soundness,
+        cor:compat-sound, def:sem-assum, def:compat, def:well-behaved,
+        sec:recursive-types @ 652f34d (=sections/04= was open in Emacs
+        with unsaved changes; this note reads the saved file)
+Lean:   Pollux/Proto/Transform.lean (=Value.reinterpret=),
+        Pollux/InterParse/Theorems/Compatible.lean (=DescCompat=) @ 652f34d
+
+* Summary
+
+=sec:log-rel-lean= offers two renderings of the coercion judgment: put the
+derivation in =Type= and define =coerce= by recursion on it, or keep the
+relation a =Prop= and prove agreement with =Value.reinterpret=. The section
+motivates the choice with "lean can't eliminate a =Prop= into a coercion."
+
+That sentence is true but it doesn't support the dichotomy, because it rules
+out the wrong thing. Lean forbids *eliminating* a =Prop= to produce data. It
+does not forbid a =Prop=-valued family from being *indexed* by data. A
+judgment written
+
+\[ \judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \co} \]
+
+can be rendered as an inductive =Prop= whose last argument is the coercion,
+built up rule by rule exactly as the report writes it. Reading $\co$ off a
+derivation then needs no elimination at all: it is already a component of the
+hypothesis's type. So there is a third option, and it is the one that matches
+the report's notation most literally.
+
+Two further results, worked out below.
+
+1. *Value finiteness does more than justify termination.* For a recursive
+   descriptor pair, finiteness is what makes the coercion *unique*, and so what
+   stops the recursive rule from being a soundness hole. It does not, however,
+   do anything about the =Prop=/=Type= barrier. The two obstacles are
+   independent, and conflating them is what makes the dichotomy look forced.
+2. *The judgment can carry a coercion /recipe/ rather than the coercion.* A
+   first-order syntax $\Coe$ with a denotation $\interp{\cdot}$ keeps every
+   advantage of option (c), makes $\mathsf{fix}$ a constructor instead of a
+   semantic fixpoint, and — the decisive point — is what makes a compatibility
+   *checker* writable as an ordinary Lean function. This is the recommendation.
+
+This note is the successor to the =Lean= section of
+=2026-09-30-review-coercion-framing.org=, whose options (a) and (b) are the two
+now in =sec:log-rel-lean=. It also settles the choice E5 (second bullet, in
+=2026-09-01-review-proto-relations.md=) asks the author to make, and which R4
+of =2026-10-28-finding-descriptor-recursion-symbol-table.org= leaves open: in
+favour of the environment route, with the environment finite and first-order.
+
+* 1 What the =Prop= restriction does and does not forbid
+
+The restriction is large elimination: from =h : P= with =P : Prop= you cannot
+compute a =Value → Value=, because proofs are irrelevant and two proofs of =P=
+must be interchangeable. What the restriction never touched is the *arguments*
+of a =Prop=-valued family. These may live in any sort. The frozen InterParse
+relation already exercises this — =DescCompat : Desc → Desc → Prop=
+(=Compatible.lean:116=) is indexed by two pieces of =Type=-valued data, and
+every lemma about it reads those off its hypotheses freely. Adding a third
+index of type =Value → Value= is the same move.
+
+The consequence is that "the derivation builds the coercion" and "the coercion
+is recoverable in Lean" come apart from each other:
+
+- Can a rule's conclusion name a coercion built from its premises' coercions?
+  *Yes* — it is an index, not a computation.
+- Given a derivation =h : DescCompat Σ Γ d₁ d₂ c=, is =c= available? *Yes*,
+  and runnable: it sits in the type of =h=, so nothing is eliminated.
+- Given only that /some/ coercion exists, is it runnable? *No.* Extracting
+  $\co$ from $\exists \co.\ \judg{\varnothing}{\dc_1 \dcompat \dc_2 \coerce
+  \co}$ needs choice, which yields a =noncomputable= constant.
+- Does value finiteness help with that last one? *No* — it is proof
+  irrelevance, not termination.
+
+The last two points are the whole content of the =Prop= objection, and the fix
+for them is to never erase: a derivation should be produced together with its
+coercion, as a $\Sigma$-pair, the way an elaborating type checker returns a core
+term alongside its typing derivation. It is not a reason to abandon indexing.
+
+* 2 Option (c1): index the judgment by the coercion
+
+Written out at the name level, with $\Gamma$ carrying coercions:
+
+#+begin_src lean
+inductive DescCompat (Σ : SymTab) : Assum → Name → Name → (Value → Value) → Prop
+  | assum  {Γ a₁ a₂ c} :
+      Γ.lookup (a₁, a₂) = some c →
+      DescCompat Σ Γ a₁ a₂ c
+  | unfold {Γ a₁ a₂ c} :
+      (a₁, a₂) ∉ Γ →
+      DescCompatD Σ (Γ.insert (a₁, a₂) c) (Σ a₁) (Σ a₂) c →
+      DescCompat Σ Γ a₁ a₂ c
+#+end_src
+
+=unfold= does not *construct* $\mathsf{fix}\,x.\,\co$. It pre-substitutes: the
+coercion is put into $\Gamma$ and the body is required to elaborate to that
+same coercion. The premise is the unfolding equation, stated rather than
+solved. This is legal (the recursive occurrence is strictly positive) and the
+derivations are the finite ones, since $\Gamma$'s growth bound is untouched —
+the keys are still name pairs and the function payload does not affect the
+$\mathcal{O}(|\dom{\Sigma}|^2)$ argument of =sec:recursive-types=.
+
+Note that this needs $\Gamma$ to map pairs to coercion *values*, which is
+precisely the "alternative formulation" already floated in the second bullet of
+=sec:judgments=. That alternative is not a stylistic variant; it is what makes
+this rendering possible, because no rule then has to build a fixpoint.
+
+** Where value finiteness earns its keep
+
+The pre-substituted premise looks dangerously weak — any self-consistent $\co$
+appears to satisfy it. It does not, and finiteness is the reason. Take the
+=Tree=/=Tree'= example. The body derivation is a =D-Update=, whose conclusion
+*forces* the shape of the lambda, so $\co$ must satisfy
+
+\[ \co = \lambda \m.\ \{\, 1 \mapsto (\mathrm{dec}_{\mathtt{int64}} \circ
+   \mathrm{enc}_{\mathtt{int32}})(\m[1]),\
+   2 \mapsto \mathrm{map}\ \co\ (\m[2]) \,\}. \]
+
+Because every value has a finite $\mdepth$, and the assumed coercion is only
+ever applied under a message payload (the guardedness observation in
+=sec:recursive-types=, and R4 step 1 of the October note), strong induction on
+$\mdepth(\m)$ shows this equation has *exactly one* solution at every value. So
+the derivation pins $\co$ down uniquely even though no rule ever built it. Were
+values not finite, the premise would admit junk and the rule would be unsound.
+
+In Lean this comes for free: =Value= is an inductive type, so finiteness is
+structural rather than something to argue. The report has to work for it
+(=sec:recursive-types=, point 2, with the 100-layer limit as backup); Lean is
+handed it by the kernel.
+
+This also gives the report's coherence remark a Lean reading. Uniqueness of the
+fixpoint, not just agreement on encodable messages, is what makes "any two
+derivations of the same judgment yield coercions that agree".
+
+** What (c1) costs
+
+$\co$ must be supplied up front. A derivation certifies a coercion; it does not
+hand you one. So the "read rule by rule, it is a program" reading of
+=sec:framework= becomes "read rule by rule, it is a specification a program can
+be checked against". That is a change in the prose's framing, though not in any
+statement, and option (c2) recovers most of it.
+
+* 3 Option (c2): index the judgment by a recipe
+
+Instead of a function, let the judgment output a first-order term in a small
+language of coercions, with a denotation defined once.
+
+#+begin_src lean
+inductive Coe where
+  | scalar (τ₁ τ₂ : ScalarType)                 -- T-Varint, T-StrByt, …
+  | lift   (κ₁ κ₂ : Cardinality) (r : Coe)      -- the K-rules
+  | upd    (a₂ : Name) (rs : List (Int × Coe))  -- D-Update
+  | msgRef (a₁ a₂ : Name)                       -- N-Assum
+#+end_src
+
+with a finite recipe table $\Theta : (\mathrm{Name} \times \mathrm{Name})
+\rightharpoonup \Coe$ produced alongside the derivation, and
+
+\[ \interp{\cdot} : \Coe \to \mathrm{Value} \to \mathrm{Value}. \]
+
+The judgment becomes $\judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce r}$ with
+$r : \Coe$, and soundness becomes exactly the correctness statement the
+=def:soundness= shape already wants:
+
+\[ \judg{\varnothing}{\nm_1 \dcompat \nm_2 \coerce r} \implies
+   \interp{r} \text{ is well behaved.} \]
+
+** Why a recipe rather than a function: the checker becomes writable
+
+This is the argument that decides it. =sec:recursive-types= gives two
+*independent* finiteness facts. Under (c2) each one becomes the termination
+measure of one Lean function, and the two functions are separate:
+
+| Finiteness fact            | Lean function    | Measure            |
+|----------------------------+------------------+--------------------|
+| 1. $\Gamma$ grows, bounded | the checker      | $\Gamma$'s bound   |
+| 2. every value is finite   | $\interp{\cdot}$ | writer $\mdepth$   |
+
+The checker produces $(\Theta, r)$ and terminates on $\Gamma$'s
+$\lvert\dom{\Sigma}\rvert^2$ bound; $\interp{\cdot}$ terminates on the writer
+value's depth.
+
+With a function-valued index this separation is unavailable. A checker
+returning =Option (Value → Value)= would have to construct the function at the
+=N-Unfold= step, which requires a fixpoint over values — but the checker has no
+value argument, so the value recursion has to be built *inside* its return
+value. The checker and the interpreter collapse into one tangled definition
+carrying both measures at once. With a recipe the checker only ever assembles
+first-order syntax; all value recursion lives in $\interp{\cdot}$, proved once
+and reused by every witness.
+
+That also answers the concern that drove this discussion. $\interp{\cdot}$ is a
+single canonical function, but it is *parameterized by the recipe*, so distinct
+derivations denote distinct coercions through it. That is categorically unlike
+=Value.reinterpret=, which is a function of $(\dc_1, \dc_2)$ alone and leaves no
+room for alternatives. Recipes give a whole space of runnable coercions at the
+cost of one termination proof.
+
+** Making guardedness syntactic
+
+Note that $\Coe$ above has no $\mathsf{fix}$ and no variable. The recursion is
+carried by the table $\Theta$, exactly as $\Sigma$ carries descriptor
+recursion — *the recipe table is to the coercion what the symbol table is to
+the descriptor.* =N-Unfold= writes an entry; =N-Assum= emits =msgRef a₁ a₂=,
+whose interpretation is a table lookup.
+
+This is worth the asymmetry with the report's $\mathsf{fix}\,x.\,\co$, because
+it makes guardedness impossible to violate rather than merely true.
+=msgRef= can only occur inside an =upd= at a key, and the interpreter's clause
+for that key applies it to $\m[\id]$ — a strictly shallower value. So the
+measure is a plain lexicographic pair: =scalar=/=lift=/=upd= shrink the recipe
+at equal value, =msgRef= shrinks the value. Contrast the de Bruijn
+$\mathsf{fix}$/$\mathsf{var}$ encoding, which is textually closer to the report
+but where the environment holds functions whose arguments Lean cannot see are
+smaller; there $\interp{\cdot}$ needs either fuel plus a stability lemma, or a
+depth-indexed dependent environment. Both work and neither is pleasant.
+
+So: =N-Unfold= as the report states it is *representable* either way, and the
+table form is the one that keeps the interpreter two lines.
+
+** What (c2) costs
+
+- $\Coe$ has to track the rule set. Mitigated by the constructors tracking rule
+  *families*: a new scalar axiom is a new $(\tau_1,\tau_2)$ pair, not a new
+  constructor. Adding a rule shape is a new constructor plus a clause in
+  $\interp{\cdot}$.
+- $\interp{\cdot}$ is total, so it has a branch for a recipe that does not fit
+  the value it meets (an =upd= arriving at a scalar). Making that branch
+  $\init$ rather than anything arbitrary stops it being junk, and the soundness
+  theorem only ever meets recipes that came from a derivation. The
+  intrinsically typed alternative is worse here than it looks; see below.
+- One unfolding layer in every statement: $\interp{r}$ where the report writes
+  $\co$.
+- The admissible coercions are now those $\Coe$ can express, not every
+  well-behaved function. This is no loss against =def:compat=, which asks only
+  that a well-behaved coercion *exist*, and the report already disclaims
+  completeness.
+
+** Indexing $\Coe$: why not intrinsically typed
+
+This deserves more than a bullet, because "index $\Coe$ by the descriptor
+pair" is two separate moves, and only one of them does what it is usually
+invoked for.
+
+*Indexing the recipe* is $\Coe : \mathrm{Desc} \to \mathrm{Desc} \to
+\mathrm{Type}$, so =upd= can be built only at a pair where it makes sense.
+*Making the denotation dependent* is $\denote{\cdot} : \mathrm{Desc} \to
+\mathrm{Type}$, with $\interp{\cdot} : \Coe\ \dc_1\ \dc_2 \to \denote{\dc_1}
+\to \denote{\dc_2}$. The off-spec branches of $\interp{\cdot}$ come from
+ill-typed *values*, not ill-typed recipes — an =upd= meeting a scalar is a
+fact about the =Value=, not about the recipe — so indexing the recipe alone
+leaves them exactly where they were. Only the dependent denotation closes
+them.
+
+The dependent denotation is not available here. $\denote{\mathtt{Tree}} =
+\mathbb{Z} \times \mathrm{Option}\ \denote{\mathtt{Tree}}$ has no solution as
+a recursive function $\mathrm{Desc} \to \mathrm{Type}$, for the same reason
+1.1 of the October note gives for =def:dsize= under a cyclic $\Sigma$. A real
+type per descriptor would mean generating a fresh inductive per descriptor,
+which Lean cannot do from data. So "intrinsically typed" can only mean the
+subtype $\denote{\dc} \triangleq \{v : \mathrm{Value} \mid \mathrm{Valid}\
+\dc\ v\}$, which does survive cycles: the carrier stays the one inductive
+=Value= and only the predicate varies.
+
+That subtype fuses a definition with its correctness theorem, and here that
+carries a specific price. $\interp{\cdot}$ would have to *produce*
+$\mathrm{Valid}\ \dc_2$ of its output, so =Value.reinterpret_valid= stops
+being a theorem and becomes part of the definition — and =reinterpret_valid=
+needs =Desc.OneofPreservedAll=, which =Proto/OneofCounterexample.lean= shows
+is genuinely required in its recursive form rather than merely convenient. A
+side condition the report states as the premise of one theorem would become a
+permanent index on the coercion language, in a place the report never puts it.
+
+Indexing also fights first-order-ness, and =upd= is where that becomes
+unavoidable. Because =D-Update= quantifies over the shared key set, the
+intrinsically typed constructor wants to be
+
+#+begin_src lean
+| upd : (∀ k, k ∈ shared d₁ d₂ → FieldCoe (d₁.get k) (d₂.get k)) → Coe d₁ d₂
+#+end_src
+
+a function-valued constructor argument. That costs exactly the properties
+that made a recipe worth having: no =DecidableEq=, no structural recursion
+over a recipe, nothing to print or diff, and a checker that must build a
+dependent function instead of assembling syntax. Keeping it first-order as
+=List (Int × Coe)= plus a proof that the list covers the shared keys at the
+right types puts the typing back outside the term, merely relocated into the
+constructor. Both at once is not on offer.
+
+The implication most worth recording: *indexing slides (c2) back toward (a).*
+An indexed $\Coe$ in =Type=, indexed by the descriptor pair, is a derivation
+in =Type= with the pure side-condition premises erased — a smaller payload,
+the same shape. The argument for the recipe above was that it is *not* a
+derivation: first-order, decidable, and assemblable by a checker measured on
+$\Gamma$'s growth. Index it and that argument weakens in proportion.
+
+Two things intrinsic typing does buy, each with a cheaper answer.
+
+- *A mis-paired recipe becomes a type error*, where raw =interp r v=
+  typechecks for any =r=, so a mismatch is caught only by a theorem's
+  hypotheses. Cheaper: $\judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce r}$ /is/
+  the typing judgment for recipes, so the guarantee comes from a relation
+  that is being defined anyway.
+- *No off-spec branch*, so no theorem can accidentally be about it. Cheaper:
+  make the branch $\init$. It is then the same default injection =D-Update=
+  already prescribes for reader-only keys, and =Slot.reinterpret_isSome=
+  (sketched in =sec:proto-transform=) is the lemma saying it never fires on a
+  shared key.
+
+Two smaller points against. A structural $\denote{\dc}$ built as a product
+over the entry list would put the sealed representation into a *type*, which
+=lean/CLAUDE.md= bars even from statements; the subtype form avoids it, since
+=Value.Valid= is sanctioned. And this development has already made the same
+call three times — the =Serializer ι α wf= phantom predicate, InterParse's
+relations carrying no well-formedness premises with the callers holding them,
+and =Value.Valid= as a predicate rather than a subtype. An intrinsic $\Coe$
+would be the first break in a deliberate convention.
+
+*Recommendation:* raw $\Coe$, $\init$ as the off-spec branch, and the
+compatibility relation as its typing judgment.
+
+* 4 Where this leaves =Value.reinterpret=
+
+Not wasted, and no longer load-bearing. Under (c1) or (c2) it becomes *a*
+witness rather than the definition: prove $\interp{r_0} = $ =Value.reinterpret
+d₁ d₂= for the canonical recipe $r_0$ if its existing lemma set is wanted, and
+skip the bridge otherwise. Nothing else depends on the equation.
+
+The =% TODO= at the end of =sec:log-rel-lean= should be read in this light. The
+termination metric does move to the writer's value's depth, but it moves into
+$\interp{\cdot}$. That switch is not an optimization: as 1.1 of the October note
+shows, =descSize= has *no* solution for a cyclic $\Sigma$, so a descriptor
+measure cannot survive the move to a symbol table at all. The reader's field
+list is still consulted for totality over $\dc_2$, but one layer at a time
+through =explode=, which is a fold over a finite key set rather than a
+recursion.
+
+* 5 Report changes
+
+Ordered by how much each one matters.
+
+1. *=sec:log-rel-lean=, the two-item list.* Becomes three. The motivating
+   sentence needs the correction in §1: Lean forbids eliminating a =Prop=, not
+   indexing one, so the third option exists. Worth stating the
+   termination/elimination split explicitly, since it is what makes the list
+   complete.
+2. *=sec:judgments=, third bullet.* $\co : \denote{\Sigma(\nm_1)} \to
+   \denote{\Sigma(\nm_2)}$ becomes $r : \Coe$ with $\interp{r}$ at that type
+   under (c2). The second bullet's "alternative formulation" sentence is
+   required by (c1) and unnecessary under (c2), where $\Gamma$ keeps assumption
+   variables as written.
+3. *=def:soundness= and =cor:compat-sound=.* "$\co$ is well behaved" becomes
+   "$\interp{r}$ is well behaved". Together with R6 of the October note this
+   closes the =% TODO= on =def:soundness=.
+4. *=def:sem-assum=.* Commit to the environment route (E5's second bullet, R4's
+   closing paragraph). Under (c2) the environment is $\Theta$ — finite,
+   first-order, and decidable — which is a better object to quantify over than
+   either a function environment or =reinterpret=.
+5. *=sec:recursive-types=.* One sentence naming the two finiteness facts as the
+   two measures (the table in §3 above). The facts are already there; what is
+   missing is that they belong to different functions.
+6. *New, if (c2) is adopted:* a figure for $\Coe$ and the clauses of
+   $\interp{\cdot}$. Draft below.
+
+Not re-reported here: the =N-Unfold= level mix ($\field{\card}{\nm_1} \dcompat
+\field{\card}{\nm_2}$, putting $\dcompat$ on fields) and the duplicate
+statements of both name rules are E5's fourth bullet already.
+
+* 6 Suggested report text
+
+For =sec:log-rel-lean=, replacing the sentence before the itemize and adding a
+third item:
+
+#+begin_src latex
+The paper formalization reads a derivation of
+$\judg{\varnothing}{\dc_1 \dcompat \dc_2 \coerce \co}$ as the construction of
+$\co$. Lean cannot eliminate a \texttt{Prop} into a function, so a derivation
+in \texttt{Prop} cannot be \emph{computed from}. It can, however, be
+\emph{indexed by} the coercion: a \texttt{Prop}-valued family may take
+arguments of any sort, and reading the coercion off a derivation is then a
+projection from its type rather than an elimination. Three alternatives follow.
+\begin{itemize}
+\item Put the derivation into \texttt{Type} \ldots
+\item Keep the existing \texttt{Value.reinterpret} \ldots
+\item \textbf{Make the coercion an output of the judgment.} Index the relation
+  by the coercion it builds, so that the Lean statement is literally
+  $\judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce \co}$, and state soundness as
+  ``the coercion a derivation carries is well-behaved''
+  (Definition~\ref{def:well-behaved}). Nothing is eliminated and no second
+  function is defined, so neither the duplication of the first alternative nor
+  the agreement lemma of the second arises. Two facts make this work. The
+  recursive rule states the unfolding equation rather than solving it, and
+  because every message has finite depth that equation has a unique solution,
+  so a derivation still determines its coercion. Separately, the coercion may
+  be carried as a first-order \emph{recipe} with a denotation defined once;
+  then $\mathsf{fix}$ is a constructor rather than a fixed point, and the two
+  finiteness facts of Section~\ref{sec:recursive-types} become the termination
+  measures of two separate functions --- the assumption set's growth bound for
+  the checker, the writer value's depth for the denotation.
+\end{itemize}
+#+end_src
+
+And, if the recipe variant is adopted, for =sec:judgments=:
+
+#+begin_src latex
+\begin{figure}
+\[
+\begin{array}{lcl}
+  r &::=& \mathrm{sc}(\ty_1, \ty_2) \mid \mathrm{lift}(\card_1, \card_2, r)
+        \mid \mathrm{upd}(\nm_2, \overline{\id \mapsto r}) \\
+    &&\mid \mathrm{ref}(\nm_1, \nm_2) \\
+  \Theta &::=& \overline{(\nm_1, \nm_2) \mapsto r}
+\end{array}
+\]
+\caption{Coercion recipes. $\Theta$ carries recursion for coercions exactly as
+  $\Sigma$ carries it for descriptors; $\mathrm{ref}$ resolves through it.}
+\end{figure}
+
+A judgment $\judg{\Gamma}{\dc_1 \dcompat \dc_2 \coerce r}$ outputs a recipe,
+and $\llbracket r \rrbracket_{\Theta} : \denote{\dc_1} \rightarrow
+\denote{\dc_2}$ is its denotation. $\mathrm{ref}$ occurs only inside an
+$\mathrm{upd}$ at a message
+field, so $\llbracket \cdot \rrbracket_{\Theta}$ applies it only to a nested
+message of strictly smaller depth; this is the guardedness condition
+Section~\ref{sec:recursive-types} describes, here imposed by the syntax.
+#+end_src
+
+* Blocked
+
+Nothing in Lean is blocked. =Pollux.Proto= has no compatibility relation yet,
+and the choice among the three renderings is the first thing to settle before
+writing one, so this note is on the critical path for that work rather than
+waiting on anything.
+
+- Needs the author: which rendering. Whether $\Coe$ is intrinsically typed is
+  no longer open — see "Indexing $\Coe$" — unless the type-level guarantee
+  against a mis-paired recipe is wanted for its own sake. The $\Coe$
+  constructor set still depends on the final rule set, so it should not be
+  fixed before =sec:proto-relations= settles.
+- Interacts with the October note: 1.4 (one table or two) decides whether
+  $\Theta$ is indexed by $\dom{\Sigma_1} \times \dom{\Sigma_2}$; R2 (the
+  type/message bridge) is unchanged by any of this; R4's step 1 becomes
+  unnecessary under (c2), since $\mathsf{fix}$ stops being a semantic fixpoint.
+- Can proceed meanwhile: everything in that note's "unaffected" list, plus the
+  one-layer cardinality and scalar lemmas, which mention no coercion
+  representation at all.
